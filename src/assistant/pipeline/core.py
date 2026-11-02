@@ -6,7 +6,7 @@ The DB layer (service.py) loads plain data, calls run_pipeline(), then applies t
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 
 from assistant.db.models import ItemStatus
 from assistant.pipeline.errors import NeedsInputError
@@ -26,6 +26,7 @@ from assistant.pipeline.logic import (
 )
 from assistant.pipeline.places import ResolvedPlace
 from assistant.pipeline.schema import Extraction
+from assistant.timezones import get_tz
 
 log = logging.getLogger(__name__)
 
@@ -55,6 +56,11 @@ class Outcome:
     error: str | None = None
 
 
+def local_today(ctx: PipelineContext) -> date:
+    """The user's calendar date: "nearest future date" must not be off by one near midnight."""
+    return ctx.now.astimezone(get_tz(ctx.user_tz)).date()
+
+
 async def extract_with_escalation(
     extractor: Extractor, inputs, threshold: float
 ) -> tuple[Extraction, bool]:
@@ -78,7 +84,7 @@ async def run_pipeline(
         TripContext(t.title, t.destination, t.starts_on, t.ends_on) for t in ctx.trips
     ]
     try:
-        inputs = await gatherer.gather(ctx.item, today=ctx.now.date(), trips=trip_ctx)
+        inputs = await gatherer.gather(ctx.item, today=local_today(ctx), trips=trip_ctx)
     except NeedsInputError as e:
         return Outcome(status=ItemStatus.NEEDS_INPUT, user_text=e.user_text, error=str(e))
 

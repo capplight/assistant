@@ -83,16 +83,68 @@ async def test_instagram_token_is_optional_and_passed_when_set():
 async def test_web_page_title_and_og_description():
     html = ("<html><head><title>Sao Beach</title><meta property='og:description' "
             "content='Лучший пляж острова'></head><body>x</body></html>")  # fmt: skip
-    respx.get("https://example.com/a").mock(
+    route = respx.get("https://93.184.216.34/a").mock(
         return_value=httpx.Response(200, html=html)
     )
     meta = await links().fetch("https://example.com/a", ItemSource.WEB)
     assert meta.title == "Sao Beach" and meta.description == "Лучший пляж острова"
+    # Connection pinned to the vetted IP; Host and TLS SNI/cert name stay the real host.
+    req = route.calls[0].request
+    assert req.headers["Host"] == "example.com"
+    assert req.extensions["sni_hostname"] == "example.com"
+
+
+@respx.mock
+async def test_page_fetch_never_resolves_twice():
+    """DNS rebinding: the first answer is public, any later one private. Only the first
+    lookup happens per hop, and the request goes to that address."""
+    answers = iter([["93.184.216.34"], ["127.0.0.1"]])
+    lookups = []
+
+    async def rebinding(host):
+        lookups.append(host)
+        return next(answers)
+
+    route = respx.get("http://93.184.216.34/p").mock(
+        return_value=httpx.Response(200, html="<title>ok</title>")
+    )
+    meta = await links(rebinding).fetch("http://example.com/p", ItemSource.WEB)
+    assert meta.title == "ok" and route.called and lookups == ["example.com"]
+    assert "sni_hostname" not in route.calls[0].request.extensions
+
+
+async def test_non_web_ports_blocked():
+    calls = []
+
+    async def resolver(host):
+        calls.append(host)
+        return ["93.184.216.34"]
+
+    with respx.mock(assert_all_called=False) as mock:
+        route = mock.get(url__regex=r".*").mock(return_value=httpx.Response(200))
+        for url in ("http://example.com:6379/", "https://example.com:8443/x",
+                    "ftp://example.com/", "http://user:pw@example.com/"):  # fmt: skip
+            assert await links(resolver).fetch(url, ItemSource.WEB) is None
+        assert not route.called and calls == []
+    ok = await links(resolver)._pin("https://example.com:443/a")
+    assert str(ok[0]) == "https://93.184.216.34/a"
+
+
+async def test_mapped_and_mixed_private_addresses_blocked():
+    async def mixed(host):
+        return ["93.184.216.34", "10.0.0.1"]
+
+    async def mapped(host):
+        return ["::ffff:127.0.0.1"]
+
+    for r in (mixed, mapped):
+        with pytest.raises(ValueError):
+            await links(r)._pin("http://example.com/")
 
 
 @respx.mock
 async def test_page_redirect_to_private_network_blocked():
-    respx.get("https://example.com/a").mock(
+    respx.get("https://93.184.216.34/a").mock(
         return_value=httpx.Response(302, headers={"location": "http://internal/"})
     )
     calls = []
@@ -248,3 +300,29 @@ def test_error_classification():
     assert is_transient(httpx.ConnectError("x"))
     assert is_transient(httpx.HTTPStatusError("x", request=req, response=httpx.Response(502)))
     assert is_permanent(httpx.HTTPStatusError("x", request=req, response=httpx.Response(404)))
+
+
+TOKEN = "123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsawQ"
+
+
+@respx.mock
+async def test_telegram_http_errors_never_contain_the_token():
+    respx.post(f"https://api.telegram.org/bot{TOKEN}/getFile").mock(
+        return_value=httpx.Response(502, text="Bad Gateway")
+    )
+    with pytest.raises(httpx.HTTPStatusError) as e:
+        await TelegramFiles(TOKEN, "", httpx.AsyncClient()).download("F")
+    assert TOKEN not in str(e.value) and "502" in str(e.value)
+    assert is_transient(e.value)  # still retried by the queue
+
+
+@respx.mock
+async def test_telegram_file_download_error_has_no_token():
+    respx.post(f"https://api.telegram.org/bot{TOKEN}/getFile").mock(return_value=httpx.Response(
+        200, json={"ok": True, "result": {"file_size": 3, "file_path": "photos/f.jpg"}}))
+    respx.get(f"https://api.telegram.org/file/bot{TOKEN}/photos/f.jpg").mock(
+        return_value=httpx.Response(404)
+    )
+    with pytest.raises(httpx.HTTPStatusError) as e:
+        await TelegramFiles(TOKEN, "", httpx.AsyncClient()).download("F")
+    assert TOKEN not in str(e.value) and is_permanent(e.value)

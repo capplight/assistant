@@ -29,6 +29,8 @@ class TelegramFile:
 
 
 class TelegramFiles:
+    """Never put URLs into exception messages or logs: they contain the bot token."""
+
     def __init__(
         self, token: str, api_base: str = "", client: httpx.AsyncClient | None = None
     ) -> None:
@@ -52,9 +54,7 @@ class TelegramFiles:
             desc = str(payload.get("description", ""))
             if "too big" in desc.lower():
                 raise FileTooBigError(desc)
-            resp.raise_for_status()
-            raise httpx.HTTPStatusError(f"getFile failed: {desc}", request=resp.request,
-                                        response=resp)
+            raise _status_error("getFile", resp, desc)
         result = payload["result"]
         size = result.get("file_size") or 0
         if size > self.limit:
@@ -74,13 +74,22 @@ class TelegramFiles:
         async with self._client.stream(
             "GET", f"{self._base}/file/bot{self._token}/{file_path}"
         ) as r:
-            r.raise_for_status()
+            if r.status_code != 200:
+                raise _status_error("file download", r)
             async for chunk in r.aiter_bytes():
                 total += len(chunk)
                 if total > self.limit:
                     raise FileTooBigError(f"> {self.limit} bytes")
                 chunks.append(chunk)
         return TelegramFile(b"".join(chunks), file_path)
+
+
+def _status_error(what: str, resp: httpx.Response, desc: str = "") -> httpx.HTTPStatusError:
+    """Like raise_for_status(), but the message never contains the URL: Bot API URLs carry
+    the bot token (/bot<token>/...), and this text ends up in logs and DB error columns.
+    The status code stays on .response, so errors.is_transient() still classifies it."""
+    msg = f"Telegram {what} failed: HTTP {resp.status_code}" + (f" ({desc[:200]})" if desc else "")
+    return httpx.HTTPStatusError(msg, request=resp.request, response=resp)
 
 
 def _read_local(path: str) -> bytes | None:

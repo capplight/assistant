@@ -12,17 +12,21 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from html import unescape
 from html.parser import HTMLParser
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import urljoin
 
 import httpx
 
 from assistant.db.models import ItemSource
+from assistant.logs import error_text
 
 log = logging.getLogger(__name__)
 
 PAGE_MAX_BYTES = 512 * 1024
 IMAGE_MAX_BYTES = 5 * 1024 * 1024
 MAX_REDIRECTS = 3
+ALLOWED_PORTS = frozenset({80, 443})
+TOTAL_TIMEOUT = 15.0  # whole page/image fetch incl. redirects; per-op timeout is separate
+UA = "Mozilla/5.0 (compatible; TripMemoryBot/1.0)"
 
 Resolver = Callable[[str], Awaitable[list[str]]]
 
@@ -120,9 +124,17 @@ class LinkMetadataClient:
         graph_version: str = "v23.0",
         timeout: float = 6.0,
         resolver: Resolver | None = None,
+        page_client: httpx.AsyncClient | None = None,
     ) -> None:
-        self._client = client or httpx.AsyncClient(
-            timeout=timeout, headers={"User-Agent": "Mozilla/5.0 (compatible; TripMemoryBot/1.0)"}
+        self._client = client or httpx.AsyncClient(timeout=timeout, headers={"User-Agent": UA})
+        # Arbitrary user URLs go through a separate client: no env proxies (the proxy would
+        # resolve names itself) and no keep-alive (a pooled connection to an IP must not be
+        # reused for another host with a different SNI).
+        self._page_client = page_client or client or httpx.AsyncClient(
+            timeout=timeout,
+            headers={"User-Agent": UA},
+            trust_env=False,
+            limits=httpx.Limits(max_keepalive_connections=0),
         )
         self._ig_token = instagram_access_token
         self._graph_version = graph_version
@@ -131,6 +143,8 @@ class LinkMetadataClient:
 
     async def aclose(self) -> None:
         await self._client.aclose()
+        if self._page_client is not self._client:
+            await self._page_client.aclose()
 
     async def fetch(self, url: str, source: ItemSource) -> LinkMeta | None:
         try:
@@ -147,7 +161,7 @@ class LinkMetadataClient:
                 return None  # chat links carry nothing useful
             return await self._page(url)
         except Exception as e:  # never fail an item because of metadata
-            log.info("link metadata failed for %s: %r", source, e)
+            log.info("link metadata failed for %s: %s", source, error_text(e))
             return None
 
     async def fetch_image(self, url: str) -> bytes | None:
@@ -155,7 +169,7 @@ class LinkMetadataClient:
         try:
             body, ctype = await self._get_capped(url, IMAGE_MAX_BYTES)
         except Exception as e:
-            log.info("thumbnail fetch failed: %r", e)
+            log.info("thumbnail fetch failed: %s", error_text(e))
             return None
         if body is None or not ctype.startswith("image/"):
             return None
@@ -174,22 +188,40 @@ class LinkMetadataClient:
             return None
         return parse_page_meta(body.decode("utf-8", errors="replace"))
 
-    async def _check_public(self, url: str) -> None:
-        """SSRF guard: user-supplied URLs must not reach private networks."""
-        parts = urlsplit(url)
-        if parts.scheme not in ("http", "https") or not parts.hostname:
+    async def _pin(self, url: str) -> tuple[httpx.URL, str, str]:
+        """SSRF guard for user-supplied URLs: resolve once, require every address to be
+        public and the port to be 80/443, and return the URL rewritten to the vetted IP
+        (plus the Host header and TLS SNI/verification name) so httpx never resolves again.
+        """
+        u = httpx.URL(url)
+        if u.scheme not in ("http", "https") or not u.raw_host or u.userinfo:
             raise ValueError("unsupported url")
-        for addr in await self._resolve(parts.hostname):
-            ip = ipaddress.ip_address(addr.split("%")[0])
-            if not ip.is_global:
-                raise ValueError(f"non-public address for {parts.hostname}")
+        if u.port is not None and u.port not in ALLOWED_PORTS:
+            raise ValueError("port not allowed")
+        host = u.raw_host.decode("ascii")
+        addrs = await self._resolve(host)
+        if not addrs:
+            raise ValueError("host does not resolve")
+        ips = [ipaddress.ip_address(a.split("%")[0]) for a in addrs]
+        for ip in ips:
+            mapped = getattr(ip, "ipv4_mapped", None)
+            if not ip.is_global or (mapped is not None and not mapped.is_global):
+                raise ValueError("non-public address")
+        return u.copy_with(host=str(ips[0])), u.netloc.decode("ascii"), host
 
     async def _get_capped(self, url: str, cap: int) -> tuple[bytes | None, str]:
-        for _ in range(MAX_REDIRECTS + 1):
-            await self._check_public(url)
-            async with self._client.stream(
-                "GET", url, timeout=self._timeout, follow_redirects=False
-            ) as resp:
+        async with asyncio.timeout(TOTAL_TIMEOUT):
+            return await self._get_capped_inner(url, cap)
+
+    async def _get_capped_inner(self, url: str, cap: int) -> tuple[bytes | None, str]:
+        for _ in range(MAX_REDIRECTS + 1):  # every hop is re-vetted and re-pinned
+            pinned, host_header, host = await self._pin(url)
+            # sni_hostname: httpcore sends it as SNI and verifies the certificate against it.
+            ext = {"sni_hostname": host} if pinned.scheme == "https" else {}
+            async with self._page_client.stream(
+                "GET", pinned, headers={"Host": host_header}, extensions=ext,
+                timeout=self._timeout, follow_redirects=False,
+            ) as resp:  # fmt: skip
                 if resp.is_redirect and "location" in resp.headers:
                     url = urljoin(url, resp.headers["location"])
                     continue

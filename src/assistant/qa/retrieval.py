@@ -4,7 +4,7 @@ Statement builders return SQLAlchemy selects and do no I/O, so tests compile the
 """
 
 from collections.abc import Sequence
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta, tzinfo
 
 from geoalchemy2 import Geography
 from sqlalchemy import ColumnElement, Select, cast, func, literal, or_, select
@@ -50,9 +50,63 @@ def _escape_like(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
-def _day_start_utc(d: date) -> datetime:
-    # Day bounds in UTC are close enough for "what did I save last week".
-    return datetime.combine(d, time(0, 0), tzinfo=UTC)
+def _day_start_utc(d: date, tz: tzinfo = UTC) -> datetime:
+    """Start of calendar day `d` in the user's tz, as aware UTC."""
+    return datetime.combine(d, time(0, 0), tzinfo=tz).astimezone(UTC)
+
+
+# Common country names the model or heuristics may give instead of an ISO code.
+COUNTRY_CODES = {
+    "vietnam": "VN",
+    "viet nam": "VN",
+    "вьетнам": "VN",
+    "thailand": "TH",
+    "таиланд": "TH",
+    "тайланд": "TH",
+    "turkey": "TR",
+    "turkiye": "TR",
+    "türkiye": "TR",
+    "турция": "TR",
+    "uae": "AE",
+    "united arab emirates": "AE",
+    "оаэ": "AE",
+    "эмираты": "AE",
+    "georgia": "GE",
+    "грузия": "GE",
+    "kazakhstan": "KZ",
+    "казахстан": "KZ",
+    "indonesia": "ID",
+    "индонезия": "ID",
+    "egypt": "EG",
+    "египет": "EG",
+    "china": "CN",
+    "китай": "CN",
+    "japan": "JP",
+    "япония": "JP",
+    "south korea": "KR",
+    "korea": "KR",
+    "корея": "KR",
+    "южная корея": "KR",
+    "uzbekistan": "UZ",
+    "узбекистан": "UZ",
+    "kyrgyzstan": "KG",
+    "кыргызстан": "KG",
+    "киргизия": "KG",
+    "malaysia": "MY",
+    "малайзия": "MY",
+    "sri lanka": "LK",
+    "шри-ланка": "LK",
+    "maldives": "MV",
+    "мальдивы": "MV",
+}
+
+
+def country_code(value: str | None) -> str | None:
+    """ISO 3166-1 alpha-2 from a code or a common ru/en name; None if unknown."""
+    v = (value or "").strip()
+    if len(v) == 2 and v.isascii() and v.isalpha():
+        return v.upper()
+    return COUNTRY_CODES.get(v.casefold())
 
 
 def trip_ids_subquery(user_id: int, hint: str) -> Select[tuple[int]]:
@@ -63,8 +117,13 @@ def trip_ids_subquery(user_id: int, hint: str) -> Select[tuple[int]]:
     )
 
 
-def item_conditions(user_id: int, f: QueryFilters) -> list[ColumnElement[bool]]:
-    """WHERE clauses shared by every arm. Always scoped to the user's own searchable items."""
+def item_conditions(
+    user_id: int, f: QueryFilters, *, tz: tzinfo = UTC
+) -> list[ColumnElement[bool]]:
+    """WHERE clauses shared by every arm. Always scoped to the user's own searchable items.
+
+    Date filters are calendar days in `tz` (pass the user's tz).
+    """
     conds: list[ColumnElement[bool]] = [
         Item.user_id == user_id,
         Item.status.in_(SEARCHABLE_STATUSES),
@@ -72,8 +131,8 @@ def item_conditions(user_id: int, f: QueryFilters) -> list[ColumnElement[bool]]:
     cities = [c.strip() for c in f.city_variants if c and c.strip()]
     if cities:
         conds.append(or_(*[Item.city.ilike(_escape_like(c), escape="\\") for c in cities]))
-    elif f.country:
-        conds.append(Item.country == f.country.strip().upper()[:2])
+    elif code := country_code(f.country):
+        conds.append(Item.country == code)
     categories = [Category(c) for c in f.categories]
     if categories:
         conds.append(Item.category.in_(categories))
@@ -81,9 +140,9 @@ def item_conditions(user_id: int, f: QueryFilters) -> list[ColumnElement[bool]]:
         conds.append(Item.trip_id.in_(trip_ids_subquery(user_id, f.trip_hint)))
     d_from, d_to = f.parsed_dates()
     if d_from:
-        conds.append(Item.created_at >= _day_start_utc(d_from))
+        conds.append(Item.created_at >= _day_start_utc(d_from, tz))
     if d_to:
-        conds.append(Item.created_at < _day_start_utc(d_to + timedelta(days=1)))
+        conds.append(Item.created_at < _day_start_utc(d_to + timedelta(days=1), tz))
     return conds
 
 
@@ -148,15 +207,17 @@ def items_by_ids_stmt(user_id: int, ids: Sequence[int]) -> Select[tuple[Item]]:
     return select(Item).where(Item.user_id == user_id, Item.id.in_(list(ids)))
 
 
-def bookings_stmt(user_id: int, f: QueryFilters, now: datetime) -> Select[tuple[Booking]]:
+def bookings_stmt(
+    user_id: int, f: QueryFilters, now: datetime, *, tz: tzinfo = UTC
+) -> Select[tuple[Booking]]:
     """Confirmed bookings; without a period, upcoming ones (and those started in the last day)."""
     stmt = select(Booking).where(Booking.user_id == user_id, Booking.confirmed_at.is_not(None))
     d_from, d_to = f.parsed_dates()
     if d_from or d_to:
         if d_from:
-            stmt = stmt.where(Booking.starts_at >= _day_start_utc(d_from))
+            stmt = stmt.where(Booking.starts_at >= _day_start_utc(d_from, tz))
         if d_to:
-            stmt = stmt.where(Booking.starts_at < _day_start_utc(d_to + timedelta(days=1)))
+            stmt = stmt.where(Booking.starts_at < _day_start_utc(d_to + timedelta(days=1), tz))
     else:
         stmt = stmt.where(
             or_(Booking.starts_at.is_(None), Booking.starts_at >= now - timedelta(days=1))

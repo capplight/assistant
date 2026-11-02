@@ -1,4 +1,9 @@
-"""DB-bound implementation of the pipeline contract (see assistant.pipeline.__init__)."""
+"""DB-bound implementation of the pipeline contract (see assistant.pipeline.__init__).
+
+Transaction shape (CLAUDE.md): no transaction stays open across network calls, results are
+committed before any Telegram message is sent, and a failed send never re-raises.
+Every public function here commits the session it is given.
+"""
 
 import logging
 from datetime import UTC, datetime
@@ -8,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from assistant import scheduler
 from assistant.db.models import Booking, BookingType, Category, Item, ItemStatus, Trip, User
+from assistant.logs import error_text, redact
 from assistant.notify import Notifier, OutMessage
 from assistant.pipeline import CB_BOOKING, CB_PICK
 from assistant.pipeline.core import Outcome, PipelineContext, run_pipeline
@@ -28,7 +34,12 @@ from assistant.pipeline.places import ResolvedPlace, link_item_place
 
 log = logging.getLogger(__name__)
 
+# PROCESSING is deliberately not here: a retried job (crash, transient error) runs again.
 SKIP_STATUSES = (ItemStatus.DONE, ItemStatus.NEEDS_INPUT)
+
+ALREADY_CONFIRMED_TEXT = "Эта бронь уже сохранена."
+REJECTED_TEXT = "Хорошо, не сохраняю. Пришли скриншот получше или напиши детали текстом."
+NO_PLACE_TEXT = "Хорошо, сохранил без точного места. Если знаешь название — пришли его сообщением."
 
 
 def _msg(item: Item, text: str, buttons=None) -> OutMessage:
@@ -58,6 +69,27 @@ def trip_info(t: Trip) -> TripInfo:
     )  # fmt: skip
 
 
+async def send_safely(notifier: Notifier, message: OutMessage | None) -> None:
+    """Send after commit. Blocked bot, flood limits, network: log and move on, never raise,
+    so the queue does not re-run (and re-pay for) work that is already saved."""
+    if message is None:
+        return
+    try:
+        await notifier.send(message)
+    except Exception as e:
+        log.warning("could not notify chat %s: %s", message.chat_id, error_text(e))
+
+
+async def _lock_item(session: AsyncSession, item_id: int) -> Item | None:
+    stmt = (
+        select(Item)
+        .where(Item.id == item_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
 async def _load_trips(session: AsyncSession, user_id: int, existing: int | None) -> list[Trip]:
     stmt = select(Trip).where(Trip.user_id == user_id)
     stmt = stmt.where(Trip.is_active.is_(True) | (Trip.id == existing)) if existing else stmt.where(
@@ -66,37 +98,25 @@ async def _load_trips(session: AsyncSession, user_id: int, existing: int | None)
     return list((await session.execute(stmt.order_by(Trip.id))).scalars())
 
 
+# ---------------------------------------------------------------- process_item
+
+
 async def process_item(
     session: AsyncSession, item_id: int, notifier: Notifier, deps: Deps | None = None
 ) -> None:
-    deps = deps or get_deps()
-    item = (
-        await session.execute(select(Item).where(Item.id == item_id).with_for_update())
-    ).scalar_one_or_none()
-    if item is None:
-        log.warning("process_item: item %s not found", item_id)
-        return
-    if item.status in SKIP_STATUSES:
-        log.info("process_item: item %s already %s", item_id, item.status)
-        return
-    user = await session.get(User, item.user_id)
-    if user is None or user.consent_at is None:
-        log.info("process_item: item %s skipped, no consent", item_id)
-        return
+    """Claim (short tx) -> network work with no open tx -> store (short tx) -> send.
 
-    trips = await _load_trips(session, user.id, item.trip_id)
-    item.status = ItemStatus.PROCESSING
+    Commits `session` itself; any pending changes of the caller are committed with the claim.
+    """
+    deps = deps or get_deps()
+    ctx = await _claim(session, item_id, deps)
+    if ctx is None:
+        return
 
     async def resolve(query: str, country: str | None) -> ResolvedPlace | None:
+        # PlaceResolver.resolve ends its own transactions around the provider call.
         return await deps.places.resolve(session, query, country)
 
-    ctx = PipelineContext(
-        item=item_data(item),
-        user_tz=user.tz,
-        trips=[trip_info(t) for t in trips],
-        existing_trip_id=item.trip_id,
-        now=deps.clock(),
-    )
     try:
         outcome = await run_pipeline(
             ctx,
@@ -106,26 +126,101 @@ async def process_item(
             threshold=deps.threshold,
             zone_loader=deps.zone_loader,
         )
+        vector = await _embed(ctx.item, outcome, deps)
     except Exception as e:
+        await session.rollback()  # a failed place upsert may have left a transaction open
         if not is_permanent(e):
             raise  # transient or unknown: the queue retries with backoff
-        log.warning("item %s failed permanently: %r", item_id, e)
-        await mark_failed(session, item, repr(e), notifier, deps)
+        err = error_text(e)
+        log.warning("item %s failed permanently: %s", item_id, err)
+        await send_safely(notifier, await _store_failure(session, item_id, err, deps.clock()))
         return
 
-    message = await apply_outcome(session, item, user, outcome, deps)
-    await session.flush()
-    await notifier.send(message)
+    await send_safely(notifier, await _store_outcome(session, item_id, outcome, vector, deps))
+
+
+async def _claim(session: AsyncSession, item_id: int, deps: Deps) -> PipelineContext | None:
+    """Short transaction: check the item and mark it PROCESSING. Returns plain data only."""
+    item = await _lock_item(session, item_id)
+    ctx = None
+    if item is None:
+        log.warning("process_item: item %s not found", item_id)
+    elif item.status in SKIP_STATUSES:
+        log.info("process_item: item %s already %s", item_id, item.status)
+    else:
+        user = await session.get(User, item.user_id)
+        if user is None or user.consent_at is None:
+            log.info("process_item: item %s skipped, no consent", item_id)
+        else:
+            trips = await _load_trips(session, user.id, item.trip_id)
+            item.status = ItemStatus.PROCESSING
+            ctx = PipelineContext(
+                item=item_data(item),
+                user_tz=user.tz,
+                trips=[trip_info(t) for t in trips],
+                existing_trip_id=item.trip_id,
+                now=deps.clock(),
+            )
+    await session.commit()
+    return ctx
+
+
+async def _embed(item: ItemData, out: Outcome, deps: Deps) -> list[float] | None:
+    ex = out.extraction
+    if ex is None or deps.embedder.dim == 0:
+        return None
+    city = (out.place.city if out.place else None) or ex.city
+    text = "\n".join(x for x in (ex.title, ex.summary_ru, city, item.raw_text) if x)
+    if not text:
+        return None
+    try:
+        vectors = await deps.embedder.embed([text[:8000]], "document")
+    except Exception as e:  # search falls back to full-text; never fail the item for this
+        log.warning("embedding failed for item %s: %s", item.id, error_text(e))
+        return None
+    return vectors[0] if vectors else None
+
+
+async def _store_outcome(
+    session: AsyncSession, item_id: int, out: Outcome, vector: list[float] | None, deps: Deps
+) -> OutMessage | None:
+    item = await _lock_item(session, item_id)
+    if item is None or item.status is not ItemStatus.PROCESSING:
+        # Deleted by the user meanwhile, or finished by another run: drop silently.
+        log.info("process_item: item %s gone or no longer processing, result dropped", item_id)
+        await session.commit()
+        return None
+    if out.trip is not None and await session.get(Trip, out.trip.id) is None:
+        out.trip = None  # trip deleted while we were working
+    message = await apply_outcome(session, item, out, vector, deps)
+    await session.commit()
+    return message
+
+
+async def _store_failure(
+    session: AsyncSession, item_id: int, error: str, now: datetime
+) -> OutMessage | None:
+    item = await _lock_item(session, item_id)
+    if item is None or item.status is not ItemStatus.PROCESSING:
+        await session.commit()
+        return None
+    item.status = ItemStatus.FAILED
+    item.error = redact(error)[:4000]
+    item.processed_at = now
+    message = _msg(item, FAILED_TEXT)
+    await session.commit()
+    return message
 
 
 async def apply_outcome(
-    session: AsyncSession, item: Item, user: User, out: Outcome, deps: Deps
+    session: AsyncSession, item: Item, out: Outcome, vector: list[float] | None, deps: Deps
 ) -> OutMessage:
+    """Write the outcome onto the locked item (DB only, no network). Caller commits."""
     item.processed_at = deps.clock()
     ex = out.extraction
     if ex is None:  # nothing readable: ask the user
         item.status = out.status
-        item.error = out.error
+        item.error = redact(out.error)[:4000] if out.error else None
         return _msg(item, out.user_text or FAILED_TEXT)
 
     item.title = ex.title
@@ -140,10 +235,11 @@ async def apply_outcome(
     if out.trip is not None:
         item.trip_id = out.trip.id
     item.status = out.status
+    if vector is not None:
+        item.embedding = vector
 
     if out.place is not None:
         await link_item_place(session, item.id, out.place.place_id)
-    await _embed(item, deps)
 
     if out.decision == "ask":
         return _msg(item, ASK_PLACE_TEXT, ask_buttons(item.id, out.options, CB_PICK))
@@ -151,7 +247,7 @@ async def apply_outcome(
     if out.booking is not None:
         d = out.booking
         booking = Booking(
-            user_id=user.id,
+            user_id=item.user_id,
             trip_id=item.trip_id,
             item_id=item.id,
             type=BookingType(d.type),
@@ -164,47 +260,31 @@ async def apply_outcome(
         )
         session.add(booking)
         await session.flush()
-        return _msg(item, booking_text(d, out.trip), booking_buttons(booking.id, CB_BOOKING))
+        buttons = booking_buttons(booking.id, CB_BOOKING, no_date=d.starts_at is None)
+        return _msg(item, booking_text(d, out.trip), buttons)
 
     if ex.kind in ("tip", "note"):
         return _msg(item, note_text(ex.title, ex.kind, out.trip))
     return _msg(item, saved_text(ex.title, item.city, ex.category, out.trip))
 
 
-async def _embed(item: Item, deps: Deps) -> None:
-    if deps.embedder.dim == 0:
-        return
-    text = "\n".join(x for x in (item.title, item.summary, item.city, item.raw_text) if x)
-    if not text:
-        return
-    try:
-        vectors = await deps.embedder.embed([text[:8000]], "document")
-    except Exception as e:  # search falls back to full-text; never fail the item for this
-        log.warning("embedding failed for item %s: %r", item.id, e)
-        return
-    if vectors:
-        item.embedding = vectors[0]
-
-
-async def mark_failed(
-    session: AsyncSession, item: Item, error: str, notifier: Notifier, deps: Deps | None = None
-) -> None:
-    item.status = ItemStatus.FAILED
-    item.error = error[:4000]
-    item.processed_at = deps.clock() if deps else datetime.now(UTC)
-    await session.flush()
-    await notifier.send(_msg(item, FAILED_TEXT))
-
-
 async def fail_item(session: AsyncSession, item_id: int, error: str, notifier: Notifier) -> None:
-    """Worker gave up on the job: mark the item FAILED and tell the user once."""
-    item = await session.get(Item, item_id)
-    if item is None or item.status in (ItemStatus.DONE, ItemStatus.FAILED):
+    """Worker gave up on the job: commit FAILED first, then tell the user once.
+    Commits `session` itself; a failed send is logged, never raised."""
+    item = await _lock_item(session, item_id)
+    if item is None or item.status in (ItemStatus.DONE, ItemStatus.FAILED,
+                                       ItemStatus.NEEDS_INPUT):  # fmt: skip
+        await session.commit()
         return
     item.status = ItemStatus.FAILED
-    item.error = error[:4000]
-    await session.flush()
-    await notifier.send(_msg(item, FAILED_TEXT))
+    item.error = redact(error)[:4000]
+    item.processed_at = datetime.now(UTC)
+    message = _msg(item, FAILED_TEXT)
+    await session.commit()
+    await send_safely(notifier, message)
+
+
+# ---------------------------------------------------------------- handle_choice
 
 
 async def handle_choice(
@@ -214,62 +294,83 @@ async def handle_choice(
     notifier: Notifier,
     deps: Deps | None = None,
 ) -> None:
+    """Commits `session` itself. The place lookup runs with no transaction open."""
     deps = deps or get_deps()
-    item = (
-        await session.execute(select(Item).where(Item.id == item_id).with_for_update())
-    ).scalar_one_or_none()
+    item = await _lock_item(session, item_id)
     if item is None or item.status is not ItemStatus.NEEDS_INPUT:
         log.info("handle_choice: item %s not waiting for input", item_id)
+        await session.commit()
         return
     options: list[str] = list((item.extracted or {}).get("options") or [])
-    trip = await session.get(Trip, item.trip_id) if item.trip_id else None
-    trip_i = trip_info(trip) if trip else None
-    item.status = ItemStatus.DONE
-    item.processed_at = deps.clock()
 
     if not 0 <= option_index < len(options):
-        await session.flush()
-        await notifier.send(_msg(
-            item,
-            "Хорошо, сохранил без точного места. Если знаешь название — пришли его сообщением.",
-        ))  # fmt: skip
+        item.status = ItemStatus.DONE
+        item.processed_at = deps.clock()
+        message = _msg(item, NO_PLACE_TEXT)
+        await session.commit()
+        await send_safely(notifier, message)
         return
 
     choice = options[option_index]
     query = choice if not item.city or item.city.casefold() in choice.casefold() else (
         f"{choice}, {item.city}"
     )
-    place = await deps.places.resolve(session, query, item.country)
+    country = item.country
+    await session.commit()  # release the row lock before the network call
+
+    try:
+        place = await deps.places.resolve(session, query, country)
+    except Exception:
+        await session.rollback()
+        raise
+
+    item = await _lock_item(session, item_id)
+    if item is None or item.status is not ItemStatus.NEEDS_INPUT:
+        log.info("handle_choice: item %s changed meanwhile (double press?)", item_id)
+        await session.commit()
+        return
+    item.status = ItemStatus.DONE
+    item.processed_at = deps.clock()
     item.title = place.name if place else choice
     if place is not None:
         await link_item_place(session, item.id, place.place_id)
         item.city = place.city or item.city
         item.country = place.country or item.country
     item.confidence = 1.0
-    await session.flush()
+    trip = await session.get(Trip, item.trip_id) if item.trip_id else None
+    trip_i = trip_info(trip) if trip else None
     category = item.category.value if item.category else None
-    await notifier.send(_msg(item, saved_text(item.title, item.city, category, trip_i)))
+    message = _msg(item, saved_text(item.title, item.city, category, trip_i))
+    await session.commit()
+    await send_safely(notifier, message)
+
+
+# ---------------------------------------------------------------- confirm_booking
 
 
 async def confirm_booking(
     session: AsyncSession, booking_id: int, ok: bool, notifier: Notifier
 ) -> None:
-    booking = await session.get(Booking, booking_id)
+    """Commits `session` itself, then replies."""
+    booking = await session.get(Booking, booking_id, with_for_update=True)
     if booking is None:
         log.info("confirm_booking: booking %s not found", booking_id)
+        await session.commit()
         return
     chat_id, reply_to = await _booking_chat(session, booking)
 
-    if not ok:
-        await session.delete(booking)  # cascades to its reminders
-        await session.flush()
-        text = "Хорошо, не сохраняю. Пришли скриншот получше или напиши детали текстом."
-        await notifier.send(OutMessage(chat_id, text, reply_to))
+    if booking.confirmed_at is not None:
+        # "Да" pressed twice, or "Нет" after "Да": never delete a confirmed booking.
+        await session.commit()
+        await send_safely(notifier, OutMessage(chat_id, ALREADY_CONFIRMED_TEXT, reply_to))
         return
 
-    if booking.confirmed_at is not None:
-        await notifier.send(OutMessage(chat_id, "Эта бронь уже сохранена.", reply_to))
+    if not ok:
+        await session.delete(booking)  # cascades to its reminders
+        await session.commit()
+        await send_safely(notifier, OutMessage(chat_id, REJECTED_TEXT, reply_to))
         return
+
     booking.confirmed_at = datetime.now(UTC)
     await session.flush()
     reminders = []
@@ -278,8 +379,14 @@ async def confirm_booking(
     except NotImplementedError:
         log.warning("scheduler.schedule_for_booking not implemented yet; booking %s confirmed "
                     "without reminders", booking.id)  # fmt: skip
-    text = "Готово, бронь сохранена." + (" Напомню заранее." if reminders else "")
-    await notifier.send(OutMessage(chat_id, text, reply_to))
+    if reminders:
+        text = "Готово, бронь сохранена. Напомню заранее."
+    elif booking.starts_at is None:
+        text = "Готово, бронь сохранена. Даты нет, поэтому напоминания не будет."
+    else:
+        text = "Готово, бронь сохранена."
+    await session.commit()
+    await send_safely(notifier, OutMessage(chat_id, text, reply_to))
 
 
 async def _booking_chat(session: AsyncSession, booking: Booking) -> tuple[int, int | None]:

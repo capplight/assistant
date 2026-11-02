@@ -1,20 +1,27 @@
 """Reminder loop: `python -m assistant.scheduler`.
 
-Every settings.scheduler_tick_seconds sends due reminders in one transaction. Several
-instances may run at once (rows are claimed with FOR UPDATE SKIP LOCKED).
+Every settings.scheduler_tick_seconds sends due reminders, each in its own short
+transactions (see assistant.scheduler.service). Several instances may run at once (rows are
+claimed with FOR UPDATE SKIP LOCKED plus a short lease). Once an hour it also deletes
+processed_updates rows older than 7 days.
 """
 
 import asyncio
 import contextlib
 import logging
 import signal
+import time
 
 from assistant.config import get_settings
-from assistant.db.session import session_scope
+from assistant.db.session import get_sessionmaker, session_scope
+from assistant.logs import configure_logging, error_text
 from assistant.notify import Notifier, TelegramNotifier
 from assistant.scheduler import send_due
+from assistant.scheduler.service import cleanup_processed_updates
 
 log = logging.getLogger("assistant.scheduler")
+
+CLEANUP_EVERY_SECONDS = 3600.0
 
 
 def make_bot():
@@ -30,18 +37,45 @@ def make_bot():
 
 
 async def tick(notifier: Notifier) -> int:
+    return await send_due(None, notifier, sessionmaker=get_sessionmaker())
+
+
+async def cleanup() -> int:
     async with session_scope() as session:
-        return await send_due(session, notifier)
+        return await cleanup_processed_updates(session)
+
+
+class _Every:
+    """True at most once per `seconds` (monotonic clock); the first call is True."""
+
+    def __init__(self, seconds: float, clock=time.monotonic) -> None:
+        self._seconds, self._clock = seconds, clock
+        self._last: float | None = None
+
+    def due(self) -> bool:
+        now = self._clock()
+        if self._last is not None and now - self._last < self._seconds:
+            return False
+        self._last = now
+        return True
 
 
 async def run(stop: asyncio.Event, notifier: Notifier, interval: float) -> None:
+    cleanup_timer = _Every(CLEANUP_EVERY_SECONDS)
     while not stop.is_set():
         try:
             sent = await tick(notifier)
             if sent:
                 log.info("sent %d reminders", sent)
-        except Exception:
-            log.exception("scheduler tick failed")
+        except Exception as exc:
+            log.error("scheduler tick failed: %s", error_text(exc))
+        if cleanup_timer.due():
+            try:
+                deleted = await cleanup()
+                if deleted:
+                    log.info("deleted %d old processed_updates", deleted)
+            except Exception as exc:
+                log.error("processed_updates cleanup failed: %s", error_text(exc))
         with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(stop.wait(), timeout=interval)
 
@@ -58,7 +92,7 @@ def _install_signal_handlers(stop: asyncio.Event) -> None:
 
 async def main() -> None:
     s = get_settings()
-    logging.basicConfig(level=s.log_level, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    configure_logging(s.log_level)
     stop = asyncio.Event()
     _install_signal_handlers(stop)
     bot = make_bot()

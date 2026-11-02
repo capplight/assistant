@@ -52,6 +52,8 @@ class FakeSession:
         self.inserts: list[Insert] = []
         self.deleted: list[object] = []
         self.flushes = 0
+        self.commits = 0
+        self.rollbacks = 0
         self._next_id = 100
         for o in objs:
             self.objs[(type(o), o.id)] = o
@@ -78,6 +80,12 @@ class FakeSession:
 
     async def flush(self):
         self.flushes += 1
+
+    async def commit(self):
+        self.commits += 1
+
+    async def rollback(self):
+        self.rollbacks += 1
 
     def inserted(self, table):
         return [s for s in self.inserts if s.table.name == table.__tablename__]

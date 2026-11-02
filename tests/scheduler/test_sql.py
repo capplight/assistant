@@ -5,7 +5,9 @@ from sqlalchemy.dialects import postgresql
 from assistant.db.models import Trip
 from assistant.scheduler.service import (
     bookings_on_day_stmt,
-    due_stmt,
+    claim_stmt,
+    due_ids_stmt,
+    lock_stmt,
     scheduled_for_booking_stmt,
     scheduled_for_trip_stmt,
     trip_items_stmt,
@@ -17,13 +19,21 @@ def sql(stmt):
     return " ".join(str(c).split()), c.params
 
 
-def test_due_stmt_locks_reminders_skip_locked():
-    text, params = sql(due_stmt(datetime(2026, 12, 1, tzinfo=UTC)))
+def test_due_ids_stmt_does_not_lock():
+    text, params = sql(due_ids_stmt(datetime(2026, 12, 1, tzinfo=UTC)))
+    assert text.startswith("SELECT reminders.id FROM reminders")
+    assert "FOR UPDATE" not in text
+    assert "reminders.due_at <=" in text and "ORDER BY reminders.due_at" in text
+    assert 100 in params.values() and "scheduled" in params.values()
+
+
+def test_claim_locks_one_reminder_skip_locked():
+    text, params = sql(claim_stmt(42, datetime(2026, 12, 1, tzinfo=UTC)))
     assert "FOR UPDATE OF reminders SKIP LOCKED" in text
-    assert "reminders.due_at <=" in text
-    assert "ORDER BY reminders.due_at" in text
-    assert 100 in params.values()
-    assert "scheduled" in params.values()
+    assert "reminders.id =" in text and "reminders.due_at <=" in text
+    assert {42, "scheduled"} <= set(params.values())
+    text, params = sql(lock_stmt(42))
+    assert text.endswith("FOR UPDATE") and 42 in params.values()
 
 
 def test_replacement_selects_only_scheduled_rows():

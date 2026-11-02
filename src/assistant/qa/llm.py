@@ -1,6 +1,7 @@
 """Model calls for Q&A behind a small client class (tests pass a fake)."""
 
-from typing import Protocol
+from functools import lru_cache
+from typing import Any, Protocol
 
 from pydantic import BaseModel, Field
 
@@ -55,14 +56,29 @@ database; speak about the result.
 - The intro is one sentence. Each note is at most 12 words."""
 
 
+SDK_TIMEOUT_SECONDS = 60.0
+
+
+@lru_cache(maxsize=1)
+def get_anthropic_client() -> Any:
+    """One AsyncAnthropic (one httpx pool) per process, created on first use.
+
+    Tests never reach this: they pass a fake client or LLM. cache_clear() resets it.
+    """
+    from anthropic import AsyncAnthropic
+
+    s = get_settings()
+    return AsyncAnthropic(
+        api_key=s.anthropic_api_key.get_secret_value() or None,
+        timeout=SDK_TIMEOUT_SECONDS,
+        max_retries=2,
+    )
+
+
 class AnthropicQALLM:
     def __init__(self, client=None, *, model: str | None = None) -> None:
         s = get_settings()
-        if client is None:
-            from anthropic import AsyncAnthropic
-
-            client = AsyncAnthropic(api_key=s.anthropic_api_key.get_secret_value() or None)
-        self._client = client
+        self._client = client if client is not None else get_anthropic_client()
         self._model = model or s.model_fast
 
     async def _parse(self, system: str, content: str, schema: type[BaseModel]) -> BaseModel:

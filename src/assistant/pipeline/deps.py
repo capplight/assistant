@@ -22,6 +22,11 @@ from assistant.pipeline.telegram_files import TelegramFiles
 
 log = logging.getLogger(__name__)
 
+# Per LLM request. Worst case per item: 2 models x (1 + retries) x timeout = 12 min, far below
+# the queue's 30-minute STALE_AFTER, so a slow job is never reclaimed while still running.
+LLM_TIMEOUT = 120.0
+LLM_MAX_RETRIES = 2
+
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
@@ -52,8 +57,9 @@ class Deps:
 def build_deps(settings: Settings | None = None) -> Deps:
     s = settings or get_settings()
     anthropic_key = s.anthropic_api_key.get_secret_value()
-    client = anthropic.AsyncAnthropic(api_key=anthropic_key) if anthropic_key else (
-        anthropic.AsyncAnthropic()
+    llm_opts = {"timeout": LLM_TIMEOUT, "max_retries": LLM_MAX_RETRIES}
+    client = anthropic.AsyncAnthropic(api_key=anthropic_key, **llm_opts) if anthropic_key else (
+        anthropic.AsyncAnthropic(**llm_opts)
     )
     links = LinkMetadataClient(
         # Meta says instagram_oembed needs no token since 2026-06-15; honor one if provided.

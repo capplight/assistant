@@ -119,7 +119,8 @@ ISSUE_CODE = "bad_code"
 ISSUE_END_BEFORE_START = "end_before_start"
 
 ISSUE_RU = {
-    ISSUE_NO_DATE: "Не вижу дату и время — проверь, пожалуйста.",
+    ISSUE_NO_DATE: "Не вижу дату — без неё не смогу напомнить. Пришли скриншот, где видна "
+    "дата, или сохраню без напоминания.",
     ISSUE_PAST: "Дата уже прошла — проверь, пожалуйста.",
     ISSUE_CODE: "Код брони не разобрал.",
 }
@@ -301,13 +302,17 @@ def booking_text(draft: BookingDraft, trip: TripInfo | None) -> str:
     lines += [ISSUE_RU[i] for i in draft.issues if i in ISSUE_RU]
     if trip and trip.title:
         lines.append(f"Поездка: {trip.title}")
-    lines.append("Всё верно?")
+    if draft.starts_at is not None:
+        lines.append("Всё верно?")
     return "\n".join(lines)
 
 
-def booking_buttons(booking_id: int, cb_prefix: str = "bk") -> list[list[Button]]:
+def booking_buttons(
+    booking_id: int, cb_prefix: str = "bk", no_date: bool = False
+) -> list[list[Button]]:
+    """No date means no reminder: the "ok" button must not read like a confirmation."""
     return [[
-        Button("Да, верно", f"{cb_prefix}:{booking_id}:ok"),
+        Button("Сохранить без даты" if no_date else "Да, верно", f"{cb_prefix}:{booking_id}:ok"),
         Button("Нет", f"{cb_prefix}:{booking_id}:no"),
     ]]
 

@@ -85,31 +85,72 @@ async def save_items(
 ) -> list[Item]:
     """Insert items (attached to the active trip) and, with consent, enqueue processing.
 
-    Everything happens in the caller's transaction.
+    Returns only the rows actually inserted: a link that a concurrent update of the same
+    user already saved hits `uq_items_user_url` and is skipped (ON CONFLICT DO NOTHING)
+    instead of failing the whole update. Everything happens in the caller's transaction.
     """
+    if not drafts:
+        return []
     trip = await active_trip(session, user.id)
-    items = [
-        Item(
-            user_id=user.id,
-            trip_id=trip.id if trip else None,
-            kind=d.kind,
-            source=d.source,
-            status=ItemStatus.PENDING,
-            raw_text=d.raw_text,
-            url=d.url,
-            url_hash=d.url_hash,
-            telegram_file_id=d.telegram_file_id,
-            telegram_chat_id=chat_id,
-            telegram_message_id=message_id,
-        )
+    rows = [
+        {
+            "user_id": user.id,
+            "trip_id": trip.id if trip else None,
+            "kind": d.kind,
+            "source": d.source,
+            "status": ItemStatus.PENDING,
+            "raw_text": d.raw_text,
+            "url": d.url,
+            "url_hash": d.url_hash,
+            "telegram_file_id": d.telegram_file_id,
+            "telegram_chat_id": chat_id,
+            "telegram_message_id": message_id,
+        }
         for d in drafts
     ]
-    session.add_all(items)
-    await session.flush()
+    stmt = (
+        pg_insert(Item)
+        .values(rows)
+        .on_conflict_do_nothing(index_elements=[Item.user_id, Item.url_hash])
+        .returning(Item)
+    )
+    items = list((await session.scalars(stmt)).all())
     if user.consent_at is not None:
         for item in items:
             await queue.enqueue(session, JOB_PROCESS_ITEM, {"item_id": item.id})
     return items
+
+
+async def retry_failed_items(session: AsyncSession, user: User, hashes: Sequence[str]) -> int:
+    """Reset the user's FAILED items with these url hashes to PENDING and re-enqueue them.
+
+    Items without a trip are attached to the active trip. Returns how many were reset.
+    """
+    if not hashes:
+        return 0
+    stmt = (
+        select(Item)
+        .where(
+            Item.user_id == user.id,
+            Item.url_hash.in_(list(hashes)),
+            Item.status == ItemStatus.FAILED,
+        )
+        .with_for_update()
+    )
+    items = list((await session.scalars(stmt)).all())
+    if not items:
+        return 0
+    trip = await active_trip(session, user.id)
+    for item in items:
+        item.status = ItemStatus.PENDING
+        item.error = None
+        if item.trip_id is None and trip is not None:
+            item.trip_id = trip.id
+    await session.flush()
+    if user.consent_at is not None:
+        for item in items:
+            await queue.enqueue(session, JOB_PROCESS_ITEM, {"item_id": item.id})
+    return len(items)
 
 
 async def give_consent(session: AsyncSession, user: User) -> int | None:
@@ -146,12 +187,18 @@ async def create_trip(session: AsyncSession, user: User, spec: TripSpec) -> Trip
     )
     session.add(trip)
     await session.flush()
-    if trip.starts_on and trip.ends_on:
-        try:
-            await scheduler.schedule_for_trip(session, trip)
-        except NotImplementedError:
-            log.warning("scheduler.schedule_for_trip not implemented yet; trip %s", trip.id)
+    await _schedule_trip(session, trip)
     return trip
+
+
+async def _schedule_trip(session: AsyncSession, trip: Trip) -> None:
+    """(Re)create the trip's reminders if it has dates. Idempotent on the scheduler side."""
+    if not (trip.starts_on and trip.ends_on):
+        return
+    try:
+        await scheduler.schedule_for_trip(session, trip)
+    except NotImplementedError:
+        log.warning("scheduler.schedule_for_trip not implemented yet; trip %s", trip.id)
 
 
 async def list_trips(session: AsyncSession, user_id: int) -> list[Trip]:
@@ -168,6 +215,7 @@ async def switch_trip(session: AsyncSession, user_id: int, trip_id: int) -> Trip
     )
     trip.is_active = True
     await session.flush()
+    await _schedule_trip(session, trip)
     return trip
 
 

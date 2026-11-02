@@ -1,7 +1,9 @@
 """Job worker: `python -m assistant.worker`.
 
 Runs settings.worker_concurrency loops; each claims one process_item job at a time from the
-Postgres queue, processes it in its own transaction and records the result.
+Postgres queue, runs it (process_item manages its own short transactions and never keeps one
+open across network calls) and records the result. Error text stored in jobs.last_error goes
+through assistant.logs.error_text(): Bot API URLs contain the bot token.
 """
 
 import asyncio
@@ -12,6 +14,7 @@ from assistant.config import get_settings
 from assistant.db import queue
 from assistant.db.models import Job
 from assistant.db.session import get_engine, get_sessionmaker
+from assistant.logs import configure_logging, error_text
 from assistant.notify import Notifier, TelegramNotifier
 from assistant.pipeline import JOB_PROCESS_ITEM
 from assistant.pipeline.deps import Deps, build_deps, set_deps
@@ -40,15 +43,14 @@ async def run_one(notifier: Notifier, deps: Deps) -> bool:
     job_id, item_id = job.id, job_item_id(job)
     error: str | None = None
     if item_id is None:
-        error = f"bad payload: {job.payload!r}"
+        error = "bad payload: no item_id"
     else:
         try:
             async with sessionmaker() as s:
-                await process_item(s, item_id, notifier, deps)
-                await s.commit()
+                await process_item(s, item_id, notifier, deps)  # commits itself
         except Exception as e:
-            log.exception("job %s (item %s) failed", job_id, item_id)
-            error = f"{type(e).__name__}: {e}"
+            error = error_text(e)
+            log.exception("job %s (item %s) failed: %s", job_id, item_id, error)  # redacted
 
     async with sessionmaker() as s:
         job = await s.get(Job, job_id, with_for_update=True)
@@ -60,12 +62,12 @@ async def run_one(notifier: Notifier, deps: Deps) -> bool:
             return True
         gave_up = await queue.fail(s, job, error)
         await s.commit()
-        if gave_up and item_id is not None:
-            try:
-                await fail_item(s, item_id, error, notifier)
-                await s.commit()
-            except Exception:
-                log.exception("could not mark item %s failed", item_id)
+    if gave_up and item_id is not None:
+        try:
+            async with sessionmaker() as s:
+                await fail_item(s, item_id, error, notifier)  # commits FAILED, then sends
+        except Exception as e:
+            log.warning("could not mark item %s failed: %s", item_id, error_text(e))
     return True
 
 
@@ -108,9 +110,7 @@ def install_signal_handlers(stop: asyncio.Event) -> None:
 
 async def main() -> None:
     settings = get_settings()
-    logging.basicConfig(
-        level=settings.log_level, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
-    )
+    configure_logging(settings.log_level)  # redacts tokens, silences httpx request logs
     bot = make_bot(settings.bot_token.get_secret_value(), settings.telegram_api_base)
     notifier = TelegramNotifier(bot)
     deps = build_deps(settings)

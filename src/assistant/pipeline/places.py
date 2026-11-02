@@ -146,15 +146,18 @@ class PlaceResolver:
     async def resolve(
         self, session: AsyncSession, query: str, country: str | None = None
     ) -> ResolvedPlace | None:
+        """Commits `session` before the provider call and after the cache write, so no
+        transaction is open during the network request. Call it with nothing else pending."""
         if self._client is None or not query.strip():
             return None
         qh = query_hash(query)
         cached = await session.get(PlaceQuery, qh)
         if cached is not None:
-            if cached.place_id is None:
-                return None
-            place = await session.get(Place, cached.place_id)
-            return _resolved(place) if place else None
+            place = await session.get(Place, cached.place_id) if cached.place_id else None
+            resolved = _resolved(place) if place else None  # read before commit expires it
+            await session.commit()
+            return resolved
+        await session.commit()
 
         hit = pick_hit(await self._client.search(query), country)
         place_id = await self._upsert(session, hit) if hit else None
@@ -163,10 +166,10 @@ class PlaceResolver:
             .values(query_hash=qh, query=normalize_query(query), place_id=place_id)
             .on_conflict_do_nothing(index_elements=[PlaceQuery.query_hash])
         )
-        if place_id is None:
-            return None
-        place = await session.get(Place, place_id)
-        return _resolved(place) if place else None
+        place = await session.get(Place, place_id) if place_id is not None else None
+        resolved = _resolved(place) if place else None
+        await session.commit()
+        return resolved
 
     async def _upsert(self, session: AsyncSession, hit: PlaceHit) -> int:
         values = {

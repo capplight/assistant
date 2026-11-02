@@ -2,13 +2,16 @@
 
 import logging
 from collections.abc import Sequence
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, tzinfo
+from functools import lru_cache
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from assistant.db.models import Trip, User
 from assistant.embeddings import Embedder, NullEmbedder, get_embedder
+from assistant.logs import error_text
+from assistant.qa._tz import get_tz
 from assistant.qa.compose import (
     NOTHING_FOUND,
     Entry,
@@ -40,6 +43,18 @@ log = logging.getLogger(__name__)
 NEARBY_LIMIT = 10
 
 
+@lru_cache(maxsize=1)
+def default_llm() -> QALLM:
+    """Process-wide model client (shared connection pool). Tests pass `llm=` instead."""
+    return AnthropicQALLM()
+
+
+@lru_cache(maxsize=1)
+def default_embedder() -> Embedder:
+    """Process-wide query embedder (shared connection pool). Tests pass `embedder=` instead."""
+    return get_embedder()
+
+
 def trips_context(trips: Sequence[Trip], today: date) -> str:
     lines = [f"Today: {today.isoformat()}", "<user_trips>"]
     for t in trips:
@@ -62,7 +77,7 @@ async def _extract_filters(
     try:
         return await llm.extract_filters(question, trips_context(trips, today))
     except Exception as exc:
-        log.warning("filter extraction failed, using fallback: %r", exc)
+        log.warning("filter extraction failed, using fallback: %s", error_text(exc))
         return heuristic_filters(question)
 
 
@@ -78,9 +93,11 @@ async def retrieve_item_ids(
     f: QueryFilters,
     query_vec: Sequence[float] | None,
     location: Location | None,
+    *,
+    tz: tzinfo = UTC,
 ) -> list[int]:
     async def run(filters: QueryFilters) -> list[int]:
-        conds = item_conditions(user_id, filters)
+        conds = item_conditions(user_id, filters, tz=tz)
         rankings = [await _ids(session, fts_stmt(conds, filters.keywords))]
         if query_vec:
             rankings.append(await _ids(session, vector_stmt(conds, query_vec)))
@@ -112,7 +129,7 @@ async def compose_answer(
             text, ids = render_answer(draft, entries)
             return Answer(text, ids)
         except Exception as exc:
-            log.warning("answer composition failed, plain list instead: %r", exc)
+            log.warning("answer composition failed, plain list instead: %s", error_text(exc))
     text, ids = render_plain(entries)
     return Answer(text, ids)
 
@@ -130,32 +147,34 @@ async def answer(
     user = await session.get(User, user_id)
     if user is None:
         return Answer(NOTHING_FOUND, [])
+    tz: tzinfo = get_tz(user.tz)
+    today = now.astimezone(tz).date()  # the user's calendar day, not the UTC one
     # Nothing leaves for a foreign API before consent: no model, no embedding of the question.
     consent = user.consent_at is not None
     if consent and llm is None:
-        llm = AnthropicQALLM()
+        llm = default_llm()
     if not consent:
         llm = None
 
-    filters = await _extract_filters(session, llm, user_id, question, now.date())
+    filters = await _extract_filters(session, llm, user_id, question, today)
 
     query_vec: list[float] | None = None
     if consent:
-        embedder = embedder or get_embedder()
+        embedder = embedder or default_embedder()
         if not isinstance(embedder, NullEmbedder):
             try:
                 vecs = await embedder.embed([question], "query")
                 query_vec = vecs[0] if vecs else None
             except Exception as exc:
-                log.warning("query embedding failed: %r", exc)
+                log.warning("query embedding failed: %s", error_text(exc))
 
-    ids = await retrieve_item_ids(session, user_id, filters, query_vec, location)
+    ids = await retrieve_item_ids(session, user_id, filters, query_vec, location, tz=tz)
     by_id = {i.id: i for i in (await session.scalars(items_by_ids_stmt(user_id, ids))).all()}
     entries = [entry_from_item(by_id[i]) for i in ids if i in by_id]
     if filters.wants_bookings:
-        bookings = (await session.scalars(bookings_stmt(user_id, filters, now))).all()
+        bookings = (await session.scalars(bookings_stmt(user_id, filters, now, tz=tz))).all()
         entries += [entry_from_booking(b, user.tz) for b in bookings]
-    return await compose_answer(llm, question, entries, now.date())
+    return await compose_answer(llm, question, entries, today)
 
 
 async def nearby(

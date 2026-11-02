@@ -5,15 +5,18 @@ import pytest
 from assistant.db.models import Booking, BookingType, Reminder, ReminderStatus
 from assistant.scheduler.rules import (
     BOOKING_RULES,
+    CLAIM_LEASE,
     MAX_ATTEMPTS,
     TRIP_LAST_DAY,
     TRIP_MORNING,
+    apply_claim,
     apply_send_failure,
     apply_send_success,
     booking_reminder_specs,
     cancel_scheduled,
     is_permanent_send_error,
     is_stale,
+    original_due,
     trip_reminder_specs,
 )
 from assistant.scheduler.tz import get_tz
@@ -234,3 +237,69 @@ def test_success_and_staleness():
     assert (r.status, r.sent_at) == (ReminderStatus.SENT, NOW)
     assert not is_stale(r, NOW + timedelta(minutes=5))
     assert is_stale(r, NOW + timedelta(hours=3))
+
+
+# Unknown time of day ------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "kw",
+    [
+        dict(starts_at=local(2026, 12, 10, 12, 0, VN), details={"time_unknown": True}),
+        dict(starts_at=local(2026, 12, 10, 0, 0, VN)),  # local midnight = date only
+    ],
+)
+def test_flight_without_time_keeps_day_before_only(kw):
+    specs = by_kind(booking_reminder_specs(booking(**kw), None, NOW))
+    assert set(specs) == {"flight_day_before"}
+    assert (
+        specs["flight_day_before"].text == "Завтра рейс VN 123 Алматы — Фукуок, код брони ABC123."
+    )
+
+
+@pytest.mark.parametrize("btype", [BookingType.TRANSFER, BookingType.TOUR, BookingType.OTHER])
+def test_relative_rules_skipped_when_time_unknown(btype):
+    b = booking(
+        type=btype, starts_at=local(2026, 12, 10, 12, 0, VN), details={"time_unknown": True}
+    )
+    assert booking_reminder_specs(b, None, NOW) == []
+
+
+def test_hotel_time_unknown_has_no_time_in_text():
+    b = booking(
+        type=BookingType.HOTEL,
+        title="Sol Beach",
+        starts_at=local(2026, 12, 10, 14, 0, VN),
+        ends_at=local(2026, 12, 12, 6, 0, VN),
+        details={"time_unknown": True},
+    )
+    specs = by_kind(booking_reminder_specs(b, None, NOW))
+    assert specs["hotel_checkin"].text == "Сегодня заселение: Sol Beach, код брони ABC123."
+    # time unknown: the 08:00 checkout reminder is kept (its "06:00" is not a real time)
+    assert "hotel_checkout" in specs and "06:00" not in specs["hotel_checkout"].text
+
+
+# Claim lease --------------------------------------------------------------------------------
+
+
+def test_claim_leases_and_success_restores_due():
+    r = _reminder(ReminderStatus.SCHEDULED)
+    claimed_at = NOW + timedelta(minutes=1)
+    apply_claim(r, "final text", claimed_at)
+    assert r.text == "final text"
+    assert r.due_at == claimed_at + CLAIM_LEASE
+    assert original_due(r) == NOW
+    # staleness is measured from the planned time, not the lease
+    assert is_stale(r, NOW + timedelta(hours=3))
+    apply_claim(r, "again", claimed_at + timedelta(minutes=10))  # re-claim keeps the original
+    assert original_due(r) == NOW
+    apply_send_success(r, claimed_at)
+    assert (r.status, r.due_at) == (ReminderStatus.SENT, NOW)
+
+
+def test_retryable_failure_ends_lease():
+    r = _reminder(ReminderStatus.SCHEDULED)
+    apply_claim(r, "t", NOW)
+    apply_send_failure(r, TimeoutError(), NOW + timedelta(seconds=5))
+    assert (r.status, r.attempts) == (ReminderStatus.SCHEDULED, 1)
+    assert r.due_at == NOW + timedelta(seconds=5)

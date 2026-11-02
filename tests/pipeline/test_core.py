@@ -196,3 +196,16 @@ async def test_place_not_found_still_saved():
     out = await run(item(raw_text="кафе"), extractor=FakeExtractor(make_extraction()),
                     resolver=Resolver(None))  # fmt: skip
     assert out.status is ItemStatus.DONE and out.place is None
+
+
+async def test_today_is_the_users_local_date():
+    """21:30 UTC on Nov 2 is already Nov 3 in Almaty (UTC+5)."""
+    from datetime import UTC, datetime
+
+    fx = FakeExtractor(make_extraction(kind="tip", place_query=None))
+    late = datetime(2026, 11, 2, 21, 30, tzinfo=UTC)
+    c = PipelineContext(item=item(raw_text="совет"), user_tz="Asia/Almaty", trips=[],
+                        existing_trip_id=None, now=late)  # fmt: skip
+    await run_pipeline(c, gatherer=make_gatherer(), extractor=fx, resolve_place=Resolver(),
+                       threshold=0.6)  # fmt: skip
+    assert str(fx.calls[0][0].today) == "2026-11-03"

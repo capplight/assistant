@@ -111,8 +111,16 @@ def _is_date_only(local: datetime) -> bool:
     return local.hour == 0 and local.minute == 0
 
 
-def _when(local: datetime, word: str) -> str:
-    return "" if _is_date_only(local) else f" {word} {local:%H:%M}"
+def time_unknown(booking: Booking, local: datetime) -> bool:
+    """The booking has a date but no reliable time of day.
+
+    The pipeline sets details["time_unknown"]; local midnight is treated the same way.
+    """
+    return bool((booking.details or {}).get("time_unknown")) or _is_date_only(local)
+
+
+def _when(local: datetime, word: str, no_time: bool) -> str:
+    return "" if no_time else f" {word} {local:%H:%M}"
 
 
 def booking_reminder_specs(
@@ -129,20 +137,24 @@ def booking_reminder_specs(
         if anchor is None:
             continue
         local = anchor.astimezone(tz)
+        no_time = time_unknown(booking, local)
         if rule.before is not None:
+            # "Через 3 часа рейс" makes no sense when we don't know the time.
+            if no_time:
+                continue
             due = anchor - rule.before
         else:
             assert rule.at is not None
             day = local.date() + timedelta(days=rule.day_offset)
             due = datetime.combine(day, rule.at, tzinfo=tz)
             # e.g. checkout at 07:00 but the reminder is at 08:00: it would come too late.
-            if due > anchor and not _is_date_only(local):
+            if due > anchor and not no_time:
                 continue
         due = due.astimezone(UTC)
         if due <= now:
             continue
         text = rule.template.format(
-            title=booking.title, when=_when(local, rule.time_word), code=code
+            title=booking.title, when=_when(local, rule.time_word, no_time), code=code
         )
         specs.append(ReminderSpec(rule.kind, due, text, {"booking_id": booking.id}))
     return specs
@@ -190,10 +202,30 @@ MAX_ATTEMPTS = 3
 # A reminder this late (scheduler was down) is dropped: "через 3 часа рейс" after departure,
 # or yesterday's morning digest, would only confuse.
 MAX_LATENESS = timedelta(hours=2)
+# While a reminder is being sent its due_at is pushed this far ahead, so another scheduler
+# instance (or the next tick) does not pick it up. If the process dies between sending and
+# marking, the reminder comes due again after the lease: at most one duplicate.
+CLAIM_LEASE = timedelta(minutes=5)
+_ORIGINAL_DUE = "scheduled_due_at"
+
+
+def original_due(reminder: Reminder) -> datetime:
+    """due_at as planned, before any claim lease moved it."""
+    raw = (reminder.payload or {}).get(_ORIGINAL_DUE)
+    return datetime.fromisoformat(raw) if raw else reminder.due_at
 
 
 def is_stale(reminder: Reminder, now: datetime) -> bool:
-    return now - reminder.due_at > MAX_LATENESS
+    return now - original_due(reminder) > MAX_LATENESS
+
+
+def apply_claim(reminder: Reminder, text: str, now: datetime) -> None:
+    """Store the final text and lease the row for the duration of the send."""
+    payload = dict(reminder.payload or {})  # new dict: JSONB changes must be reassigned
+    payload.setdefault(_ORIGINAL_DUE, reminder.due_at.isoformat())
+    reminder.payload = payload
+    reminder.text = text
+    reminder.due_at = now + CLAIM_LEASE
 
 
 _BLOCKED_MARKERS = ("bot was blocked", "forbidden", "user is deactivated", "chat not found")
@@ -207,14 +239,21 @@ def is_permanent_send_error(exc: BaseException) -> bool:
     return any(m in msg for m in _BLOCKED_MARKERS)
 
 
-def apply_send_failure(reminder: Reminder, exc: BaseException) -> None:
+def apply_send_failure(reminder: Reminder, exc: BaseException, now: datetime | None = None) -> None:
+    """Count the attempt; give up on permanent errors or after MAX_ATTEMPTS.
+
+    With `now`, a retryable reminder comes due again right away (ends a claim lease).
+    """
     reminder.attempts = (reminder.attempts or 0) + 1
     if is_permanent_send_error(exc):
         reminder.status = ReminderStatus.CANCELLED
     elif reminder.attempts >= MAX_ATTEMPTS:
         reminder.status = ReminderStatus.FAILED
+    elif now is not None:
+        reminder.due_at = now
 
 
 def apply_send_success(reminder: Reminder, now: datetime) -> None:
     reminder.status = ReminderStatus.SENT
     reminder.sent_at = now
+    reminder.due_at = original_due(reminder)

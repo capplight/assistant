@@ -1,10 +1,10 @@
 """`python -m assistant.bot`: long polling without WEBHOOK_BASE_URL, webhook server with it."""
 
 import asyncio
-import logging
 
 from assistant.bot.app import create_bot, create_dispatcher, create_webhook_app
 from assistant.config import get_settings
+from assistant.logs import configure_logging
 
 
 async def _polling() -> None:
@@ -20,7 +20,7 @@ async def _polling() -> None:
 
 def main() -> None:
     settings = get_settings()
-    logging.basicConfig(level=settings.log_level)
+    configure_logging(settings.log_level)
     if not settings.webhook_base_url:
         asyncio.run(_polling())
         return

@@ -9,7 +9,7 @@ from sqlalchemy import select
 from assistant.bot import service
 from assistant.bot.dates import TripSpec
 from assistant.bot.intake import ItemDraft
-from assistant.db.models import ItemKind, ItemSource, Job, Trip
+from assistant.db.models import Item, ItemKind, ItemSource, ItemStatus, Job, Trip
 from assistant.links import url_hash
 
 pytestmark = [
@@ -86,3 +86,56 @@ async def test_only_one_active_trip(session):
     assert active == [t1.id]
     other = await service.ensure_user(session, _tg_id(), "B")
     assert await service.switch_trip(session, other.id, t1.id) is None
+
+
+def _link(url: str) -> ItemDraft:
+    return ItemDraft(ItemKind.LINK, ItemSource.INSTAGRAM, url=url, url_hash=url_hash(url))
+
+
+async def test_save_items_skips_conflicting_url(session):
+    user = await service.ensure_user(session, _tg_id(), "A")
+    d = _link("https://instagram.com/reel/dup")
+    assert len(await service.save_items(session, user, [d], chat_id=1, message_id=1)) == 1
+    # same link again (e.g. a concurrent update committed first): no IntegrityError
+    assert await service.save_items(session, user, [d], chat_id=1, message_id=2) == []
+    note = ItemDraft(ItemKind.TEXT, ItemSource.USER, raw_text="адаптер")
+    assert len(await service.save_items(session, user, [d, note], chat_id=1, message_id=3)) == 1
+
+
+async def test_retry_failed_item(session):
+    from datetime import UTC, datetime
+
+    user = await service.ensure_user(session, _tg_id(), "A")
+    user.consent_at = datetime.now(UTC)
+    d = _link("https://instagram.com/reel/broken")
+    (item,) = await service.save_items(session, user, [d], chat_id=1, message_id=1)
+    item.status, item.error = ItemStatus.FAILED, "boom"
+    await session.flush()
+    trip = await service.create_trip(session, user, TripSpec("Бали"))
+
+    assert await service.retry_failed_items(session, user, [d.url_hash]) == 1
+    await session.refresh(item)
+    assert (item.status, item.error, item.trip_id) == (ItemStatus.PENDING, None, trip.id)
+    assert len(await _jobs_for(session, item.id)) == 2  # original + retry
+    # not FAILED any more: nothing to retry
+    assert await service.retry_failed_items(session, user, [d.url_hash]) == 0
+    assert (await session.get(Item, item.id)) is not None
+
+
+async def test_switch_trip_schedules_reminders(session, monkeypatch):
+    from datetime import date
+
+    calls = []
+
+    async def schedule_for_trip(s, trip):
+        calls.append(trip.id)
+        return []
+
+    monkeypatch.setattr(service.scheduler, "schedule_for_trip", schedule_for_trip)
+    user = await service.ensure_user(session, _tg_id(), "A")
+    t1 = await service.create_trip(
+        session, user, TripSpec("Бали", date(2027, 1, 10), date(2027, 1, 20))
+    )
+    await service.create_trip(session, user, TripSpec("Дубай"))
+    await service.switch_trip(session, user.id, t1.id)
+    assert calls == [t1.id, t1.id]

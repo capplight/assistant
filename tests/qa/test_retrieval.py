@@ -2,9 +2,11 @@ from datetime import UTC, datetime
 
 from sqlalchemy.dialects import postgresql
 
+from assistant.qa._tz import get_tz
 from assistant.qa.filters import QueryFilters, heuristic_filters
 from assistant.qa.retrieval import (
     bookings_stmt,
+    country_code,
     fts_stmt,
     item_conditions,
     near_stmt,
@@ -147,3 +149,37 @@ def test_heuristic_filters():
     assert f.keywords == ["бань", "пляжи", "хойане"]
     assert not f.wants_bookings
     assert heuristic_filters("Когда мой рейс?").wants_bookings
+
+
+# Country codes and user-tz day bounds -------------------------------------------------------
+
+
+def test_country_code_only_iso2_or_known_names():
+    assert country_code("vn") == "VN"
+    assert country_code("Vietnam") == "VN"
+    assert country_code(" Вьетнам ") == "VN"
+    assert country_code("Таиланд") == "TH"
+    assert country_code("Atlantis") is None
+    assert country_code("Вь") is None  # 2 letters but not ASCII
+    assert country_code(None) is None
+
+
+def test_country_name_filter_and_unknown_ignored():
+    text, params = sql(recent_stmt(item_conditions(1, QueryFilters(country="Vietnam"))))
+    assert "items.country = " in text and "VN" in params.values() and "VI" not in params.values()
+    text, _ = sql(recent_stmt(item_conditions(1, QueryFilters(country="Atlantis"))))
+    assert "items.country" not in text
+
+
+def test_date_bounds_follow_user_tz():
+    f = QueryFilters(date_from="2026-10-01", date_to="2026-10-31")
+    tz = get_tz("Asia/Almaty")  # UTC+5
+    _, params = sql(recent_stmt(item_conditions(1, f, tz=tz)))
+    dates = sorted(v for v in params.values() if isinstance(v, datetime))
+    assert dates == [
+        datetime(2026, 9, 30, 19, 0, tzinfo=UTC),
+        datetime(2026, 10, 31, 19, 0, tzinfo=UTC),
+    ]
+    now = datetime(2026, 12, 1, tzinfo=UTC)
+    _, params = sql(bookings_stmt(1, QueryFilters(date_from="2026-12-10"), now, tz=tz))
+    assert datetime(2026, 12, 9, 19, 0, tzinfo=UTC) in params.values()
