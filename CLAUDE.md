@@ -9,7 +9,7 @@ tech-savvy: **never say "AI/ИИ" in user-facing text** — talk about the resul
 
 | Path | Owner | What |
 |---|---|---|
-| `src/assistant/config.py`, `db/`, `links.py`, `notify.py`, `migrations/` | core | Shared contract. Change only with a migration + note in the PR. |
+| `src/assistant/config.py`, `db/`, `links.py`, `notify.py`, `embeddings.py`, `migrations/` | core | Shared contract. Change only with a migration + note in the PR. |
 | `src/assistant/bot/`, `tests/bot/` | bot | aiogram 3 handlers, webhook/polling entry (`python -m assistant.bot`) |
 | `src/assistant/pipeline/`, `src/assistant/worker.py`, `tests/pipeline/` | pipeline | item processing, worker loop (`python -m assistant.worker`) |
 | `src/assistant/scheduler/`, `src/assistant/qa/`, `tests/scheduler/`, `tests/qa/` | scheduler+qa | reminders (`python -m assistant.scheduler`), question answering |
