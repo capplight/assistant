@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     # Database (must live in Kazakhstan in production: personal data law 94-V, art. 12)
     database_url: str = "postgresql+asyncpg://assistant:assistant@localhost:5432/assistant"
 
+    # Instagram oEmbed: Meta dropped the token requirement on 2026-06-15; set one if that changes.
+    instagram_oembed_token: SecretStr = Field(default=SecretStr(""))
+
     # LLM. Haiku for routine extraction/answers, Sonnet for bookings and escalation.
     anthropic_api_key: SecretStr = Field(default=SecretStr(""))
     model_fast: str = "claude-haiku-5-5"

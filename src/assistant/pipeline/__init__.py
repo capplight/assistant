@@ -24,14 +24,18 @@ async def process_item(session: AsyncSession, item_id: int, notifier: Notifier) 
     Must be idempotent: a retried job for an already DONE item does nothing.
     Raises on transient errors (network, 429) so the queue retries with backoff.
     """
-    raise NotImplementedError
+    from assistant.pipeline.service import process_item as _impl
+
+    await _impl(session, item_id, notifier)
 
 
 async def handle_choice(
     session: AsyncSession, item_id: int, option_index: int, notifier: Notifier
 ) -> None:
     """User answered the clarifying question for an item in NEEDS_INPUT."""
-    raise NotImplementedError
+    from assistant.pipeline.service import handle_choice as _impl
+
+    await _impl(session, item_id, option_index, notifier)
 
 
 async def confirm_booking(
@@ -39,4 +43,6 @@ async def confirm_booking(
 ) -> None:
     """User confirmed (ok) or rejected the extracted booking. On ok, sets confirmed_at and
     calls assistant.scheduler.schedule_for_booking()."""
-    raise NotImplementedError
+    from assistant.pipeline.service import confirm_booking as _impl
+
+    await _impl(session, booking_id, ok, notifier)
