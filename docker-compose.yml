@@ -1,0 +1,50 @@
+# Production runs on a VM hosted in Kazakhstan (personal data must stay in KZ).
+services:
+  db:
+    build: { context: ., dockerfile: docker/db.Dockerfile }
+    environment:
+      POSTGRES_USER: assistant
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-assistant}
+      POSTGRES_DB: assistant
+    volumes: [pgdata:/var/lib/postgresql/data]
+    ports: ["127.0.0.1:5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U assistant"]
+      interval: 5s
+      retries: 10
+
+  migrate:
+    build: .
+    command: alembic upgrade head
+    env_file: .env
+    environment: &dburl
+      DATABASE_URL: postgresql+asyncpg://assistant:${POSTGRES_PASSWORD:-assistant}@db:5432/assistant
+    depends_on: { db: { condition: service_healthy } }
+
+  bot:
+    build: .
+    command: python -m assistant.bot
+    env_file: .env
+    environment: *dburl
+    ports: ["127.0.0.1:8080:8080"]
+    depends_on: { migrate: { condition: service_completed_successfully } }
+    restart: unless-stopped
+
+  worker:
+    build: .
+    command: python -m assistant.worker
+    env_file: .env
+    environment: *dburl
+    depends_on: { migrate: { condition: service_completed_successfully } }
+    restart: unless-stopped
+
+  scheduler:
+    build: .
+    command: python -m assistant.scheduler
+    env_file: .env
+    environment: *dburl
+    depends_on: { migrate: { condition: service_completed_successfully } }
+    restart: unless-stopped
+
+volumes:
+  pgdata:
