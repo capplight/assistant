@@ -11,7 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from assistant.db.models import Job, JobStatus
 
-STALE_AFTER = timedelta(minutes=10)
+# Must exceed the longest item processing (media + STT + two LLM calls).
+STALE_AFTER = timedelta(minutes=30)
 
 
 def backoff(attempts: int) -> timedelta:
@@ -32,7 +33,11 @@ async def claim(session: AsyncSession, kinds: list[str] | None = None) -> Job | 
     """Lock and mark one ready job as running. Commit the session right after to release the row."""
     now = datetime.now(UTC)
     ready = Job.status == JobStatus.QUEUED
-    stale = (Job.status == JobStatus.RUNNING) & (Job.locked_at < now - STALE_AFTER)
+    stale = (
+        (Job.status == JobStatus.RUNNING)
+        & (Job.locked_at < now - STALE_AFTER)
+        & (Job.attempts < Job.max_attempts)
+    )
     stmt = (
         select(Job)
         .where(or_(ready, stale), Job.run_after <= now)

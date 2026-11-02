@@ -9,7 +9,7 @@ tech-savvy: **never say "AI/ИИ" in user-facing text** — talk about the resul
 
 | Path | Owner | What |
 |---|---|---|
-| `src/assistant/config.py`, `db/`, `links.py`, `notify.py`, `embeddings.py`, `migrations/` | core | Shared contract. Change only with a migration + note in the PR. |
+| `src/assistant/config.py`, `db/`, `links.py`, `notify.py`, `embeddings.py`, `timezones.py`, `logs.py`, `migrations/` | core | Shared contract. Change only with a migration + note in the PR. |
 | `src/assistant/bot/`, `tests/bot/` | bot | aiogram 3 handlers, webhook/polling entry (`python -m assistant.bot`) |
 | `src/assistant/pipeline/`, `src/assistant/worker.py`, `tests/pipeline/` | pipeline | item processing, worker loop (`python -m assistant.worker`) |
 | `src/assistant/scheduler/`, `src/assistant/qa/`, `tests/scheduler/`, `tests/qa/` | scheduler+qa | reminders (`python -m assistant.scheduler`), question answering |
@@ -43,3 +43,10 @@ alembic upgrade head   # needs Postgres with postgis + pgvector (docker compose 
 - External calls go through small client classes that tests replace with fakes; unit tests
   never hit the network.
 - User-facing strings are Russian, short, friendly, no jargon.
+- Every entry point calls `assistant.logs.configure_logging()`. Exception text stored in DB
+  (`items.error`, `jobs.last_error`) or logged by hand goes through `assistant.logs.error_text()`:
+  Bot API URLs contain the bot token.
+- Commit DB results first, then send Telegram messages. A failed send (user blocked the bot,
+  flood limit) must never roll back or re-run paid processing.
+- No DB transaction stays open across network calls (LLM, STT, Places, downloads).
+- Migrations are frozen SQL/ops; never call `Base.metadata.create_all` in a migration.
