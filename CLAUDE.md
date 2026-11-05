@@ -1,9 +1,14 @@
 # Project rules (read before any change)
 
+Product spec (source of truth for new work): `docs/spec/SPEC.md` (v1.1) and `docs/spec/final/*`.
+The Telegram-bot description below is legacy context; new work follows the spec.
+
 Telegram bot "trip memory": users forward reels, TikToks, posts, screenshots and booking
 confirmations; the bot extracts meaning (place, booking, tip), files it under a trip, answers
 questions over it and reminds on the spot. Russian-speaking users in Kazakhstan, many not
-tech-savvy: **never say "AI/ИИ" in user-facing text** — talk about the result.
+tech-savvy: talk about the result, not "AI". Exception (spec R-06, KZ law 230-VIII): the
+word «ИИ» appears only on the required disclosure/consent screens and as the single label on
+AI-generated content (e.g. a КП); never in marketing copy or ordinary UI.
 
 ## Layout and ownership
 
@@ -13,6 +18,8 @@ tech-savvy: **never say "AI/ИИ" in user-facing text** — talk about the resul
 | `src/assistant/bot/`, `tests/bot/` | bot | aiogram 3 handlers, webhook/polling entry (`python -m assistant.bot`) |
 | `src/assistant/pipeline/`, `src/assistant/worker.py`, `tests/pipeline/` | pipeline | item processing, worker loop (`python -m assistant.worker`) |
 | `src/assistant/scheduler/`, `src/assistant/qa/`, `tests/scheduler/`, `tests/qa/` | scheduler+qa | reminders (`python -m assistant.scheduler`), question answering |
+| `src/assistant/api/`, `tests/api/` | api | mobile REST API (`python -m assistant.api`): auth, devices, consents + consent gate, uploads |
+| `mobile/` | mobile | Expo / React Native app (see `mobile/README.md`) |
 
 Modules talk only through the DB schema (`db/models.py`), the job queue (`db/queue.py`),
 `notify.Notifier`, and the public functions in each package `__init__.py`. Do not import
@@ -24,7 +31,9 @@ another module's internals.
 pip install -e ".[dev]"
 pytest                 # unit tests; tests marked `db` skip without DATABASE_URL
 ruff check src tests
-alembic upgrade head   # needs Postgres with postgis + pgvector (docker compose up db)
+python scripts/dev_db.py start          # local Postgres 17 + pgvector without Docker (port 54329)
+export DATABASE_URL=$(python scripts/dev_db.py url)
+alembic upgrade head
 ```
 
 ## Rules

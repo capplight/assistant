@@ -200,27 +200,51 @@ CREATE INDEX ix_reminders_user_id ON reminders (user_id);
 CREATE INDEX ix_reminders_due ON reminders (status, due_at);
 """
 
-TSV_TRIGGER = """
+# Two statements, executed one by one: asyncpg prepares each execute() and rejects a batch.
+TSV_TRIGGER = [
+    """
 CREATE FUNCTION items_tsv_update() RETURNS trigger AS $$
 BEGIN
   NEW.tsv := setweight(to_tsvector('simple', coalesce(NEW.title, '')), 'A')
           || setweight(to_tsvector('simple', coalesce(NEW.summary, '')), 'B')
           || setweight(to_tsvector('simple', coalesce(NEW.raw_text, '')), 'C');
   RETURN NEW;
-END $$ LANGUAGE plpgsql;
-
+END $$ LANGUAGE plpgsql
+""",
+    """
 CREATE TRIGGER items_tsv BEFORE INSERT OR UPDATE OF title, summary, raw_text ON items
-FOR EACH ROW EXECUTE FUNCTION items_tsv_update();
-"""
+FOR EACH ROW EXECUTE FUNCTION items_tsv_update()
+""",
+]
+
+
+# PostGIS is optional (spec 3-engineering: no longer required; the CI image pgvector/pgvector
+# has none). With it the schema is exactly the frozen SQL above. Without it, places.geom and its
+# GiST index are left out, so geo features (qa nearby, storing place points) are unavailable.
+GEOM_COLUMN = "\tgeom geography(POINT,4326), \n"
+GEOM_INDEX = "CREATE INDEX idx_places_geom ON places USING gist (geom);\n\n"
+
+
+def _postgis_available() -> bool:
+    row = op.get_bind().exec_driver_sql(
+        "SELECT 1 FROM pg_available_extensions WHERE name = 'postgis'"
+    ).first()
+    return row is not None
 
 
 def upgrade() -> None:
     op.execute("CREATE EXTENSION IF NOT EXISTS vector")
-    op.execute("CREATE EXTENSION IF NOT EXISTS postgis")
-    for stmt in SCHEMA.split(";\n\n"):
+    schema = SCHEMA
+    if _postgis_available():
+        op.execute("CREATE EXTENSION IF NOT EXISTS postgis")
+    else:
+        assert GEOM_COLUMN in schema and GEOM_INDEX in schema
+        schema = schema.replace(GEOM_COLUMN, "").replace(GEOM_INDEX, "")
+    for stmt in schema.split(";\n\n"):
         if stmt.strip():
             op.execute(stmt.strip().rstrip(";"))
-    op.execute(TSV_TRIGGER)
+    for stmt in TSV_TRIGGER:
+        op.execute(stmt)
 
 
 TABLES = ["processed_updates", "jobs", "reminders", "bookings", "place_queries", "item_places",

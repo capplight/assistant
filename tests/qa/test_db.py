@@ -34,6 +34,14 @@ async def session():
     await engine.dispose()
 
 
+async def _require_postgis(session):
+    from sqlalchemy import text
+
+    # PostGIS is optional (migration 0001); the CI image pgvector/pgvector has none.
+    if not await session.scalar(text("SELECT 1 FROM pg_extension WHERE extname = 'postgis'")):
+        pytest.skip("needs PostGIS")
+
+
 async def _seed(session):
     user = User(telegram_id=990000002)  # no consent: no model, no embeddings
     session.add(user)
@@ -66,6 +74,7 @@ async def _seed(session):
 
 
 async def test_nearby_and_plain_answer(session):
+    await _require_postgis(session)
     from assistant.qa import Location, answer, nearby
 
     user, item = await _seed(session)

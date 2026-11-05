@@ -5,3 +5,7 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 *.egg-info/
+.devdb/
+
+# local object storage stub (assistant.api, STORAGE_BACKEND=local)
+.storage/

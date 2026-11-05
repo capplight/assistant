@@ -5,7 +5,8 @@ Phu Quoc) are stored as UTC plus the IANA tz of the place, so reminders fire on 
 """
 
 import enum
-from datetime import date, datetime
+import uuid
+from datetime import date, datetime, time
 
 from geoalchemy2 import Geography
 from pgvector.sqlalchemy import Vector
@@ -21,11 +22,16 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    Time,
     UniqueConstraint,
+    Uuid,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+from assistant.db.ids import uuid7
 
 EMBEDDING_DIM = 1024
 
@@ -100,17 +106,49 @@ class ReminderStatus(enum.StrEnum):
 
 
 class User(Base):
+    """A person. Telegram bot users have telegram_id; app users start anonymous (migration 0002).
+
+    Text enums (locale, profile, autonomy_mode, ...) are `text + CHECK` in the DB; allowed values
+    live in assistant.db.models_v2 (UserStatus etc.) and in migration 0002.
+    """
+
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True)
+    # Nullable since 0002: app users have no Telegram account (legacy bot users keep theirs).
+    telegram_id: Mapped[int | None] = mapped_column(BigInteger, unique=True)
     first_name: Mapped[str | None] = mapped_column(String(255))
     language: Mapped[str] = mapped_column(String(8), default="ru")
     # Home timezone; trips carry their own.
     tz: Mapped[str] = mapped_column(String(64), default="Asia/Almaty")
-    # Explicit consent to send data to foreign AI providers (law 94-V, art. 16). Null = not given.
+    # Legacy bot consent (foreign AI providers, law 94-V, art. 16). The app uses `consents`;
+    # 0003 backfilled it there as kind=ai_cross_border, version=legacy-bot.
     consent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    # --- 0002: app accounts (spec 3-engineering 3.1) ---
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, unique=True, default=uuid7, server_default=text("gen_random_uuid()")
+    )
+    display_name: Mapped[str | None] = mapped_column(Text)
+    locale: Mapped[str] = mapped_column(Text, default="ru", server_default="ru")  # ru|kk
+    country: Mapped[str | None] = mapped_column(Text)  # KZ|KG|..., from phone code / store
+    age_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    profile: Mapped[str] = mapped_column(Text, default="regular", server_default="regular")
+    autonomy_mode: Mapped[str] = mapped_column(Text, default="ask", server_default="ask")
+    autonomy_offer_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    plan: Mapped[str] = mapped_column(Text, default="free", server_default="free")
+    alarm_device_policy: Mapped[str] = mapped_column(
+        Text, default="last_active", server_default="last_active"
+    )
+    quiet_from: Mapped[time] = mapped_column(
+        Time, default=time(22, 0), server_default=text("'22:00'")
+    )
+    quiet_to: Mapped[time] = mapped_column(Time, default=time(8, 0), server_default=text("'08:00'"))
+    status: Mapped[str] = mapped_column(Text, default="active", server_default="active")
+    delete_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    delete_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_active_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     trips: Mapped[list["Trip"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 

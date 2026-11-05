@@ -29,7 +29,16 @@ async def session():
     await engine.dispose()
 
 
+async def _require_postgis(session):
+    from sqlalchemy import text
+
+    # PostGIS is optional (migration 0001); the CI image pgvector/pgvector has none.
+    if not await session.scalar(text("SELECT 1 FROM pg_extension WHERE extname = 'postgis'")):
+        pytest.skip("needs PostGIS")
+
+
 async def test_place_resolver_caches_and_upserts(session):
+    await _require_postgis(session)
     from assistant.pipeline.places import PlaceHit, PlaceResolver
 
     class Client:
