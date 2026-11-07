@@ -12,6 +12,7 @@ from assistant.ai import Router, build_router
 from assistant.api.deps import ApiContext
 from assistant.api.errors import install_error_handlers
 from assistant.api.routes import (
+    actions,
     auth,
     chat,
     consents,
@@ -27,6 +28,7 @@ from assistant.api.routes import (
 from assistant.api.sms import SmsSender, make_sms_sender
 from assistant.api.storage import LocalObjectStorage, ObjectStorage, make_storage
 from assistant.chat import ChatService
+from assistant.chat.push import PushSender
 from assistant.config import Settings, get_settings
 from assistant.embeddings import ChunkEmbedder, make_chunk_embedder
 
@@ -63,6 +65,7 @@ def create_app(
     storage: ObjectStorage | None = None,
     embedder: ChunkEmbedder | None = None,
     ai_router: Router | None = None,
+    push: "PushSender | None" = None,
 ) -> FastAPI:
     """`ai_router`: the AI router chat answers through (tests pass one with fake adapters);
     default = real adapters for the providers that have a key (none in dev: answers defer)."""
@@ -83,7 +86,8 @@ def create_app(
                          timeout=settings.search_embed_timeout_seconds))  # fmt: skip
     ctx.chat = ChatService(settings, sessionmaker,
                            ai_router if ai_router is not None
-                           else build_router(settings, sessionmaker), ctx.embedder)  # fmt: skip
+                           else build_router(settings, sessionmaker), ctx.embedder,
+                           push=push)  # fmt: skip
 
     app = FastAPI(title="Assistant API", version=API_VERSION)
     app.state.ctx = ctx
@@ -103,7 +107,7 @@ def create_app(
         v1.include_router(router)
     for router in (auth.router, consents.router, devices.router, uploads.router, items.router,
                    pages.router, pages.templates_router, sync.router, me.router, misc.ai,
-                   chat.router, chat.feedback_router):
+                   chat.router, chat.feedback_router, actions.router):
         v1.include_router(router)
     if isinstance(storage, LocalObjectStorage):
         v1.include_router(misc.dev_storage)

@@ -812,6 +812,7 @@ async def test_sync_carries_pages_links_and_removals_in_seq_order(db_app):
 
         none = (await c.get(f"/v1/sync?since={delta['next_since']}", headers=h)).json()
         assert none == {"items": [], "screens": [], "screen_items": [], "screen_summaries": [],
+                        "actions": [], "conversation_messages": [],
                         "tombstones": [], "next_since": delta["next_since"],
                         "has_more": False}  # fmt: skip
 

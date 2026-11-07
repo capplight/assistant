@@ -1,3 +1,4 @@
+import { groupTitles } from '@/api/endpoints';
 import type { PageItemOut, PageOut } from '@/api/types';
 import { TEMPLATE_DEFAULT_TITLE, type IconKey, type Layout, type TemplateKey } from '@/pages/templates';
 import type { Page, PageCreatedBy } from '@/store/pages';
@@ -17,6 +18,8 @@ export type PageLink = {
   pageServerId: string;
   itemServerId: string;
   position: string | null;
+  /** Group after «Разложи»; null = not in a group. */
+  groupKey?: string | null;
   manualOrder: boolean;
   pinned: boolean;
   removedAt: string | null;
@@ -41,6 +44,10 @@ export interface PagesRepository {
   applyLink(link: PageItemOut): Promise<void>;
   removeLink(linkId: string): Promise<void>;
   linksFor(pageServerId: string): Promise<PageLink[]>;
+  /** «Отменить» on the phone: these rows exactly as they were (whatever their seq). */
+  restoreLinks(links: PageLink[]): Promise<void>;
+  /** `page_patch` arrived: the page's version and group headings. */
+  setView(pageServerId: string, viewVersion: number, groups: { key: string; title: string }[] | null): Promise<void>;
   /**
    * Another account: its pages are other pages. Pages wait to be created there (a topic the account
    * already has adopts its page), and links, which name server ids, are gone.
@@ -74,7 +81,14 @@ function fromServer(out: PageOut, now: number, base: LocalPage | null): LocalPag
     deletedAt: parseTs(out.deleted_at, now),
     hiddenAt: parseTs(out.hidden_at, now),
     titleDirty: dirty,
+    viewVersion: Math.max(out.view_version ?? 0, base?.viewVersion ?? 0),
+    groups: titlesToGroups(groupTitles(out.view_state)) ?? base?.groups ?? [],
   };
+}
+
+/** `group_key` is the group's title (docs/api/chat.md PagePatch). */
+export function titlesToGroups(titles: string[] | null): { key: string; title: string }[] | null {
+  return titles ? titles.map((t) => ({ key: t, title: t })) : null;
 }
 
 function toLocal(page: Page): LocalPage {
@@ -87,6 +101,7 @@ function linkFrom(out: PageItemOut): PageLink {
     pageServerId: out.page_id,
     itemServerId: out.item_id,
     position: out.position,
+    groupKey: out.group_key ?? null,
     manualOrder: out.manual_order,
     pinned: out.pinned,
     removedAt: out.removed_at,
@@ -174,6 +189,20 @@ export class InMemoryPagesRepository implements PagesRepository {
     return [...this.links.values()].filter((l) => l.pageServerId === pageServerId);
   }
 
+  async restoreLinks(links: PageLink[]) {
+    for (const l of links) this.links.set(`${l.pageServerId}|${l.itemServerId}`, { ...l });
+  }
+
+  async setView(pageServerId: string, viewVersion: number, groups: { key: string; title: string }[] | null) {
+    const row = this.byServerId(pageServerId);
+    if (!row) return;
+    this.rows.set(row.id, {
+      ...row,
+      viewVersion: Math.max(row.viewVersion ?? 0, viewVersion),
+      groups: groups ?? row.groups ?? [],
+    });
+  }
+
   async detachFromAccount() {
     for (const [k, p] of this.rows) {
       if (p.serverId) this.rows.set(k, { ...p, serverId: null, syncState: 'pending', seq: 0 });
@@ -198,7 +227,20 @@ type PageRow = {
   seq: number;
   deleted_at: number | null;
   hidden_at: number | null;
+  view_version?: number;
+  view_groups?: string;
 };
+
+function parseGroups(json: string | undefined): { key: string; title: string }[] {
+  try {
+    const v: unknown = json ? JSON.parse(json) : [];
+    return Array.isArray(v)
+      ? v.filter((g): g is { key: string; title: string } => !!g && typeof g.key === 'string' && typeof g.title === 'string')
+      : [];
+  } catch {
+    return [];
+  }
+}
 
 const pageFromRow = (r: PageRow): LocalPage => ({
   id: r.id,
@@ -216,6 +258,8 @@ const pageFromRow = (r: PageRow): LocalPage => ({
   seq: r.seq,
   deletedAt: r.deleted_at,
   hiddenAt: r.hidden_at,
+  viewVersion: r.view_version ?? 0,
+  groups: parseGroups(r.view_groups),
 });
 
 type LinkRow = {
@@ -223,6 +267,7 @@ type LinkRow = {
   page_server_id: string;
   item_server_id: string;
   position: string | null;
+  group_key?: string | null;
   manual_order: number;
   pinned: number;
   removed_at: string | null;
@@ -234,6 +279,7 @@ const linkFromRow = (r: LinkRow): PageLink => ({
   pageServerId: r.page_server_id,
   itemServerId: r.item_server_id,
   position: r.position,
+  groupKey: r.group_key ?? null,
   manualOrder: !!r.manual_order,
   pinned: !!r.pinned,
   removedAt: r.removed_at,
@@ -241,7 +287,7 @@ const linkFromRow = (r: LinkRow): PageLink => ({
 });
 
 const PAGE_COLS =
-  'id, server_id, template_key, title, title_kk, title_dirty, icon, layout, position, created_by, created_at, sync_state, seq, deleted_at, hidden_at';
+  'id, server_id, template_key, title, title_kk, title_dirty, icon, layout, position, created_by, created_at, sync_state, seq, deleted_at, hidden_at, view_version, view_groups';
 
 export class SqlitePagesRepository implements PagesRepository {
   constructor(
@@ -251,7 +297,7 @@ export class SqlitePagesRepository implements PagesRepository {
 
   private async write(p: LocalPage, mode: 'INSERT OR IGNORE' | 'INSERT OR REPLACE') {
     await this.db.runAsync(
-      `${mode} INTO pages (${PAGE_COLS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `${mode} INTO pages (${PAGE_COLS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       p.id,
       p.serverId,
       p.templateKey,
@@ -267,6 +313,8 @@ export class SqlitePagesRepository implements PagesRepository {
       p.seq,
       p.deletedAt,
       p.hiddenAt,
+      p.viewVersion ?? 0,
+      JSON.stringify(p.groups ?? []),
     );
   }
 
@@ -331,21 +379,40 @@ export class SqlitePagesRepository implements PagesRepository {
       out.item_id,
     );
     if (old && old.seq > out.seq) return;
-    const l = linkFrom(out);
+    await this.writeLink(linkFrom(out));
+  }
+
+  private async writeLink(l: PageLink) {
     // The UNIQUE (page, item) index makes this an upsert by either key.
     await this.db.runAsync(
       `INSERT OR REPLACE INTO page_links
-         (id, page_server_id, item_server_id, position, manual_order, pinned, removed_at, seq)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, page_server_id, item_server_id, position, group_key, manual_order, pinned, removed_at, seq)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       l.id,
       l.pageServerId,
       l.itemServerId,
       l.position,
+      l.groupKey ?? null,
       l.manualOrder ? 1 : 0,
       l.pinned ? 1 : 0,
       l.removedAt,
       l.seq,
     );
+  }
+
+  async restoreLinks(links: PageLink[]) {
+    for (const l of links) await this.writeLink(l);
+  }
+
+  async setView(pageServerId: string, viewVersion: number, groups: { key: string; title: string }[] | null) {
+    await this.db.runAsync(
+      'UPDATE pages SET view_version = MAX(view_version, ?) WHERE server_id = ?',
+      viewVersion,
+      pageServerId,
+    );
+    if (groups) {
+      await this.db.runAsync('UPDATE pages SET view_groups = ? WHERE server_id = ?', JSON.stringify(groups), pageServerId);
+    }
   }
 
   async removeLink(linkId: string) {

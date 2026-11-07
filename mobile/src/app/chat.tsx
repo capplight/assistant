@@ -19,7 +19,7 @@ import { AssistantLine } from '@/components/AssistantLine';
 import { Button } from '@/components/Button';
 import { FeedbackSheet } from '@/components/FeedbackSheet';
 import { LocalHitChips, SourceChips } from '@/components/SourceChips';
-import { canReport, loadHistory, retry } from '@/chat/service';
+import { actionText, canReport, loadHistory, retry, undoAction } from '@/chat/service';
 import { useAssistant, type ChatMessage } from '@/store/assistant';
 import { useTheme } from '@/theme';
 
@@ -28,8 +28,8 @@ import { useTheme } from '@/theme';
  * assistant line at the bottom (over all pages). Dividers «— на странице X, 14:20 —» are headers.
  * Opened from the banner («Открыть ответ», `focus`), it is scrolled to that answer and the screen
  * reader starts there. History is kept on the phone and completed from the server when online.
- * Not yet: «Озвучить» (needs a speech module), «Не то» (one re-ask: server, week 6), actions with
- * «Отменить» (week 6).
+ * Actions show as their line «Разложил 23 заметки» with [Отменить] while it can be undone (2-design
+ * 4.4 п. 4). Not yet: «Озвучить» (needs a speech module), «Не то» (one re-ask on the server).
  */
 export default function ChatScreen() {
   const theme = useTheme();
@@ -157,14 +157,28 @@ export default function ChatScreen() {
 /** A whole answer: text, what is happening with it, sources, the AI label, «Ещё». */
 function Answer({ m, onMore }: { m: ChatMessage; onMore: () => void }) {
   const theme = useTheme();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const titles = useLocalHitTitles(m.status === 'queued' ? m.localHits : undefined, t);
   const notice = m.saved ? null : answerNotice(m, t);
   const hits = m.status === 'queued' ? (m.localHits ?? []) : [];
   const generated = m.status === 'done' && m.aiGenerated && !!m.text;
+  const action = m.action;
   return (
     <>
-      {m.text ? <AppText>{m.text}</AppText> : null}
+      {m.text && !action ? <AppText>{m.text}</AppText> : null}
+      {action ? (
+        <View style={[styles.actionRow, { gap: theme.space[2] }]}>
+          <AppText testID={`chat-action-${m.id}`} style={styles.flex}>
+            {action.undone
+              ? t('chat.action_undone', { text: actionText(action, i18n.language) })
+              : actionText(action, i18n.language)}
+          </AppText>
+          {action.undoable && !action.undone ? (
+            <Button testID={`chat-undo-${m.id}`} label={t('common.undo')} variant="text" onPress={() => void undoAction(m.id)} />
+          ) : null}
+        </View>
+      ) : null}
+      {m.proposal ? <AppText variant="meta">{m.proposal.question}</AppText> : null}
       {notice ? <AppText variant={m.text ? 'meta' : 'body'}>{notice}</AppText> : null}
       {hits.length > 0 ? (
         <>
@@ -193,4 +207,5 @@ const styles = StyleSheet.create({
   center: { textAlign: 'center' },
   scrim: { flex: 1, justifyContent: 'flex-end' },
   actions: { flexDirection: 'row', justifyContent: 'flex-end' },
+  actionRow: { flexDirection: 'row', alignItems: 'center' },
 });

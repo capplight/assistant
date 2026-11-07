@@ -27,7 +27,53 @@ export type ChatSource = {
  */
 export type ChatStatus = 'streaming' | 'done' | 'queued' | 'interrupted' | 'deferred' | 'failed';
 
-export type ChatNotice = 'limit' | 'error' | 'not_found' | 'no_ai' | null;
+/** `offline_action` / `no_ai_action`: «Разложи» and the like need the assistant (2-design 6.9). */
+export type ChatNotice = 'limit' | 'error' | 'not_found' | 'no_ai' | 'offline_action' | 'no_ai_action' | null;
+
+/** What the line thought the phrase is, for when the server can't be asked (offline, no consent yet). */
+export type LineGuess = 'question' | 'action' | 'note';
+
+/** A change the assistant made (Action of docs/api/actions.md). Item ids are the server's. */
+export type ChatAction = {
+  id: string;
+  kind: string;
+  /** `summary.ru` / `summary.kk` («Разложил 23 заметки в 5 групп»); kk falls back to ru. */
+  text: string;
+  textKk: string | null;
+  /** The page it changed (server id), and its title as the server named it. */
+  pageServerId: string | null;
+  pageTitle: string | null;
+  changedItemIds: string[];
+  /** «Что изменилось»: ready `text` per record; `reverted` after «Вернуть». */
+  changes: { itemId: string; title: string | null; text: string; reverted: boolean }[];
+  createdPageId: string | null;
+  undoable: boolean;
+  undone?: boolean;
+};
+
+/**
+ * A question back (Proposal of docs/api/chat.md): «Какую?» (`choice`), «Переставить 212 записей?»
+ * (`count`), «Вы сами расставили 4 записи. Переставить и их?» (`manual`). Nothing was changed.
+ */
+export type ChatProposal = {
+  kind: 'choice' | 'count' | 'manual';
+  question: string;
+  options: { id: string; label: string; kind: 'item' | 'pick' | 'yes' | 'no' | 'keep_mine' | 'cancel'; itemId: string | null }[];
+  /** The option in focus first. */
+  defaultId: string | null;
+  /** The option tapped, or `expired` / `answered` from the server. */
+  answered?: string | null;
+};
+
+/** Sent with the question: what was on screen when it was said (docs/api/chat.md). */
+export type ChatAskContext = {
+  visibleItemIds: string[];
+  viewVersion: number | null;
+  selectedItemId: string | null;
+  /** A tap on an option of a question back. */
+  choice?: { replyId: string; option: string } | null;
+  guess?: LineGuess;
+};
 
 /** One message in the single conversation (R-52), kept on the phone for «Переписка». */
 export type ChatMessage = {
@@ -58,6 +104,12 @@ export type ChatMessage = {
   localHits?: string[];
   /** Plain «Сохранил.» reply to a note (no answer to show). */
   saved?: boolean;
+  /** User: the page context sent with it. */
+  ask?: ChatAskContext;
+  /** Assistant: `answer_kind` (`action`, `text`, `choice`, `deferred`). */
+  answerKind?: string | null;
+  action?: ChatAction;
+  proposal?: ChatProposal;
 };
 
 /** The banner shows one message; it stays until «Закрыть» or the next request (R-52). */
@@ -71,11 +123,14 @@ type AssistantState = {
   aboutAll: boolean;
   listening: boolean;
   banner: Banner | null;
+  /** «Ответ готов» on «Сегодня»: an answer finished while the phone was away (GET /chat/pending-banner). */
+  pending: Banner | null;
   messages: ChatMessage[];
   setAboutAll: (v: boolean) => void;
   setListening: (v: boolean) => void;
   showBanner: (b: Banner) => void;
   closeBanner: () => void;
+  setPending: (b: Banner | null) => void;
   addMessage: (m: ChatMessage) => void;
   updateMessage: (id: string, patch: Partial<ChatMessage> | ((m: ChatMessage) => Partial<ChatMessage>)) => void;
   /** Server history merged in: unknown ones added, known ones completed. Sorted by time. */
@@ -91,11 +146,13 @@ export const useAssistant = create<AssistantState>()(
       aboutAll: false,
       listening: false,
       banner: null,
+      pending: null,
       messages: [],
       setAboutAll: (aboutAll) => set({ aboutAll }),
       setListening: (listening) => set({ listening }),
       showBanner: (banner) => set({ banner }),
       closeBanner: () => set({ banner: null }),
+      setPending: (pending) => set({ pending }),
       addMessage: (m) => set((s) => ({ messages: cap([...s.messages, m]) })),
       updateMessage: (id, patch) =>
         set((s) => ({
@@ -121,7 +178,7 @@ export const useAssistant = create<AssistantState>()(
           next.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
           return { messages: cap(next) };
         }),
-      reset: () => set({ aboutAll: false, listening: false, banner: null, messages: [] }),
+      reset: () => set({ aboutAll: false, listening: false, banner: null, pending: null, messages: [] }),
     }),
     {
       name: 'assistant.v1',

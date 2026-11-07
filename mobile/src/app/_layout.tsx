@@ -12,6 +12,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ToastHost } from '@/components/Toast';
+import { usePushAnswers } from '@/push/usePushAnswers';
 import { ShareIntentRoot } from '@/share/ShareIntentBridge';
 import { useBackgroundSync } from '@/sync/useBackgroundSync';
 import { useTheme } from '@/theme';
@@ -22,6 +23,7 @@ export default function RootLayout() {
   const [loaded, error] = useFonts({ Onest_400Regular, Onest_500Medium, Onest_600SemiBold, Onest_700Bold });
   const theme = useTheme();
   useBackgroundSync();
+  usePushAnswers();
 
   // Fall back to the system font if Onest fails to load — never block the app on a font.
   if (!loaded && !error) return null;

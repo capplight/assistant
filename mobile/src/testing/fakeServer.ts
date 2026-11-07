@@ -276,6 +276,7 @@ export function happyServer(): FakeServer {
     .on('GET /search', () => ({ status: 200, body: { results: [], semantic: true } }))
     .on('GET /chat/messages', () => ({ status: 200, body: { messages: [], has_more_before: false, has_more_after: false } }))
     .on('POST /chat/messages/*/delivery', () => ({ status: 200, body: {} }))
+    .on('GET /chat/pending-banner', () => ({ status: 200, body: { message: null } }))
     .on('POST /feedback', () => ({ status: 201, body: { id: 'fb-1', created_at: new Date().toISOString() } }))
     .on('GET /sync', (c) => {
       const since = Number(c.query.since ?? 0);

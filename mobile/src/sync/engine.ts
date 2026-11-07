@@ -47,6 +47,8 @@ export function backoffMs(
   return Math.max(Math.round(jittered), (retryAfterSec ?? 0) * 1000);
 }
 
+export type ActionUndoPayload = { actionId: string; itemIds?: string[]; clientId?: string };
+
 export type DeviceInfo = () => Omit<DeviceIn, 'client_id'>;
 
 export type SyncDeps = {
@@ -238,9 +240,18 @@ export class SyncEngine {
         return (e) => this.sendLegacyText(e);
       case 'feedback.send':
         return (e) => this.sendFeedback(e);
+      case 'action.undo':
+        return (e) => this.sendUndo(e);
       default:
         return null;
     }
+  }
+
+  /** The page already shows the old order; the server brings it back too, then sync confirms. */
+  private async sendUndo(e: OutboxEntry): Promise<void> {
+    const p = e.payload as ActionUndoPayload;
+    // client_id = the outbox row: a repeat returns the first result (actions.md).
+    await this.d.api.undoAction(p.actionId, { client_id: p.clientId ?? e.id, ...(p.itemIds ? { item_ids: p.itemIds } : {}) });
   }
 
   /** «Сообщить о проблеме»: the body was built when the person pressed «Отправить». */

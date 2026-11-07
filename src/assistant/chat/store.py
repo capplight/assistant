@@ -105,8 +105,20 @@ def _iso(value: datetime) -> str:
     return (value if value.tzinfo else value.replace(tzinfo=UTC)).isoformat()
 
 
+def proposal_out(prop: dict[str, Any] | None, now: datetime) -> dict[str, Any] | None:
+    """A proposal as the phone sees it: never the plan our code keeps."""
+    if not prop:
+        return None
+    out = {k: v for k, v in prop.items() if k != "plan"}
+    if out.get("state") == "open" and datetime.fromisoformat(out["expires_at"]) <= now:
+        out["state"] = "expired"
+    return out
+
+
 def message_dict(m: ConversationMessage, *, page: dict[str, Any] | None,
-                 reply_to: uuid.UUID | None, ai_label: str) -> dict[str, Any]:  # fmt: skip
+                 reply_to: uuid.UUID | None, ai_label: str,
+                 action: dict[str, Any] | None = None,
+                 now: datetime | None = None) -> dict[str, Any]:  # fmt: skip
     assistant = m.role == MessageRole.ASSISTANT
     citations = [{k: v for k, v in c.items() if k != "_pk"} for c in (m.citations or [])]
     return {
@@ -117,14 +129,31 @@ def message_dict(m: ConversationMessage, *, page: dict[str, Any] | None,
         "checked": m.checked if assistant else None,
         "delivery": m.delivery if assistant else None,
         "ai_label": ai_label if assistant and m.ai_generated else None,
+        "action": action if assistant else None,
+        "proposal": proposal_out(m.proposal, now or datetime.now(UTC)) if assistant else None,
+        "choice": m.choice if not assistant else None,
+        "error_code": m.error_code if assistant else None,
+        "seq": m.seq,
         "created_at": _iso(m.created_at),
     }  # fmt: skip
 
 
 async def messages_dicts(session: AsyncSession, rows: list[ConversationMessage],
                          ai_label: str) -> list[dict[str, Any]]:  # fmt: skip
+    from assistant.actions import actions_dicts
+    from assistant.db.models_actions import Action
+
+    now = datetime.now(UTC)
     pages = await pages_of(session, {m.screen_id for m in rows if m.screen_id})
     replies = await public_ids(session, {m.reply_to_id for m in rows if m.reply_to_id})
+    action_pks = {m.action_ids[0] for m in rows if m.action_ids}
+    actions: dict[int, dict[str, Any]] = {}
+    if action_pks:
+        found = list(await session.scalars(select(Action).where(Action.id.in_(action_pks))))
+        actions = {a.id: d for a, d in zip(found, await actions_dicts(session, found, now),
+                                           strict=True)}  # fmt: skip
     return [message_dict(m, page=pages.get(m.screen_id) if m.screen_id else None,
                          reply_to=replies.get(m.reply_to_id) if m.reply_to_id else None,
-                         ai_label=ai_label) for m in rows]  # fmt: skip
+                         ai_label=ai_label,
+                         action=actions.get(m.action_ids[0]) if m.action_ids else None,
+                         now=now) for m in rows]  # fmt: skip

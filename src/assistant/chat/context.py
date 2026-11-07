@@ -34,8 +34,8 @@ from assistant.chat.tools import READ_TOOLS, ToolEnv, run_search
 from assistant.chat.verify import Facts, facts_of, short_date
 from assistant.embeddings import ChunkEmbedder
 
-PROMPT_VERSION = "chat.v1"
-SYSTEM_PROMPT = (Path(__file__).parent / "prompts" / "chat.v1.md").read_text(encoding="utf-8")
+PROMPT_VERSION = "chat.v2"
+SYSTEM_PROMPT = (Path(__file__).parent / "prompts" / "chat.v2.md").read_text(encoding="utf-8")
 
 BUDGET_PROFILE = 400
 BUDGET_PAGE_LINE = 30
@@ -87,6 +87,8 @@ class TurnInput:
     lang: str
     page_pk: int | None
     visible_pks: list[int]
+    selected_pk: int | None = None  # «это»: the record open or selected on the phone
+    input_kind: str = "typed"
 
 
 @dataclass
@@ -154,14 +156,18 @@ async def _visible(session: AsyncSession, turn: TurnInput, book: SourceBook,
 
 async def _history(session: AsyncSession, turn: TurnInput, book: SourceBook,
                    tz: ZoneInfo) -> tuple[str | None, list[tuple[str, str]]]:  # fmt: skip
-    summary = await session.scalar(text("SELECT summary FROM conversations WHERE id = :c"),
-                                   {"c": turn.conversation_id})  # fmt: skip
+    conv = (await session.execute(text(
+        "SELECT summary, summary_upto_msg_id FROM conversations WHERE id = :c"),
+        {"c": turn.conversation_id})).one()  # fmt: skip
+    summary = conv.summary
+    # What the summary folded in is not repeated word for word (layer 5 vs 6).
     rows = (await session.execute(text("""
         SELECT role, content, screen_id, created_at FROM conversation_messages
-        WHERE conversation_id = :c AND id <> :m AND deleted_at IS NULL
+        WHERE conversation_id = :c AND id <> :m AND deleted_at IS NULL AND id > :upto
           AND role IN ('user', 'assistant') AND state = 'done' AND content <> ''
         ORDER BY id DESC LIMIT :n
-    """), {"c": turn.conversation_id, "m": turn.message_id, "n": MAX_HISTORY})).all()  # fmt: skip
+    """), {"c": turn.conversation_id, "m": turn.message_id, "n": MAX_HISTORY,
+           "upto": conv.summary_upto_msg_id or 0})).all()  # fmt: skip
     out = []
     for r in reversed(rows):
         line = r.content
@@ -200,10 +206,40 @@ def _source_line(book: SourceBook, src: Source, *, with_pages: bool) -> str:
     return f"{head} · {src.title}\n{src.shown[-1]}" if src.shown[-1] else f"{head} · {src.title}"
 
 
+async def _selected(session: AsyncSession, turn: TurnInput, book: SourceBook) -> Source | None:
+    if turn.selected_pk is None:
+        return None
+    r = (await session.execute(text("""
+        SELECT i.id, i.public_id, i.title, i.kind, i.occurred_at, i.created_at,
+               left(coalesce(i.text, i.raw_text, i.summary, ''), 600) AS body
+        FROM items i WHERE i.id = :i AND i.user_id = :u AND i.deleted_at IS NULL
+    """), {"i": turn.selected_pk, "u": turn.user_id})).first()  # fmt: skip
+    if r is None:
+        return None
+    links = (await session.execute(text("""
+        SELECT si.screen_id FROM screen_items si JOIN screens s ON s.id = si.screen_id
+        WHERE si.item_id = :i AND si.removed_by_user_at IS NULL AND s.deleted_at IS NULL
+    """), {"i": r.id})).scalars().all()  # fmt: skip
+    body = " ".join((r.body or "").split())[:300]
+    return book.add(pk=r.id, item_id=r.public_id, title=r.title, body=body, kind=r.kind,
+                    occurred_at=r.occurred_at, created_at=r.created_at, page_pks=list(links))
+
+
+async def book_for(sessionmaker: async_sessionmaker[AsyncSession], user_id: int,
+                   page_pk: int | None) -> SourceBook:  # fmt: skip
+    """A book with just the pages (a tap on «Да» needs no context for a model)."""
+    async with sessionmaker() as session:
+        _, _, tz = await _profile(session, user_id)
+        book = SourceBook(tz)
+        await _pages(session, user_id, book)
+        book.current = book.page_by_pk(page_pk) if page_pk is not None else None
+    return book
+
+
 async def assemble(
     sessionmaker: async_sessionmaker[AsyncSession], embedder: ChunkEmbedder, turn: TurnInput, *,
     now: datetime | None = None, max_input_tokens: int = 12000, embed_timeout_s: float = 0.5,
-    min_similarity: float = 0.45,
+    min_similarity: float = 0.45, tools: tuple = READ_TOOLS,
 ) -> tuple[Assembled, ToolEnv]:  # fmt: skip
     now = now or datetime.now(UTC)
     async with sessionmaker() as session:
@@ -213,6 +249,7 @@ async def assemble(
         page = book.page_by_pk(turn.page_pk) if turn.page_pk is not None else None
         book.current = page
         visible = await _visible(session, turn, book, page)
+        selected = await _selected(session, turn, book)
         summary, history = await _history(session, turn, book, ZoneInfo(tz))
     env = ToolEnv(sessionmaker, embedder, turn.user_id, book, embed_timeout_s, min_similarity,
                   counts=set())  # fmt: skip
@@ -224,7 +261,7 @@ async def assemble(
                                  boost_page_pk=page.pk if page else None)  # fmt: skip
 
     # --- layers ---
-    tools_text = "".join(t.name + t.description + str(t.parameters) for t in READ_TOOLS)
+    tools_text = "".join(t.name + t.description + str(t.parameters) for t in tools)
     profile = [_cut(f"Профиль: имя {name or 'не указано'}; язык интерфейса {locale}; "
                     f"часовой пояс {tz}.", BUDGET_PROFILE)]  # fmt: skip
     index = _index_lines(pages, page)
@@ -232,6 +269,13 @@ async def assemble(
                if page else "Текущая страница: не указана")  # fmt: skip
     question = f"Вопрос (язык {turn.lang}): {turn.text}"
     context = [now_line(now, tz), "Страницы:", *index, current]
+    if selected is not None:
+        context.append(f"Выбранная запись («это», «здесь»): {selected.ref}")
+    if tools is not READ_TOOLS:
+        context.append("Изменения: человек в этой фразе просит что-то изменить; инструменты "
+                       "изменений доступны.")  # fmt: skip
+    else:
+        context.append("Изменения: в этой фразе человек ничего менять не просил; только ответ.")
     if summary:
         context.append("Свёртка прошлых сообщений: " + _cut(summary, BUDGET_SUMMARY))
     context.append(question)
@@ -288,6 +332,9 @@ async def assemble(
         hist.pop(0)
 
     untrusted = []
+    if selected is not None:
+        untrusted.append(UntrustedPart("Выбранная запись",
+                                       _source_line(book, selected, with_pages=True)))
     if page_lines:
         untrusted.append(UntrustedPart(f"Записи на текущей странице «{page.title}»"
                                        if page else "Записи", "\n".join(page_lines)))  # fmt: skip

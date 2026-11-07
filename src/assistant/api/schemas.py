@@ -323,7 +323,7 @@ class ItemListOut(BaseModel):
 
 
 class TombstoneOut(BaseModel):
-    entity: Literal["item", "screen", "screen_item"]
+    entity: Literal["item", "screen", "screen_item", "conversation_message", "action"]
     id: uuid.UUID
     seq: int
     deleted_at: datetime
@@ -481,6 +481,8 @@ class SearchOut(BaseModel):
 
 class SyncOut(BaseModel):
     items: list[ItemOut]  # changed since `since`, incl. trashed (deleted_at) and hidden ones
+    actions: list["ActionOut"] = []  # «Что я сделал» (docs/api/actions.md)
+    conversation_messages: list["ChatMessageOut"] = []  # among the newest 50 (chat.md)
     screens: list[PageOut]  # pages, incl. removed ones (deleted_at)
     screen_items: list[PageItemOut]  # item-on-page links, incl. removed ones (removed_at)
     screen_summaries: list[PageSummaryOut]  # gone with their page: no tombstones of their own
@@ -501,6 +503,7 @@ class ChatMessageIn(BaseModel):
     selected_item_id: uuid.UUID | None = None
     lang: LocaleStr | None = None
     input_kind: Literal["typed", "voice", "share"] = "typed"
+    choice: "ChatChoiceIn | None" = None
 
     @field_validator("text")
     @classmethod
@@ -509,6 +512,11 @@ class ChatMessageIn(BaseModel):
         if not value or len(value) > 2000:
             raise ValueError("text must be 1...2000 characters")
         return value
+
+
+class ChatChoiceIn(BaseModel):
+    reply_id: uuid.UUID
+    option: str = Field(min_length=1, max_length=40)
 
 
 class ChatCitationOut(BaseModel):
@@ -535,6 +543,11 @@ class ChatMessageOut(BaseModel):
     checked: dict[str, Any] | None
     delivery: str | None
     ai_label: str | None
+    action: "ActionOut | None" = None
+    proposal: dict[str, Any] | None = None
+    choice: dict[str, Any] | None = None
+    error_code: str | None = None
+    seq: int = 0
     created_at: datetime
 
 
@@ -564,3 +577,63 @@ class FeedbackIn(BaseModel):
 class FeedbackOut(BaseModel):
     id: uuid.UUID
     created_at: datetime
+
+
+# --- actions (docs/api/actions.md) ---
+
+
+class ActionChangeOut(BaseModel):
+    item_id: uuid.UUID | None
+    title: str
+    kind: str
+    text: str
+    page_id: uuid.UUID | None
+    reverted: bool
+
+
+class ActionSummaryOut(BaseModel):
+    ru: str
+    kk: str | None
+
+
+class ActionOut(BaseModel):
+    id: uuid.UUID
+    kind: str
+    scope: str
+    initiated_by: str
+    summary: ActionSummaryOut
+    page: PageRefOut | None
+    changes: list[ActionChangeOut]
+    changed_item_ids: list[uuid.UUID]
+    created_page_id: uuid.UUID | None
+    undoable: bool
+    undoable_until: datetime | None
+    undone_at: datetime | None
+    undo_of: uuid.UUID | None
+    message_id: uuid.UUID | None
+    seq: int
+    created_at: datetime
+
+
+class ActionsOut(BaseModel):
+    actions: list[ActionOut]
+    has_more: bool
+
+
+class UndoIn(BaseModel):
+    client_id: uuid.UUID | None = None
+    item_ids: list[uuid.UUID] | None = Field(default=None, max_length=500)
+
+
+class UndoOut(BaseModel):
+    action: ActionOut
+    undo: ActionOut
+    partial: bool
+    repeated: bool
+    message_ru: str | None
+    page_patches: list[dict[str, Any]]
+
+
+ChatMessageIn.model_rebuild()
+ChatMessageOut.model_rebuild()
+SyncOut.model_rebuild()

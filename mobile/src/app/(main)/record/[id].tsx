@@ -1,6 +1,6 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Check, ChevronLeft, TriangleAlert } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,6 +14,7 @@ import { pluralForm, reviewRows, type ReviewRow } from '@/records/review';
 import { useRecord } from '@/records/useRecords';
 import { getRecordActions, refreshRecord } from '@/services';
 import { useUndo } from '@/store/undo';
+import { useView } from '@/store/view';
 import { MAX_FONT_SCALE, useTheme } from '@/theme';
 
 /** The server's limit for one «Исправить». */
@@ -42,6 +43,17 @@ export default function RecordScreen() {
   useEffect(() => {
     if (serverId) void refreshRecord(serverId);
   }, [serverId]);
+
+  // «Напомни про это», «удали это»: with the card open, «это» is this record (US-30).
+  useFocusEffect(
+    useCallback(() => {
+      if (!serverId) return undefined;
+      useView.getState().setSelected(serverId);
+      return () => {
+        if (useView.getState().selected === serverId) useView.getState().setSelected(null);
+      };
+    }, [serverId]),
+  );
 
   const back = () => {
     if (ret) router.navigate(ret as never);

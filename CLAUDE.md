@@ -23,6 +23,7 @@ AI-generated content (e.g. a КП); never in marketing copy or ordinary UI.
 | `src/assistant/pages/`, `api/routes/pages.py`, `db/models_pages.py`, `tests/api/test_pages*.py` | api | pages: template catalogue, placement by `auto_rule`, LexoRank (contract: `docs/api/pages.md`) |
 | `src/assistant/memory/`, `api/routes/memory.py`, `db/models_search.py`, `tests/memory/` | api | chunks + embeddings (worker `python -m assistant.memory`), hybrid search, storage policy and file purge, page summaries (contract: `docs/api/search.md`) |
 | `src/assistant/chat/`, `api/routes/chat.py`, `db/models_chat.py`, `tests/chat/` | api | the assistant line: one conversation, layered context, read tools, number/date check, SSE delivery + resume, feedback (contract: `docs/api/chat.md`) |
+| `src/assistant/actions/` | api | changes from the assistant line: intent rule, mutating tools, one action per phrase with `inverse`, undo/redo, manual-order protection (contract: `docs/api/actions.md`) |
 | `mobile/` | mobile | Expo / React Native app (see `mobile/README.md`) |
 
 Modules talk only through the DB schema (`db/models.py`), the job queue (`db/queue.py`),

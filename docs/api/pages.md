@@ -213,8 +213,13 @@ Errors: `403 page_system` («Сегодня») · `404 not_found` · `409 item_d
 - `screen_items` includes rows with `removed_at`: hide them. Upsert by `(page_id, item_id)` or `id`.
 - Show a link only when its item is live too. Items travel in `items` with `deleted_at` and
   `hidden_reason`.
-- A tombstone is a hard delete: `screen_item` when the item is purged after 30 days in the trash;
-  `screen` only when the account is deleted. Drop them locally by `id`.
+- A tombstone is a hard delete: `screen_item` when the item is purged after 30 days in the trash,
+  or when «Отменить» takes back a link the assistant added (`actions.md`); `screen` only when the
+  account is deleted. Drop them locally by `id`.
+- The assistant line changes rows too (week 6): `group_key` (stacks after «Разложи по темам»,
+  names in `view_state.groups`), `position`, «убрано» (`removed_at`), new links. Records placed by
+  hand (`manual_order`) are moved only after the person's «Да». The chat event `page_patch`
+  carries the same rows at once.
 - A brand-new account has one row right away: «Сегодня» in `screens`.
 
 ## Placement (`auto_rule`)
@@ -257,5 +262,5 @@ Alphabet `0-9A-Za-z`, compared by bytes (JS `<` on strings gives the same order;
 | `PUT /pages/{id}/fields`, `POST /pages/{id}/reset`, sorting and grouping by field | week 11 |
 | `POST /pages/batch` (use one `POST /pages` per page) | week 16 |
 | `GET /pages/{id}/summary` | week 4 |
-| `action` for the «Отменить» strip in responses (the `actions` table does not exist) | week 9 |
+| `action` for the «Отменить» strip in responses of these endpoints (the assistant line already returns one: `actions.md`) | week 9 |
 | `item_facets` values (`facet.*`, `task.*`, `expense.*`, `document.*` fields stay empty) | weeks 9-14 |

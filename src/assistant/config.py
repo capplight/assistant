@@ -156,6 +156,9 @@ class Settings(BaseSettings):
     chat_max_input_tokens: int = 12000
     chat_max_tool_steps: int = 4
     chat_stale_pending_seconds: float = 120.0
+    # Big semantic reorders (>150 records, PAGE_GROUP) per person per day (spec 5.10 rule 8,
+    # `limits.ai_reorder_per_day`, counter `ai_reorders`).
+    chat_big_reorders_per_day: int = 3
     # The single label on generated content (R-06, spec 5.9), until the lawyer's opinion.
     label_ai_generated: str = "Подготовил помощник (ИИ) по вашим записям — проверьте"
 

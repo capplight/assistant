@@ -223,4 +223,24 @@ d('SQLite repositories', () => {
     expect((await outbox.get(e.id))?.payload).toEqual({ fields: { a: null } });
     expect(await outbox.listPending()).toHaveLength(1);
   });
+
+  it('week 6: view_version and group titles of a page, group_key of a row, rows put back as they were', async () => {
+    const db = open();
+    await migrate(db);
+    const repo = new SqlitePagesRepository(db);
+    await repo.applyRemote(pageOut('p1', 1, { template_key: 'notes', view_version: 3, view_state: { groups: ['Ремонт'] } }));
+    expect((await repo.get('p1'))?.viewVersion).toBe(3);
+    expect((await repo.get('p1'))?.groups).toEqual([{ key: 'Ремонт', title: 'Ремонт' }]);
+    await repo.setView('srv-p1', 4, [{ key: 'Здоровье', title: 'Здоровье' }]);
+    await repo.setView('srv-p1', 2, null); // never goes back
+    expect((await repo.get('p1'))?.viewVersion).toBe(4);
+    expect((await repo.get('p1'))?.groups).toEqual([{ key: 'Здоровье', title: 'Здоровье' }]);
+
+    await repo.applyLink(linkOut('srv-p1', 'i1', 5, { position: 'B' }));
+    const [old] = await repo.linksFor('srv-p1');
+    await repo.applyLink(linkOut('srv-p1', 'i1', 9, { position: 'Z', group_key: 'Здоровье' }));
+    expect((await repo.linksFor('srv-p1'))[0]).toMatchObject({ position: 'Z', groupKey: 'Здоровье' });
+    await repo.restoreLinks([old!]);
+    expect((await repo.linksFor('srv-p1'))[0]).toMatchObject({ position: 'B', groupKey: null, seq: 5 });
+  });
 });

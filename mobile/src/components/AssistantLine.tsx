@@ -1,17 +1,16 @@
 import { router } from 'expo-router';
 import { ChevronDown, Mic, PencilLine, Plus, SendHorizontal } from 'lucide-react-native';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-import { ask } from '@/chat/service';
-import { looksLikeQuestion } from '@/records/search';
+import { sendFromLine } from '@/chat/service';
 import { getCapture } from '@/services';
 import { MAX_FONT_SCALE, useTheme } from '@/theme';
 import { useAssistant } from '@/store/assistant';
 import { selectNoAi, useOnboarding } from '@/store/onboarding';
 import { useToast } from '@/store/toast';
-import { newId } from '@/utils/id';
+import { useUndo } from '@/store/undo';
 import type { Fragment } from '@/voice/session';
 import { useVoiceRecorder } from '@/voice/useVoiceRecorder';
 
@@ -23,9 +22,9 @@ import { VoiceListening } from './VoiceListening';
 
 /**
  * The persistent assistant line (F-37, R-52, 2-design §4.3): [+] [Про: <page> · field] (mic).
- * Same on every page, above the tabs. A typed question goes to the one conversation (src/chat) and
- * the answer shows in the banner above; anything else, and voice, becomes a local record + outbox
- * entry (offline-first). Voice: fragments ≤3 min, no live transcription (R-17). «Без ИИ»: no mic —
+ * Same on every page, above the tabs. A typed phrase goes to the one conversation (src/chat): a
+ * text answer shows in the banner above, a change shows on the page with «Отменить»; without the
+ * server a note is saved here (offline-first). Voice is still a local record + outbox entry. Voice: fragments ≤3 min, no live transcription (R-17). «Без ИИ»: no mic —
  * «Написать» focuses the field (R-05) — and questions are a search by words, no AI call.
  */
 export function AssistantLine({ scope }: { scope?: 'all' } = {}) {
@@ -35,7 +34,7 @@ export function AssistantLine({ scope }: { scope?: 'all' } = {}) {
   const noAi = useOnboarding(selectNoAi);
   const consentGiven = useOnboarding((s) => s.consent !== null);
   const store = useAssistant();
-  const { setAboutAll, setListening, showBanner, addMessage } = store;
+  const { setAboutAll, setListening } = store;
   const language = useOnboarding((s) => s.language);
   const showToast = useToast((s) => s.show);
   // In «Переписка» the line always works over all pages.
@@ -49,6 +48,15 @@ export function AssistantLine({ scope }: { scope?: 'all' } = {}) {
     const s = useOnboarding.getState();
     if (!s.phoneAskedAt && !s.phoneLinkedAt) router.push('/phone');
   };
+
+  // A change made by the assistant (a note it saved, «Разложил…») is a first result too.
+  useEffect(
+    () =>
+      useUndo.subscribe((st, prev) => {
+        if (scope !== 'all' && st.strip?.kind === 'action' && st.strip.id !== prev.strip?.id) askPhoneOnce();
+      }),
+    [scope],
+  );
 
   const onVoiceFinished = async (fragments: Fragment[]) => {
     setListening(false);
@@ -75,40 +83,18 @@ export function AssistantLine({ scope }: { scope?: 'all' } = {}) {
     // Consent gate (3-engineering §6.14): nothing is sent before S05.
     if (!value || !consentGiven) return;
     setText('');
-    // R-53: a question gets an answer over all pages, everything else is saved. Week 5: the phone
-    // still tells them apart (actions on the server come in week 6). «Без ИИ»: search by words only.
-    if (looksLikeQuestion(value)) {
-      if (noAi) {
-        router.navigate({ pathname: '/search', params: { q: value, from: 'line' } });
-        return;
-      }
-      void ask(value, { id: current.id, title: current.title, serverId: current.kind === 'page' ? current.page.serverId : null });
+    // R-53: online the server decides what the phrase is (a question, a change, a note); offline
+    // and in «Без ИИ» the phone guesses (src/chat/service.ts `sendFromLine`).
+    const result = await sendFromLine(value, {
+      id: current.id,
+      title: current.title,
+      serverId: current.kind === 'page' ? current.page.serverId : null,
+    });
+    if (result === 'search') {
+      router.navigate({ pathname: '/search', params: { q: value, from: 'line' } });
       return;
     }
-    const userMsg = {
-      id: newId(),
-      role: 'user' as const,
-      text: value,
-      pageId: current.id,
-      pageTitle: current.title,
-      at: new Date().toISOString(),
-    };
-    addMessage(userMsg);
-    const capture = await getCapture();
-    await capture.saveText({ text: value, source: 'typed', pageId: current.id });
-    const reply = {
-      id: newId(),
-      role: 'assistant' as const,
-      text: t('line.saved'),
-      pageId: current.id,
-      pageTitle: current.title,
-      at: new Date().toISOString(),
-      saved: true,
-      status: 'done' as const,
-    };
-    addMessage(reply);
-    showBanner({ messageId: reply.id });
-    askPhoneOnce();
+    if (result === 'saved') askPhoneOnce();
   };
 
   const chip = (

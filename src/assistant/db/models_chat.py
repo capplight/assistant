@@ -1,4 +1,4 @@
-"""Conversation and feedback schema (migration 0010, frozen SQL; spec 3.7, 3.13).
+"""Conversation and feedback schema (migrations 0010, 0011; frozen SQL; spec 3.7, 3.13).
 
 Allowed values of the text enums below must match the CHECKs in 0010.
 """
@@ -12,6 +12,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     DateTime,
+    FetchedValue,
     ForeignKey,
     Integer,
     Numeric,
@@ -92,6 +93,7 @@ class Conversation(Base):
 
 class ConversationMessage(Base):
     __tablename__ = "conversation_messages"
+    __mapper_args__ = {"eager_defaults": True}  # fetch the trigger-set seq
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     public_id: Mapped[uuid.UUID] = mapped_column(Uuid, default=uuid7, unique=True)
@@ -121,6 +123,12 @@ class ConversationMessage(Base):
     prompt_version: Mapped[str | None] = mapped_column(Text)
     cost_usd: Mapped[Decimal] = mapped_column(Numeric(12, 6), default=Decimal(0))
     error_code: Mapped[str | None] = mapped_column(Text)
+    # 0011: a question waiting for a tap (with the plan our code made), the option tapped
+    proposal: Mapped[dict | None] = mapped_column(JSONB)
+    choice: Mapped[dict | None] = mapped_column(JSONB)
+    seq: Mapped[int] = mapped_column(
+        BigInteger, server_default=FetchedValue(), server_onupdate=FetchedValue()
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

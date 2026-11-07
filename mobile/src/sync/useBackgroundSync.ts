@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
 
-import { flushQueued } from '@/chat/service';
+import { flushQueued, refreshPending } from '@/chat/service';
 import { getApi, kickSync, notifyDataChanged } from '@/services';
 import { useConnectivity } from '@/store/connectivity';
 import { useOnboarding } from '@/store/onboarding';
@@ -34,7 +34,10 @@ export function useBackgroundSync(): void {
     };
     kick();
     const sub = AppState.addEventListener('change', (st) => {
-      if (st === 'active') kick();
+      if (st !== 'active') return;
+      kick();
+      // An answer finished while the app was in the background waits on «Сегодня».
+      void refreshPending();
     });
     const timer = setInterval(() => {
       if (AppState.currentState === 'active') kick();

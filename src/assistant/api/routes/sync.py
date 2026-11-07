@@ -9,29 +9,42 @@ come back as tombstones. Pages (`screens`, `screen_items`) are in the same strea
 entities join the same response.
 """
 
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select, update
 
+from assistant.actions import actions_dicts
 from assistant.api.consent_gate import require_base_consent
-from assistant.api.deps import CurrentUser, Db
+from assistant.api.deps import Ctx, CurrentUser, Db
 from assistant.api.routes.items import items_out
 from assistant.api.routes.memory import summary_out
 from assistant.api.routes.pages import page_item_out, page_out
-from assistant.api.schemas import PageItemOut, PageSummaryOut, SyncOut, TombstoneOut
+from assistant.api.schemas import (
+    ActionOut,
+    ChatMessageOut,
+    PageItemOut,
+    PageSummaryOut,
+    SyncOut,
+    TombstoneOut,
+)
+from assistant.chat import store as chat_store
 from assistant.db.models import Item
+from assistant.db.models_actions import Action
+from assistant.db.models_chat import ConversationMessage, MessageRole
 from assistant.db.models_pages import Screen, ScreenItem
 from assistant.db.models_search import ScreenSummary
 from assistant.db.models_v2 import Device, HiddenReason, SyncTombstone
 
 router = APIRouter(prefix="/sync", tags=["sync"])
+CHAT_KEEP = 50  # the phone keeps the newest 50 messages for offline «Переписка» (spec 6.11)
 GatedUser = Annotated[CurrentUser, Depends(require_base_consent)]
 
 
 @router.get("", response_model=SyncOut)
 async def sync(
-    user: GatedUser, db: Db,
+    user: GatedUser, db: Db, ctx: Ctx,
     since: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=500)] = 200,
 ) -> SyncOut:  # fmt: skip
@@ -83,7 +96,30 @@ async def sync(
             .limit(limit + 1)
         )
     ]
-    merged = sorted([(row.seq, row) for row in (*items, *tombs, *screens, *links, *summaries)],
+    actions = list(
+        await db.scalars(
+            select(Action)
+            .where(Action.user_id == user.id, Action.seq > since)
+            .order_by(Action.seq)
+            .limit(limit + 1)
+        )
+    )
+    newest = (
+        select(ConversationMessage.id)
+        .where(ConversationMessage.user_id == user.id,
+               ConversationMessage.role.in_([MessageRole.USER, MessageRole.ASSISTANT]))
+        .order_by(ConversationMessage.id.desc()).limit(CHAT_KEEP)
+    )  # fmt: skip
+    messages = list(
+        await db.scalars(
+            select(ConversationMessage)
+            .where(ConversationMessage.id.in_(newest), ConversationMessage.seq > since)
+            .order_by(ConversationMessage.seq)
+            .limit(limit + 1)
+        )
+    )
+    merged = sorted([(row.seq, row) for row in (*items, *tombs, *screens, *links, *summaries,
+                                                *actions, *messages)],
                     key=lambda pair: pair[0])  # fmt: skip
     page = merged[:limit]
     has_more = len(merged) > limit
@@ -92,6 +128,8 @@ async def sync(
     page_screens = [row for _, row in page if isinstance(row, Screen)]
     page_links = [row for _, row in page if isinstance(row, PageItemOut)]
     page_summaries = [row for _, row in page if isinstance(row, PageSummaryOut)]
+    page_actions = [row for _, row in page if isinstance(row, Action)]
+    page_messages = [row for _, row in page if isinstance(row, ConversationMessage)]
     next_since = page[-1][0] if page else since
 
     if user.device_id is not None and since > 0:  # what this phone confirms it already has
@@ -100,8 +138,13 @@ async def sync(
             .where(Device.id == user.device_id, Device.last_sync_seq < since)
             .values(last_sync_seq=since)
         )
+    label = ctx.settings.label_ai_generated
     return SyncOut(
         items=await items_out(db, page_items),
+        actions=[ActionOut.model_validate(d)
+                 for d in await actions_dicts(db, page_actions, datetime.now(UTC))],
+        conversation_messages=[ChatMessageOut.model_validate(d) for d in
+                               await chat_store.messages_dicts(db, page_messages, label)],
         screens=[page_out(row) for row in page_screens],
         screen_items=page_links,
         screen_summaries=page_summaries,

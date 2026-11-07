@@ -1,6 +1,6 @@
-"""Read tools of the chat step (spec 5.10): `search` and `list_page`. Week 6 adds the mutating
-ones (create, update, move, reorder, create_page_from_template) behind the intent rule; they plug
-in here as more `ChatTool`s with `mutating=True` and never reach a step without that intent.
+"""Tools of the chat step (spec 5.10): read tools `search` and `list_page` here; the mutating
+ones (create, update, move, reorder, create_page_from_template) live in mutate.py and run only
+when the turn's intent rule allowed changes (`ToolEnv.mut.allowed`), checked again in `execute`.
 
 The model returns a call; code validates the arguments against the same schema, runs a short
 read-only DB session (closed before the next model call) and writes the result as JSON. Results
@@ -12,7 +12,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ValidationError
 from sqlalchemy import text
@@ -81,6 +81,7 @@ class ToolEnv:
     embed_timeout_s: float
     min_similarity: float
     counts: set[int]  # numbers our code reported (totals): allowed in the answer
+    mut: Any = None  # mutate.MutationState of the turn; None = read-only
 
 
 @dataclass
@@ -264,7 +265,29 @@ def call_key(call: ToolCall) -> str:
 
 async def execute(env: ToolEnv, call: ToolCall, *, allowed: set[str]) -> ToolOutcome:
     """Run one call. Unknown / not allowed tools and bad arguments come back as an error the
-    model can read; nothing outside the white list ever runs."""
+    model can read; nothing outside the white list ever runs. A mutating tool runs only when the
+    person's phrase asked for a change (the intent rule), whatever `allowed` says."""
+    from assistant.chat import mutate
+
+    if call.name in mutate.MUTATING_NAMES:
+        m = env.mut
+        if call.name not in allowed or m is None or not m.allowed:
+            return _error(f"tool {call.name} is not available: the person did not ask for a "
+                          "change")  # fmt: skip
+        if m.proposal is not None:
+            return _error("a question to the person is pending: answer with text now")
+        args_type, runner, activity = mutate.RUNNERS[call.name]
+        try:
+            margs = args_type.model_validate(call.arguments)
+        except ValidationError:
+            return _error("arguments do not match the schema", activity)
+        try:
+            res = await runner(env, margs)
+        except Exception:
+            log.exception("chat tool %s failed", call.name)
+            return _error("the change failed; nothing was changed by this call", activity)
+        m.calls += 1
+        return ToolOutcome(res.content, res.is_error, res.activity, res.page)
     tool = TOOLS.get(call.name)
     if tool is None or call.name not in allowed:
         return _error(f"tool {call.name} is not available")

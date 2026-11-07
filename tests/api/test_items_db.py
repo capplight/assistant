@@ -355,6 +355,7 @@ async def test_sync_order_pagination_and_tombstones(db_app):
 
         empty = (await c.get(f"/v1/sync?since={full['next_since']}", headers=h)).json()
         assert empty == {"items": [], "screens": [], "screen_items": [], "screen_summaries": [],
+                         "actions": [], "conversation_messages": [],
                          "tombstones": [], "next_since": full["next_since"],
                          "has_more": False}  # fmt: skip
 

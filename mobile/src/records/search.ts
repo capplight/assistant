@@ -100,3 +100,22 @@ export function looksLikeQuestion(text: string): boolean {
   const t = text.trim().toLowerCase();
   return t.endsWith('?') || QUESTION_START.test(t);
 }
+
+const ACTION_START =
+  /^(разложи|разложить|рассортируй|отсортируй|сгруппируй|упорядочи|переставь|перенеси|перемести|удали|убери|отметь|сделай страницу|создай страницу|добавь сюда|добавь на эту|добавь в эту|сұрыпта|топта|ретте|жой|өшір|алып таста|ауыстыр|көшір|белгіле)(\s|$)/;
+
+/**
+ * «Разложи по темам», «удали это», «перенеси в расходы»: a change on the page (R-53). Only used
+ * when the server can't be asked (offline, «Без ИИ», no consent yet): online, the server decides
+ * what any phrase is (3-engineering 5.10 п. 2). Then the phone does not save such a phrase as a
+ * note, and says the change waits for the internet (2-design 6.9).
+ */
+export function looksLikeAction(text: string): boolean {
+  return ACTION_START.test(text.trim().toLowerCase());
+}
+
+/** What the line does with a phrase when the server can't decide: ask, change, or save. */
+export function guessLine(text: string): 'question' | 'action' | 'note' {
+  if (looksLikeQuestion(text)) return 'question';
+  return looksLikeAction(text) ? 'action' : 'note';
+}

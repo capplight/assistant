@@ -272,6 +272,8 @@ export type PageOut = {
   icon: string;
   position: string;
   layout: string;
+  /** `groups`: group titles after «Разложи», in order (docs/api/chat.md PagePatch). */
+  view_state?: { groups?: string[]; [k: string]: unknown } | null;
   view_version: number;
   created_by: string;
   hidden_at: string | null;
@@ -361,7 +363,11 @@ export type ChatMessageIn = {
   selected_item_id?: string | null;
   lang: Locale;
   input_kind: ChatInputKind;
+  /** A tap on an option of an earlier Proposal; `text` is then the option's label. */
+  choice?: ChatChoiceIn | null;
 };
+
+export type ChatChoiceIn = { reply_id: string; option: string };
 
 export type ChatPageRef = { id: string; title: string; icon: string | null };
 
@@ -410,6 +416,14 @@ export type ChatMessageOut = {
   checked: { ok: boolean; removed: number } | null;
   delivery: ChatDelivery | null;
   ai_label: string | null;
+  /** The change of an `action` answer. */
+  action: ActionOut | null;
+  /** The question back of a `choice` answer, with its current `state`. */
+  proposal: ProposalOut | null;
+  /** On the person's message that was a tap. */
+  choice: ChatChoiceIn | null;
+  /** On a `failed` answer: `stream_interrupted`, `stale`, `not_done`, … */
+  error_code: string | null;
   created_at: string;
 };
 
@@ -417,6 +431,83 @@ export type ChatMessageOut = {
 export type ChatHistoryOut = { messages: ChatMessageOut[]; has_more_before: boolean; has_more_after: boolean };
 
 export type ChatDeliveryState = 'banner_shown' | 'opened' | 'dismissed';
+
+// --- week 6: changes, questions back, undo — docs/api/chat.md + docs/api/actions.md (2026-11-07).
+// The backend schemas.py did not have these models yet when this was written; the decoder in
+// endpoints.ts is lenient, so a renamed field is a change there only.
+
+/** «Что изменилось»: one row per record, `text` ready (««Плитка, замер» → Ремонт»). */
+export type ActionChangeOut = {
+  item_id: string;
+  title: string | null;
+  kind: string | null;
+  text: string;
+  page_id: string | null;
+  reverted: boolean;
+};
+
+/** One change of the assistant with one «Отменить» (actions.md «Action»). */
+export type ActionOut = {
+  id: string;
+  kind: string;
+  summary: { ru: string; kk: string | null };
+  page: ChatPageRef | null;
+  changes: ActionChangeOut[];
+  changed_item_ids: string[];
+  created_page_id: string | null;
+  undoable: boolean;
+  undoable_until: string | null;
+  undone_at: string | null;
+  undo_of: string | null;
+  message_id: string | null;
+};
+
+/** `page_patch`, and `page_patches` of an undo. `group_key` = the group's title. */
+export type PagePatchOut = {
+  page_id: string;
+  view_version: number;
+  /** `groups`: titles in order, «Остальное» last; absent after a sort. */
+  view_state: { sort?: string; groups?: string[]; [k: string]: unknown } | null;
+  rows: PageItemOut[];
+  removed_item_ids: string[];
+};
+
+export type ProposalOptionKind = 'item' | 'pick' | 'yes' | 'no' | 'keep_mine' | 'cancel';
+
+/**
+ * A question back (`needs_choice` kind `choice`, `confirm` kind `count`, `confirm_manual` kind
+ * `manual`). Nothing was changed. A tap: POST /chat/messages with `choice` (except `pick`).
+ */
+export type ProposalOut = {
+  reply_id: string | null;
+  kind: 'choice' | 'count' | 'manual';
+  question: string;
+  count: number | null;
+  item_ids: string[];
+  options: { id: string; label: string; kind: ProposalOptionKind; item_id: string | null }[];
+  /** The option in focus first («Оставить мои»). */
+  default: string | null;
+  expires_at: string | null;
+  state: 'open' | 'answered' | 'expired';
+};
+
+/** POST /actions/{id}/undo. `item_ids`: «Вернуть» one row of «Что изменилось». */
+export type ActionUndoIn = { client_id?: string; item_ids?: string[] };
+
+export type ActionUndoOut = {
+  action: ActionOut | null;
+  undo: ActionOut | null;
+  partial: boolean;
+  repeated: boolean;
+  message_ru: string | null;
+  page_patches: PagePatchOut[];
+};
+
+/** Data of the push «Ответ готов» (R-14: never any text). Not live: no push credentials on the server yet. */
+export type AnswerReadyPushData = { type: 'chat_reply'; reply_id: string | null };
+
+/** GET /v1/chat/pending-banner: the newest finished answer waiting for «Сегодня» (text, change or question back). */
+export type PendingBannerOut = { message: ChatMessageOut | null };
 
 /** SSE events of one reply, decoded (unknown events are dropped by the decoder). `eventId` = SSE `id:`. */
 export type ChatEvent = (
@@ -429,12 +520,17 @@ export type ChatEvent = (
   /** The full checked answer; `aiLabel` set when the assistant wrote it (R-06). */
   | { type: 'banner'; replyId: string | null; text: string; preview: string; short: boolean; aiLabel: string | null; citations: ChatCitationOut[] }
   /** `limited`: monthly limit reached, the answer is search results without a written answer. */
-  | { type: 'done'; replyId: string | null; limited: boolean }
+  | { type: 'done'; replyId: string | null; limited: boolean; answerKind: ChatAnswerKind | null; actionId: string | null }
   | { type: 'deferred'; replyId: string | null; text: string | null }
   /** `retry`: «Попробуйте ещё раз» with a NEW client_id. */
   | { type: 'error'; replyId: string | null; code: string; messageRu: string; messageKk: string; retry: boolean }
   /** Resume of a finished reply: replace what was shown. */
   | { type: 'snapshot'; message: ChatMessageOut }
+  /** Several in one reply = the same action growing: replace by `action.id`. */
+  | { type: 'action'; action: ActionOut; changedItemIds: string[] }
+  | { type: 'page_patch'; patch: PagePatchOut }
+  /** `needs_choice`, `confirm`, `confirm_manual`. */
+  | { type: 'proposal'; proposal: ProposalOut }
 ) & { eventId?: string | null };
 
 // --- feedback («Сообщить о проблеме», R-41) — docs/api/chat.md ---

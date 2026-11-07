@@ -13,6 +13,8 @@ import { usePages } from '@/store/pages';
 import { useSession } from '@/store/session';
 import { useToast } from '@/store/toast';
 import { useUndo } from '@/store/undo';
+import { useView } from '@/store/view';
+import { FakePush } from '@/push';
 
 export const APP_DIR = path.resolve(__dirname, '../app');
 
@@ -39,10 +41,12 @@ export function jsonResponse(status: number, body?: unknown, headers: Record<str
 }
 
 export let testRecords = new InMemoryRecordsRepository();
+/** The push port of the current test (no native module is loaded in tests). */
+export let testPush = new FakePush();
 export let testPages = new InMemoryPagesRepository();
 
 /** Reset all local state between tests; returns the in-memory outbox for assertions. Network: offline. */
-export function resetApp(o: { fetch?: FetchLike } = {}): InMemoryOutboxRepository {
+export function resetApp(o: { fetch?: FetchLike; push?: FakePush } = {}): InMemoryOutboxRepository {
   useOnboarding.getState().reset();
   usePages.getState().reset();
   useAssistant.getState().reset();
@@ -50,6 +54,7 @@ export function resetApp(o: { fetch?: FetchLike } = {}): InMemoryOutboxRepositor
   useConnectivity.setState({ online: true });
   useToast.setState({ toast: null });
   useUndo.setState({ strip: null });
+  useView.getState().reset();
   void i18n.changeLanguage('ru');
   const outbox = new InMemoryOutboxRepository();
   testRecords = new InMemoryRecordsRepository();
@@ -61,6 +66,7 @@ export function resetApp(o: { fetch?: FetchLike } = {}): InMemoryOutboxRepositor
     files: fakeFiles,
     putFile: async () => undefined,
     baseUrl: () => 'http://api.test',
+    push: (testPush = o.push ?? new FakePush()),
   });
   return outbox;
 }

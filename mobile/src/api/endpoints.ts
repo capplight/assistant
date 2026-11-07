@@ -2,6 +2,15 @@ import type { ApiClient } from './client';
 import { ApiError } from './errors';
 import { readSse, StreamDroppedError, type SseMessage } from './sse';
 import type {
+  ActionChangeOut,
+  ActionOut,
+  ActionUndoIn,
+  ActionUndoOut,
+  AnswerReadyPushData,
+  PageItemOut,
+  PagePatchOut,
+  PendingBannerOut,
+  ProposalOut,
   ChatDeliveryState,
   ChatEvent,
   ChatHistoryOut,
@@ -114,8 +123,133 @@ export function chatMessageOut(v: unknown): ChatMessageOut | null {
     checked: checked ? { ok: checked.ok !== false, removed: Number(checked.removed) || 0 } : null,
     delivery: (str(o.delivery) as ChatMessageOut['delivery']) ?? null,
     ai_label: str(o.ai_label),
+    action: actionOut(o.action),
+    proposal: proposalOut(o.proposal),
+    choice: choiceIn(o.choice),
+    error_code: str(o.error_code),
     created_at: str(o.created_at) ?? new Date().toISOString(),
   };
+}
+
+// --- week 6: Action (actions.md), PagePatch and Proposal (chat.md) ---
+
+const strs = (v: unknown): string[] => arr(v).map(str).filter((x): x is string => x !== null);
+
+function changeOut(v: unknown): ActionChangeOut | null {
+  const o = obj(v);
+  const itemId = o && str(o.item_id);
+  if (!o || !itemId) return null;
+  return {
+    item_id: itemId,
+    title: str(o.title),
+    kind: str(o.kind),
+    text: str(o.text) ?? str(o.title) ?? '',
+    page_id: str(o.page_id),
+    reverted: o.reverted === true,
+  };
+}
+
+export function actionOut(v: unknown): ActionOut | null {
+  const o = obj(v);
+  const id = o && str(o.id);
+  const summary = o && obj(o.summary);
+  const ru = summary ? str(summary.ru) : o ? str(o.summary) : null;
+  if (!o || !id || !ru) return null;
+  return {
+    id,
+    kind: str(o.kind) ?? 'action',
+    summary: { ru, kk: summary ? str(summary.kk) : null },
+    page: pageRef(o.page),
+    changes: arr(o.changes).map(changeOut).filter((x): x is ActionChangeOut => x !== null),
+    changed_item_ids: strs(o.changed_item_ids),
+    created_page_id: str(o.created_page_id),
+    undoable: o.undoable === true,
+    undoable_until: str(o.undoable_until),
+    undone_at: str(o.undone_at),
+    undo_of: str(o.undo_of),
+    message_id: str(o.message_id),
+  };
+}
+
+function linkOut(v: unknown): PageItemOut | null {
+  const o = obj(v);
+  const id = o && str(o.id);
+  const pageId = o && str(o.page_id);
+  const itemId = o && str(o.item_id);
+  if (!o || !id || !pageId || !itemId) return null;
+  return {
+    id,
+    page_id: pageId,
+    item_id: itemId,
+    position: str(o.position),
+    group_key: str(o.group_key),
+    manual_order: o.manual_order === true,
+    manual_at: str(o.manual_at),
+    pinned: o.pinned === true,
+    added_by: str(o.added_by) ?? 'agent',
+    removed_at: str(o.removed_at),
+    seq: Number(o.seq) || 0,
+    updated_at: str(o.updated_at) ?? new Date().toISOString(),
+    updated_by: str(o.updated_by) ?? 'agent',
+  };
+}
+
+/** `view_state.groups`: group titles in order; null when the view has none. */
+export function groupTitles(viewState: unknown): string[] | null {
+  const vs = obj(viewState);
+  return vs && Array.isArray(vs.groups) ? strs(vs.groups) : null;
+}
+
+export function pagePatchOut(v: unknown): PagePatchOut | null {
+  const d = obj(v);
+  const pageId = d && str(d.page_id);
+  if (!d || !pageId) return null;
+  const vs = obj(d.view_state);
+  const groups = groupTitles(vs);
+  return {
+    page_id: pageId,
+    view_version: Number(d.view_version) || 0,
+    view_state: vs ? { ...vs, ...(groups ? { groups } : {}) } : null,
+    rows: arr(d.rows).map(linkOut).filter((x): x is PageItemOut => x !== null),
+    removed_item_ids: strs(d.removed_item_ids),
+  };
+}
+
+const OPTION_KINDS = new Set(['item', 'pick', 'yes', 'no', 'keep_mine', 'cancel']);
+type ProposalOption = ProposalOut['options'][number];
+
+export function proposalOut(v: unknown): ProposalOut | null {
+  const d = obj(v);
+  const question = d && str(d.question);
+  if (!d || !question) return null;
+  const options = arr(d.options)
+    .map((x, i): ProposalOption | null => {
+      const o = obj(x);
+      const label = o && str(o.label);
+      if (!o || !label) return null;
+      const kind = (OPTION_KINDS.has(String(o.kind)) ? o.kind : 'cancel') as ProposalOption['kind'];
+      return { id: str(o.id) ?? String(i), label, kind, item_id: str(o.item_id) };
+    })
+    .filter((x): x is ProposalOption => x !== null);
+  if (options.length === 0) return null;
+  return {
+    reply_id: str(d.reply_id),
+    kind: d.kind === 'count' || d.kind === 'manual' ? d.kind : 'choice',
+    question,
+    count: typeof d.count === 'number' ? d.count : null,
+    item_ids: strs(d.item_ids),
+    options,
+    default: str(d.default),
+    expires_at: str(d.expires_at),
+    state: d.state === 'answered' || d.state === 'expired' ? d.state : 'open',
+  };
+}
+
+function choiceIn(v: unknown): { reply_id: string; option: string } | null {
+  const c = obj(v);
+  const replyId = c && str(c.reply_id);
+  const option = c && str(c.option);
+  return replyId && option ? { reply_id: replyId, option } : null;
 }
 
 /** One SSE message → a typed event (docs/api/chat.md «Events»). Unknown events: null (ignored). */
@@ -155,8 +289,32 @@ export function decodeChatEvent(m: SseMessage): ChatEvent | null {
           aiLabel: str(d.ai_label),
           citations: citations(d.citations),
         };
-      case 'done':
-        return { type: 'done', replyId: str(d.reply_id), limited: d.limited === true };
+      case 'done': {
+        const kind = str(d.answer_kind);
+        return {
+          type: 'done',
+          replyId: str(d.reply_id),
+          limited: d.limited === true,
+          answerKind: (kind as ChatMessageOut['answer_kind']) ?? null,
+          actionId: str(d.action_id),
+        };
+      }
+      case 'action': {
+        const action = actionOut(d.action);
+        if (!action) return null;
+        const ids = strs(d.changed_item_ids);
+        return { type: 'action', action, changedItemIds: ids.length > 0 ? ids : action.changed_item_ids };
+      }
+      case 'page_patch': {
+        const patch = pagePatchOut(d);
+        return patch ? { type: 'page_patch', patch } : null;
+      }
+      case 'needs_choice':
+      case 'confirm':
+      case 'confirm_manual': {
+        const proposal = proposalOut(obj(d.proposal) ?? d);
+        return proposal ? { type: 'proposal', proposal } : null;
+      }
       case 'deferred':
         return { type: 'deferred', replyId: str(d.reply_id), text: str(d.text) };
       case 'error':
@@ -342,6 +500,31 @@ export class Api {
     };
   }
 
+  /** One message (the plain JSON alternative to the resume stream). */
+  async chatMessage(id: string): Promise<ChatMessageOut | null> {
+    return chatMessageOut(await this.client.request<unknown>('GET', `/chat/messages/${encodeURIComponent(id)}`));
+  }
+
+  /** The answer that waits on «Сегодня» (the phone was gone when it was finished). */
+  async pendingBanner(): Promise<PendingBannerOut> {
+    const out = obj(await this.client.request<unknown>('GET', '/chat/pending-banner')) ?? {};
+    return { message: chatMessageOut(out.message) };
+  }
+
+  /** «Отменить» an action (whole, or `item_ids` only). `410 undo_expired` after 30 days. */
+  async undoAction(actionId: string, body: ActionUndoIn = {}): Promise<ActionUndoOut> {
+    const out =
+      obj(await this.client.request<unknown>('POST', `/actions/${encodeURIComponent(actionId)}/undo`, { body })) ?? {};
+    return {
+      action: actionOut(out.action),
+      undo: actionOut(out.undo),
+      partial: out.partial === true,
+      repeated: out.repeated === true,
+      message_ru: str(out.message_ru),
+      page_patches: arr(out.page_patches).map(pagePatchOut).filter((x): x is PagePatchOut => x !== null),
+    };
+  }
+
   chatDelivery(messageId: string, delivery: ChatDeliveryState): Promise<unknown> {
     return this.client.request('POST', `/chat/messages/${encodeURIComponent(messageId)}/delivery`, { body: { delivery } });
   }
@@ -350,4 +533,11 @@ export class Api {
   sendFeedback(body: FeedbackIn): Promise<FeedbackOut> {
     return this.client.request('POST', '/feedback', { body, idempotencyKey: body.client_id });
   }
+}
+
+/** Data of a push → «Ответ готов», or null when it is some other notification. */
+export function answerReadyFrom(data: unknown): AnswerReadyPushData | null {
+  const o = obj(data);
+  if (!o || o.type !== 'chat_reply') return null;
+  return { type: 'chat_reply', reply_id: str(o.reply_id) };
 }

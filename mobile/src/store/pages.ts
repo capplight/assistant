@@ -29,7 +29,13 @@ export type Page = {
   /** `failed`: the server refused it for good; the page stays on this phone. */
   syncState: 'pending' | 'synced' | 'failed';
   seq: number;
+  /** The server's `view_version` of what the phone shows (sent with a request from the line). */
+  viewVersion?: number;
+  /** Group headings after «Разложи» (`group_key` → title). */
+  groups?: PageGroup[];
 };
+
+export type PageGroup = { key: string; title: string };
 
 function makePage(
   templateKey: TemplateKey,

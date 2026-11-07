@@ -6,6 +6,7 @@ import { Api, type PutFile } from '@/api/endpoints';
 import { TokenStorage, type SecretStore } from '@/api/tokens';
 import { getOutbox, getPagesRepo, getRecords, type LocalRecord } from '@/db';
 import { RecordActions } from '@/records/actions';
+import { nativePush, type DeviceToken, type PushPort } from '@/push';
 import { Capture, type FileOps } from '@/records/capture';
 import { useDataVersion } from '@/store/data';
 import { useConnectivity } from '@/store/connectivity';
@@ -25,6 +26,7 @@ type Overrides = {
   files?: FileOps;
   putFile?: PutFile;
   baseUrl?: () => string;
+  push?: PushPort;
 };
 
 let overrides: Overrides = {};
@@ -32,13 +34,31 @@ let api: Api | null = null;
 let engine: Promise<SyncEngine> | null = null;
 let capture: Promise<Capture> | null = null;
 let actions: Promise<RecordActions> | null = null;
+let push: PushPort | null = null;
+/** Sent with POST /devices once notifications are allowed (src/push). */
+let pushToken: DeviceToken | null = null;
 
 const deviceInfo: DeviceInfo = () => ({
   platform: Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'web',
   os_version: String(Platform.Version ?? ''),
   app_version: getAppVersion(),
+  ...(pushToken ? { push_provider: pushToken.provider, push_token: pushToken.token } : {}),
   capabilities: {},
 });
+
+export function getPush(): PushPort {
+  if (!push) push = overrides.push ?? nativePush();
+  return push;
+}
+
+/** A new push token: the device row is updated through the outbox (devices need consent). */
+export async function setPushToken(t: DeviceToken | null): Promise<void> {
+  if (t?.token === pushToken?.token && t?.provider === pushToken?.provider) return;
+  pushToken = t;
+  if (!t || useOnboarding.getState().consent === null) return;
+  await (await getOutbox()).enqueue('device.register', {});
+  kickSync();
+}
 
 /** Local data changed: lists reload, tabs follow the pages table. */
 export function notifyDataChanged(): void {
@@ -178,4 +198,6 @@ export function setServicesForTests(o: Overrides): void {
   engine = null;
   capture = null;
   actions = null;
+  push = null;
+  pushToken = null;
 }

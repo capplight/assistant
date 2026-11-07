@@ -82,6 +82,7 @@ async def post_message(body: ChatMessageIn, user: AiUser, db: Db, ctx: Ctx) -> S
         client_id=body.client_id, text=body.text, page_id=body.page_id,
         visible_item_ids=body.visible_item_ids, view_version=body.view_version,
         selected_item_id=body.selected_item_id, lang=body.lang, input_kind=body.input_kind,
+        choice=body.choice.model_dump() if body.choice else None,
     )  # fmt: skip
     reply_id, run = await service.start(user.id, user.locale, req)
     if run is not None:
@@ -169,7 +170,8 @@ async def pending_banner(user: BaseUser, db: Db, ctx: Ctx) -> PendingBannerOut:
         .where(ConversationMessage.user_id == user.id,
                ConversationMessage.delivery == Delivery.BANNER_PENDING,
                ConversationMessage.role == MessageRole.ASSISTANT,
-               ConversationMessage.state.in_([MessageState.DONE, MessageState.DEFERRED]),
+               ConversationMessage.state.in_([MessageState.DONE, MessageState.DEFERRED,
+                                              MessageState.FAILED]),
                ConversationMessage.deleted_at.is_(None))
         .order_by(ConversationMessage.id.desc()).limit(1)
     )  # fmt: skip

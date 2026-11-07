@@ -1,3 +1,4 @@
+import { lineRouting } from '@/chat/service';
 import { fireEvent, renderRouter, screen, within } from 'expo-router/testing-library';
 
 import { useOnboarding } from '@/store/onboarding';
@@ -5,6 +6,15 @@ import { usePages } from '@/store/pages';
 import { useUndo } from '@/store/undo';
 import { happyServer, itemOut, pageOut, tokenPair } from '@/testing/fakeServer';
 import { APP_DIR, finishOnboarding, resetApp, settle, testPages, testRecords } from '@/testing/helpers';
+
+// The line here saves notes on the phone (week 2-5 routing). Week 6 sends every phrase to the server
+// when it can (src/chat/service.ts `lineRouting`); that is covered in week6.test.tsx.
+beforeAll(() => {
+  lineRouting.serverDecides = false;
+});
+afterAll(() => {
+  lineRouting.serverDecides = true;
+});
 
 const notes = () => usePages.getState().pages.find((p) => p.templateKey === 'notes')!;
 

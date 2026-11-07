@@ -365,12 +365,18 @@ describe('offline, limits, «Без ИИ»', () => {
     expect(s.calls.some((c) => c.path.startsWith('/chat'))).toBe(false);
   });
 
-  it('a note is still saved on the phone, not sent to the conversation', async () => {
+  it('week 6: a note goes to the conversation (the server decides); never reached it → saved on the phone', async () => {
     const outbox = setup();
+    s.on('POST /chat/messages', () => ({ status: 200, sse: reply() }));
     await askOnShopping('хлеб и молоко');
+    await settle(() => s.callsTo('POST /chat/messages').length === 1);
+    expect(outbox.all().filter((e) => e.kind === 'item.create')).toHaveLength(0);
+
+    s.offline = true;
+    await fireEvent.changeText(screen.getByTestId('assistant-input'), 'сыр и масло');
+    await fireEvent.press(screen.getByTestId('assistant-send'));
     await settle(() => outbox.all().some((e) => e.kind === 'item.create'));
-    expect(s.callsTo('POST /chat/messages')).toHaveLength(0);
-    expect(within(screen.getByTestId('answer-banner')).getByText('Сохранил.')).toBeTruthy();
+    expect(within(screen.getByTestId('answer-banner')).getByText(/^Сохранил\./)).toBeTruthy();
   });
 });
 

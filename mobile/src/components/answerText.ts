@@ -18,8 +18,12 @@ export function answerNotice(m: ChatMessage, t: TFunction): string | null {
     case 'deferred':
       return t('answer.deferred');
     case 'failed':
+      if (m.notice === 'offline_action') return t('line.offline_action');
+      if (m.notice === 'no_ai_action') return t('line.no_ai_action');
       return m.notice === 'limit' ? t('answer.limit') : m.notice === 'no_ai' ? t('answer.no_ai') : t('errors.generic');
     case 'done':
+      // A change is shown on the page; a question back is shown as buttons.
+      if (m.action || m.proposal || m.answerKind === 'action' || m.answerKind === 'choice') return null;
       if (m.notice === 'limit') return t('answer.limit');
       if (m.notice === 'not_found') return t('answer.not_found');
       return m.text || (m.sources?.length ?? 0) > 0 ? null : t('answer.not_found');

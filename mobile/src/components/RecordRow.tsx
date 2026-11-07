@@ -13,11 +13,14 @@ export function RecordRow({
   record,
   onPress,
   snippet,
+  highlighted,
 }: {
   record: LocalRecord;
   onPress: () => void;
   /** Search: the place that matched, when the title does not show it. */
   snippet?: string | null;
+  /** Just changed by the assistant: `markerSoft` for 600 ms (2-design `motion.highlight`). */
+  highlighted?: boolean;
 }) {
   const theme = useTheme();
   const { t, i18n } = useTranslation();
@@ -34,7 +37,7 @@ export function RecordRow({
       style={({ pressed }) => [
         styles.card,
         {
-          backgroundColor: theme.colors.surface,
+          backgroundColor: highlighted ? theme.colors.markerSoft : theme.colors.surface,
           borderColor: theme.colors.line,
           borderRadius: theme.radius.card,
           padding: theme.space[4],

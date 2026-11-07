@@ -22,7 +22,9 @@ export type OutboxKind =
   | 'capture.text'
   /** Unused: questions stream live (src/chat), they are not queued here. Old rows stay pending. */
   | 'chat.message'
-  | 'feedback.send';
+  | 'feedback.send'
+  /** «Отменить» / «Вернуть» an assistant action: done on the phone at once, the server follows. */
+  | 'action.undo';
 
 export type OutboxStatus = 'pending' | 'sent' | 'failed';
 
@@ -133,6 +135,10 @@ export const OUTBOX_MIGRATIONS: readonly string[] = [
    CREATE UNIQUE INDEX IF NOT EXISTS page_links_page_item ON page_links (page_server_id, item_server_id);`,
   // v4 (week 4): how long a deleted record can still be brought back
   `ALTER TABLE records ADD COLUMN purge_after INTEGER;`,
+  // v5 (week 6): the page version the line sends with a request, group headings after «Разложи»
+  `ALTER TABLE pages ADD COLUMN view_version INTEGER NOT NULL DEFAULT 0;
+   ALTER TABLE pages ADD COLUMN view_groups TEXT NOT NULL DEFAULT '[]';
+   ALTER TABLE page_links ADD COLUMN group_key TEXT;`,
 ];
 
 type Row = {

@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { fireEvent, renderRouter, screen } from 'expo-router/testing-library';
 import { Dimensions } from 'react-native';
 
+import { lineRouting } from '@/chat/service';
 import type { InMemoryOutboxRepository } from '@/db';
 import { saveNewPages } from '@/pages/service';
 import { fold, looksLikeQuestion, searchRecords } from '@/records/search';
@@ -14,6 +15,15 @@ import { undoStripMs, useUndo } from '@/store/undo';
 import type { Call, FakeServer } from '@/testing/fakeServer';
 import { happyServer, itemOut, pageOut, tokenPair } from '@/testing/fakeServer';
 import { APP_DIR, finishOnboarding, offlineFetch, resetApp, settle, testPages, testRecords } from '@/testing/helpers';
+
+// The line here saves notes on the phone (week 2-5 routing). Week 6 sends every phrase to the server
+// when it can (src/chat/service.ts `lineRouting`); that is covered in week6.test.tsx.
+beforeAll(() => {
+  lineRouting.serverDecides = false;
+});
+afterAll(() => {
+  lineRouting.serverDecides = true;
+});
 
 const notes = () => usePages.getState().pages.find((p) => p.templateKey === 'notes')!;
 

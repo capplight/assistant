@@ -6,7 +6,9 @@ import { create } from 'zustand';
  */
 export type UndoStripState =
   | { id: number; kind: 'merged'; recordId: string; canonicalDate: string }
-  | { id: number; kind: 'deleted'; recordId: string };
+  | { id: number; kind: 'deleted'; recordId: string }
+  /** «Разложил 23 заметки в 5 групп [Что изменилось] [Отменить]»: the action of this assistant message. */
+  | { id: number; kind: 'action'; messageId: string };
 
 /** 2-design 4.3 fixes these: 10 s; 15 s with a font of 150% and more; 30 s with a screen reader. */
 export const UNDO_STRIP_MS = 10_000;
@@ -24,6 +26,7 @@ type UndoState = {
   strip: UndoStripState | null;
   showMerged: (recordId: string, canonicalDate: string) => void;
   showDeleted: (recordId: string) => void;
+  showAction: (messageId: string) => void;
   hide: (id?: number) => void;
 };
 
@@ -31,6 +34,7 @@ export const useUndo = create<UndoState>()((set, get) => ({
   strip: null,
   showMerged: (recordId, canonicalDate) => set({ strip: { id: ++seq, kind: 'merged', recordId, canonicalDate } }),
   showDeleted: (recordId) => set({ strip: { id: ++seq, kind: 'deleted', recordId } }),
+  showAction: (messageId) => set({ strip: { id: ++seq, kind: 'action', messageId } }),
   hide: (id) => {
     if (id === undefined || get().strip?.id === id) set({ strip: null });
   },

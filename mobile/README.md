@@ -1,4 +1,4 @@
-# Mobile app — week 5 (assistant line answers, «Переписка», «Сообщить о проблеме»)
+# Mobile app — week 6 (changes on the page, «Отменить», questions back, «Ответ готов»)
 
 Expo SDK 58 (React Native 0.88, New Architecture), TypeScript strict, expo-router.
 Spec: `../docs/spec/SPEC.md`, `../docs/spec/final/2-design.md`, `../docs/spec/final/3-engineering.md` §2.1, §11.2 (week 1, Mobile).
@@ -86,8 +86,43 @@ src/
   pages/                     template catalog v1, premarks, labels, LexoRank, page contents and order, page service
   __tests__/                 onboarding, main, api (auth/refresh/errors), consent, sync, capture (share/voice), unit, fonts
   testing/                   helpers + FakeServer (fetch mock, SSE streams)
-  chat/                      the one conversation: ask, stream, resume, queue, history, feedback
+  chat/                      the one conversation: ask, stream, resume, queue, history, feedback,
+                             actions (page_patch, undo), questions back, pending answer, push tap
+  push/                      expo-notifications behind a port (FakePush in tests)
 ```
+
+## Week 6: what works
+
+Contract: `../docs/api/chat.md`, `../docs/api/actions.md`; shapes only in `src/api/types.ts` + `src/api/endpoints.ts`
+(reconciled with `schemas.py`, `chat/mutate.py`, `chat/service.py`, `actions/patch.py` on 2026-11-07).
+**Checked by tests with a fake server only: not against the real server, not on a device.**
+
+- **Every phrase goes to the server** when it can be asked (3-engineering 5.10 п. 2: the server tells a question, a change
+  and a note apart). The phone's guess (`guessLine`: question / change / note) is used only without the server: offline
+  or before consent a note is saved here, a question waits, a change says «Сделать это смогу, когда появится интернет»
+  [Хорошо]; «Без ИИ» never calls `/chat`. `lineRouting.serverDecides=false` brings week 5 routing back.
+- **Page context**: `visible_item_ids` (rows on screen, top first, ≤40), the page's `view_version` (SQLite v5),
+  `selected_item_id` = the open record card («это»).
+- **US-24**: `action` → no banner, «Переписка» stays closed; the strip over the line «Разложил … [Что изменилось]
+  [Отменить]» (10/15/30 s), [Открыть] when the change was on another page. `page_patch` → rows upserted, removed rows
+  dropped, group headings from `view_state.groups` (`group_key` = title), changed rows `markerSoft` 600 ms. Nothing moves
+  while a finger is on the list (the patch waits). Then `/sync` for the records.
+- **«Отменить» / «Вернуть»** (one row of «Что изменилось»): `POST /actions/{id}/undo` with `client_id`, `page_patches`
+  applied, `partial` → «Часть уже изменена вами…». Offline: the rows the phone kept go back at once and the undo waits in
+  the outbox (`action.undo`, same `client_id`). In «Переписка» actions show with [Отменить].
+- **US-28 / US-30**: `needs_choice`, `confirm`, `confirm_manual` → the question in the banner, the `default` option first
+  and focused («Оставить мои»). A tap → `choice: {reply_id, option}` + label as text; «Выбрать» → tap a record on the page
+  → the original phrase again with `selected_item_id`.
+- **«Ответ готов» on «Сегодня»**: `GET /chat/pending-banner` when «Сегодня» opens and on return to the foreground; the
+  card sends `banner_shown` / `opened` / `dismissed`. An answer finished after the person went to another page waits on
+  «Сегодня» instead of following them.
+- **Push** (`src/push/`): native token (`getDevicePushTokenAsync`) sent with `POST /devices` once notifications are
+  allowed; tap `{type: "chat_reply", reply_id}` → «Переписка» on the answer; quiet in the foreground. **Not verified**: needs
+  a development build and FCM/APNs credentials (none in the repo; the server has none either). The permission is not
+  asked yet (S04, week 8).
+
+Not yet: «Отменено · Вернуть» 5 s (undo of the undo), «Пока вас не было, я разложил…», stacks animation
+(`motion.stack`), `actions` / `conversation_messages` arrays of `/sync`, progress «Раскладываю… 12 из 40» [Остановить].
 
 ## Week 5: what works
 
