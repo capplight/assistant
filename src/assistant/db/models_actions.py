@@ -27,6 +27,8 @@ class ActionKind(enum.StrEnum):
     SCREEN_MOVE_ITEMS = "screen_move_items"
     SCREEN_ADD_ITEM = "screen_add_item"
     SCREEN_REMOVE_ITEM = "screen_remove_item"
+    REORDER_SCREENS = "reorder_screens"  # week 7: tab order by hand
+    HABIT_CHANGE = "habit_change"  # week 7: a learned placement rule turned off
 
 
 class Initiator(enum.StrEnum):

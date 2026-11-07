@@ -3,11 +3,13 @@
 Public surface for other modules:
 - `place_item(session, item)`: call after anything new is known about an item (created, text ready,
   envelope written). Adds it to the pages whose rule matches; never moves an existing row.
-- `lexorank`, `rules`: pure code, no DB.
+- `rescue_moved(session, page)`: call when a page is removed: records moved onto it by hand go
+  back to where they came from.
+- `lexorank`, `rules`, `order`: pure code, no DB. `habits`: learned placement (`placement_rule`).
 The API is in `assistant.api.routes.pages`.
 """
 
-from assistant.pages import lexorank, rules
+from assistant.pages import habits, lexorank, order, rules
 from assistant.pages.service import (
     add_link,
     create_page,
@@ -15,9 +17,13 @@ from assistant.pages.service import (
     latest_template,
     latest_templates,
     lock_user,
+    mark_rekeyed,
     place_item,
     rebalance_page,
+    rescue_moved,
 )
 
-__all__ = ["add_link", "create_page", "fill_page", "latest_template", "latest_templates",
-           "lexorank", "lock_user", "place_item", "rebalance_page", "rules"]  # fmt: skip
+__all__ = ["add_link", "create_page", "fill_page", "habits", "latest_template",
+           "latest_templates", "lexorank", "lock_user", "mark_rekeyed", "order", "place_item",
+           "rebalance_page",
+           "rescue_moved", "rules"]  # fmt: skip

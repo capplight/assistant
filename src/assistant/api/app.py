@@ -106,8 +106,9 @@ def create_app(
     for router in (memory.router, memory.pages_router, memory.items_router):
         v1.include_router(router)
     for router in (auth.router, consents.router, devices.router, uploads.router, items.router,
-                   pages.router, pages.templates_router, sync.router, me.router, misc.ai,
-                   chat.router, chat.feedback_router, actions.router):
+                   pages.items_router, pages.habits_router, pages.router, pages.templates_router,
+                   sync.router, me.router, misc.ai, chat.router, chat.feedback_router,
+                   actions.router):
         v1.include_router(router)
     if isinstance(storage, LocalObjectStorage):
         v1.include_router(misc.dev_storage)

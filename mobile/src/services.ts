@@ -13,6 +13,7 @@ import { useConnectivity } from '@/store/connectivity';
 import { useOnboarding } from '@/store/onboarding';
 import { syncPagesStore } from '@/store/pagesSync';
 import { useSession } from '@/store/session';
+import { useToast } from '@/store/toast';
 import { useUndo } from '@/store/undo';
 import { SyncEngine, type DeviceInfo } from '@/sync/engine';
 
@@ -117,6 +118,10 @@ export function getSyncEngine(): Promise<SyncEngine> {
         onChanged: notifyDataChanged,
         onAutoMerged: (recordId, date) => useUndo.getState().showMerged(recordId, date),
         blocked: syncBlocked,
+        onLearned: (outboxId, text) => {
+          if (!useUndo.getState().noteLearned(outboxId, text)) useToast.getState().show(text, 5000);
+        },
+        onNotice: (text) => useToast.getState().show(text, 5000),
         onAccountConsentRejected: () =>
           useOnboarding.getState().requireAccountConsent({ userId: '', switched: false }),
       }))();

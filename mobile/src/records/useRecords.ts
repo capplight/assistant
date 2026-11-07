@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { getPagesRepo, getRecords, type LocalRecord } from '@/db';
-import { pageEntries, type PageEntry } from '@/pages/contents';
+import { pageEntries, pageKey, type PageEntry } from '@/pages/contents';
 import { useDataVersion } from '@/store/data';
 import type { Page } from '@/store/pages';
 
@@ -33,11 +33,13 @@ export function usePageEntries(page: Page | undefined): PageEntry[] | null {
   return useLocalQuery(async () => {
     if (!page) return [];
     const [records, repo] = await Promise.all([getRecords(), getPagesRepo()]);
-    const [list, links] = await Promise.all([
+    // Rows made on this phone before the page reached the server are under its local key.
+    const [list, server, local] = await Promise.all([
       records.list(LIST_LIMIT),
       page.serverId ? repo.linksFor(page.serverId) : Promise.resolve([]),
+      repo.linksFor(pageKey({ id: page.id, serverId: null })),
     ]);
-    return pageEntries(page, list, links);
+    return pageEntries(page, list, [...server, ...local]);
   }, [page?.id, page?.serverId, page?.templateKey]);
 }
 

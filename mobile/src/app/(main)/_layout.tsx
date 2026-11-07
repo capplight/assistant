@@ -31,6 +31,7 @@ export default function MainLayout() {
         <Tabs.Screen name="record/[id]" />
         <Tabs.Screen name="search" />
         <Tabs.Screen name="trash" />
+        <Tabs.Screen name="my-pages" />
       </Tabs>
     </KeyboardAvoidingView>
   );

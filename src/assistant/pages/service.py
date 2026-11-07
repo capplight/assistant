@@ -11,12 +11,20 @@ from datetime import datetime
 from sqlalchemy import func, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from assistant.db.ids import uuid7
 from assistant.db.models import Item
-from assistant.db.models_pages import AddedBy, Screen, ScreenCreatedBy, ScreenItem, ScreenTemplate
+from assistant.db.models_pages import (
+    AddedBy,
+    Screen,
+    ScreenCreatedBy,
+    ScreenItem,
+    ScreenKind,
+    ScreenTemplate,
+)
 from assistant.db.models_v2 import HiddenReason
-from assistant.pages import lexorank
+from assistant.pages import habits, lexorank
 from assistant.pages.rules import ItemFacts, matches
 
 
@@ -58,17 +66,20 @@ async def _rules(session: AsyncSession, pages: list[Screen]) -> dict[int, dict]:
 
 
 async def rebalance_page(session: AsyncSession, screen_id: int) -> int:
-    """Re-key a page in one transaction: same visible order, same flags, shorter keys. Who last
-    moved a row is not touched. Rows without a position stay. Returns the rows re-keyed."""
+    """Re-key a page in one transaction: same visible order (page order, so rows that shared a key
+    keep their tie-break), same flags, shorter keys. Who last moved a row is not touched. Rows
+    without a position stay. Marks the page `rekeyed_seq`: keys a phone computed before this are
+    not trusted (`order.trusted`). Returns the rows re-keyed."""
     rows = (
         await session.execute(
             select(ScreenItem.item_id)
             .join(Item, Item.id == ScreenItem.item_id)
             .where(ScreenItem.screen_id == screen_id, ScreenItem.position.is_not(None))
-            .order_by(ScreenItem.position, Item.public_id)
+            .order_by(ScreenItem.position, func.coalesce(Item.occurred_at, Item.created_at).desc(),
+                      Item.public_id)
             .with_for_update(of=ScreenItem)
         )
-    ).all()
+    ).all()  # fmt: skip
     for (item_id,), key in zip(rows, lexorank.sequence(len(rows)), strict=True):
         await session.execute(
             update(ScreenItem)
@@ -76,7 +87,18 @@ async def rebalance_page(session: AsyncSession, screen_id: int) -> int:
             .values(position=key)
             .execution_options(synchronize_session=False)
         )
+    await mark_rekeyed(session, screen_id)
     return len(rows)
+
+
+async def mark_rekeyed(session: AsyncSession, screen_id: int) -> None:
+    """Keys of this page's rows were laid out anew. Taken after the rows' own seq, so a phone whose
+    `base_seq` covers this value has seen all of them, even when sync came in several pages."""
+    await session.execute(
+        update(Screen).where(Screen.id == screen_id)
+        .values(rekeyed_seq=func.nextval("sync_seq"))
+        .execution_options(synchronize_session=False)
+    )  # fmt: skip
 
 
 async def _gap(session: AsyncSession, screen_id: int,
@@ -147,12 +169,48 @@ async def place_item(session: AsyncSession, item: Item) -> int:
     facts = ItemFacts(kind=str(item.kind), envelope=item.envelope, title=item.title,
                       summary=item.summary,
                       text=item.text if item.text is not None else item.raw_text)  # fmt: skip
+    # Learned from the person's moves: such records also go where they put the others.
+    learned = await habits.placements(session, item.user_id, item.envelope)
+    targets = {str(h.value.get("page_id")) for h in learned}
     when = item.occurred_at or item.created_at
     added = 0
     for page in pages:
-        if matches(rules[page.id], facts) and await add_link(session, page, item.id, when):
+        wanted = str(page.public_id) in targets or matches(rules[page.id], facts)
+        wanted = wanted and page.kind != ScreenKind.SYSTEM_TODAY
+        if wanted and await add_link(session, page, item.id, when):
             added += 1
+    for h in learned:
+        h.last_used_at = func.now()
     return added
+
+
+async def rescue_moved(session: AsyncSession, page: Screen) -> int:
+    """A page is being removed: a record the person moved onto it by hand, that is on no other live
+    page, goes back on the page it was moved from (a move never leaves a record on no page, also
+    when the move and the removal came from two phones). Returns how many came back."""
+    other = aliased(ScreenItem)
+    live = aliased(Screen)
+    rows = list(await session.execute(
+        select(ScreenItem.item_id, ScreenItem.moved_from_screen_id)
+        .join(Screen, Screen.id == ScreenItem.moved_from_screen_id)
+        .where(ScreenItem.screen_id == page.id, ScreenItem.removed_by_user_at.is_(None),
+               ScreenItem.moved_from_screen_id.is_not(None), Screen.deleted_at.is_(None),
+               ~select(other.item_id).join(live, live.id == other.screen_id)
+               .where(other.item_id == ScreenItem.item_id, other.screen_id != page.id,
+                      other.removed_by_user_at.is_(None), live.deleted_at.is_(None),
+                      live.kind != ScreenKind.SYSTEM_TODAY).exists())
+    ))  # fmt: skip
+    back = 0
+    for item_id, src in rows:
+        result = await session.execute(
+            update(ScreenItem)
+            .where(ScreenItem.screen_id == src, ScreenItem.item_id == item_id,
+                   ScreenItem.removed_by_user_at.is_not(None))
+            .values(removed_by_user_at=None, updated_at=func.now())
+            .execution_options(synchronize_session=False)
+        )  # fmt: skip
+        back += result.rowcount or 0
+    return back
 
 
 async def fill_page(session: AsyncSession, page: Screen) -> int:

@@ -14,6 +14,13 @@ const OLD_ACCOUNT_ONLY: readonly OutboxKind[] = [
   'item.delete',
   'item.restore',
   'profile.update',
+  'action.undo',
+  'page.item_move',
+  'item.move_to_page',
+  'page.item_remove',
+  'pages.reorder',
+  'pages.remove',
+  'pages.restore',
 ];
 
 /**

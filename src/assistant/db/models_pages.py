@@ -116,6 +116,10 @@ class Screen(Base):
         DateTime(timezone=True), server_default=sa_func.now(), onupdate=sa_func.now()
     )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # 0012: the winning manual tab move (last-writer-wins clock) and the last re-key of the rows
+    moved_ts: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    moved_client_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    rekeyed_seq: Mapped[int | None] = mapped_column(BigInteger)
 
 
 class ScreenItem(Base):
@@ -150,3 +154,10 @@ class ScreenItem(Base):
         DateTime(timezone=True), server_default=sa_func.now()
     )
     updated_by: Mapped[str] = mapped_column(Text, default=UpdatedBy.AGENT)
+    # 0012: the winning manual move of the row (last-writer-wins clock; undo leaves it), and the
+    # page the person moved the record here from
+    moved_ts: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    moved_client_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    moved_from_screen_id: Mapped[int | None] = mapped_column(
+        ForeignKey("screens.id", ondelete="SET NULL")
+    )

@@ -97,7 +97,7 @@ export default function MoreScreen() {
         ? row('consent', t('account_consent.row'), () => router.push('/account-consent'), t('account_consent.row_hint'))
         : null}
       {row('add_page', t('more.add_page'), () => setNaming(true), t('tpl.hint.custom'))}
-      {row('my_pages', t('more.my_pages'), undefined, t('more.later'))}
+      {row('my_pages', t('more.my_pages'), () => router.navigate('/my-pages'))}
       {row('all_records', t('more.all_records'), () => router.navigate('/records'))}
       {row('trash', t('trash.title'), () => router.navigate('/trash'), t('trash.hint'))}
       {row('did', t('more.did'), undefined, t('more.later'))}

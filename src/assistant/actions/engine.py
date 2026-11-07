@@ -11,6 +11,12 @@ An op is a JSON object with ids as public uuids (strings), never database ids:
   not bring it back); `false` = the row is deleted (it was added by the change being undone).
 - `delete_entity_soft` / `restore_entity` {entity: items|screens, id}: trash / back.
 - `restore_field` {entity: items, id, field: title, value, expect?}: sets one field.
+- `restore_page_position` {page, position, expect?}: sets a page's place among the tabs.
+- `restore_habit` {id, state: {evidence_count, status, value}, expect?}: sets a rule back (the
+  undo of turning it off).
+- `habit_evidence` {id, item, add}: counts one record for a learned rule, or takes it back (the
+  undo of the learning a manual move did). A later move of another record does not block it, and a
+  rule the person turned off stays off.
 
 `apply` runs a list of ops in one transaction (the caller commits) and returns the ops that undo
 what it did, newest first, so `apply(apply(x).inverse)` is a round trip. With `check=True` (an
@@ -29,13 +35,16 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from assistant.db.models import Item
+from assistant.db.models_habits import UserHabit
 from assistant.db.models_pages import MAX_PAGES, AddedBy, Screen, ScreenItem, ScreenKind
-from assistant.pages import add_link, lock_user
+from assistant.pages import add_link, habits, lock_user, mark_rekeyed, rescue_moved
 from assistant.records import restore_item, trash_item
 
 OPS = frozenset({"restore_positions", "restore_view_state", "add_screen_item",
                  "remove_screen_item", "delete_entity_soft", "restore_entity",
-                 "restore_field"})  # fmt: skip
+                 "restore_field", "restore_page_position", "restore_habit",
+                 "habit_evidence"})  # fmt: skip
+HABIT_STATUSES = frozenset({"candidate", "active", "disabled"})
 ENTITIES = frozenset({"items", "screens"})
 ITEM_FIELDS = frozenset({"title"})
 ROW_FIELDS = ("position", "group_key", "manual_order")
@@ -124,6 +133,9 @@ async def _restore_positions(session: AsyncSession, user_id: int, op: dict, out:
         out.pages.add(page.id)
     if back:
         out.inverse.append({"op": "restore_positions", "page": str(page.public_id), "rows": back})
+    if len(back) > 1:  # the page was rearranged: a key a phone computed before says nothing now
+        await session.flush()
+        await mark_rekeyed(session, page.id)
 
 
 async def _restore_view_state(session: AsyncSession, user_id: int, op: dict, out: Outcome, *,
@@ -225,6 +237,8 @@ async def _soft(session: AsyncSession, user_id: int, op: dict, out: Outcome, *,
         if page.deleted_at is not None:
             return
         page.deleted_at = now
+        await session.flush()
+        await rescue_moved(session, page)
     out.inverse.append({"op": "restore_entity", "entity": entity, "id": rid})
 
 
@@ -281,6 +295,68 @@ async def _restore_field(session: AsyncSession, user_id: int, op: dict, out: Out
     out.items.add(rid)
 
 
+async def _restore_page_position(session: AsyncSession, user_id: int, op: dict, out: Outcome, *,
+                                 by: str, check: bool, now: datetime) -> None:  # fmt: skip
+    page = await _screen(session, user_id, op["page"])
+    if page is None or page.kind == ScreenKind.SYSTEM_TODAY:
+        out.skipped += 1
+        return
+    if check and "expect" in op and page.position != op["expect"]:
+        out.skipped += 1  # the person moved the tab again since
+        return
+    if page.position == op["position"]:
+        return
+    out.inverse.append({"op": "restore_page_position", "page": str(page.public_id),
+                        "position": page.position, "expect": op["position"]})  # fmt: skip
+    page.position = op["position"]
+    page.updated_at = now
+
+
+async def _restore_habit(session: AsyncSession, user_id: int, op: dict, out: Outcome, *,
+                         by: str, check: bool, now: datetime) -> None:  # fmt: skip
+    state = op.get("state") or {}
+    if state.get("status") not in HABIT_STATUSES or not isinstance(state.get("value"), dict):
+        raise ValueError("restore_habit: bad state")
+    habit = await session.scalar(
+        select(UserHabit).where(UserHabit.user_id == user_id,
+                                UserHabit.public_id == _uuid(op["id"])).with_for_update()
+    )  # fmt: skip
+    if habit is None:
+        out.skipped += 1
+        return
+    cur = {"evidence_count": habit.evidence_count, "status": habit.status}
+    expect = op.get("expect")
+    if check and expect and any(cur.get(k) != v for k, v in expect.items()):
+        out.skipped += 1  # the person changed the rule since (turned it off, ...)
+        return
+    back = {"evidence_count": habit.evidence_count, "status": habit.status,
+            "value": dict(habit.value or {})}  # fmt: skip
+    if back == state:
+        return
+    out.inverse.append({"op": "restore_habit", "id": str(habit.public_id), "state": back,
+                        "expect": {"evidence_count": int(state.get("evidence_count") or 0),
+                                   "status": state["status"]}})  # fmt: skip
+    habit.evidence_count = int(state.get("evidence_count") or 0)
+    habit.status = state["status"]
+    habit.value = dict(state["value"])
+    habit.updated_at = now
+
+
+async def _habit_evidence(session: AsyncSession, user_id: int, op: dict, out: Outcome, *,
+                          by: str, check: bool, now: datetime) -> None:  # fmt: skip
+    habit = await session.scalar(
+        select(UserHabit).where(UserHabit.user_id == user_id,
+                                UserHabit.public_id == _uuid(op["id"])).with_for_update()
+    )  # fmt: skip
+    if habit is None:
+        out.skipped += 1
+        return
+    item, add = str(op["item"]), bool(op.get("add"))
+    if habits.count_evidence(habit, item, add=add, now=now):
+        out.inverse.append({"op": "habit_evidence", "id": str(habit.public_id), "item": item,
+                            "add": not add})  # fmt: skip
+
+
 _HANDLERS = {
     "restore_positions": _restore_positions,
     "restore_view_state": _restore_view_state,
@@ -289,6 +365,9 @@ _HANDLERS = {
     "delete_entity_soft": _soft,
     "restore_entity": _restore,
     "restore_field": _restore_field,
+    "restore_page_position": _restore_page_position,
+    "restore_habit": _restore_habit,
+    "habit_evidence": _habit_evidence,
 }
 
 
@@ -322,6 +401,8 @@ def op_items(op: dict[str, Any]) -> set[str]:
     if op["op"] == "restore_positions":
         return {str(r["item"]) for r in op.get("rows") or []}
     if op["op"] in ("add_screen_item", "remove_screen_item"):
+        return {str(op["item"])}
+    if op["op"] == "habit_evidence":
         return {str(op["item"])}
     if op.get("entity") == "items":
         return {str(op["id"])}

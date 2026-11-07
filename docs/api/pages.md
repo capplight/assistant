@@ -1,4 +1,4 @@
-# Pages API (sprint 3, part B)
+# Pages API (sprint 3, part B; manual order: week 7)
 
 Spec: `docs/spec/final/3-engineering.md` 3.10, 4.10, 6.12; R-46...R-51, R-54. Base path `/v1`.
 All endpoints need `Authorization: Bearer` and the base consents (`pd_processing` + `terms`);
@@ -241,6 +241,10 @@ An item is placed when created and when its text is ready. Enrichment must call
 (R-54). A new row goes above the first auto-placed row that is not newer, so a head of rows placed
 by hand or pinned stays on top.
 
+Learned placement (`placement_rule`, week 7): after the person moved 2 records of one kind to a page
+by hand (`move-to-page`), new records of that kind are placed there too. It only adds rows, like the
+rules.
+
 ## Ordering keys (LexoRank)
 
 Shared vectors: `docs/spec/vectors/lexorank.json`; server code: `src/assistant/pages/lexorank.py`.
@@ -250,17 +254,171 @@ Alphabet `0-9A-Za-z`, compared by bytes (JS `<` on strings gives the same order;
 - `between(null, null)` = `"V"`; `between(a, null)` is just after `a`; `between(null, b)` is just
   before `b`; `between(a, b)` is strictly between. `a >= b` or a malformed key is an error.
 - `sequence(n)`: `n` evenly spaced keys, for filling a page.
-- The phone needs `between` only for optimistic display; the server computes stored keys from the
-  neighbours' ids (week 7 `items/move`). Over 64 chars the server re-keys the page without changing
-  the visible order, so expect a burst of `screen_items` in sync.
+- `between` on the phone: for optimistic display **and** for the `position` it sends with a move
+  (see "Manual order"). Over 64 chars the server re-keys the page without changing the visible
+  order (`sequence`), so expect a burst of `screen_items` in sync; a key the phone computed before
+  that re-key is then not used (see `base_seq` below).
+
+## Manual order (week 7)
+
+Spec: `3-engineering.md` 4.10, 6.12; F-41, R-54; US-27, US-28. The person can move anything by
+hand, online or offline, also in «Без ИИ». **What the person placed is theirs**: the assistant does
+not move it without their «Да» (`confirm_manual` in `chat.md`), page rules and background work never
+move it, and a row the person took off a page is never brought back there by the assistant or the
+rules. Every call below is safe to queue in the outbox and to repeat: send the same `client_id` on
+every retry, a new one for every new tap.
+
+Fields of these calls:
+- `client_id` (uuid; required, optional only on `DELETE`): idempotency. A repeat returns the first result with
+  `repeated: true` and changes nothing.
+- `client_ts` (ISO time with offset; optional, default the server's time, but always send it from
+  the outbox, the same value on every retry): when the person did it on the phone. Two phones that moved **the same row** (or the same tab) offline: the later `client_ts`
+  wins, equal times by the larger `client_id` (as a lowercase string). The loser gets `200`,
+  `moved: false`, `reason: "newer_move"` and the row as it stands: show it there, no dialog. A time
+  in the future counts as the server's time. Used by `items/move` and `pages/reorder`; accepted and
+  not needed by `move-to-page` (two moves to different pages both stay) and `DELETE` (taking a row
+  off a page always stands; a move of it from the other phone changes only its hidden place).
+
+Every change that did something returns an `action` (shape of `actions.md`, `initiated_by: "user"`)
+for the «Отменить» strip (10 s; 30 days in «Что я сделал»). «Отменить» = `POST
+/v1/actions/{action.id}/undo`. If the move is still in the outbox (never sent), drop it from the
+outbox instead: there is nothing to undo on the server. A call that changed nothing has
+`action: null`.
+
+### `POST /v1/pages/{id}/items/move`
+«Выше / Ниже», drag and drop, the «Порядок» mode.
+```json
+{"client_id": "uuid", "client_ts": "2026-11-08T10:00:00+05:00",
+ "item_id": "uuid", "after_item_id": "uuid or null", "before_item_id": "uuid or null",
+ "position": "Vk", "base_seq": 1234, "group_key": "Ремонт", "base_view_version": 7}
+```
+- `item_id`: the row to move. `after_item_id` / `before_item_id`: the rows right above / right
+  below its new place **as the person saw them** (at least one; null = the top / the bottom).
+  «Выше» = before the row above it; «Ниже» = after the row below it.
+- `position`: the key the phone computed, `between(above.position, below.position)` from its local
+  rows, and `base_seq`: the `next_since` of the last `/v1/sync` the phone applied before it. Send
+  both whenever you have them. The server stores that very key when it is a valid key of at most 64
+  chars and the page was not laid out anew after `base_seq` (a re-key, «Разложи» by the assistant,
+  or its «Отменить»: the neighbours then stand elsewhere). That is what makes two phones agree: two
+  rows moved on two phones keep both their keys whatever order the calls arrive in, and two rows
+  that got the same key are ordered by the page order below. Otherwise (no `position`, or stale)
+  the server computes the key right after `after_item_id` (or right before `before_item_id`) among
+  the rows as they are now: the person's place next to those rows wins. Only in this case can the
+  result of chained moves depend on the order the calls arrive in.
+- If the two neighbours have the same key (two phones put rows in one gap), the phone cannot compute
+  a key between them: send no `position`; the server re-keys the page and places the row.
+- `group_key` (optional): the group (stack) it goes into; `null` = out of any group; leave the field
+  out to keep the group.
+- `base_view_version` (optional): the page's `view_version` the person looked at. Never a conflict:
+  the person's move always applies (human over AI); `rebased: true` says the page had changed.
+- The row gets `manual_order: true`, `manual_at` = `client_ts`, `updated_by: "user"`; the page's
+  `view_version` goes up. A row removed from the page meanwhile (other phone) takes the new place
+  but stays removed.
+
+`200`:
+```json
+{"moved": true, "reason": null, "repeated": false, "rebased": false,
+ "link": PageItemOut, "action": Action, "page_patch": PagePatch}
+```
+- `reason` when `moved: false`: `newer_move` (a later move of this row won; `link` is where it
+  is), `anchor_gone` (neither neighbour is on the page any more and no usable `position`; nothing
+  changed).
+- `page_patch` (shape of `chat.md`): the moved row; after a re-key, every row of the page.
+- Errors: `404 not_found` (page, or the item not on it) · `403 page_system` («Сегодня») ·
+  `422 validation_error` (no neighbour given, or the item is its own neighbour).
+- A move on a removed page still applies (it comes back with that order on restore).
+
+### `POST /v1/items/{id}/move-to-page`
+«Переместить на страницу…» and «Показать ещё на…» (S39).
+```json
+{"client_id": "uuid", "client_ts": "...", "mode": "move",
+ "from_page_id": "uuid", "to_page_ids": ["uuid"]}
+```
+- `mode: "move"`: shown on the chosen page and taken off `from_page_id` (required; exactly one page
+  in `to_page_ids`). The record stays off `from_page_id` the same way as after «Убрать с этой
+  страницы». `mode: "also_show"`: shown also on every page in `to_page_ids` (1-19); nothing is taken
+  off. A page the person had removed the record from shows it again (they asked).
+- A record already on a chosen page stays where it is there; a new row goes where its date puts it.
+- A chosen page that was removed meanwhile (other phone) is skipped. With `move`, if no chosen page
+  is live, the record is **not** taken off `from_page_id`: a move never leaves it on no page
+  (`moved: false`, `reason: "page_removed"`). The same holds the other way round: when a page is
+  removed, a record the person moved onto it that is on no other live page goes back on the page it
+  was moved from.
+- **Learning** (`placement_rule`, F-29): after the person moved or showed 2 different records of
+  the same kind (receipt, document, contract, task, ...; not plain notes) on the same page, new
+  records of that kind go there too. It only adds: the page rules still place them as before.
+  `learned_ru` is set on the call that switched it on: show it after the result («Перенёс в
+  Расходы. Похожие положу туда же»). «Отменить» of a move takes that record's count back.
+
+`200`:
+```json
+{"moved": true, "reason": null, "repeated": false, "links": [PageItemOut],
+ "action": Action, "page_patches": [PagePatch], "learned_ru": null}
+```
+`links`: the record's rows on the pages touched (`removed_at` set on the page it left). `reason`
+when `moved: false`: `nothing_to_do` (already so), `page_removed`. Errors: `404 not_found` ·
+`403 page_system` («Сегодня» as a source or target) · `409 item_deleted` · `422 validation_error`.
+
+### `DELETE /v1/pages/{id}/items/{item_id}?client_id=`
+«Убрать с этой страницы». The record stays in memory, in search and on its other pages; this page
+keeps a hidden row (`removed_at`), so neither the rules nor the assistant put it back here. The
+person can put it back: «Отменить», «Показать ещё на…», or `POST /v1/pages/{id}/items`.
+`client_id` is optional (query); repeating on a removed row changes nothing.
+
+`200`:
+```json
+{"removed": true, "repeated": false, "link": PageItemOut, "action": Action,
+ "page_patch": PagePatch,
+ "still_on": [{"id": "uuid", "title": "Документы и КП", "icon": "documents"}]}
+```
+`still_on`: live pages that still show it («Запись осталась в поиске и на странице …»).
+Errors: `404 not_found` · `403 page_system`.
+
+### `POST /v1/pages/reorder`
+Tab order in «Мои страницы» (S34: drag, ↑ ↓). Same shape as a row move:
+```json
+{"client_id": "uuid", "client_ts": "...", "page_id": "uuid",
+ "after_page_id": "uuid or null", "before_page_id": "uuid or null", "position": "W"}
+```
+«Сегодня» always stays first and cannot be moved (`403 page_system`); `after_page_id` = «Сегодня»
+means the first place after it. `position`: the key the phone computed from its tab list (without
+«Сегодня»); stored as is when valid (≤64 chars), otherwise computed from the neighbours. Same
+`client_ts` rule for one page moved on two phones.
+After «Отменить» of a tab move the order comes in `/v1/sync` (`screens`): `page_patches` carry rows
+only.
+`200 {"moved": true, "reason": null, "repeated": false, "page": PageOut, "action": Action}`;
+`reason`: `newer_move`, `anchor_gone`. Errors: `404 not_found` · `403 page_system` ·
+`422 validation_error`.
+
+### `GET /v1/habits`, `DELETE /v1/habits/{id}?client_id=`
+«Что я для вас настроил» (F-29, US-27): the learned rules in use, whose page is live. Other kinds of
+habit and `PATCH` come in week 9.
+```json
+{"habits": [{"id": "uuid", "kind": "placement_rule", "text_ru": "Чеки кладу на страницу «Расходы»",
+  "page": {"id": "uuid", "title": "Расходы", "icon": "money"}, "envelope_type": "receipt",
+  "evidence_count": 2, "updated_at": "2026-11-08T10:00:00+00:00"}]}
+```
+`DELETE` = «Убрать»: new records are no longer placed by the rule, those already placed stay, and
+further moves do not switch it on again. `200 {"removed": true, "repeated": false, "action": Action}`
+(«Отменить» as usual; `removed: false`, `action: null` when already off). `404 not_found`.
+
+### Conflicts, in short
+| Situation | Result |
+|---|---|
+| Two phones move different rows offline | both moves stay (each row keeps its own key) |
+| Two phones move the same row offline | the later `client_ts` wins; the other phone sees it there after sync |
+| The person moved a row while the assistant was arranging the page | the person's place stays (the assistant skips it; 6.12 rebase) |
+| The assistant arranges a page with rows placed by hand | it asks «Вы сами расставили N записей. Переставить и их?»; «Оставить мои» keeps them |
+| One phone took a row off the page, the other moved it | it stays off the page (with the moved place, for «Отменить») |
+| Moved a record to a page that the other phone removed | the record stays on (or goes back to) the page it came from |
+| «Отменить» after the person changed the row again | `partial: true`, «Часть уже изменена вами — вернул остальное» |
 
 ## Not here yet
 
 | What | When |
 |---|---|
-| `POST /pages/reorder`, `POST /pages/{id}/items/move`, `POST /items/{id}/move-to-page`, `DELETE /pages/{id}/items/{item_id}` | week 7 |
 | `PUT /pages/{id}/fields`, `POST /pages/{id}/reset`, sorting and grouping by field | week 11 |
 | `POST /pages/batch` (use one `POST /pages` per page) | week 16 |
-| `GET /pages/{id}/summary` | week 4 |
-| `action` for the «Отменить» strip in responses of these endpoints (the assistant line already returns one: `actions.md`) | week 9 |
+| Other kinds of habit, `PATCH /habits/{id}`, habits in `/v1/sync` | week 9 |
+| `action` in responses of `POST /pages`, `PATCH /pages/{id}`, `DELETE /pages/{id}`, `POST /pages/{id}/items` | week 9 |
 | `item_facets` values (`facet.*`, `task.*`, `expense.*`, `document.*` fields stay empty) | weeks 9-14 |

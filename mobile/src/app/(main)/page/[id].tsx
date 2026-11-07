@@ -6,7 +6,16 @@ import { FlatList, Pressable, View } from 'react-native';
 
 import { pickRecord } from '@/chat/service';
 import type { PageEntry } from '@/pages/contents';
+import { entryIndexAfterDrop } from '@/pages/drag';
+import { dropRecord, moveToPages, removeFromPage, stepRecord } from '@/pages/manual';
+import { recordTitle } from '@/records/format';
+import { getRecordActions } from '@/services';
+import { useUndo } from '@/store/undo';
 import { useView } from '@/store/view';
+
+import { MovePageSheet, type MoveMode } from '@/components/MovePageSheet';
+import { useDrag } from '@/components/useDrag';
+import { RecordMenuSheet } from '@/components/RecordMenuSheet';
 
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
@@ -31,7 +40,10 @@ import { useTheme } from '@/theme';
  * marked 600 ms (`markerSoft`); nothing moves while a finger is on the list (R-54) — the patch
  * waits for it. The rows on screen go with a request from the line (`visible_item_ids`).
  * «Найти на странице» (S10): at once by letters on the phone, online or not; the server adds word
- * forms, typos and meaning when it can. Not here yet: «Порядок» and «⋯ Ещё» (week 7), «Настроить» (week 11).
+ * forms, typos and meaning when it can.
+ * Week 7, by hand (F-41, 2-design 4.7): «⋯» on every card (Выше / Ниже / Переместить… / Показать
+ * ещё на… / Убрать), «Порядок» in the header puts ↑ ↓ on every card, long press 400 ms → drag (the
+ * double of the buttons). Offline and in «Без ИИ» alike. Not here yet: «Настроить» (week 11).
  */
 export default function PageScreen() {
   const theme = useTheme();
@@ -51,6 +63,10 @@ export default function PageScreen() {
   const picking = useView((st) => (st.picking?.pageId === id ? st.picking : null));
   const setVisible = useView((st) => st.setVisible);
   const setTouching = useView((st) => st.setTouching);
+  const [ordering, setOrdering] = useState(false);
+  const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [moveSheet, setMoveSheet] = useState<{ recordId: string; mode: MoveMode } | null>(null);
+  const drag = useDrag();
 
   // The marker goes after 600 ms (Reduce Motion: the same, it is a colour, not a move).
   useEffect(() => {
@@ -92,8 +108,17 @@ export default function PageScreen() {
   }
 
   const shown = entries ?? [];
+  const canMove = !searching && shown.length > 0;
+  const menuIndex = menuFor ? shown.findIndex((e) => e.record.id === menuFor) : -1;
+  const menuEntry = menuIndex >= 0 ? shown[menuIndex] : undefined;
+  const sheetEntry = moveSheet ? shown.find((e) => e.record.id === moveSheet.recordId) : undefined;
   const hl = highlight ? new Set(highlight.ids) : null;
-  const foundRecords = searching ? searchRecords(shown.map((e) => e.record), q) : null;
+  const foundRecords = searching
+    ? searchRecords(
+        shown.map((e) => e.record),
+        q,
+      )
+    : null;
   const known = new Set((foundRecords ?? []).map((r) => r.serverId));
   const extra = server.results.filter((r) => !known.has(r.hit.item_id));
   const nothing = searching && foundRecords?.length === 0 && extra.length === 0 && server.state !== 'loading';
@@ -105,6 +130,16 @@ export default function PageScreen() {
         <AppText variant="title1" accessibilityRole="header" style={{ flex: 1 }}>
           {title(page)}
         </AppText>
+        {canMove || ordering ? (
+          <Button
+            testID="page-order"
+            label={ordering ? t('page.order_done') : t('page.order')}
+            variant={ordering ? 'primary' : 'text'}
+            minHeight={theme.size.minTouch}
+            accessibilityState={{ selected: ordering }}
+            onPress={() => setOrdering((o) => !o)}
+          />
+        ) : null}
         {page.templateKey === 'custom' ? (
           <Pressable
             testID="page-rename"
@@ -128,6 +163,11 @@ export default function PageScreen() {
         value={q}
         onChange={(value) => setFind({ pageId: id, q: value })}
       />
+      {ordering ? (
+        <AppText testID="page-order-hint" variant="meta" accessibilityLiveRegion="polite">
+          {t('page.order_hint')}
+        </AppText>
+      ) : null}
       {!searching && entries && entries.length > 0 ? (
         <AppText variant="section" accessibilityRole="header">
           {t('page.recent')}
@@ -143,83 +183,166 @@ export default function PageScreen() {
 
   return (
     <Screen testID={`page-${page.templateKey}`} edges={['top']} scroll={false}>
-      <FlatList
-        testID="page-records"
-        data={foundRecords ? foundRecords.map((record): Row => ({ type: 'entry', entry: { record, link: null } })) : rows}
-        keyExtractor={(r) => (r.type === 'entry' ? r.entry.record.id : `group-${r.key}`)}
-        onViewableItemsChanged={onViewable}
-        onTouchStart={() => setTouching(true)}
-        onTouchEnd={() => setTouching(false)}
-        onTouchCancel={() => setTouching(false)}
-        onScrollBeginDrag={() => setTouching(true)}
-        onMomentumScrollEnd={() => setTouching(false)}
-        contentContainerStyle={{ paddingVertical: theme.space[4] }}
-        keyboardShouldPersistTaps="handled"
-        ListHeaderComponent={header}
-        ListFooterComponent={
-          searching ? (
-            <View style={{ gap: theme.space[3] }}>
-              <SearchMore rows={extra} state={server.state} pageId={page.id} q={q} />
-              {nothing ? (
-                <AppText testID="page-find-none" accessibilityLiveRegion="polite">
-                  {t('page.find_none')}
-                </AppText>
-              ) : null}
-              <Button
-                testID="page-find-all"
-                label={t('page.find_all')}
-                variant="text"
-                onPress={() => router.navigate({ pathname: '/search', params: { q } })}
-              />
-            </View>
-          ) : undefined
-        }
-        ListEmptyComponent={
-          entries && !searching ? (
-            <View
-              testID="page-empty"
-              style={{
-                backgroundColor: theme.colors.surface,
-                borderColor: theme.colors.line,
-                borderWidth: 1,
-                borderRadius: theme.radius.card,
-                padding: theme.space[4],
-                gap: theme.space[2],
-              }}
-            >
-              <AppText>{t('page.empty')}</AppText>
-              <AppText variant="meta">{example}</AppText>
-            </View>
-          ) : undefined
-        }
-        renderItem={({ item }) =>
-          item.type === 'group' ? (
-            <AppText
-              testID={`group-${item.key}`}
-              variant="section"
-              accessibilityRole="header"
-              style={{ marginTop: theme.space[3], marginBottom: theme.space[2] }}
-            >
-              {item.title}
-            </AppText>
-          ) : (
-            <RecordRow
-              record={item.entry.record}
-              snippet={searching ? snippetFor(item.entry.record, q) : null}
-              highlighted={!!item.entry.record.serverId && !!hl?.has(item.entry.record.serverId)}
-              onPress={() => {
-                const rec = item.entry.record;
-                // «Какую? → выбрать»: this tap answers the assistant (US-30).
-                if (picking && rec.serverId) {
-                  void pickRecord(rec.serverId);
-                  return;
-                }
-                router.navigate({ pathname: '/record/[id]', params: { id: rec.id, from: page.id } });
-              }}
-            />
-          )
-        }
-      />
+      <View style={{ flex: 1 }} {...drag.handlers}>
+        <FlatList
+          testID="page-records"
+          data={
+            foundRecords ? foundRecords.map((record): Row => ({ type: 'entry', entry: { record, link: null } })) : rows
+          }
+          keyExtractor={(r) => (r.type === 'entry' ? r.entry.record.id : `group-${r.key}`)}
+          onViewableItemsChanged={onViewable}
+          scrollEnabled={!drag.active}
+          onTouchStart={() => setTouching(true)}
+          onTouchEnd={() => setTouching(false)}
+          onTouchCancel={() => setTouching(false)}
+          onScrollBeginDrag={() => setTouching(true)}
+          onMomentumScrollEnd={() => setTouching(false)}
+          contentContainerStyle={{ paddingVertical: theme.space[4] }}
+          keyboardShouldPersistTaps="handled"
+          ListHeaderComponent={header}
+          ListFooterComponent={
+            searching ? (
+              <View style={{ gap: theme.space[3] }}>
+                <SearchMore rows={extra} state={server.state} pageId={page.id} q={q} />
+                {nothing ? (
+                  <AppText testID="page-find-none" accessibilityLiveRegion="polite">
+                    {t('page.find_none')}
+                  </AppText>
+                ) : null}
+                <Button
+                  testID="page-find-all"
+                  label={t('page.find_all')}
+                  variant="text"
+                  onPress={() => router.navigate({ pathname: '/search', params: { q } })}
+                />
+              </View>
+            ) : undefined
+          }
+          ListEmptyComponent={
+            entries && !searching ? (
+              <View
+                testID="page-empty"
+                style={{
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.line,
+                  borderWidth: 1,
+                  borderRadius: theme.radius.card,
+                  padding: theme.space[4],
+                  gap: theme.space[2],
+                }}
+              >
+                <AppText>{t('page.empty')}</AppText>
+                <AppText variant="meta">{example}</AppText>
+              </View>
+            ) : undefined
+          }
+          renderItem={({ item, index }) => {
+            const shift = drag.shift(index);
+            const style = shift
+              ? { transform: [{ translateY: shift }], zIndex: drag.isDragged(index) ? 10 : 0 }
+              : undefined;
+            if (item.type === 'group') {
+              return (
+                <View style={style} onLayout={(e) => drag.measure(index, e.nativeEvent.layout.height)}>
+                  <AppText
+                    testID={`group-${item.key}`}
+                    variant="section"
+                    accessibilityRole="header"
+                    style={{ paddingTop: theme.space[3], paddingBottom: theme.space[2] }}
+                  >
+                    {item.title}
+                  </AppText>
+                </View>
+              );
+            }
+            const rec = item.entry.record;
+            const at = shown.findIndex((e) => e.record.id === rec.id);
+            return (
+              <View style={style}>
+                <RecordRow
+                  record={rec}
+                  snippet={searching ? snippetFor(rec, q) : null}
+                  highlighted={!!rec.serverId && !!hl?.has(rec.serverId)}
+                  lifted={drag.isDragged(index)}
+                  onLayout={(e) => drag.measure(index, e.nativeEvent.layout.height + theme.space[3])}
+                  moves={
+                    canMove
+                      ? {
+                          onMenu: () => setMenuFor(rec.id),
+                          onUp: at > 0 ? () => void stepRecord(page, rec.id, -1) : undefined,
+                          onDown: at >= 0 && at < shown.length - 1 ? () => void stepRecord(page, rec.id, 1) : undefined,
+                          onMoveTo: () => setMoveSheet({ recordId: rec.id, mode: 'move' }),
+                          onDragStart: () =>
+                            drag.start(index, (to) => {
+                              const target = entryIndexAfterDrop(
+                                rows.map((r) => r.type === 'entry'),
+                                index,
+                                to,
+                              );
+                              if (target !== at) void dropRecord(page, rec.id, target);
+                            }),
+                          showArrows: ordering,
+                        }
+                      : undefined
+                  }
+                  onPress={() => {
+                    const rec = item.entry.record;
+                    // «Какую? → выбрать»: this tap answers the assistant (US-30).
+                    if (picking && rec.serverId) {
+                      void pickRecord(rec.serverId);
+                      return;
+                    }
+                    router.navigate({ pathname: '/record/[id]', params: { id: rec.id, from: page.id } });
+                  }}
+                />
+              </View>
+            );
+          }}
+        />
+      </View>
+      {menuEntry ? (
+        <RecordMenuSheet
+          title={recordTitle(menuEntry.record, t)}
+          mine={!!menuEntry.link?.manualOrder}
+          canUp={menuIndex > 0}
+          canDown={menuIndex < shown.length - 1}
+          onUp={() => void stepRecord(page, menuEntry.record.id, -1)}
+          onDown={() => void stepRecord(page, menuEntry.record.id, 1)}
+          onMoveTo={() => {
+            setMenuFor(null);
+            setMoveSheet({ recordId: menuEntry.record.id, mode: 'move' });
+          }}
+          onAlso={() => {
+            setMenuFor(null);
+            setMoveSheet({ recordId: menuEntry.record.id, mode: 'also_show' });
+          }}
+          onRemove={() => {
+            setMenuFor(null);
+            void removeFromPage(menuEntry.record, page);
+          }}
+          onDelete={() => {
+            const id = menuEntry.record.id;
+            setMenuFor(null);
+            void getRecordActions()
+              .then((a) => a.remove(id))
+              .then(() => useUndo.getState().showDeleted(id));
+          }}
+          onClose={() => setMenuFor(null)}
+        />
+      ) : null}
+      {moveSheet && sheetEntry ? (
+        <MovePageSheet
+          record={sheetEntry.record}
+          recordTitle={recordTitle(sheetEntry.record, t)}
+          current={page}
+          initialMode={moveSheet.mode}
+          onClose={() => setMoveSheet(null)}
+          onDone={(mode, targets) => {
+            setMoveSheet(null);
+            void moveToPages(sheetEntry.record, page, targets, mode);
+          }}
+        />
+      ) : null}
       {renaming ? (
         <PageNameSheet
           initial={page.title ?? ''}

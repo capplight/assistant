@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import AwareDatetime, BaseModel, Field, field_validator, model_validator
 
 from assistant.db.models_v2 import ConsentKind, Platform, PushProvider
 
@@ -634,6 +634,128 @@ class UndoOut(BaseModel):
     page_patches: list[dict[str, Any]]
 
 
+# --- manual order (week 7, docs/api/pages.md "Manual order") ---
+
+RankKey = Annotated[str, Field(min_length=1, max_length=128)]
+MoveReason = Literal["newer_move", "anchor_gone", "nothing_to_do", "page_removed"]
+
+
+class _Anchored(BaseModel):
+    client_id: uuid.UUID
+    client_ts: AwareDatetime | None = None
+    position: RankKey | None = None  # the phone's own key; used when it can be trusted
+
+
+class ItemMoveIn(_Anchored):
+    item_id: uuid.UUID
+    after_item_id: uuid.UUID | None = None
+    before_item_id: uuid.UUID | None = None
+    base_seq: int | None = Field(default=None, ge=0)
+    group_key: str | None = Field(default=None, min_length=1, max_length=64)
+    base_view_version: int | None = None
+
+    @model_validator(mode="after")
+    def _anchors(self) -> "ItemMoveIn":
+        if self.after_item_id is None and self.before_item_id is None:
+            raise ValueError("after_item_id or before_item_id is required")
+        if self.item_id in (self.after_item_id, self.before_item_id):
+            raise ValueError("an item is not its own neighbour")
+        return self
+
+
+class ItemMoveOut(BaseModel):
+    moved: bool
+    reason: MoveReason | None
+    repeated: bool
+    rebased: bool
+    link: PageItemOut
+    action: "ActionOut | None"
+    page_patch: dict[str, Any]
+
+
+class MoveToPageIn(BaseModel):
+    client_id: uuid.UUID
+    client_ts: AwareDatetime | None = None
+    mode: Literal["move", "also_show"]
+    from_page_id: uuid.UUID | None = None
+    to_page_ids: list[uuid.UUID] = Field(min_length=1, max_length=19)
+
+    @model_validator(mode="after")
+    def _pages(self) -> "MoveToPageIn":
+        if self.mode == "move":
+            if self.from_page_id is None or len(set(self.to_page_ids)) != 1:
+                raise ValueError("move: from_page_id and exactly one page in to_page_ids")
+            if self.from_page_id in self.to_page_ids:
+                raise ValueError("move: to the same page")
+        return self
+
+
+class MoveToPageOut(BaseModel):
+    moved: bool
+    reason: MoveReason | None
+    repeated: bool
+    links: list[PageItemOut]
+    action: "ActionOut | None"
+    page_patches: list[dict[str, Any]]
+    learned_ru: str | None
+
+
+class RemoveFromPageOut(BaseModel):
+    removed: bool
+    repeated: bool
+    link: PageItemOut
+    action: "ActionOut | None"
+    page_patch: dict[str, Any]
+    still_on: list[PageRefOut]
+
+
+class PageReorderIn(_Anchored):
+    page_id: uuid.UUID
+    after_page_id: uuid.UUID | None = None
+    before_page_id: uuid.UUID | None = None
+
+    @model_validator(mode="after")
+    def _anchors(self) -> "PageReorderIn":
+        if self.after_page_id is None and self.before_page_id is None:
+            raise ValueError("after_page_id or before_page_id is required")
+        if self.page_id in (self.after_page_id, self.before_page_id):
+            raise ValueError("a page is not its own neighbour")
+        return self
+
+
+class PageReorderOut(BaseModel):
+    moved: bool
+    reason: MoveReason | None
+    repeated: bool
+    page: PageOut
+    action: "ActionOut | None"
+
+
+class HabitOut(BaseModel):
+    id: uuid.UUID
+    kind: str
+    text_ru: str
+    page: PageRefOut
+    envelope_type: str | None
+    evidence_count: int
+    updated_at: datetime
+
+
+class HabitsOut(BaseModel):
+    habits: list[HabitOut]
+
+
+class HabitOffOut(BaseModel):
+    removed: bool
+    repeated: bool
+    action: "ActionOut | None"
+
+
 ChatMessageIn.model_rebuild()
 ChatMessageOut.model_rebuild()
 SyncOut.model_rebuild()
+ItemMoveOut.model_rebuild()
+MoveToPageOut.model_rebuild()
+RemoveFromPageOut.model_rebuild()
+PageReorderOut.model_rebuild()
+HabitOffOut.model_rebuild()

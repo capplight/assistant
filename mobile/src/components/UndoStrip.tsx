@@ -4,12 +4,14 @@ import { useTranslation } from 'react-i18next';
 import { AccessibilityInfo, StyleSheet, View } from 'react-native';
 
 import { actionText, undoAction } from '@/chat/service';
+import { undoManual } from '@/pages/manual';
+import { usePageLabels } from '@/pages/usePageLabels';
 import { formatShortDate } from '@/records/format';
 import { getRecordActions } from '@/services';
 import { useAssistant } from '@/store/assistant';
 import { usePages } from '@/store/pages';
 import { useToast } from '@/store/toast';
-import { undoStripMs, useUndo } from '@/store/undo';
+import { undoStripMs, useUndo, type ManualStripText } from '@/store/undo';
 import { useTheme } from '@/theme';
 
 import { AppText } from './AppText';
@@ -38,6 +40,10 @@ export function UndoStrip() {
   const action = message?.action;
   const otherPage = usePages((s) =>
     action?.pageServerId ? s.pages.find((p) => p.serverId === action.pageServerId) : undefined,
+  );
+  const { title } = usePageLabels();
+  const openTarget = usePages((s) =>
+    strip?.kind === 'manual' && strip.openPageId ? s.pages.find((p) => p.id === strip.openPageId) : undefined,
   );
   const [screenReader, setScreenReader] = useState(false);
   const [changesOpen, setChangesOpen] = useState(false);
@@ -75,18 +81,35 @@ export function UndoStrip() {
       void undoAction(strip.messageId);
       return;
     }
-    void getRecordActions().then((a) => (strip.kind === 'merged' ? a.unmerge(strip.recordId) : a.restore(strip.recordId)));
+    if (strip.kind === 'manual') {
+      void undoManual(strip.outboxIds);
+      return;
+    }
+    void getRecordActions().then((a) =>
+      strip.kind === 'merged' ? a.unmerge(strip.recordId) : a.restore(strip.recordId),
+    );
   };
 
+  const manualText = (m: ManualStripText) => {
+    const names = (m.pages ?? []).map((p) => title(p));
+    const base =
+      m.key === 'move.also_done' && names.length > 1
+        ? t('move.also_done_many', { pages: names.join(', ') })
+        : t(m.key, { page: names[0] ?? '' });
+    return m.extra ? `${base} ${m.extra}` : base;
+  };
   const text =
     strip.kind === 'merged'
       ? t('dedup.exact', { date: formatShortDate(strip.canonicalDate, i18n.language) })
       : strip.kind === 'deleted'
         ? t('record.deleted')
-        : action
-          ? actionText(action, i18n.language)
-          : '';
-  const showOpen = strip.kind === 'action' && !!otherPage && otherPage.id !== current.id;
+        : strip.kind === 'manual'
+          ? manualText(strip.text)
+          : action
+            ? actionText(action, i18n.language)
+            : '';
+  const target = strip.kind === 'manual' ? openTarget : otherPage;
+  const showOpen = (strip.kind === 'action' || strip.kind === 'manual') && !!target && target.id !== current.id;
   const canUndo = strip.kind !== 'action' || (!!action?.undoable && !action.undone);
   const hasChanges = strip.kind === 'action' && (action?.changes.length ?? 0) > 0;
 
@@ -110,13 +133,14 @@ export function UndoStrip() {
           {text}
         </AppText>
         <View style={[styles.row, { gap: theme.space[1], flexWrap: 'wrap' }]}>
-          {showOpen && otherPage ? (
+          {showOpen && target ? (
             <Button
               testID="undo-strip-open"
               label={t('line.open')}
+              accessibilityLabel={t('move.open_a11y', { page: title(target) })}
               variant="text"
               minHeight={theme.size.minTouch}
-              onPress={() => router.navigate({ pathname: '/page/[id]', params: { id: otherPage.id } })}
+              onPress={() => router.navigate({ pathname: '/page/[id]', params: { id: target.id } })}
             />
           ) : null}
           {hasChanges ? (

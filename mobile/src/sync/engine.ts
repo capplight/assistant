@@ -1,9 +1,28 @@
 import type { Api } from '@/api/endpoints';
 import { ApiError, isOfflineError, isRetryable, SignInRequiredError } from '@/api/errors';
-import type { ConsentsIn, DeviceIn, FeedbackIn, ItemCreateIn, ItemKind, ItemOut, ItemSource, PageCreateIn } from '@/api/types';
+import type {
+  ConsentsIn,
+  DeviceIn,
+  FeedbackIn,
+  ItemCreateIn,
+  ItemKind,
+  ItemOut,
+  ItemSource,
+  ManualOut,
+  PageCreateIn,
+} from '@/api/types';
 import type { OutboxEntry, OutboxRepository } from '@/db/outbox';
 import type { PagesRepository } from '@/db/pages';
 import type { RecordFile, RecordsRepository } from '@/db/records';
+import type {
+  ItemMovePayload,
+  ItemRemovePayload,
+  LinkKey,
+  LinkPayload,
+  MoveToPagePayload,
+  PageRemovePayload,
+  PagesReorderPayload,
+} from '@/pages/manual';
 import type { RenamePayload } from '@/pages/service';
 import type { CorrectPayload, TrashPayload, UnmergePayload, VerifyPayload } from '@/records/actions';
 import { TEMPLATE_DEFAULT_TITLE } from '@/pages/templates';
@@ -47,7 +66,22 @@ export function backoffMs(
   return Math.max(Math.round(jittered), (retryAfterSec ?? 0) * 1000);
 }
 
-export type ActionUndoPayload = { actionId: string; itemIds?: string[]; clientId?: string };
+/**
+ * An undo of a change by hand also has what the phone shows meanwhile: `keys` (rows shown as they
+ * were) or `pageId` (a tab back in its place). They settle when the server answers.
+ */
+export type ActionUndoPayload = { actionId: string; itemIds?: string[]; clientId?: string; keys?: LinkKey[]; pageId?: string };
+
+const NOTHING: ManualOut = {
+  moved: false,
+  reason: null,
+  rows: [],
+  removed: [],
+  pages: [],
+  view_versions: [],
+  action: null,
+  learned_ru: null,
+};
 
 export type DeviceInfo = () => Omit<DeviceIn, 'client_id'>;
 
@@ -68,12 +102,30 @@ export type SyncDeps = {
   blocked?: () => boolean;
   /** The server refused the consent given for this account: ask again. */
   onAccountConsentRejected?: () => void;
+  /** «Похожие положу туда же»: the move of this outbox row taught the server a placement rule. */
+  onLearned?: (outboxId: string, text: string) => void;
+  /** A line from the server for the person («Часть уже изменена вами — вернул остальное»). */
+  onNotice?: (text: string) => void;
 };
 
 export type PushResult = { sent: number; retried: number; failed: number; offline: boolean };
 
 /** Kinds that later entries depend on (devices/items need consent on the server): strict order. */
 const BARRIERS = new Set(['consent.accept', 'device.register']);
+
+/**
+ * Changes by hand keep the order of the taps among themselves: each names its neighbours as they
+ * were after the one before. A row waiting for its retry holds the later ones, the rest still go.
+ */
+const IN_TAP_ORDER = new Set<string>([
+  'page.item_move',
+  'item.move_to_page',
+  'page.item_remove',
+  'pages.reorder',
+  'pages.remove',
+  'pages.restore',
+  'action.undo',
+]);
 
 /**
  * Outbox → server, then server → local SQLite.
@@ -83,6 +135,9 @@ const BARRIERS = new Set(['consent.accept', 'device.register']);
 export class SyncEngine {
   private running: Promise<void> | null = null;
   private again = false;
+  /** The outbox row being sent right now, and when its call is over. */
+  private sending: { id: string; done: Promise<void> } | null = null;
+  private readonly held = new Set<string>();
   private readonly now: () => number;
   private readonly random: () => number;
 
@@ -119,6 +174,19 @@ export class SyncEngine {
     return this.running;
   }
 
+  /**
+   * «Отменить»: the engine keeps its hands off this row until `release`. When a call of it is in
+   * flight, waits for the end of that call first, so the row is then either waiting or answered.
+   */
+  async hold(outboxId: string): Promise<void> {
+    while (this.sending?.id === outboxId) await this.sending.done.catch(() => undefined);
+    this.held.add(outboxId);
+  }
+
+  release(outboxId: string): void {
+    this.held.delete(outboxId);
+  }
+
   /** Resolves when no run is in flight: nothing is writing the old account's answers any more. */
   async whenIdle(): Promise<void> {
     while (this.running) await this.running.catch(() => undefined);
@@ -129,17 +197,30 @@ export class SyncEngine {
     const pending = await this.d.outbox.listPending(500);
     // Consent and device come first, whenever they were queued: everything else depends on them.
     const ordered = [...pending.filter((e) => BARRIERS.has(e.kind)), ...pending.filter((e) => !BARRIERS.has(e.kind))];
+    let tapsWait = false;
     for (const entry of ordered) {
       if (this.d.blocked?.()) break;
       const sender = this.senderFor(entry);
       if (!sender) continue; // no endpoint yet (chat: week 5) — stays queued
       const barrier = BARRIERS.has(entry.kind);
-      if (entry.nextAttemptAt > this.now()) {
-        if (barrier) break;
+      const inOrder = IN_TAP_ORDER.has(entry.kind);
+      if (inOrder && (tapsWait || this.held.has(entry.id))) {
+        tapsWait = true;
         continue;
       }
+      if (entry.nextAttemptAt > this.now()) {
+        if (barrier) break;
+        if (inOrder) tapsWait = true;
+        continue;
+      }
+      let release: () => void = () => undefined;
+      this.sending = { id: entry.id, done: new Promise<void>((r) => (release = r)) };
       try {
-        await sender(entry);
+        if (this.held.has(entry.id)) continue;
+        // `pending` above is a snapshot: the row may have been taken back or updated since.
+        const fresh = (await this.d.outbox.get(entry.id)) ?? entry;
+        if (fresh.status !== 'pending') continue;
+        await sender(fresh);
         await this.d.outbox.markSent(entry.id);
         res.sent++;
       } catch (e) {
@@ -149,6 +230,7 @@ export class SyncEngine {
         }
         const msg = e instanceof ApiError ? e.code : e instanceof Error ? e.message : String(e);
         if (isRetryable(e)) {
+          if (inOrder) tapsWait = true;
           const retryAfter = e instanceof ApiError ? e.retryAfter : null;
           await this.d.outbox.markRetry(entry.id, msg, this.now() + backoffMs(entry.attempts, retryAfter, this.random));
           res.retried++;
@@ -165,6 +247,9 @@ export class SyncEngine {
             break;
           }
         }
+      } finally {
+        this.sending = null;
+        release();
       }
     }
     return res;
@@ -242,6 +327,18 @@ export class SyncEngine {
         return (e) => this.sendFeedback(e);
       case 'action.undo':
         return (e) => this.sendUndo(e);
+      case 'page.item_move':
+        return (e) => this.sendItemMove(e);
+      case 'item.move_to_page':
+        return (e) => this.sendMoveToPage(e);
+      case 'page.item_remove':
+        return (e) => this.sendItemRemove(e);
+      case 'pages.reorder':
+        return (e) => this.sendPagesReorder(e);
+      case 'pages.remove':
+        return (e) => this.sendPageRemove(e, 'remove');
+      case 'pages.restore':
+        return (e) => this.sendPageRemove(e, 'restore');
       default:
         return null;
     }
@@ -250,8 +347,238 @@ export class SyncEngine {
   /** The page already shows the old order; the server brings it back too, then sync confirms. */
   private async sendUndo(e: OutboxEntry): Promise<void> {
     const p = e.payload as ActionUndoPayload;
-    // client_id = the outbox row: a repeat returns the first result (actions.md).
-    await this.d.api.undoAction(p.actionId, { client_id: p.clientId ?? e.id, ...(p.itemIds ? { item_ids: p.itemIds } : {}) });
+    try {
+      // client_id = the outbox row: a repeat returns the first result (actions.md).
+      const out = await this.d.api.undoAction(p.actionId, {
+        client_id: p.clientId ?? e.id,
+        ...(p.itemIds ? { item_ids: p.itemIds } : {}),
+      });
+      // The tab's place comes back in /sync (`page_patches` carry rows only, pages.md).
+      if (p.pageId) await this.d.pages.settlePage(p.pageId, 'position');
+      if (out.partial && out.message_ru) this.d.onNotice?.(out.message_ru);
+      if (!p.keys) return;
+      const rows = out.page_patches.flatMap((x) => x.rows);
+      const removed = out.page_patches.flatMap((x) => x.removed_item_ids.map((item_id) => ({ page_id: x.page_id, item_id })));
+      const versions = out.page_patches.map((x) => ({ page_id: x.page_id, view_version: x.view_version }));
+      await this.settleKeys(p.keys, p.keys, { ...NOTHING, moved: true, rows, removed, view_versions: versions });
+    } catch (err) {
+      if (!isRetryable(err)) {
+        // Too late or refused: the server's rows (and the page's place) are shown again.
+        for (const k of p.keys ?? []) await this.d.pages.settleLink(k.page, k.item);
+        if (p.pageId) await this.d.pages.settlePage(p.pageId, 'position');
+      }
+      throw err;
+    }
+  }
+
+  // --- week 7: by hand (pages/manual.ts, docs/api/pages.md «Manual order») ---
+
+  /** The server id of a local page; null = it lives on this phone only. Throws while it is on its way. */
+  private async pageServerId(localId: string | null, wait = true): Promise<string | null> {
+    if (!localId) return null;
+    const page = await this.d.pages.get(localId);
+    if (!page) return null;
+    if (page.serverId) return page.serverId;
+    if (wait && page.syncState === 'pending') throw new Error('page_not_synced');
+    return null;
+  }
+
+  /** The server id of a local record; null = on this phone only. Throws while its `item.create` waits. */
+  private async itemServerId(recordId: string | null, wait = true): Promise<string | null> {
+    if (!recordId) return null;
+    const rec = await this.d.records.get(recordId);
+    if (!rec) return null;
+    if (rec.serverId) return rec.serverId;
+    if (!wait) return null;
+    if (await this.creating(recordId)) throw new Error('record_not_synced');
+    return null;
+  }
+
+  private async creating(recordId: string): Promise<boolean> {
+    return (await this.d.outbox.listPending(500)).some((row) => {
+      if (row.kind !== 'item.create') return false;
+      const p = row.payload as ItemPayload;
+      return p.clientId === recordId || p.sourceMeta?.recording_id === recordId;
+    });
+  }
+
+  /**
+   * The nearest neighbour the server knows (the server needs at least one).
+   */
+  private async neighbour(ids: string[], resolve: (id: string) => Promise<string | null>) {
+    for (const id of ids) {
+      const server = await resolve(id);
+      if (server) return server;
+    }
+    return null;
+  }
+
+  /**
+   * The rows of the change take the server's answer. A row made under a local key (page or record
+   * not on the server then) goes, and the server's row under the real keys takes its place. When
+   * the call did nothing (`moved: false`: a later move on another phone, gone neighbours), the
+   * rows show where they really are.
+   */
+  private async settleKeys(keys: LinkKey[], real: LinkKey[], out: ManualOut): Promise<void> {
+    const find = (k: LinkKey) => out.rows.find((r) => r.page_id === k.page && r.item_id === k.item) ?? null;
+    for (const [i, k] of keys.entries()) {
+      const r = real[i] ?? k;
+      const answer = find(r);
+      if (r.page !== k.page || r.item !== k.item) {
+        await this.d.pages.settleLink(k.page, k.item, { answer: null, keepShown: out.moved && !answer });
+        if (answer) await this.d.pages.applyLink(answer);
+        continue;
+      }
+      await this.d.pages.settleLink(k.page, k.item, { answer, keepShown: out.moved });
+    }
+    // Gone from the page for good (the undo took back a row that did not exist before).
+    for (const gone of out.removed) {
+      const left = await this.d.pages.getLink(gone.page_id, gone.item_id);
+      if (left) await this.d.pages.removeLink(left.id);
+    }
+    for (const v of out.view_versions) await this.d.pages.setView(v.page_id, v.view_version, null);
+    const mine = new Set(real.map((k) => `${k.page}|${k.item}`));
+    for (const row of out.rows) if (!mine.has(`${row.page_id}|${row.item_id}`)) await this.d.pages.applyLink(row);
+    for (const page of out.pages) if (page.kind !== 'system_today') await this.d.pages.applyRemote(page);
+  }
+
+  /**
+   * One change by hand of rows: resolve the server ids, call, take the rows it returns, keep the
+   * action for «Отменить». Refused for good: the server's rows come back on screen.
+   */
+  private async sendLink(e: OutboxEntry, call: () => Promise<{ out: ManualOut; real: LinkKey[] } | null>): Promise<void> {
+    const p = e.payload as LinkPayload;
+    let res: { out: ManualOut; real: LinkKey[] } | null;
+    try {
+      res = await call();
+    } catch (err) {
+      if (!isRetryable(err)) for (const k of p.keys) await this.d.pages.settleLink(k.page, k.item);
+      throw err;
+    }
+    if (!res) return; // lives on this phone only: the rows stay as the person left them
+    await this.settleKeys(p.keys, res.real, res.out);
+    await this.d.outbox.updatePayload(e.id, { ...p, actionId: res.out.action?.id ?? null, realKeys: res.real });
+    if (res.out.learned_ru) this.d.onLearned?.(e.id, res.out.learned_ru);
+  }
+
+  private sendItemMove(e: OutboxEntry): Promise<void> {
+    return this.sendLink(e, async () => {
+      const p = e.payload as ItemMovePayload;
+      const page = await this.pageServerId(p.pageId);
+      const item = await this.itemServerId(p.recordId);
+      if (!page || !item) return null;
+      const known = (id: string) => this.itemServerId(id, false);
+      const after = await this.neighbour(p.above, known);
+      const before = await this.neighbour(p.below, known);
+      if (!after && !before) {
+        // No neighbour on the server yet: wait for one that is on its way, else it stays here only.
+        for (const id of [...p.above, ...p.below]) if (await this.creating(id)) throw new Error('record_not_synced');
+        return null;
+      }
+      // The phone's key is only good among the same neighbours as on screen.
+      const exact = after === (await known(p.above[0] ?? '')) && before === (await known(p.below[0] ?? ''));
+      const out = await this.d.api.moveItem(page, {
+        client_id: p.clientId,
+        client_ts: p.at,
+        item_id: item,
+        after_item_id: after,
+        before_item_id: before,
+        ...(p.position && exact ? { position: p.position, base_seq: p.baseSeq } : {}),
+        ...('groupKey' in p ? { group_key: p.groupKey ?? null } : {}),
+        base_view_version: p.baseViewVersion,
+      });
+      return { out, real: [{ page, item }] };
+    });
+  }
+
+  private sendMoveToPage(e: OutboxEntry): Promise<void> {
+    return this.sendLink(e, async () => {
+      const p = e.payload as MoveToPagePayload;
+      const item = await this.itemServerId(p.recordId);
+      if (!item) return null;
+      const to: (string | null)[] = [];
+      for (const id of p.toPageIds) to.push(await this.pageServerId(id));
+      const targets = to.filter((x): x is string => !!x);
+      if (targets.length === 0) return null; // pages only on this phone
+      const from = await this.pageServerId(p.fromPageId);
+      // From a page the server does not have, it can only show it there too.
+      const mode = p.mode === 'move' && from ? 'move' : 'also_show';
+      const out = await this.d.api.moveToPage(item, {
+        client_id: p.clientId,
+        client_ts: p.at,
+        mode,
+        ...(mode === 'move' ? { from_page_id: from } : {}),
+        to_page_ids: targets,
+      });
+      const real: LinkKey[] = to.map((page, i) => (page ? { page, item } : (p.keys[i] as LinkKey)));
+      if (p.mode === 'move') real.push(from ? { page: from, item } : (p.keys[p.toPageIds.length] as LinkKey));
+      return { out, real };
+    });
+  }
+
+  private sendItemRemove(e: OutboxEntry): Promise<void> {
+    return this.sendLink(e, async () => {
+      const p = e.payload as ItemRemovePayload;
+      const page = await this.pageServerId(p.pageId);
+      const item = await this.itemServerId(p.recordId);
+      if (!page || !item) return null;
+      const out = await this.d.api.removeFromPage(page, item, p.clientId);
+      return { out, real: [{ page, item }] };
+    });
+  }
+
+  private async sendPagesReorder(e: OutboxEntry): Promise<void> {
+    const p = e.payload as PagesReorderPayload;
+    if (!(await this.d.pages.get(p.pageId))) return; // a placeholder page of the first launch
+    const id = await this.pageServerId(p.pageId);
+    if (!id) {
+      await this.d.pages.settlePage(p.pageId, 'position'); // lives on this phone only
+      return;
+    }
+    try {
+      const known = (x: string) => this.pageServerId(x, false);
+      const after = await this.neighbour(p.above, known);
+      const before = await this.neighbour(p.below, known);
+      if (!after && !before) {
+        for (const x of [...p.above, ...p.below]) await this.pageServerId(x); // throws while one is on its way
+        await this.d.pages.settlePage(p.pageId, 'position');
+        return;
+      }
+      const out = await this.d.api.reorderPages({
+        client_id: p.clientId,
+        client_ts: p.at,
+        page_id: id,
+        after_page_id: after,
+        before_page_id: before,
+        ...(after === (await known(p.above[0] ?? '')) && before === (await known(p.below[0] ?? ''))
+          ? { position: p.position }
+          : {}),
+      });
+      await this.d.pages.settlePage(p.pageId, 'position');
+      for (const pg of out.pages) if (pg.kind !== 'system_today') await this.d.pages.applyRemote(pg);
+      await this.d.outbox.updatePayload(e.id, { ...p, actionId: out.action?.id ?? null });
+    } catch (err) {
+      if (!isRetryable(err)) await this.d.pages.settlePage(p.pageId, 'position');
+      throw err;
+    }
+  }
+
+  private async sendPageRemove(e: OutboxEntry, what: 'remove' | 'restore'): Promise<void> {
+    const p = e.payload as PageRemovePayload;
+    if (!(await this.d.pages.get(p.pageId))) return;
+    const id = await this.pageServerId(p.pageId);
+    if (!id) {
+      await this.d.pages.settlePage(p.pageId, 'removed'); // lives on this phone only
+      return;
+    }
+    try {
+      const out = what === 'remove' ? await this.d.api.removePage(id) : await this.d.api.restorePage(id);
+      await this.d.pages.settlePage(p.pageId, 'removed');
+      await this.d.pages.applyRemote(out);
+    } catch (err) {
+      if (!isRetryable(err)) await this.d.pages.settlePage(p.pageId, 'removed');
+      throw err;
+    }
   }
 
   /** «Сообщить о проблеме»: the body was built when the person pressed «Отправить». */

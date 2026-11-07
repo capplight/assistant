@@ -316,6 +316,63 @@ export type PageItemOut = {
 
 export type PageLinkCreateOut = { link: PageItemOut; created: boolean };
 
+// --- week 7: by hand (F-41) — docs/api/pages.md «Manual order», schemas.py (2026-11-08) ---
+
+/**
+ * «Выше / Ниже / перетащил». At least one neighbour (as the person saw them). `position`: the key
+ * the phone computed (with `base_seq`, the last applied `next_since`): the server keeps it when it
+ * can, so two phones agree. Leave `group_key` out to keep the group; null = out of any group.
+ */
+export type ItemMoveIn = {
+  client_id: string;
+  client_ts?: string;
+  item_id: string;
+  after_item_id?: string | null;
+  before_item_id?: string | null;
+  position?: string;
+  base_seq?: number;
+  group_key?: string | null;
+  base_view_version?: number;
+};
+
+/** S39. `move`: `from_page_id` and exactly one page; `also_show`: 1-19 pages. */
+export type MoveToPageIn = {
+  client_id: string;
+  client_ts?: string;
+  mode: 'move' | 'also_show';
+  from_page_id?: string | null;
+  to_page_ids: string[];
+};
+
+/** S34 ↑↓ / drag. At least one neighbour; `after_page_id` may be «Сегодня» (= first). */
+export type PagesReorderIn = {
+  client_id: string;
+  client_ts?: string;
+  page_id: string;
+  after_page_id?: string | null;
+  before_page_id?: string | null;
+  position?: string;
+};
+
+/** Why a call did nothing: a later move on another phone won, the neighbours or pages are gone. */
+export type MoveReason = 'newer_move' | 'anchor_gone' | 'nothing_to_do' | 'page_removed';
+
+/**
+ * The answer of every call above, in one shape: `moved` (`removed` for DELETE), the rows as they
+ * are now (`link`, `links`, `page_patch(es)` rows), the page (reorder), the action for «Отменить»
+ * (null: nothing changed), `learned_ru` («Похожие положу туда же») after the move that taught it.
+ */
+export type ManualOut = {
+  moved: boolean;
+  reason: MoveReason | null;
+  rows: PageItemOut[];
+  removed: { page_id: string; item_id: string }[];
+  pages: PageOut[];
+  view_versions: { page_id: string; view_version: number }[];
+  action: ActionOut | null;
+  learned_ru: string | null;
+};
+
 // --- sync (spec §4.4; aligned with routes/sync.py as of 2026-11-07) ---
 
 /** Counted by the server for each page. The phone counts its own lists, so it does not keep these. */

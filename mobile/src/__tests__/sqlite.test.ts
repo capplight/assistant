@@ -243,4 +243,46 @@ d('SQLite repositories', () => {
     await repo.restoreLinks([old!]);
     expect((await repo.linksFor('srv-p1'))[0]).toMatchObject({ position: 'B', groupKey: null, seq: 5 });
   });
+
+  it('week 7: a change by hand stays over /sync until it settles; the page keeps its place and removal', async () => {
+    const db = open();
+    await migrate(db);
+    const repo = new SqlitePagesRepository(db, () => 1000);
+    await repo.applyLink(linkOut('S', 'i1', 5, { position: 'B' }));
+    const [server] = await repo.linksFor('S');
+    // Two moves by hand, then the assistant's row arrives from /sync: what the person did stays.
+    await repo.writeLocal({ ...server!, position: 'K', manualOrder: true });
+    await repo.writeLocal({ ...server!, position: 'M', manualOrder: true });
+    await repo.applyLink(linkOut('S', 'i1', 9, { position: 'Z' }));
+    expect(await repo.getLink('S', 'i1')).toMatchObject({ position: 'M', pending: 2 });
+    expect(await repo.linksForItem('i1')).toHaveLength(1);
+    // The first answer: the second change still waits, so it is still shown.
+    await repo.settleLink('S', 'i1', { answer: linkOut('S', 'i1', 10, { position: 'K', manual_order: true }) });
+    expect(await repo.getLink('S', 'i1')).toMatchObject({ position: 'M', pending: 1 });
+    // The second is undone before it went: the newest server row (seq 10) is shown.
+    await repo.settleLink('S', 'i1', {});
+    expect(await repo.getLink('S', 'i1')).toMatchObject({ position: 'K', pending: 0, seq: 10, manualOrder: true });
+    // After that, /sync applies as before.
+    await repo.applyLink(linkOut('S', 'i1', 11, { position: 'P' }));
+    expect((await repo.getLink('S', 'i1'))?.position).toBe('P');
+
+    // A row the server never had goes when its change settles without an answer.
+    await repo.writeLocal({ ...server!, id: 'local:x', pageServerId: 'local:p9', itemServerId: 'i2', seq: 0 });
+    await repo.settleLink('local:p9', 'i2', {});
+    expect(await repo.getLink('local:p9', 'i2')).toBeNull();
+    // Accepted without a row in the answer: the person's version stays.
+    await repo.writeLocal({ ...server!, position: 'Q' });
+    await repo.settleLink('S', 'i1', { keepShown: true });
+    expect(await repo.getLink('S', 'i1')).toMatchObject({ position: 'Q', pending: 0 });
+
+    await repo.applyRemote(pageOut('p1', 1, { position: 'B' }));
+    await repo.setPosition('p1', 'D');
+    await repo.setRemoved('p1', 500);
+    await repo.applyRemote(pageOut('p1', 2, { position: 'X', title: 'Дача' }));
+    expect(await repo.get('p1')).toMatchObject({ position: 'D', deletedAt: 500, positionDirty: 1, removedDirty: 1 });
+    await repo.settlePage('p1', 'position');
+    await repo.settlePage('p1', 'removed');
+    await repo.applyRemote(pageOut('p1', 3, { position: 'X' }));
+    expect(await repo.get('p1')).toMatchObject({ position: 'X', deletedAt: null, positionDirty: 0 });
+  });
 });

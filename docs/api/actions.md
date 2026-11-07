@@ -9,9 +9,14 @@ Every change the assistant makes is one **action** with one «Отменить»
 one action, even when it touched many records («Разложил 23 заметки в 5 групп»). The action keeps
 the recipe to undo it; the server runs it, the phone never computes an undo itself.
 
-Week 6 writes actions for the assistant line only (`initiated_by: "agent"`) and for undo
-(`initiated_by: "user"`). Week 9 adds the other kinds (reminders, merges, the person's own edits)
-on the same objects; the shapes below do not change.
+Week 6 writes actions for the assistant line (`initiated_by: "agent"`) and for undo
+(`initiated_by: "user"`). Week 7 adds the person's own moves (`initiated_by: "user"`, see
+"Manual order" in `pages.md`): `screen_reorder_items` (moved a row: «Переставил «…»»),
+`screen_move_items` («Перенёс «…» в «…»», «Теперь ещё на странице «…»»), `screen_remove_item`
+(«Убрал «…» со страницы «…»»), `reorder_screens` («Переставил страницу «…»», no `changes` rows), `habit_change` (a learned rule turned off, no
+`changes` rows).
+Week 9 adds the other kinds (reminders, merges, edits) on the same objects; the shapes below do
+not change.
 
 ## Action
 
@@ -41,7 +46,7 @@ on the same objects; the shapes below do not change.
 
 | Field | Notes |
 |---|---|
-| `kind` | Week 6: `screen_reorder_items` («Разложи», «отсортируй»), `screen_move_items` (перенёс / показал ещё на / убрал со страницы), `save_item` (записал), `delete_item` (в корзину), `user_edit` (переименовал), `create_screen` (страница). An undo has the kind of what it undid. More kinds come in week 9: show `summary`, do not switch on `kind`. |
+| `kind` | Weeks 6-7: `reorder_screens` (tabs), `screen_remove_item` (убрал со страницы), `screen_reorder_items` («Разложи», «отсортируй»), `screen_move_items` (перенёс / показал ещё на / убрал со страницы), `save_item` (записал), `delete_item` (в корзину), `user_edit` (переименовал), `create_screen` (страница). An undo has the kind of what it undid. More kinds come in week 9: show `summary`, do not switch on `kind`. |
 | `summary.ru` | Ready to show in the line: «Разложил 23 заметки в 5 групп». `summary.kk` is `null` until reviewed (R-39): fall back to `ru`. |
 | `page` | The page it happened on (null: none / removed). |
 | `changes` | «Что изменилось»: one row per record, ready text in `text`. `kind`: `group`, `order`, `move`, `show`, `remove`, `trash`, `rename`, `create`, `create_page`. `page_id`: the page the row is about, or null (a note placed only by the page rules). `reverted=true`: already returned with «Вернуть». At most 500 rows. |

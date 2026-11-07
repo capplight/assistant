@@ -17,7 +17,7 @@ export async function syncPagesStore(repo: PagesRepository): Promise<void> {
   const inDb = new Set(rows.map((r) => r.id));
   const live: Page[] = rows
     .filter((r) => r.deletedAt === null && r.hiddenAt === null)
-    .map(({ deletedAt: _d, hiddenAt: _h, titleDirty: _t, ...page }) => page);
+    .map(({ deletedAt: _d, hiddenAt: _h, titleDirty: _t, positionDirty: _p, removedDirty: _r, ...page }) => page);
   const current = usePages.getState().pages;
   const next = [...live, ...current.filter((p) => !inDb.has(p.id))];
   if (JSON.stringify(byId(next)) !== JSON.stringify(byId(current))) usePages.setState({ pages: next });

@@ -1,4 +1,4 @@
-# Mobile app — week 6 (changes on the page, «Отменить», questions back, «Ответ готов»)
+# Mobile app — week 7 (by hand: order, moves between pages, «Мои страницы»)
 
 Expo SDK 58 (React Native 0.88, New Architecture), TypeScript strict, expo-router.
 Spec: `../docs/spec/SPEC.md`, `../docs/spec/final/2-design.md`, `../docs/spec/final/3-engineering.md` §2.1, §11.2 (week 1, Mobile).
@@ -90,6 +90,30 @@ src/
                              actions (page_patch, undo), questions back, pending answer, push tap
   push/                      expo-notifications behind a port (FakePush in tests)
 ```
+
+## Week 7: what works
+
+Contract: `../docs/api/pages.md` «Manual order», `../docs/api/actions.md`; shapes only in `src/api/types.ts` +
+`src/api/endpoints.ts` (reconciled with `schemas.py`, `routes/pages.py`, `actions/manual.py` on 2026-11-08).
+**Checked by tests with a fake server only: not against the real server, not on a device. Dragging has only its
+maths tested: the gesture must be checked on a real phone.**
+
+- **On a page** (`pages/manual.ts`): «⋯» on every card (Выше / Ниже, the sheet stays open; Переместить… S39; Показать ещё
+  на…; Убрать с этой страницы; Удалить), «Порядок» in the header (↑ ↓ on every card), long press 400 ms → drag
+  (`components/useDrag.ts`, RN `PanResponder`, no native dependency). Screen readers: actions on the card.
+- **S39** (`components/MovePageSheet.tsx`), **S34** (`(main)/my-pages.tsx`, from «Ещё»: ↑ ↓, drag, «⋯»; tabs follow).
+- **Offline and «Без ИИ»**: shown at once, one outbox row per change (`client_id`, `client_ts`), sent in tap order. While a
+  change waits, /sync and `page_patch` only update the server's copy of the row (`writeLocal` / `settleLink`, SQLite v6).
+- **«Отменить»**: still in the outbox → dropped, nothing is sent. Sent → `POST /actions/{id}/undo`; the old rows are a
+  display guess until it answers, and the phone never writes moves of its own for it. Removing a page has no action yet:
+  its undo is `POST /pages/{id}/restore`.
+- **Two phones**: `moved: false` (`newer_move`) → the row shows where it is, no dialog. The phone's key + `base_seq` go with
+  a move, except when a neighbour has no key yet or the two keys are equal.
+- `learned_ru` is added to the strip only when the server says it learned.
+
+Not yet: scrolling at the screen edges while dragging, a haptic tick, «Положить в стопку…» and «Изменить» in «⋯»,
+the S35 gallery from S34 («+ Добавить страницу» makes a «Своя страница»), «Настроить» (week 11), S30 / `GET /habits`
+(week 9), `still_on` in the strip text. KK strings of this week are drafts for native review.
 
 ## Week 6: what works
 
@@ -290,7 +314,7 @@ directly), background sync while the app is closed (`expo-background-task`), pus
 - «+» sheet options, «Как выглядит», Terms/Policy links, «Настраиваю для другого человека», most «Ещё»
   entries (Мои страницы, Что я сделал, Настройки, …) are placeholders.
 - Answer banner shows a local confirmation, not a real answer; no source chips or AI label yet (week 5).
-- «Порядок», «⋯ Ещё» week 7; «Настроить» week 11.
+- «Настроить» week 11.
 - Seed pages (Заметки / Дела и напоминания / Расходы) exist before onboarding; onboarding replaces them.
 - SQLite is plain (no SQLCipher / drizzle / FTS5 yet). Ids are pseudo-random UUID-shaped (TODO expo-crypto).
 - Theme follows the phone only (switch comes with S23). Reduce Motion is not wired (no animations yet).

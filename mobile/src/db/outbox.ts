@@ -24,7 +24,18 @@ export type OutboxKind =
   | 'chat.message'
   | 'feedback.send'
   /** «Отменить» / «Вернуть» an assistant action: done on the phone at once, the server follows. */
-  | 'action.undo';
+  | 'action.undo'
+  /** Week 7, by hand (F-41): «Выше / Ниже / перетащил» on a page. */
+  | 'page.item_move'
+  /** «Переместить на страницу…» / «Показать ещё на…» (S39). */
+  | 'item.move_to_page'
+  /** «Убрать с этой страницы». */
+  | 'page.item_remove'
+  /** S34 ↑↓ / drag: the tab order. */
+  | 'pages.reorder'
+  /** S34 «Убрать» and its «Отменить». */
+  | 'pages.remove'
+  | 'pages.restore';
 
 export type OutboxStatus = 'pending' | 'sent' | 'failed';
 
@@ -139,6 +150,12 @@ export const OUTBOX_MIGRATIONS: readonly string[] = [
   `ALTER TABLE pages ADD COLUMN view_version INTEGER NOT NULL DEFAULT 0;
    ALTER TABLE pages ADD COLUMN view_groups TEXT NOT NULL DEFAULT '[]';
    ALTER TABLE page_links ADD COLUMN group_key TEXT;`,
+  // v6 (week 7): changes by hand still in the outbox keep the person's version over /sync
+  `ALTER TABLE page_links ADD COLUMN pending INTEGER NOT NULL DEFAULT 0;
+   ALTER TABLE page_links ADD COLUMN server_row TEXT;
+   ALTER TABLE pages ADD COLUMN position_dirty INTEGER NOT NULL DEFAULT 0;
+   ALTER TABLE pages ADD COLUMN removed_dirty INTEGER NOT NULL DEFAULT 0;
+   CREATE INDEX IF NOT EXISTS page_links_item ON page_links (item_server_id);`,
 ];
 
 type Row = {

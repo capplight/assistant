@@ -7,8 +7,13 @@ import type {
   ActionUndoIn,
   ActionUndoOut,
   AnswerReadyPushData,
+  ItemMoveIn,
+  ManualOut,
+  MoveReason,
+  MoveToPageIn,
   PageItemOut,
   PagePatchOut,
+  PagesReorderIn,
   PendingBannerOut,
   ProposalOut,
   ChatDeliveryState,
@@ -212,6 +217,50 @@ export function pagePatchOut(v: unknown): PagePatchOut | null {
     view_state: vs ? { ...vs, ...(groups ? { groups } : {}) } : null,
     rows: arr(d.rows).map(linkOut).filter((x): x is PageItemOut => x !== null),
     removed_item_ids: strs(d.removed_item_ids),
+  };
+}
+
+function pageOutOf(v: unknown): PageOut | null {
+  const o = obj(v);
+  return o && str(o.id) && typeof o.position === 'string' ? (o as unknown as PageOut) : null;
+}
+
+const MOVE_REASONS = new Set<string>(['newer_move', 'anchor_gone', 'nothing_to_do', 'page_removed']);
+
+/**
+ * Week 7 answers (pages.md «Manual order»): `link` (move, DELETE) or `links` (move-to-page), and the
+ * rows of `page_patch` / `page_patches`; `page` (reorder). The record's own rows come first, so
+ * they win over the same row in a patch.
+ */
+export function manualOut(v: unknown): ManualOut {
+  const o = obj(v) ?? {};
+  const rows: PageItemOut[] = [];
+  const removed: { page_id: string; item_id: string }[] = [];
+  const add = (x: unknown) => {
+    const l = linkOut(x);
+    if (l && !rows.some((r) => r.page_id === l.page_id && r.item_id === l.item_id)) rows.push(l);
+  };
+  add(o.link);
+  arr(o.links).forEach(add);
+  const versions: { page_id: string; view_version: number }[] = [];
+  for (const p of [o.page_patch, ...arr(o.page_patches)].map(pagePatchOut)) {
+    if (!p) continue;
+    p.rows.forEach(add);
+    removed.push(...p.removed_item_ids.map((item_id) => ({ page_id: p.page_id, item_id })));
+    versions.push({ page_id: p.page_id, view_version: p.view_version });
+  }
+  const page = pageOutOf(o.page);
+  const reason = str(o.reason);
+  return {
+    // `removed` is the DELETE's word for it.
+    moved: o.moved === true || o.removed === true,
+    reason: reason && MOVE_REASONS.has(reason) ? (reason as MoveReason) : null,
+    rows,
+    removed,
+    pages: page ? [page] : [],
+    view_versions: versions,
+    action: actionOut(o.action),
+    learned_ru: str(o.learned_ru),
   };
 }
 
@@ -443,6 +492,43 @@ export class Api {
   /** Show an existing item on this page too. Idempotent by page + item. */
   addItemToPage(pageId: string, itemId: string): Promise<PageLinkCreateOut> {
     return this.client.request('POST', `/pages/${encodeURIComponent(pageId)}/items`, { body: { item_id: itemId } });
+  }
+
+  // week 7: by hand (F-41). Every call is idempotent by `client_id` (the outbox row).
+
+  /** «Выше / Ниже / перетащил» → a new key between the neighbours, `manual_order=true`. */
+  async moveItem(pageId: string, body: ItemMoveIn): Promise<ManualOut> {
+    const path = `/pages/${encodeURIComponent(pageId)}/items/move`;
+    return manualOut(await this.client.request<unknown>('POST', path, { body, idempotencyKey: body.client_id }));
+  }
+
+  /** S39: move to another page, or show there too. */
+  async moveToPage(itemId: string, body: MoveToPageIn): Promise<ManualOut> {
+    const path = `/items/${encodeURIComponent(itemId)}/move-to-page`;
+    return manualOut(await this.client.request<unknown>('POST', path, { body, idempotencyKey: body.client_id }));
+  }
+
+  /** «Убрать с этой страницы»: the row stays as `removed_at`, the assistant does not bring it back. */
+  async removeFromPage(pageId: string, itemId: string, clientId: string): Promise<ManualOut> {
+    const path = `/pages/${encodeURIComponent(pageId)}/items/${encodeURIComponent(itemId)}`;
+    return manualOut(
+      await this.client.request<unknown>('DELETE', path, { query: { client_id: clientId }, idempotencyKey: clientId }),
+    );
+  }
+
+  /** S34: the tab order. */
+  async reorderPages(body: PagesReorderIn): Promise<ManualOut> {
+    return manualOut(await this.client.request<unknown>('POST', '/pages/reorder', { body, idempotencyKey: body.client_id }));
+  }
+
+  /** S34 «Убрать»: soft delete, the records stay. Repeatable. */
+  removePage(pageId: string): Promise<PageOut> {
+    return this.client.request('DELETE', `/pages/${encodeURIComponent(pageId)}`);
+  }
+
+  /** «Отменить» of «Убрать»: the old rows and order are back. */
+  restorePage(pageId: string): Promise<PageOut> {
+    return this.client.request('POST', `/pages/${encodeURIComponent(pageId)}/restore`);
   }
 
   sync(since: number, limit = 200): Promise<SyncOut> {
