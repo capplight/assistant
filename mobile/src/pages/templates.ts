@@ -5,9 +5,27 @@
 export type TemplateKey = 'notes' | 'tasks' | 'shopping' | 'documents' | 'expenses' | 'custom';
 export type PageKey = 'today' | TemplateKey;
 
-export type IconKey = 'today' | 'documents' | 'tasks' | 'shopping' | 'work' | 'money' | 'other';
+export type IconKey =
+  | 'today'
+  | 'documents'
+  | 'tasks'
+  | 'shopping'
+  | 'work'
+  | 'money'
+  | 'other'
+  | 'people'
+  | 'health'
+  | 'home';
 
-export type Layout = 'list' | 'checklist' | 'table' | 'builtin:tasks' | 'builtin:kp' | 'builtin:expenses' | 'stacks';
+export type Layout =
+  | 'list'
+  | 'checklist'
+  | 'table'
+  | 'builtin:today'
+  | 'builtin:tasks'
+  | 'builtin:kp'
+  | 'builtin:expenses'
+  | 'stacks';
 
 export type PageTemplate = {
   key: TemplateKey;
@@ -15,15 +33,27 @@ export type PageTemplate = {
   /** `true` for all but custom: one system topic — one page. */
   singleton: boolean;
   defaultLayout: Layout;
+  /** `auto_rule` is {"any": [{"always": true}]}: everything saved shows here, also offline. */
+  placeAll: boolean;
+};
+
+/** The server's title of a page nobody renamed; such pages follow the app language. */
+export const TEMPLATE_DEFAULT_TITLE: Record<TemplateKey, string> = {
+  notes: 'Заметки',
+  tasks: 'Дела и напоминания',
+  shopping: 'Покупки',
+  documents: 'Документы и КП',
+  expenses: 'Расходы',
+  custom: 'Моя страница',
 };
 
 export const TEMPLATES: readonly PageTemplate[] = [
-  { key: 'notes', icon: 'documents', singleton: true, defaultLayout: 'stacks' },
-  { key: 'tasks', icon: 'tasks', singleton: true, defaultLayout: 'builtin:tasks' },
-  { key: 'shopping', icon: 'shopping', singleton: true, defaultLayout: 'checklist' },
-  { key: 'documents', icon: 'work', singleton: true, defaultLayout: 'builtin:kp' },
-  { key: 'expenses', icon: 'money', singleton: true, defaultLayout: 'builtin:expenses' },
-  { key: 'custom', icon: 'other', singleton: false, defaultLayout: 'list' },
+  { key: 'notes', icon: 'documents', singleton: true, defaultLayout: 'stacks', placeAll: true },
+  { key: 'tasks', icon: 'tasks', singleton: true, defaultLayout: 'builtin:tasks', placeAll: false },
+  { key: 'shopping', icon: 'shopping', singleton: true, defaultLayout: 'checklist', placeAll: false },
+  { key: 'documents', icon: 'work', singleton: true, defaultLayout: 'builtin:kp', placeAll: false },
+  { key: 'expenses', icon: 'money', singleton: true, defaultLayout: 'builtin:expenses', placeAll: false },
+  { key: 'custom', icon: 'other', singleton: false, defaultLayout: 'list', placeAll: false },
 ];
 
 /** Gallery order (S35): «Своя страница» first, like «Blank workbook» in Excel. */

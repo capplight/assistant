@@ -103,7 +103,8 @@ class Usage:
     tokens_in: int = 0
     tokens_out: int = 0
     cached_in: int = 0
-    cache_write_in: int = 0
+    cache_write_in: int = 0  # 5-minute cache writes
+    cache_write_1h_in: int = 0  # 1-hour cache writes (a higher price)
 
 
 TokenHook = Callable[[str], Awaitable[None]]
@@ -121,6 +122,7 @@ class AdapterRequest:
     timeout_s: float = 30.0
     effort: str | None = None  # Anthropic output_config.effort; others ignore it
     on_token: TokenHook | None = None  # set = stream text deltas through this hook
+    cache_ttl: str | None = "5m"  # "5m" | "1h" | None; adapters without the choice ignore it
 
 
 @dataclass
@@ -130,6 +132,15 @@ class AdapterResponse:
     model: str
     tool_calls: list[ToolCall] = field(default_factory=list)
     request_id: str | None = None
+
+
+@dataclass
+class BatchEntry:
+    """One result of a provider batch: an answer, or the error it would have raised live."""
+
+    custom_id: str
+    response: AdapterResponse | None = None
+    error: "ProviderError | None" = None
 
 
 # --- errors adapters raise (mapped from SDK exceptions) ---
@@ -208,6 +219,14 @@ class AIUnavailable(AIError):
         self.last_outcome = last_outcome
 
 
+class BatchUnavailable(AIError):
+    """No batch now (route, adapter, primary provider off or busy): run the task live."""
+
+
+class StaleBatchResult(AIError):
+    """The record changed after the batch was sent: the answer is about the old text."""
+
+
 class StreamInterrupted(AIError):
     """Provider failed after the first token was streamed: no switch (spec 5.3)."""
 
@@ -223,6 +242,7 @@ class Result[T: BaseModel]:
     attempts: int
     fallback_from: str | None
     escalation_blocked: bool = False
+    escalation_denied: str | None = None  # why: over_budget | daily_cap | a policy code
     budget_warning: bool = False
     # Everything produced here is AI-generated content (spec 5.9): UI shows labels.ai_generated.
     ai_generated: bool = True

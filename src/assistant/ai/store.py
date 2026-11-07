@@ -13,7 +13,7 @@ from decimal import Decimal
 from typing import Protocol
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from assistant.ai.consent import ai_consent_providers
@@ -69,6 +69,7 @@ class UsageRecord:
     cached_in: int = 0
     cache_write_in: int = 0
     images: int = 0
+    batch: bool = False
     cost_usd: Decimal = Decimal(0)
     latency_ms: int | None = None
     fallback_from: str | None = None
@@ -122,6 +123,11 @@ class AIStore(Protocol):
 
     async def consent_providers(self, user_id: int) -> frozenset[str] | None: ...
 
+    async def strong_calls_since(self, user_id: int, since: datetime,
+                                 models: frozenset[str]) -> int:
+        """Successful calls of these models outside the documents class (escalations)."""
+        ...
+
 
 class MemoryAIStore:
     def __init__(self) -> None:
@@ -158,6 +164,11 @@ class MemoryAIStore:
 
     async def consent_providers(self, user_id: int) -> frozenset[str] | None:
         return self.consents.get(user_id)
+
+    async def strong_calls_since(self, user_id: int, since: datetime,
+                                 models: frozenset[str]) -> int:
+        return sum(1 for r in self.usage if r.user_id == user_id and r.created_at >= since
+                   and r.model in models and r.outcome == "ok" and r.budget_class != "documents")
 
 
 _ADD_SPEND = text("""
@@ -224,7 +235,7 @@ class PgAIStore:
                 cache_write_in=rec.cache_write_in, images=rec.images, cost_usd=rec.cost_usd,
                 latency_ms=rec.latency_ms, outcome=rec.outcome, fallback_from=rec.fallback_from,
                 attempt=rec.attempt, job_id=rec.job_id, prompt_version=rec.prompt_version,
-                error_kind=rec.error_kind, created_at=rec.created_at,
+                error_kind=rec.error_kind, created_at=rec.created_at, batch=rec.batch,
             ))  # fmt: skip
 
     async def providers_off(self) -> dict[str, str]:
@@ -259,6 +270,17 @@ class PgAIStore:
     async def consent_providers(self, user_id: int) -> frozenset[str] | None:
         async with self._sm() as s:
             return await ai_consent_providers(s, user_id, legacy_providers=self._legacy)
+
+    async def strong_calls_since(self, user_id: int, since: datetime,
+                                 models: frozenset[str]) -> int:
+        async with self._sm() as s:
+            n = await s.scalar(
+                select(func.count()).select_from(ProviderUsage).where(
+                    ProviderUsage.user_id == user_id, ProviderUsage.created_at >= since,
+                    ProviderUsage.model.in_(models), ProviderUsage.outcome == "ok",
+                    ProviderUsage.budget_class != "documents",
+                ))  # fmt: skip
+            return int(n or 0)
 
 
 async def ensure_usage_partitions(session: AsyncSession, now: datetime, months: int = 3) -> None:

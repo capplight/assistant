@@ -1,4 +1,4 @@
-# Mobile app — week 2 (API client, sync, share, voice)
+# Mobile app — week 3 (pages, record card, «Проверьте», S04b)
 
 Expo SDK 58 (React Native 0.88, New Architecture), TypeScript strict, expo-router.
 Spec: `../docs/spec/SPEC.md`, `../docs/spec/final/2-design.md`, `../docs/spec/final/3-engineering.md` §2.1, §11.2 (week 1, Mobile).
@@ -62,8 +62,11 @@ src/
                              → phrase (S03, path 3) / gallery (S35, paths 1 and 3)
     (main)/_layout.tsx       Tabs navigator with custom footer: answer banner + assistant line + tabs
     (main)/index.tsx         «Сегодня» (S06, empty state)
-    (main)/page/[id].tsx     universal page (S37 placeholder)
+    (main)/page/[id].tsx     universal page (S37)
+    (main)/record/[id].tsx   record card (S09), `from` = the page it was opened from
+    (main)/records.tsx       «Все записи»
     (main)/more.tsx          «Ещё» (S42)
+    phone.tsx                number, SMS code, name (S04b)
     chat.tsx                 «Переписка» (S36, full screen placeholder)
   components/                AssistantLine, AnswerBanner, BottomTabs, AddSheet, TemplateCard, …
   theme/                     tokens from 2-design §2: colors (light/dark), typography, spacing, radii, motion
@@ -75,11 +78,45 @@ src/
   records/                   Capture service (text / file / voice → record + outbox), file ops
   share/                     expo-share-intent bridge + handler
   voice/                     fragment session logic + expo-audio hook
-  db/                        expo-sqlite: outbox, records, sync cursor (SQLite and in-memory impls)
-  pages/                     template catalog v1, premarks, page labels
+  account/                   phone link / sign-in
+  db/                        expo-sqlite: outbox, records, pages + links, sync cursor (SQLite and in-memory impls)
+  pages/                     template catalog v1, premarks, labels, LexoRank, page contents and order, page service
   __tests__/                 onboarding, main, api (auth/refresh/errors), consent, sync, capture (share/voice), unit, fonts
   testing/                   helpers + FakeServer (fetch mock)
 ```
+
+## Week 3: what works
+
+Contract: `../docs/api/pages.md`; shapes only in `src/api/types.ts` + `src/api/endpoints.ts`. Reconciled with
+`../src/assistant/api/schemas.py` and routes on 2026-11-07. **Checked by tests with a fake server and on a real
+SQLite engine, not yet against the real server or on a device.**
+
+- **S37** (`page/[id].tsx`): the same frame for every template; records from local SQLite, online or not. A page is
+  a view: linked rows from `/sync`, plus records saved on this page, plus for «Заметки» (rule «always») everything.
+  Order as the server's (`src/pages/contents.ts`); a record without a key yet goes by its date, so nothing jumps
+  after sync. «Все записи» in «Ещё» shows the whole memory, also what no page shows.
+  «Своя страница»: «Ещё» → name → page; rename with the pencil. Other templates show the plain list until their weeks.
+- **Pages offline** (`db/pages.ts`, `sync/engine.ts`): SQLite is the source of truth, the zustand store feeds tabs
+  (`store/pagesSync.ts`). `pages.create` rows (also old week 1-2 ones) → one `POST /pages` each, idempotent by
+  `client_id`. `409 singleton_exists` → the local page adopts the existing one, keeping its local id.
+  Saved from a page → `POST /items`, then `POST /pages/{id}/items` (waits for the page). Pull: `screens`,
+  `screen_items`, tombstones `item | screen | screen_item`. «Сегодня» from the server is skipped: built in here.
+- **Card S09**: title, source line, status, the label (`ai_generated` or `ai_fields`), «Проверьте N мест»,
+  «Что я понял», text. Opening it calls `GET /items/{id}` (the server stops the record waiting for the overnight run).
+- **«Верно»** works offline: overlay `records.pending` + outbox `item.verify` → `PATCH /items/{id}` with `verify`,
+  `base_seq`. On `409 conflict` the phone compares values: same → repeat with the new seq; changed → not confirmed,
+  the card asks about the new value. A permanent refusal clears the overlay.
+- **«Отменить» for automatic merges**: strip above the assistant line for 10 s. Comes from `POST /items`
+  (`duplicate`) and from `/sync` (files and voice are compared later). Outbox `item.unmerge` → `POST /items/{id}/unmerge`.
+- **S04b**: after the first result, once (path 3: after S35; paths 1, 2: after the first record in the line). Number
+  (+7 / +996 by the phone's region, tap to change), SMS code, name. «Позже» with the honest line. Later: «Ещё».
+  `account_switched`: the sync cursor goes back to 0, consent (same texts) and device are sent again.
+- **LexoRank** (`pages/lexorank.ts`) passes `../docs/spec/vectors/lexorank.json`, the file the server's tests use.
+- **SQLite** migrations run in a transaction. `sqlite.test.ts` runs them and all repository SQL on Node's SQLite.
+
+Not yet: «Исправить» on «Проверьте» (no API to change a field's value), the name on the server (no endpoint, kept on
+the phone), «Как показывать?» for «Своя страница» (always a list), offline placement by rules other than «always»,
+`GET /page-templates` (the catalog is still local), voice for the name, the «укажите номер» card on «Сегодня» (R-08).
 
 ## Week 2: what works
 
@@ -89,10 +126,7 @@ src/
   single-flight) → retry; rejected refresh → sign in again with the same device key. Errors
   `{code, message_ru, message_kk, retry_after?}` → `ApiError`, no answer → `NetworkError`;
   `errorMessage()` picks the server text by language or a local fallback.
-  All paths/bodies are in `src/api/endpoints.ts` + `src/api/types.ts` — **items/sync shapes follow spec §4
-  and were cross-checked with the in-progress server code (`routes/items.py`, `routes/sync.py`) on
-  2026-11-07**; they are the only place to change if the server moves. Open point: the server's
-  `ItemCreateIn` has no `source_meta` yet, so voice fragments' `recording_id` is currently dropped.
+  All paths/bodies are in `src/api/endpoints.ts` + `src/api/types.ts` — they are the only place to change if the server moves.
 - **S05** shows the legal texts from `GET /v1/consents/text` (checkbox labels, 18+ line, push line,
   recipients); offline — a bundled byte-identical snapshot of the server texts (`src/consent/texts.ts`).
   The button records exactly what was on screen: `POST /v1/consents` with `version` + `text_hash` per kind
@@ -121,7 +155,7 @@ src/
 
 Not yet: autostop after 2.5 s of silence, S22 preview sheet with a text note before saving (share saves
 directly), background sync while the app is closed (`expo-background-task`), push token in `/devices`,
-`{N}` days in the consent text, voice on S03, offline banner, records list UI.
+`{N}` days in the consent text, voice on S03, offline banner.
 
 ## Week 1 (still valid unless replaced above)
 
@@ -143,12 +177,12 @@ directly), background sync while the app is closed (`expo-background-task`), pus
 
 ## Stubbed / not yet
 
-- `pages.create` and `chat.message` outbox rows stay queued (pages API week 3, chat week 5).
+- `chat.message` outbox rows stay queued (chat week 5).
 - S03 is typed only.
 - «+» sheet options, «Как выглядит», Terms/Policy links, «Настраиваю для другого человека», most «Ещё»
-  entries (Мои страницы, Все записи, Что я сделал, Настройки, …) are placeholders.
+  entries (Мои страницы, Что я сделал, Настройки, …) are placeholders.
 - Answer banner shows a local confirmation, not a real answer; no source chips or AI label yet (week 5).
-- Pages have no records; «Найти на странице» is a dead field. Page order is an integer, not LexoRank.
+- «Найти на странице» is off the page until it works (week 4); «Порядок», «⋯ Ещё» week 7; «Настроить» week 11.
 - Seed pages (Заметки / Дела и напоминания / Расходы) exist before onboarding; onboarding replaces them.
 - SQLite is plain (no SQLCipher / drizzle / FTS5 yet). Ids are pseudo-random UUID-shaped (TODO expo-crypto).
 - Theme follows the phone only (switch comes with S23). Reduce Motion is not wired (no animations yet).

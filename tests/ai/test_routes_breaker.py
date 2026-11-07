@@ -39,8 +39,8 @@ def test_price_cost():
     table = load_routes(make_settings())
     usage = Usage(tokens_in=1_000_000, tokens_out=100_000, cached_in=500_000,
                   cache_write_in=200_000)  # fmt: skip
-    # sonnet 5.5: 2.00 + 1.00 + 0.10 + 0.50
-    assert table.price("claude-sonnet-5-5").cost(usage) == Decimal("3.600000")
+    # sonnet 5.5: 2.00 + 1.00 + 0.05 + 0.50
+    assert table.price("claude-sonnet-5-5").cost(usage) == Decimal("3.550000")
     assert table.price("no-such-model") == table.price("default")
 
 

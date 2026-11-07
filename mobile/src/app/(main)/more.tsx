@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { ChevronRight } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -6,11 +7,14 @@ import { useShallow } from 'zustand/react/shallow';
 
 import { AppText } from '@/components/AppText';
 import { PageIcon } from '@/components/Icon';
+import { PageNameSheet } from '@/components/PageNameSheet';
 import { Screen } from '@/components/Screen';
 import { LANGUAGES } from '@/i18n';
+import { addCustomPage } from '@/pages/service';
 import { MAX_TAB_PAGES, MAX_TAB_PAGES_LARGE_FONT } from '@/pages/templates';
 import { usePageLabels } from '@/pages/usePageLabels';
 import { useOnboarding } from '@/store/onboarding';
+import { useToast } from '@/store/toast';
 import { selectSortedPages, usePages } from '@/store/pages';
 import { useTheme } from '@/theme';
 
@@ -22,6 +26,9 @@ export default function MoreScreen() {
   const pages = usePages(useShallow(selectSortedPages));
   const language = useOnboarding((s) => s.language);
   const setLanguage = useOnboarding((s) => s.setLanguage);
+  const phoneLinked = useOnboarding((s) => s.phoneLinkedAt !== null);
+  const showToast = useToast((s) => s.show);
+  const [naming, setNaming] = useState(false);
   const overflow = pages.slice(theme.largeFont ? MAX_TAB_PAGES_LARGE_FONT : MAX_TAB_PAGES);
 
   const row = (key: string, label: string, onPress?: () => void, meta?: string) => (
@@ -80,14 +87,30 @@ export default function MoreScreen() {
           ))}
         </View>
       ) : null}
+      {row('add_page', t('more.add_page'), () => setNaming(true), t('tpl.hint.custom'))}
       {row('my_pages', t('more.my_pages'), undefined, t('more.later'))}
-      {row('all_records', t('more.all_records'), undefined, t('more.later'))}
+      {row('all_records', t('more.all_records'), () => router.navigate('/records'))}
       {row('did', t('more.did'), undefined, t('more.later'))}
       {row('chat', t('more.chat'), () => router.push('/chat'))}
       {row('import', t('more.import'), undefined, t('more.later'))}
       {row('lang', `${t('lang.choose')}: ${t(`lang.${language}`)}`, () => setLanguage(nextLang), t(`lang.${nextLang}`))}
+      {phoneLinked
+        ? row('phone', t('phone.linked'))
+        : row('phone', t('phone.more_row'), () => router.push('/phone'), t('phone.more_hint'))}
       {row('settings', t('more.settings'), undefined, t('more.later'))}
       {row('help', t('more.help'), undefined, t('more.later'))}
+      {naming ? (
+        <PageNameSheet
+          onClose={() => setNaming(false)}
+          onSave={(name) => {
+            setNaming(false);
+            void addCustomPage(name).then((page) => {
+              if (page) router.navigate({ pathname: '/page/[id]', params: { id: page.id } });
+              else showToast(t('gallery.limit'), 4000);
+            });
+          }}
+        />
+      ) : null}
     </Screen>
   );
 }

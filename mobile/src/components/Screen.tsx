@@ -25,7 +25,10 @@ export function Screen({
 }: Props) {
   const theme = useTheme();
   const pad = { paddingHorizontal: theme.screenPadding };
-  const inner = <View style={[styles.inner, { maxWidth: theme.size.maxContentWidth }]}>{children}</View>;
+  // Without a bounded height a list inside (scroll={false}) would grow with its content and never scroll.
+  const inner = (
+    <View style={[styles.inner, !scroll && styles.bounded, { maxWidth: theme.size.maxContentWidth }]}>{children}</View>
+  );
   return (
     <SafeAreaView testID={testID} edges={edges} style={[styles.root, { backgroundColor: theme.colors.bg }]}>
       {scroll ? (
@@ -57,4 +60,5 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   center: { alignItems: 'center' },
   inner: { width: '100%', flexGrow: 1 },
+  bounded: { flex: 1, minHeight: 0 },
 });

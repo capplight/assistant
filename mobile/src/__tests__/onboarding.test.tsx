@@ -108,6 +108,9 @@ describe('first launch flow', () => {
     expect(screen.getByTestId('gallery-shopping')).not.toBeChecked();
     await fireEvent.press(screen.getByTestId('gallery-ok'));
     expect(usePages.getState().pages.map((p) => p.templateKey)).toEqual(['notes', 'tasks', 'expenses']);
+    // The first result exists: S04b, then «Сегодня». «Позже» always works.
+    expect(r.getPathname()).toBe('/phone');
+    await fireEvent.press(screen.getByTestId('phone-later'));
     expect(r.getPathname()).toBe('/');
     expect(useOnboarding.getState().path).toBe('phrase_first');
   });

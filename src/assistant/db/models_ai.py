@@ -7,7 +7,17 @@ Spec 3-engineering 3.8. Enums are text + CHECK; allowed values are in assistant.
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import BigInteger, DateTime, Integer, Numeric, PrimaryKeyConstraint, Text, func
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    PrimaryKeyConstraint,
+    Text,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from assistant.db.models import Base
@@ -44,6 +54,7 @@ class ProviderUsage(Base):
     job_id: Mapped[int | None] = mapped_column(BigInteger)
     prompt_version: Mapped[str | None] = mapped_column(Text)
     error_kind: Mapped[str | None] = mapped_column(Text)
+    batch: Mapped[bool] = mapped_column(Boolean, default=False)  # 0006: discounted batch call
 
 
 class Budget(Base):
@@ -85,3 +96,42 @@ class ProviderState(Base):
     reason: Mapped[str | None] = mapped_column(Text)
     changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),
                                                  server_default=func.now())  # fmt: skip
+
+
+class AIBatch(Base):
+    """One provider batch (migration 0006). Holds no prompt or answer text."""
+
+    __tablename__ = "ai_batches"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    provider: Mapped[str] = mapped_column(Text)
+    model: Mapped[str] = mapped_column(Text)
+    task: Mapped[str] = mapped_column(Text)
+    provider_batch_id: Mapped[str | None] = mapped_column(Text, unique=True)
+    status: Mapped[str] = mapped_column(Text, default="submitting")
+    request_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),
+                                                 server_default=func.now())  # fmt: skip
+    deadline_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    next_poll_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),
+                                                   server_default=func.now())  # fmt: skip
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    error_kind: Mapped[str | None] = mapped_column(Text)
+
+
+class AIBatchRequest(Base):
+    """One record waiting for, or sent in, a batch. payload_sha256 hashes the masked prompt: the
+    answer is used only if the same prompt can be rebuilt (masking tables are never stored)."""
+
+    __tablename__ = "ai_batch_requests"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    batch_id: Mapped[int | None] = mapped_column(ForeignKey("ai_batches.id", ondelete="SET NULL"))
+    task: Mapped[str] = mapped_column(Text)
+    item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    state: Mapped[str] = mapped_column(Text, default="queued")
+    payload_sha256: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),
+                                                 server_default=func.now())  # fmt: skip
+    done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

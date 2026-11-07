@@ -1,37 +1,61 @@
 # AI routes (spec 3-engineering 5.2). Order in `chain` = priority.
 # `primary` / `fallback` resolve to settings.ai_primary_provider / ai_fallback_provider;
 # a provider name (anthropic | openai | google | groq) is used as is.
-# Model names and prices: [verify at the week-0 bake-off / price check]. Anthropic models
-# default to settings.model_fast / model_strong (MODEL_FAST / MODEL_STRONG).
+# Anthropic models default to settings.model_fast / model_strong (MODEL_FAST / MODEL_STRONG).
+#
+# Names and prices checked 2026-11-07 on the official pages:
+#   platform.claude.com/docs/en/about-claude/pricing
+#   developers.openai.com/api/docs/pricing
+#   aistudio.google.com/docs/deprecations and /docs/pricing
+#   console.groq.com/docs/models and /docs/deprecations
+# Recheck before each provider contract / bake-off. Paid tiers only in production (spec 2.8).
 
 models:
   anthropic: {light: "${MODEL_FAST}", strong: "${MODEL_STRONG}"}
+  # Still listed, not the newest generation; the bake-off decides.
   openai: {light: gpt-5-mini, strong: gpt-5}
-  google: {light: gemini-2.5-flash, strong: gemini-2.5-pro}
-  groq: {light: llama-3.3-70b-versatile, strong: llama-3.3-70b-versatile}
+  # gemini-2.5-flash / -pro shut down 2026-12-01; these are Google's listed replacements.
+  google: {light: gemini-3.5-flash-lite, strong: gemini-3.8-flash}
+  # llama-3.3-70b-versatile: deprecations page says shutdown 2026-08-16, models page shows it
+  # "Enterprise / Contact Sales" with no public price. gpt-oss-120b is the listed replacement.
+  groq: {light: openai/gpt-oss-120b, strong: openai/gpt-oss-120b}
 
-# USD per 1M tokens: in (uncached), out, cached_in (cache read), cache_write.
-# Unknown model -> `default` (deliberately expensive so budgets stay conservative).
+# USD per 1M tokens: in (uncached), out, cached_in (cache read), cache_write (5 min),
+# cache_write_1h (default 2 x in). Unknown model -> `default` (expensive, budgets stay safe).
+# claude-haiku-5-5 costs 5x more for a prompt over 100,000 tokens: enrichment input is capped
+# far below that, so only the short-prompt rate applies.
 prices:
-  claude-haiku-5-5: {in: 0.10, out: 0.50, cached_in: 0.01, cache_write: 0.125}
-  claude-sonnet-5-5: {in: 2.00, out: 10.00, cached_in: 0.20, cache_write: 2.50}
+  claude-haiku-5-5: {in: 0.10, out: 0.50, cached_in: 0.01, cache_write: 0.125, cache_write_1h: 0.20}
+  claude-sonnet-5-5: {in: 2.00, out: 10.00, cached_in: 0.10, cache_write: 2.50, cache_write_1h: 4.00}
   gpt-5-mini: {in: 0.25, out: 2.00, cached_in: 0.025, cache_write: 0.25}
   gpt-5: {in: 1.25, out: 10.00, cached_in: 0.125, cache_write: 1.25}
-  gemini-2.5-flash: {in: 0.30, out: 2.50, cached_in: 0.03, cache_write: 0.30}
-  gemini-2.5-pro: {in: 1.25, out: 10.00, cached_in: 0.125, cache_write: 1.25}
-  llama-3.3-70b-versatile: {in: 0.59, out: 0.79, cached_in: 0.59, cache_write: 0.59}
+  gemini-3.5-flash-lite: {in: 0.30, out: 2.50, cached_in: 0.03, cache_write: 0.30}
+  # Rises on 2027-01-01 from 0.75 / 3.75 / 0.075; the later price is used on purpose.
+  gemini-3.8-flash: {in: 1.50, out: 7.50, cached_in: 0.15, cache_write: 1.50}
+  openai/gpt-oss-120b: {in: 0.15, out: 0.60, cached_in: 0.15, cache_write: 0.15}
   default: {in: 5.00, out: 25.00, cached_in: 5.00, cache_write: 5.00}
 
-# Per task: budget_class, tier (light|strong), escalate (tier allowed on request, if budget
-# < 80%), timeout_s (first token for streams), max_tokens, mask_contacts (phones/emails), chain.
+# Price multiplier for provider batches. Only Anthropic batches are implemented (adapters).
+batch_discount: {anthropic: 0.5}
+
+# Per task: budget_class, tier (light|strong), escalate (tier allowed on request, see
+# ai/policy.py), timeout_s (first token for streams), max_tokens, mask_contacts, chain,
+# cache (off|5m|1h: prompt cache of the stable prefix),
+# batch (off|bulk|always), batch_max_wait_h (then cancel and run live).
+#   off    - someone waits for the result
+#   bulk   - only records nobody is waiting for (import, backlog); live captures run now
+#   always - nothing on screen depends on it
 defaults: {tier: light, timeout_s: 30, max_tokens: 4000, mask_contacts: true,
-           chain: [primary, fallback]}
+           chain: [primary, fallback], cache: 5m, batch: "off", batch_max_wait_h: 6}
 
 tasks:
-  enrich: {budget_class: background, escalate: strong, mask_contacts: false}
+  # A new record is on the screen: live. Import and backlog can wait (opening one pulls it out).
+  enrich: {budget_class: background, escalate: strong, mask_contacts: false, batch: bulk}
+  # A new stack shows at once, with «Отменить» (spec 6.4), and its name is what you read.
   stack_name: {budget_class: background}
-  dup_judge: {budget_class: background}
-  import_summarize: {budget_class: import}
+  # «Объединить?» is a suggestion nobody waits for (spec 6.3).
+  dup_judge: {budget_class: background, batch: always}
+  import_summarize: {budget_class: import, batch: always, batch_max_wait_h: 24}
   intent: {budget_class: answers, timeout_s: 15}
   reminder_parse: {budget_class: answers, timeout_s: 15}
   answer: {budget_class: answers, escalate: strong, timeout_s: 8}
@@ -40,8 +64,10 @@ tasks:
   stack_summary: {budget_class: answers, escalate: strong}
   draft: {budget_class: answers}
   chat: {budget_class: answers, escalate: strong, timeout_s: 8}
+  # The next chat turn may need it (spec 5.10, layer 5).
   chat_summarize: {budget_class: background}
   page_group: {budget_class: answers}
+  # Receipts have a "within 1 min" promise (product spec, F-40).
   expense_extract: {budget_class: background, escalate: strong}
   kp_extract: {budget_class: documents, tier: strong, timeout_s: 60, max_tokens: 16000}
   kp_edit: {budget_class: documents, tier: strong, timeout_s: 60, max_tokens: 16000}

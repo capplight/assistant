@@ -3,6 +3,11 @@ adapter (OpenAI-compatible Chat Completions at api.groq.com).
 
 UNVERIFIED against the live APIs (no keys yet, `openai` SDK not installed in dev):
 written to the documented openai>=1.x shapes; check at the week-0 bake-off.
+
+Prompt caching is automatic on both, for long enough prefixes: we keep the prefix stable and read
+`cached_tokens`. OpenAI also gets `prompt_cache_key` (the schema name, never user data) to keep
+one task's calls on the same cache. Batch APIs exist on both but are not implemented here: only
+the primary provider batches, and a batch task on a fallback provider runs live.
 """
 
 import base64
@@ -100,6 +105,8 @@ class OpenAIAdapter:
         if req.json_schema is not None:
             kwargs["text"] = {"format": {"type": "json_schema", "name": req.schema_name[:64],
                                          "schema": req.json_schema, "strict": True}}
+        if req.cache_ttl is not None and req.schema_name:
+            kwargs["prompt_cache_key"] = req.schema_name[:64]
         if req.tools:
             kwargs["tools"] = [{"type": "function", "name": t.name, "description": t.description,
                                 "parameters": t.parameters, "strict": False} for t in req.tools]

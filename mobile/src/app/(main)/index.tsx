@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { Screen } from '@/components/Screen';
+import { useOnboarding } from '@/store/onboarding';
 import { useTheme } from '@/theme';
 
 /**
@@ -14,6 +15,7 @@ import { useTheme } from '@/theme';
 export default function TodayScreen() {
   const theme = useTheme();
   const { t, i18n } = useTranslation();
+  const name = useOnboarding((s) => s.displayName);
   let date: string;
   try {
     date = new Date().toLocaleDateString(i18n.language, { weekday: 'long', day: 'numeric', month: 'long' });
@@ -45,7 +47,7 @@ export default function TodayScreen() {
         </Pressable>
       </View>
       <AppText variant="display" accessibilityRole="header" style={{ marginBottom: theme.space[8] }}>
-        {t('today.hello')}
+        {name ? t('today.hello_name', { name }) : t('today.hello')}
       </AppText>
       <AppText variant="section" accessibilityRole="header" style={{ marginBottom: theme.space[3] }}>
         {t('today.today')}

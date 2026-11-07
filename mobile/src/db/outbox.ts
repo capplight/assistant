@@ -8,7 +8,15 @@ import { newId } from '@/utils/id';
  * Rows are never deleted: `sent` stays as history, `failed` = permanent server rejection (kept for support).
  */
 export type OutboxKind =
-  'consent.accept' | 'device.register' | 'item.create' | 'pages.create' | 'capture.text' | 'chat.message';
+  | 'consent.accept'
+  | 'device.register'
+  | 'item.create'
+  | 'item.verify'
+  | 'item.unmerge'
+  | 'pages.create'
+  | 'pages.update'
+  | 'capture.text'
+  | 'chat.message';
 
 export type OutboxStatus = 'pending' | 'sent' | 'failed';
 
@@ -78,6 +86,43 @@ export const OUTBOX_MIGRATIONS: readonly string[] = [
    CREATE UNIQUE INDEX IF NOT EXISTS records_server_id ON records (server_id);
    CREATE INDEX IF NOT EXISTS records_created ON records (created_at);
    CREATE TABLE IF NOT EXISTS sync_state (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);`,
+  // v3 (week 3): what the record card needs + local overlay for changes not yet on the server
+  `ALTER TABLE records ADD COLUMN summary TEXT;
+   ALTER TABLE records ADD COLUMN review_fields TEXT NOT NULL DEFAULT '{}';
+   ALTER TABLE records ADD COLUMN ai_generated INTEGER NOT NULL DEFAULT 0;
+   ALTER TABLE records ADD COLUMN hidden_reason TEXT;
+   ALTER TABLE records ADD COLUMN canonical_id TEXT;
+   ALTER TABLE records ADD COLUMN error TEXT;
+   ALTER TABLE records ADD COLUMN pending TEXT NOT NULL DEFAULT '{}';
+   CREATE TABLE IF NOT EXISTS pages (
+     id TEXT PRIMARY KEY NOT NULL,
+     server_id TEXT,
+     template_key TEXT NOT NULL,
+     title TEXT,
+     title_kk TEXT,
+     title_dirty INTEGER NOT NULL DEFAULT 0,
+     icon TEXT NOT NULL,
+     layout TEXT NOT NULL,
+     position TEXT NOT NULL,
+     created_by TEXT NOT NULL,
+     created_at TEXT NOT NULL,
+     sync_state TEXT NOT NULL DEFAULT 'pending',
+     seq INTEGER NOT NULL DEFAULT 0,
+     deleted_at INTEGER,
+     hidden_at INTEGER
+   );
+   CREATE UNIQUE INDEX IF NOT EXISTS pages_server_id ON pages (server_id);
+   CREATE TABLE IF NOT EXISTS page_links (
+     id TEXT PRIMARY KEY NOT NULL,
+     page_server_id TEXT NOT NULL,
+     item_server_id TEXT NOT NULL,
+     position TEXT,
+     manual_order INTEGER NOT NULL DEFAULT 0,
+     pinned INTEGER NOT NULL DEFAULT 0,
+     removed_at TEXT,
+     seq INTEGER NOT NULL DEFAULT 0
+   );
+   CREATE UNIQUE INDEX IF NOT EXISTS page_links_page_item ON page_links (page_server_id, item_server_id);`,
 ];
 
 type Row = {
@@ -111,8 +156,16 @@ export async function migrate(db: SqlDb): Promise<void> {
   const current = row?.user_version ?? 0;
   for (let v = current; v < OUTBOX_MIGRATIONS.length; v++) {
     const sql = OUTBOX_MIGRATIONS[v];
-    if (sql) await db.execAsync(sql);
-    await db.execAsync(`PRAGMA user_version = ${v + 1}`);
+    // All or nothing: a half-applied ALTER list would fail forever on the next launch.
+    await db.execAsync('BEGIN');
+    try {
+      if (sql) await db.execAsync(sql);
+      await db.execAsync(`PRAGMA user_version = ${v + 1}`);
+      await db.execAsync('COMMIT');
+    } catch (e) {
+      await db.execAsync('ROLLBACK');
+      throw e;
+    }
   }
 }
 

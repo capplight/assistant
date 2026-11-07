@@ -5,6 +5,7 @@ from pathlib import Path
 import httpx
 import pytest
 from fastapi import FastAPI
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from assistant.api.app import create_app
@@ -68,6 +69,10 @@ async def db_app(tmp_path: Path) -> AsyncIterator[tuple[FastAPI, FakeSmsSender, 
         app = create_app(make_settings(), sessionmaker=maker, sms=sms,
                          storage=make_storage(tmp_path))  # fmt: skip
         check = maker()
+        # Each test starts with an empty queue: a test on real connections can commit jobs, and
+        # worker tests claim the oldest job first. The deletion is rolled back with the rest.
+        await check.execute(text("DELETE FROM jobs"))
+        await check.commit()
         try:
             yield app, sms, check
         finally:

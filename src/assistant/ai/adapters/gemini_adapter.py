@@ -4,6 +4,10 @@ functionDeclarations for tools, vision for OCR, streaming.
 UNVERIFIED against the live API (no key yet, `google-genai` not installed in dev): written to
 the documented google-genai shapes; check at the week-0 bake-off (notably which JSON-schema
 keywords response_json_schema accepts together with tools).
+
+Prompt caching: implicit only (automatic on a stable prefix, read from
+`cached_content_token_count`). Explicit context caches bill storage per hour, and our traffic
+does not repay it. Batch mode is not implemented: Gemini is a fallback and OCR route, both live.
 """
 
 from typing import Any

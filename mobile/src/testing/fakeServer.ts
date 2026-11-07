@@ -1,4 +1,5 @@
 import type { FetchLike } from '@/api/client';
+import type { ItemOut, PageItemOut, PageOut } from '@/api/types';
 
 import { jsonResponse } from './helpers';
 
@@ -78,7 +79,7 @@ export function tokenPair(tag = String(++n)) {
   };
 }
 
-export function itemOut(clientId: string, seq: number, extra: Record<string, unknown> = {}) {
+export function itemOut(clientId: string, seq: number, extra: Record<string, unknown> = {}): ItemOut {
   return {
     id: `srv-${clientId}`,
     client_id: clientId,
@@ -92,7 +93,54 @@ export function itemOut(clientId: string, seq: number, extra: Record<string, unk
     updated_at: new Date().toISOString(),
     seq,
     ...extra,
-  };
+  } as ItemOut;
+}
+
+export function pageOut(clientId: string | null, seq: number, extra: Record<string, unknown> = {}): PageOut {
+  return {
+    id: `srv-${clientId ?? seq}`,
+    client_id: clientId,
+    kind: 'page',
+    template_key: 'custom',
+    template_version: 1,
+    title: 'Моя страница',
+    title_kk: null,
+    icon: 'other',
+    position: 'V',
+    layout: 'list',
+    view_state: {},
+    field_prefs: [],
+    custom_fields: [],
+    customized: false,
+    view_version: 1,
+    created_by: 'user',
+    hidden_at: null,
+    last_opened_at: null,
+    seq,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    deleted_at: null,
+    ...extra,
+  } as PageOut;
+}
+
+export function linkOut(pageId: string, itemId: string, seq: number, extra: Record<string, unknown> = {}): PageItemOut {
+  return {
+    id: `link-${pageId}-${itemId}`,
+    page_id: pageId,
+    item_id: itemId,
+    position: 'V',
+    group_key: null,
+    manual_order: false,
+    manual_at: null,
+    pinned: false,
+    added_by: 'rule',
+    removed_at: null,
+    seq,
+    updated_at: new Date().toISOString(),
+    updated_by: 'agent',
+    ...extra,
+  } as PageItemOut;
 }
 
 /** POST /v1/items response shape (server ItemCreateOut). */
@@ -150,6 +198,21 @@ export function happyServer(): FakeServer {
       items.set(b.client_id, it);
       return { status: 201, body: createOut(it, true) };
     })
+    .on('POST /pages', (c) => {
+      const b = c.body as { client_id: string; template_key: string; title?: string };
+      return {
+        status: 201,
+        body: { page: pageOut(b.client_id, ++seq, { template_key: b.template_key, title: b.title ?? 'Моя страница' }), created: true },
+      };
+    })
+    .on('PATCH /pages/*', (c) => ({
+      status: 200,
+      body: pageOut(null, ++seq, { id: c.path.split('/')[2], ...(c.body as object) }),
+    }))
+    .on('POST /pages/*/items', (c) => ({
+      status: 201,
+      body: { link: linkOut(c.path.split('/')[2] ?? '', (c.body as { item_id: string }).item_id, ++seq), created: true },
+    }))
     .on('GET /sync', (c) => {
       const since = Number(c.query.since ?? 0);
       const list = [...items.values()].filter((i) => i.seq > since);

@@ -8,7 +8,18 @@ import type {
   DeviceOut,
   ItemCreateIn,
   ItemCreateOut,
+  ItemOut,
+  ItemPatchIn,
   Locale,
+  OtpRequestIn,
+  OtpRequestOut,
+  OtpVerifyIn,
+  OtpVerifyOut,
+  PageCreateIn,
+  PageCreateOut,
+  PageLinkCreateOut,
+  PageOut,
+  PagePatchIn,
   ServerConsentKind,
   SyncOut,
   UploadIn,
@@ -24,6 +35,18 @@ export class Api {
     readonly client: ApiClient,
     private readonly putFile?: PutFile,
   ) {}
+
+  // phone (S04b): link to this account, or sign into the account that already has this phone
+  requestOtp(body: OtpRequestIn): Promise<OtpRequestOut> {
+    return this.client.request('POST', '/auth/otp/request', { body });
+  }
+
+  /** Saves the new tokens: from here on the app works as this account. */
+  async verifyOtp(body: OtpVerifyIn): Promise<OtpVerifyOut> {
+    const out = await this.client.request<OtpVerifyOut>('POST', '/auth/otp/verify', { body });
+    await this.client.tokens.saveTokens(out);
+    return out;
+  }
 
   // consents — the text endpoint is public (shown before any account data matters)
   getConsentText(kind: ServerConsentKind, locale: Locale): Promise<ConsentTextOut> {
@@ -65,6 +88,37 @@ export class Api {
   // items / sync — spec §4.3/§4.4 (server still in progress), see types.ts
   createItem(body: ItemCreateIn): Promise<ItemCreateOut> {
     return this.client.request('POST', '/items', { body, idempotencyKey: body.client_id });
+  }
+
+  getItem(id: string): Promise<ItemOut> {
+    return this.client.request('GET', `/items/${encodeURIComponent(id)}`);
+  }
+
+  patchItem(id: string, body: ItemPatchIn): Promise<ItemOut> {
+    return this.client.request('PATCH', `/items/${encodeURIComponent(id)}`, { body });
+  }
+
+  /** «Отменить» for an automatically merged exact repeat: the record is visible again. */
+  unmergeItem(id: string): Promise<ItemOut> {
+    return this.client.request('POST', `/items/${encodeURIComponent(id)}/unmerge`);
+  }
+
+  // pages — docs/api/pages.md
+  createPage(body: PageCreateIn): Promise<PageCreateOut> {
+    return this.client.request('POST', '/pages', { body, idempotencyKey: body.client_id });
+  }
+
+  getPage(id: string): Promise<PageOut> {
+    return this.client.request('GET', `/pages/${encodeURIComponent(id)}`);
+  }
+
+  patchPage(id: string, body: PagePatchIn): Promise<PageOut> {
+    return this.client.request('PATCH', `/pages/${encodeURIComponent(id)}`, { body });
+  }
+
+  /** Show an existing item on this page too. Idempotent by page + item. */
+  addItemToPage(pageId: string, itemId: string): Promise<PageLinkCreateOut> {
+    return this.client.request('POST', `/pages/${encodeURIComponent(pageId)}/items`, { body: { item_id: itemId } });
   }
 
   sync(since: number, limit = 200): Promise<SyncOut> {

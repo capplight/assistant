@@ -1,0 +1,645 @@
+{
+ "description": "Shared LexoRank test vectors. Server: src/assistant/pages/lexorank.py. Any port must reproduce every value byte for byte. Frozen: appending is fine, changing a value means stored keys no longer follow the algorithm.",
+ "alphabet": "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+ "max_length": 64,
+ "between": [
+  {
+   "a": null,
+   "b": null,
+   "expect": "V"
+  },
+  {
+   "a": "V",
+   "b": null,
+   "expect": "W"
+  },
+  {
+   "a": null,
+   "b": "V",
+   "expect": "U"
+  },
+  {
+   "a": "z",
+   "b": null,
+   "expect": "zV"
+  },
+  {
+   "a": "zz",
+   "b": null,
+   "expect": "zzV"
+  },
+  {
+   "a": "zV",
+   "b": null,
+   "expect": "zW"
+  },
+  {
+   "a": "y",
+   "b": null,
+   "expect": "z"
+  },
+  {
+   "a": "U",
+   "b": null,
+   "expect": "V"
+  },
+  {
+   "a": "0V",
+   "b": null,
+   "expect": "1"
+  },
+  {
+   "a": "A1",
+   "b": null,
+   "expect": "B"
+  },
+  {
+   "a": null,
+   "b": "2",
+   "expect": "1"
+  },
+  {
+   "a": null,
+   "b": "1",
+   "expect": "0V"
+  },
+  {
+   "a": null,
+   "b": "01",
+   "expect": "00V"
+  },
+  {
+   "a": null,
+   "b": "001",
+   "expect": "000V"
+  },
+  {
+   "a": null,
+   "b": "0V",
+   "expect": "0U"
+  },
+  {
+   "a": null,
+   "b": "z",
+   "expect": "y"
+  },
+  {
+   "a": null,
+   "b": "A1",
+   "expect": "9"
+  },
+  {
+   "a": "A",
+   "b": "B",
+   "expect": "AV"
+  },
+  {
+   "a": "A",
+   "b": "C",
+   "expect": "B"
+  },
+  {
+   "a": "A",
+   "b": "A1",
+   "expect": "A0V"
+  },
+  {
+   "a": "A",
+   "b": "A01",
+   "expect": "A00V"
+  },
+  {
+   "a": "A0V",
+   "b": "A1",
+   "expect": "A0k"
+  },
+  {
+   "a": "Az",
+   "b": "B",
+   "expect": "AzV"
+  },
+  {
+   "a": "Azz",
+   "b": "B",
+   "expect": "AzzV"
+  },
+  {
+   "a": "Az",
+   "b": "B1",
+   "expect": "AzV"
+  },
+  {
+   "a": "1",
+   "b": "2",
+   "expect": "1V"
+  },
+  {
+   "a": "1",
+   "b": "z",
+   "expect": "V"
+  },
+  {
+   "a": "0V",
+   "b": "1",
+   "expect": "0k"
+  },
+  {
+   "a": "01",
+   "b": "02",
+   "expect": "01V"
+  },
+  {
+   "a": "001",
+   "b": "002",
+   "expect": "001V"
+  },
+  {
+   "a": "V",
+   "b": "W",
+   "expect": "VV"
+  },
+  {
+   "a": "V",
+   "b": "VV",
+   "expect": "VF"
+  },
+  {
+   "a": "VV",
+   "b": "VW",
+   "expect": "VVV"
+  },
+  {
+   "a": "U",
+   "b": "V",
+   "expect": "UV"
+  },
+  {
+   "a": "Uz",
+   "b": "V",
+   "expect": "UzV"
+  },
+  {
+   "a": "Uzz",
+   "b": "V01",
+   "expect": "UzzV"
+  },
+  {
+   "a": "Z",
+   "b": "a",
+   "expect": "ZV"
+  },
+  {
+   "a": "9",
+   "b": "A",
+   "expect": "9V"
+  },
+  {
+   "a": "9z",
+   "b": "A",
+   "expect": "9zV"
+  },
+  {
+   "a": "z",
+   "b": "zV",
+   "expect": "zF"
+  },
+  {
+   "a": "y",
+   "b": "z",
+   "expect": "yV"
+  },
+  {
+   "a": "yz",
+   "b": "z",
+   "expect": "yzV"
+  },
+  {
+   "a": "A1B2",
+   "b": "A1B3",
+   "expect": "A1B2V"
+  },
+  {
+   "a": "A1B2",
+   "b": "A1C",
+   "expect": "A1BW"
+  },
+  {
+   "a": "a",
+   "b": "a0001",
+   "expect": "a0000V"
+  }
+ ],
+ "invalid": [
+  {
+   "a": "A",
+   "b": "A"
+  },
+  {
+   "a": "B",
+   "b": "A"
+  },
+  {
+   "a": "A0",
+   "b": null
+  },
+  {
+   "a": null,
+   "b": "A0"
+  },
+  {
+   "a": "",
+   "b": null
+  },
+  {
+   "a": null,
+   "b": ""
+  },
+  {
+   "a": "A-",
+   "b": null
+  },
+  {
+   "a": null,
+   "b": "Я"
+  },
+  {
+   "a": "0",
+   "b": null
+  },
+  {
+   "a": null,
+   "b": "0"
+  },
+  {
+   "a": "a",
+   "b": "Z"
+  }
+ ],
+ "sequence": [
+  {
+   "n": 0,
+   "expect": []
+  },
+  {
+   "n": 1,
+   "expect": [
+    "V"
+   ]
+  },
+  {
+   "n": 2,
+   "expect": [
+    "Kf",
+    "fK"
+   ]
+  },
+  {
+   "n": 3,
+   "expect": [
+    "FV",
+    "V",
+    "kV"
+   ]
+  },
+  {
+   "n": 5,
+   "expect": [
+    "AK",
+    "Ke",
+    "Uy",
+    "fI",
+    "pc"
+   ]
+  },
+  {
+   "n": 10,
+   "expect": [
+    "5d",
+    "BG",
+    "Gt",
+    "MW",
+    "S9",
+    "Xm",
+    "dP",
+    "j2",
+    "of",
+    "uI"
+   ]
+  },
+  {
+   "n": 61,
+   "expect": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "G",
+    "H",
+    "I",
+    "J",
+    "K",
+    "L",
+    "M",
+    "N",
+    "O",
+    "P",
+    "Q",
+    "R",
+    "S",
+    "T",
+    "U",
+    "V",
+    "W",
+    "X",
+    "Y",
+    "Z",
+    "a",
+    "b",
+    "c",
+    "d",
+    "e",
+    "f",
+    "g",
+    "h",
+    "i",
+    "j",
+    "k",
+    "l",
+    "m",
+    "n",
+    "o",
+    "p",
+    "q",
+    "r",
+    "s",
+    "t",
+    "u",
+    "v",
+    "w",
+    "x",
+    "y",
+    "z"
+   ]
+  }
+ ],
+ "sequence_samples": [
+  {
+   "n": 100,
+   "len": 100,
+   "first": "0c3",
+   "last": "zMq",
+   "at_index_n_div_2": "VIT"
+  },
+  {
+   "n": 3843,
+   "len": 3843,
+   "first": "01",
+   "last": "zz",
+   "at_index_n_div_2": "V"
+  },
+  {
+   "n": 20000,
+   "len": 20000,
+   "first": "00Bu",
+   "last": "zvkW",
+   "at_index_n_div_2": "Uy4A"
+  }
+ ],
+ "chain": [
+  {
+   "insert_at": 0,
+   "expect": "V"
+  },
+  {
+   "insert_at": 1,
+   "expect": "W"
+  },
+  {
+   "insert_at": 0,
+   "expect": "U"
+  },
+  {
+   "insert_at": 1,
+   "expect": "UV"
+  },
+  {
+   "insert_at": 4,
+   "expect": "X"
+  },
+  {
+   "insert_at": 2,
+   "expect": "Uk"
+  },
+  {
+   "insert_at": 1,
+   "expect": "UF"
+  },
+  {
+   "insert_at": 3,
+   "expect": "Uc"
+  },
+  {
+   "insert_at": 1,
+   "expect": "U7"
+  },
+  {
+   "insert_at": 8,
+   "expect": "WV"
+  },
+  {
+   "insert_at": 4,
+   "expect": "UY"
+  },
+  {
+   "insert_at": 1,
+   "expect": "U3"
+  },
+  {
+   "insert_at": 2,
+   "expect": "U5"
+  },
+  {
+   "insert_at": 3,
+   "expect": "U6"
+  },
+  {
+   "insert_at": 6,
+   "expect": "UN"
+  },
+  {
+   "insert_at": 2,
+   "expect": "U4"
+  },
+  {
+   "insert_at": 9,
+   "expect": "UW"
+  },
+  {
+   "insert_at": 5,
+   "expect": "U6V"
+  },
+  {
+   "insert_at": 10,
+   "expect": "UVV"
+  },
+  {
+   "insert_at": 5,
+   "expect": "U6F"
+  },
+  {
+   "insert_at": 17,
+   "expect": "VV"
+  },
+  {
+   "insert_at": 7,
+   "expect": "U6k"
+  },
+  {
+   "insert_at": 9,
+   "expect": "UB"
+  },
+  {
+   "insert_at": 21,
+   "expect": "WF"
+  },
+  {
+   "insert_at": 5,
+   "expect": "U67"
+  },
+  {
+   "insert_at": 13,
+   "expect": "UR"
+  },
+  {
+   "insert_at": 26,
+   "expect": "Y"
+  },
+  {
+   "insert_at": 20,
+   "expect": "Us"
+  },
+  {
+   "insert_at": 20,
+   "expect": "Uo"
+  },
+  {
+   "insert_at": 25,
+   "expect": "W7"
+  },
+  {
+   "insert_at": 25,
+   "expect": "W3"
+  },
+  {
+   "insert_at": 1,
+   "expect": "U1"
+  },
+  {
+   "insert_at": 4,
+   "expect": "U4V"
+  },
+  {
+   "insert_at": 32,
+   "expect": "XV"
+  },
+  {
+   "insert_at": 33,
+   "expect": "Xk"
+  },
+  {
+   "insert_at": 14,
+   "expect": "UJ"
+  },
+  {
+   "insert_at": 15,
+   "expect": "UL"
+  },
+  {
+   "insert_at": 3,
+   "expect": "U3V"
+  },
+  {
+   "insert_at": 27,
+   "expect": "Uw"
+  },
+  {
+   "insert_at": 33,
+   "expect": "WB"
+  }
+ ],
+ "chain_sorted": [
+  "U",
+  "U1",
+  "U3",
+  "U3V",
+  "U4",
+  "U4V",
+  "U5",
+  "U6",
+  "U67",
+  "U6F",
+  "U6V",
+  "U6k",
+  "U7",
+  "UB",
+  "UF",
+  "UJ",
+  "UL",
+  "UN",
+  "UR",
+  "UV",
+  "UVV",
+  "UW",
+  "UY",
+  "Uc",
+  "Uk",
+  "Uo",
+  "Us",
+  "Uw",
+  "V",
+  "VV",
+  "W",
+  "W3",
+  "W7",
+  "WB",
+  "WF",
+  "WV",
+  "X",
+  "XV",
+  "Xk",
+  "Y"
+ ],
+ "sort_check": {
+  "input": [
+   "a",
+   "Z",
+   "0V",
+   "z",
+   "1",
+   "A",
+   "A1",
+   "9"
+  ],
+  "bytewise": [
+   "0V",
+   "1",
+   "9",
+   "A",
+   "A1",
+   "Z",
+   "a",
+   "z"
+  ]
+ }
+}

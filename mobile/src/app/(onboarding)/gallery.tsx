@@ -8,7 +8,7 @@ import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
 import { TemplateCard } from '@/components/TemplateCard';
-import { getOutbox } from '@/db';
+import { saveNewPages } from '@/pages/service';
 import { DEFAULT_PREMARKED, GALLERY_ORDER, TEMPLATES, type TemplateKey } from '@/pages/templates';
 import { premarksFor, useOnboarding } from '@/store/onboarding';
 import { usePages } from '@/store/pages';
@@ -20,7 +20,7 @@ const isTemplateKey = (s: string): s is TemplateKey => TEMPLATES.some((t) => t.k
  * S35 — template gallery in the first launch (R-48, US-23).
  * from=phrase (path 3): Notes + Tasks premarked (+ Documents / Expenses from the phrase and welcome picks).
  * Otherwise (path 1): only the tapped card (if any) + welcome picks.
- * «Подходит» creates local pages; the server gets them via outbox (POST /pages/batch later).
+ * «Подходит» creates local pages; the server gets them via outbox (one POST /pages per page).
  */
 export default function GalleryScreen() {
   const theme = useTheme();
@@ -42,11 +42,12 @@ export default function GalleryScreen() {
     // Tab order follows the catalog order, not the tap order.
     const keys = TEMPLATES.map((tpl) => tpl.key).filter((k) => selected.includes(k));
     const pages = createFromOnboarding(keys, fromPhrase ? 'onboarding_phrase' : 'onboarding_gallery');
-    const outbox = await getOutbox();
-    await outbox.enqueue('pages.create', { pages });
+    await saveNewPages(pages);
     complete();
-    // Path 1: open the first chosen page; path 3: back to «Сегодня» with the first result.
-    if (!fromPhrase && pages[0]) router.replace({ pathname: '/page/[id]', params: { id: pages[0].id } });
+    // Path 1: open the first chosen page (S04b comes after the first saved record).
+    // Path 3: the first result exists already, so S04b now, then «Сегодня».
+    if (fromPhrase) router.replace({ pathname: '/phone', params: { next: 'home' } });
+    else if (pages[0]) router.replace({ pathname: '/page/[id]', params: { id: pages[0].id } });
     else router.replace('/');
   };
 

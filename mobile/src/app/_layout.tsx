@@ -48,6 +48,7 @@ export default function RootLayout() {
             <Stack.Screen name="(main)" />
             <Stack.Screen name="(onboarding)" options={{ gestureEnabled: false }} />
             <Stack.Screen name="chat" options={{ presentation: 'fullScreenModal' }} />
+            <Stack.Screen name="phone" options={{ gestureEnabled: false }} />
           </Stack>
           <ToastHost />
         </ThemeProvider>

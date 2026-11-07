@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+import { between, compareRank, sequence } from '@/pages/lexorank';
 import { getTemplate, MAX_PAGES, type IconKey, type Layout, type TemplateKey } from '@/pages/templates';
 import { newId } from '@/utils/id';
 
@@ -15,17 +16,24 @@ export type Page = {
   templateKey: TemplateKey;
   /** null → localized template title (so RU/KK switch works); set for custom pages or renamed ones. */
   title: string | null;
+  /** The name in Kazakh, when a renamed page has one. */
+  titleKk: string | null;
   icon: IconKey;
   layout: Layout;
-  /** Order in «Мои страницы» and tabs. TODO: LexoRank shared module (week 7). */
-  position: number;
+  /** LexoRank: order in «Мои страницы» and tabs; compare by bytes, tie-break id. */
+  position: string;
   createdBy: PageCreatedBy;
   createdAt: string;
+  /** Server id; null until POST /pages answered. */
+  serverId: string | null;
+  /** `failed`: the server refused it for good; the page stays on this phone. */
+  syncState: 'pending' | 'synced' | 'failed';
+  seq: number;
 };
 
 function makePage(
   templateKey: TemplateKey,
-  position: number,
+  position: string,
   createdBy: PageCreatedBy,
   title: string | null = null,
 ): Page {
@@ -34,11 +42,15 @@ function makePage(
     id: newId(),
     templateKey,
     title,
+    titleKk: null,
     icon: tpl.icon,
     layout: tpl.defaultLayout,
     position,
     createdBy,
     createdAt: new Date().toISOString(),
+    serverId: null,
+    syncState: 'pending',
+    seq: 0,
   };
 }
 
@@ -48,7 +60,30 @@ function makePage(
  */
 export const SEED_TEMPLATES: readonly TemplateKey[] = ['notes', 'tasks', 'expenses'];
 export function seedPages(): Page[] {
-  return SEED_TEMPLATES.map((k, i) => makePage(k, i, 'seed'));
+  const keys = sequence(SEED_TEMPLATES.length);
+  return SEED_TEMPLATES.map((k, i) => makePage(k, keys[i] ?? 'V', 'seed'));
+}
+
+/** Tab order: `position` by bytes, tie-break id (docs/api/pages.md). */
+export function comparePages(a: Page, b: Page): number {
+  return compareRank(a.position, b.position) || (a.id < b.id ? -1 : 1);
+}
+
+/** Weeks 1-2 stored integer positions and no server fields. */
+export function migrateV0(state: unknown): { pages: Page[] } {
+  const old = (state as { pages?: (Omit<Page, 'position'> & { position: number })[] })?.pages ?? [];
+  const sorted = [...old].sort((a, b) => a.position - b.position);
+  const keys = sequence(sorted.length);
+  return {
+    pages: sorted.map((p, i) => ({
+      ...p,
+      position: keys[i] ?? 'V',
+      titleKk: null,
+      serverId: null,
+      syncState: 'pending' as const,
+      seq: 0,
+    })),
+  };
 }
 
 type PagesState = {
@@ -56,6 +91,7 @@ type PagesState = {
   /** Replace pages with the onboarding choice; returns the created pages in order. */
   createFromOnboarding: (keys: TemplateKey[], createdBy: PageCreatedBy, customTitle?: string) => Page[];
   addPage: (key: TemplateKey, title?: string) => Page | null;
+  renamePage: (id: string, title: string | null) => void;
   reset: () => void;
 };
 
@@ -65,9 +101,11 @@ export const usePages = create<PagesState>()(
       pages: seedPages(),
       createFromOnboarding: (keys, createdBy, customTitle) => {
         const unique = keys.filter((k, i) => getTemplate(k).singleton === false || keys.indexOf(k) === i);
-        const created = unique
-          .slice(0, MAX_PAGES - 1)
-          .map((k, i) => makePage(k, i, createdBy, k === 'custom' ? (customTitle ?? null) : null));
+        const chosen = unique.slice(0, MAX_PAGES - 1);
+        const positions = sequence(chosen.length);
+        const created = chosen.map((k, i) =>
+          makePage(k, positions[i] ?? 'V', createdBy, k === 'custom' ? (customTitle ?? null) : null),
+        );
         set({ pages: created });
         return created;
       },
@@ -75,14 +113,23 @@ export const usePages = create<PagesState>()(
         const { pages } = get();
         if (pages.length >= MAX_PAGES - 1) return null;
         if (getTemplate(key).singleton && pages.some((p) => p.templateKey === key)) return null;
-        const page = makePage(key, pages.length, 'user', title ?? null);
+        const last = [...pages].sort(comparePages).at(-1);
+        const page = makePage(key, between(last?.position ?? null, null), 'user', title ?? null);
         set({ pages: [...pages, page] });
         return page;
       },
+      renamePage: (id, title) =>
+        set({ pages: get().pages.map((p) => (p.id === id ? { ...p, title, titleKk: null } : p)) }),
       reset: () => set({ pages: seedPages() }),
     }),
-    { name: 'pages.v1', storage: persistStorage, partialize: ({ pages }) => ({ pages }) },
+    {
+      name: 'pages.v1',
+      version: 1,
+      storage: persistStorage,
+      partialize: ({ pages }) => ({ pages }),
+      migrate: (state, version) => (version < 1 ? migrateV0(state) : state) as Pick<PagesState, 'pages'> as PagesState,
+    },
   ),
 );
 
-export const selectSortedPages = (s: PagesState) => [...s.pages].sort((a, b) => a.position - b.position);
+export const selectSortedPages = (s: PagesState) => [...s.pages].sort(comparePages);

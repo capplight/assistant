@@ -4,7 +4,8 @@
     (idempotency `item:<id>:ingest:v1`) -> text -> exact-duplicate merge -> ready / needs_review
 
 Three short transactions per job; no transaction is open while reading the original from
-storage or calling OCR/STT. Enrichment (`ai:enrich`), embeddings and stacks come later (router).
+storage or calling OCR/STT/a link. The last one queues enrichment (`ai:enrich`, records/enrich.py).
+Voice fragments of one recording come together in records/voice.py. Embeddings and stacks: later.
 
 Consent gate: kinds in CROSS_BORDER_KINDS (voice -> STT abroad) run only when ai_cross_border
 covers the transcriber's recipient; otherwise the record becomes `needs_consent` and is
@@ -14,14 +15,19 @@ re-queued when the consent is granted (`requeue_needs_consent`).
 import asyncio
 import logging
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from assistant.ai import Router
+from assistant.config import Settings
 from assistant.db import queue
 from assistant.db.models import Item, Job
 from assistant.db.models_v2 import KeepReason, RecordKind, RecordStatus
-from assistant.records import store
+from assistant.logs import error_text
+from assistant.pages import place_item
+from assistant.records import enrich, store, voice
 from assistant.records.adapters import FakeOcr, FakeTranscriber, Ocr, Transcriber
 from assistant.records.extract import (
     Extracted,
@@ -31,6 +37,7 @@ from assistant.records.extract import (
     extract_xlsx,
     json_size,
 )
+from assistant.records.links import LinkReader
 from assistant.records.textnorm import (
     content_hash,
     detect_lang,
@@ -59,6 +66,9 @@ class IngestDeps:
     ocr: Ocr = field(default_factory=FakeOcr)
     transcriber: Transcriber = field(default_factory=FakeTranscriber)
     ocr_langs: str = "rus+kaz+eng"
+    links: LinkReader | None = None  # None: a link stays as the person sent it
+    router: Router | None = None  # None: no AI provider configured, `ai:enrich` jobs just wait
+    settings: Settings | None = None
 
 
 def job_kind(kind: str) -> str:
@@ -83,6 +93,7 @@ async def requeue_needs_consent(session: AsyncSession, user_id: int, grant_marke
         item.status = RecordStatus.PENDING
         item.error = None
         await enqueue_ingest(session, item, suffix=f":consent:{grant_marker}")
+    await enrich.requeue_after_consent(session, user_id, grant_marker)
     return len(items)
 
 
@@ -94,6 +105,8 @@ class _Result:
     meta: dict = field(default_factory=dict)
     lang: str | None = None
     keep_original: KeepReason | None = None
+    title: str | None = None  # a title that came with the content (a link's page title)
+    keep_hash: bool = False  # a link stays identified by what the person sent, not by the page
 
 
 async def run_ingest(maker: async_sessionmaker[AsyncSession], item_id: int,
@@ -119,12 +132,15 @@ async def run_ingest(maker: async_sessionmaker[AsyncSession], item_id: int,
         file = await store.original_file(s, item.id)
         key, mime, size = (file.storage_key, file.mime, file.bytes) if file else (None, None, 0)
         typed_text = item.text
+        link_url = _link_url(item) if kind == RecordKind.LINK else None
         item.status = RecordStatus.PROCESSING
         await s.commit()
 
     # 2. extract (no transaction open)
     try:
-        if kind in TEXT_KINDS or key is None:
+        if kind == RecordKind.LINK and link_url and deps.links is not None:
+            result = await _link_result(link_url, typed_text, deps.links)
+        elif kind in TEXT_KINDS or key is None:
             result = _Result(text=typed_text)
         else:
             data = await deps.storage.get(key)
@@ -138,6 +154,31 @@ async def run_ingest(maker: async_sessionmaker[AsyncSession], item_id: int,
     return await _finish(maker, item_id, result)
 
 
+def _link_url(item: Item) -> str | None:
+    url = (item.source_meta or {}).get("url")
+    if url:
+        return str(url)
+    links = find_links(item.text)
+    return links[0] if links else None
+
+
+async def _link_result(url: str, typed: str | None, reader: LinkReader) -> _Result:
+    """What the person sent stays first; the page text follows. Failure leaves just the link."""
+    try:
+        content = await reader.read(url)
+    except Exception as exc:  # a dead site is not a failed record
+        log.info("link read failed: %s", error_text(exc))
+        content = None
+    if content is None:
+        return _Result(text=typed, meta={"link": {"error": "unavailable"}}, keep_hash=True)
+    body = content.text or content.description
+    head = [line for line in (content.title, None if body == content.title else body) if line]
+    if content.author:
+        head.insert(0, f"Автор: {content.author}")
+    text = "\n\n".join([typed or url, *head])
+    return _Result(text=text, meta={"link": content.meta()}, title=content.title, keep_hash=True)
+
+
 async def _extract(kind: str, data: bytes, mime: str, size: int, deps: IngestDeps) -> _Result:
     if kind in (RecordKind.IMAGE, RecordKind.SCREENSHOT):
         ocr = await deps.ocr.recognize(data, langs=deps.ocr_langs)
@@ -146,7 +187,7 @@ async def _extract(kind: str, data: bytes, mime: str, size: int, deps: IngestDep
                        meta={"ocr": deps.ocr.name})  # fmt: skip
     if kind == RecordKind.VOICE:
         tr = await deps.transcriber.transcribe(data, mime=mime, lang_hint=None)
-        review = detect_review_fields(tr.text)
+        review = detect_review_fields(tr.text)  # a fragment's own fields; voice.py rebuilds them
         if tr.confidence < store.KEEP_BELOW_CONFIDENCE:
             review["transcript"] = {"kind": "transcript", "value": None, "state": "unverified"}
         meta = {"stt": deps.transcriber.name}
@@ -196,12 +237,18 @@ async def _finish(maker: async_sessionmaker[AsyncSession], item_id: int,
             return None
         now = store.now_utc()
         text = normalize_text(result.text)[:MAX_TEXT_CHARS] if result.text else None
+        if item.recording_id is not None:
+            status = await _finish_fragment(s, item, text, result, now)
+            await s.commit()
+            return status
         item.text = text or None
         item.text_lang = result.lang if result.lang in ("ru", "kk", "en") else detect_lang(text)
-        if not item.title:
-            item.title = title_from_text(text)
-        item.confidence = result.confidence
         meta = dict(item.source_meta or {})
+        if not item.title:
+            item.title = (result.title or title_from_text(text) or "")[:500] or None
+            if item.title:
+                meta["title_source"] = "text"
+        item.confidence = result.confidence
         meta.update(result.meta)
         links = find_links(text)
         if links:
@@ -211,7 +258,8 @@ async def _finish(maker: async_sessionmaker[AsyncSession], item_id: int,
         old = item.review_fields or {}
         item.review_fields = {k: (old[k] if old.get(k, {}).get("state") == "verified" else v)
                               for k, v in result.review.items()}  # fmt: skip
-        item.content_hash = content_hash(text)
+        if not result.keep_hash:
+            item.content_hash = content_hash(text)
         item.processed_at = now
         item.error = None
 
@@ -241,9 +289,35 @@ async def _finish(maker: async_sessionmaker[AsyncSession], item_id: int,
                 store.merge_into(item, canonical, now)
                 if file is not None:
                     store.trash_file(file, now)
+        if item.hidden_reason is None:
+            await enrich.enqueue_enrich(s, item)
+        await s.flush()
+        await place_item(s, item)  # the text is known now: rules by words can match
         status = str(item.status)
         await s.commit()
     return status
+
+
+async def _finish_fragment(s: AsyncSession, item: Item, text: str | None, result: _Result,
+                           now: datetime) -> str:  # fmt: skip
+    """One fragment of a recording: keep its transcript aside, rebuild the record."""
+    lang = result.lang if result.lang in ("ru", "kk", "en") else detect_lang(text)
+    meta = {**(item.source_meta or {}), **result.meta,
+            "fragment_result": {"state": "done", "text": text, "confidence": result.confidence,
+                                "lang": lang}}  # fmt: skip
+    item.source_meta = meta
+    unsure = not text or (result.confidence is not None
+                          and result.confidence < store.KEEP_BELOW_CONFIDENCE)  # fmt: skip
+    file = await store.original_file(s, item.id, lock=True)
+    if file is not None:
+        if unsure:
+            store.keep_file(file, KeepReason.LOW_CONFIDENCE)
+        else:
+            store.trash_file(file, now)
+    item.status = RecordStatus.READY  # the fragment's own state; the record's is set by assemble
+    item.processed_at = now
+    await voice.assemble(s, await voice.siblings(s, item.user_id, item.recording_id), now)
+    return str(item.status)
 
 
 def kind_needs_text(kind: str) -> bool:
@@ -261,6 +335,11 @@ async def _finish_failed(maker: async_sessionmaker[AsyncSession], item_id: int,
             file = await store.original_file(s, item.id, lock=True)
             if file is not None:
                 store.keep_file(file, KeepReason.LOW_CONFIDENCE)  # nothing replaced it
+            if item.recording_id is not None:
+                item.source_meta = {**(item.source_meta or {}), "fragment_result": {
+                    "state": "failed", "text": None, "confidence": None, "code": code}}  # fmt: skip
+                rows = await voice.siblings(s, item.user_id, item.recording_id)
+                await voice.assemble(s, rows, store.now_utc())
         await s.commit()
     log.info("ingest item %s failed: %s", item_id, code)
     return RecordStatus.FAILED

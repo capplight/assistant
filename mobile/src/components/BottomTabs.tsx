@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, usePathname } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
@@ -33,6 +33,7 @@ export function BottomTabs() {
   const { t } = useTranslation();
   const tabs = useTabs();
   const current = useCurrentPage();
+  const pathname = usePathname();
   const activeKey = current.kind === 'page' ? current.id : current.kind === 'more' ? 'more' : 'today';
 
   return (
@@ -59,7 +60,8 @@ export function BottomTabs() {
             accessibilityState={{ selected: active }}
             accessibilityLabel={t('tabs.a11y', { name: tab.label })}
             onPress={() => {
-              if (!active) router.navigate(tab.href);
+              // Also on a record card opened from this page: the tab leads back to the page.
+              if (pathname !== tab.href) router.navigate(tab.href);
             }}
             style={[styles.tab, { minHeight: theme.size.primaryTouch }]}
           >

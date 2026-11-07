@@ -23,6 +23,7 @@ dependencies = [
     "pypdfium2>=4.30",
     "python-docx>=1.1",
     "python-calamine>=0.3",
+    "trafilatura>=2",  # main text of a shared link (spec 2.2)
 ]
 
 [project.optional-dependencies]
@@ -48,6 +49,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "assistant.ai" = ["routes.yaml"]
+"assistant.records" = ["prompts/*.md"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

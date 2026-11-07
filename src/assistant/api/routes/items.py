@@ -26,6 +26,7 @@ from assistant.api.schemas import (
     ItemPatchIn,
     ReviewFieldOut,
 )
+from assistant.config import get_settings
 from assistant.db.models import Item
 from assistant.db.models_v2 import (
     File,
@@ -39,16 +40,21 @@ from assistant.db.models_v2 import (
     Upload,
     UploadState,
 )
+from assistant.pages import place_item
 from assistant.records import (
     CROSS_BORDER_KINDS,
     ai_consent_covers,
+    children,
     content_hash,
     detect_lang,
+    enqueue_enrich,
     enqueue_ingest,
+    enqueue_sweep,
     find_canonical,
     merge_into,
     normalize_text,
     original_file,
+    promote_if_waiting,
     restore_item,
     trash_file,
     trash_item,
@@ -119,7 +125,10 @@ def item_out(item: Item, files: list[File], canonical_public_id: uuid.UUID | Non
         text_lang=item.text_lang, summary=item.summary,
         review_fields=_review(item.review_fields), merged_fragments=item.merged_fragments or [],
         source_meta=item.source_meta or {}, confidence=item.confidence,
-        ai_generated=item.ai_generated, content_hash=item.content_hash,
+        ai_generated=item.ai_generated, ai_fields=item.ai_fields or [],
+        ai_label=(get_settings().label_ai_generated
+                  if item.ai_generated or item.ai_fields else None),
+        enrich_state=item.enrich_state, content_hash=item.content_hash,
         original_sha256=item.original_sha256, canonical_id=canonical_public_id,
         hidden_reason=item.hidden_reason, error=_error_code(item),
         files=[_file_out(f) for f in files], seq=item.seq, occurred_at=item.occurred_at,
@@ -228,6 +237,18 @@ async def create_item(body: ItemCreateIn, user: GatedUser, db: Db,
     kind = _resolve_kind(body, file.mime if file else None)
 
     meta: dict = {}
+    if body.title:
+        meta["title_source"] = "user"
+    sent = body.source_meta.model_dump(exclude_none=True, mode="json") if body.source_meta else {}
+    recording = None
+    if kind == RecordKind.VOICE and "recording_id" in sent:
+        recording = body.source_meta.recording_id  # type: ignore[union-attr]
+        fragment_no = body.source_meta.fragment  # type: ignore[union-attr]
+    else:
+        fragment_no = None
+        for key in ("recording_id", "fragment", "fragments"):
+            sent.pop(key, None)
+    meta.update(sent)
     text: str | None = None
     if file is not None:
         if has_text:
@@ -242,7 +263,8 @@ async def create_item(body: ItemCreateIn, user: GatedUser, db: Db,
                 status=RecordStatus.PENDING, title=body.title, text=text,
                 text_lang=detect_lang(text), content_hash=content_hash(text),
                 original_sha256=file.sha256 if file else None, source_meta=meta,
-                occurred_at=body.occurred_at)  # fmt: skip
+                occurred_at=body.occurred_at, recording_id=recording, fragment_no=fragment_no,
+                hidden_reason=HiddenReason.VOICE_FRAGMENT if fragment_no else None)  # fmt: skip
     try:
         async with db.begin_nested():
             db.add(item)
@@ -260,9 +282,12 @@ async def create_item(body: ItemCreateIn, user: GatedUser, db: Db,
 
     if file is not None:
         file.item_id = item.id
-    canonical = await find_canonical(db, user.id, content_hash=item.content_hash,
-                                     original_sha256=item.original_sha256,
-                                     exclude_id=item.id)  # fmt: skip
+    # A fragment is compared as part of its whole recording, once that is put together.
+    canonical = None if recording else await find_canonical(
+        db, user.id, content_hash=item.content_hash, original_sha256=item.original_sha256,
+        exclude_id=item.id)  # fmt: skip
+    if recording:
+        await enqueue_sweep(db, item, item.created_at)
     if canonical is not None:
         merge_into(item, canonical)
         item.status = RecordStatus.READY  # hidden; not extracted unless unmerged
@@ -273,6 +298,8 @@ async def create_item(body: ItemCreateIn, user: GatedUser, db: Db,
     else:
         await enqueue_ingest(db, item)
     await db.flush()
+    if not item.fragment_no:  # a fragment reaches pages through its recording
+        await place_item(db, item)
     return await _create_out(db, item, created=True)
 
 
@@ -295,7 +322,10 @@ async def list_trash(
     cursor: uuid.UUID | None = None,
 ) -> ItemListOut:  # fmt: skip
     """Trash ("Удалённые записи"): trashed records until purge_after (30 days)."""
-    stmt = select(Item).where(Item.user_id == user.id, Item.deleted_at.is_not(None))
+    stmt = select(Item).where(
+        Item.user_id == user.id, Item.deleted_at.is_not(None),
+        Item.hidden_reason.is_distinct_from(HiddenReason.VOICE_FRAGMENT),
+    )  # fmt: skip
     return await _page(db, user, stmt, limit, cursor)
 
 
@@ -316,7 +346,10 @@ async def _page(db: AsyncSession, user: CurrentUser, stmt, limit: int,  # type: 
 
 @router.get("/{item_id}", response_model=ItemOut)
 async def get_item(item_id: uuid.UUID, user: GatedUser, db: Db) -> ItemOut:
-    return await one_out(db, await _get(db, user, item_id))
+    item = await _get(db, user, item_id)
+    if await promote_if_waiting(db, item):  # the person is looking: it stops waiting for a batch
+        await db.flush()
+    return await one_out(db, item)
 
 
 @router.patch("/{item_id}", response_model=ItemOut)
@@ -328,11 +361,20 @@ async def patch_item(item_id: uuid.UUID, body: ItemPatchIn, user: GatedUser, db:
         raise ApiError(409, "item_deleted")
     if "title" in body.model_fields_set:
         item.title = body.title.strip() if body.title and body.title.strip() else None
+        item.source_meta = {**(item.source_meta or {}), "title_source": "user"}
+        item.ai_fields = [f for f in (item.ai_fields or []) if f != "title"]
     if "text" in body.model_fields_set and body.text is not None:
         text = normalize_text(body.text) or None
+        changed = text != item.text
         item.text = text
         item.text_lang = detect_lang(text)
         item.content_hash = content_hash(text)
+        if changed:  # the summary described the old text; a new one is on its way
+            item.summary = None
+            item.ai_fields = [f for f in (item.ai_fields or []) if f != "summary"]
+            if item.recording_id is not None:
+                item.source_meta = {**(item.source_meta or {}), "text_edited": True}
+            await enqueue_enrich(db, item, suffix=":edit", live=True)
     if body.verify:
         fields = {k: dict(v) for k, v in (item.review_fields or {}).items()}
         for key in body.verify:
@@ -342,9 +384,11 @@ async def patch_item(item_id: uuid.UUID, body: ItemPatchIn, user: GatedUser, db:
         if all(v.get("state") == "verified" for v in fields.values()):
             if item.status == RecordStatus.NEEDS_REVIEW:
                 item.status = RecordStatus.READY
-            file = await original_file(db, item.id, lock=True)
-            if file is not None and file.keep_reason == KeepReason.LOW_CONFIDENCE:
-                trash_file(file)  # the confirmed text now replaces the original (rule 8)
+            # The confirmed text now replaces the originals (rule 8), each fragment's too.
+            for owner in [item, *await children(db, item)]:
+                file = await original_file(db, owner.id, lock=True)
+                if file is not None and file.keep_reason == KeepReason.LOW_CONFIDENCE:
+                    trash_file(file)
     await db.flush()
     return await one_out(db, item)
 
@@ -354,6 +398,8 @@ async def delete_item(item_id: uuid.UUID, user: GatedUser, db: Db) -> ItemOut:
     """Soft delete: in "Удалённые записи" for 30 days (purge_after), then gone for good."""
     item = await _get(db, user, item_id, lock=True)
     trash_item(item)
+    for fragment in await children(db, item):  # hidden, but its data goes with the record
+        trash_item(fragment)
     await db.flush()
     return await one_out(db, item)
 
@@ -362,6 +408,8 @@ async def delete_item(item_id: uuid.UUID, user: GatedUser, db: Db) -> ItemOut:
 async def restore(item_id: uuid.UUID, user: GatedUser, db: Db) -> ItemOut:
     item = await _get(db, user, item_id, lock=True)
     restore_item(item)
+    for fragment in await children(db, item):
+        restore_item(fragment)
     await db.flush()
     return await one_out(db, item)
 

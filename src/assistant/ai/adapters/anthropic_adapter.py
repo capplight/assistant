@@ -1,8 +1,11 @@
 """Anthropic adapter: Messages API, output_config.format json_schema, tools, streaming,
-prompt caching on the system block.
+prompt caching on the system block, Message Batches.
 
 UNVERIFIED against the live API (no key yet): request shape follows the installed SDK
-(anthropic 2.x: messages.create(output_config=...), messages.stream(...)).
+(anthropic 2.x: messages.create(output_config=...), messages.stream(...),
+messages.batches.create/retrieve/results/cancel). Check `cache_read_input_tokens` > 0 on the
+first real traffic: a prefix under the model's minimum (about 512 tokens) silently never caches.
+Batch results are kept by Anthropic for 29 days and batches are not eligible for zero retention.
 """
 
 import base64
@@ -17,6 +20,7 @@ from assistant.ai.types import (
     AdapterRequest,
     AdapterResponse,
     BadOutput,
+    BatchEntry,
     ProviderError,
     ProviderRequestError,
     ProviderTimeout,
@@ -31,6 +35,7 @@ from assistant.ai.types import (
 
 class AnthropicAdapter:
     name = "anthropic"
+    supports_batch = True
 
     def __init__(self, api_key: str = "", *, client: Any = None) -> None:
         self._api_key = api_key
@@ -62,9 +67,7 @@ class AnthropicAdapter:
         kwargs: dict[str, Any] = {
             "model": req.model,
             "max_tokens": req.max_tokens,
-            # Cache the stable prefix (system prompt); tools render before it.
-            "system": [{"type": "text", "text": req.system,
-                        "cache_control": {"type": "ephemeral"}}],
+            "system": [_system_block(req)],
             "messages": messages,
             "timeout": req.timeout_s,
         }  # fmt: skip
@@ -74,6 +77,46 @@ class AnthropicAdapter:
             kwargs["tools"] = [{"name": t.name, "description": t.description,
                                 "input_schema": t.parameters} for t in req.tools]  # fmt: skip
         return kwargs
+
+    # --- Message Batches: half price, most finish within an hour, 24 hours at most ---
+
+    async def _batch_call(self, call: Any) -> Any:
+        import anthropic
+
+        try:
+            return await call
+        except anthropic.APITimeoutError as exc:
+            raise ProviderTimeout(type(exc).__name__) from exc
+        except anthropic.RateLimitError as exc:
+            raise RateLimited(type(exc).__name__) from exc
+        except anthropic.APIStatusError as exc:
+            raise _map_status(exc.status_code, error_text_of(exc)) from exc
+        except anthropic.APIConnectionError as exc:
+            raise ServerError(type(exc).__name__) from exc
+
+    async def submit_batch(self, requests: list[tuple[str, AdapterRequest]]) -> str:
+        items = []
+        for custom_id, req in requests:
+            params = self.request_kwargs(req)
+            params.pop("timeout", None)  # not a request parameter inside a batch
+            items.append({"custom_id": custom_id, "params": params})
+        batch = await self._batch_call(self._get_client().messages.batches.create(requests=items))
+        return batch.id
+
+    async def batch_ended(self, batch_id: str) -> bool:
+        batch = await self._batch_call(self._get_client().messages.batches.retrieve(batch_id))
+        return batch.processing_status == "ended"
+
+    async def batch_results(self, batch_id: str) -> list[BatchEntry]:
+        """Results come in any order: entries are keyed by custom_id. Only `succeeded` is billed."""
+        stream = await self._batch_call(self._get_client().messages.batches.results(batch_id))
+        out: list[BatchEntry] = []
+        async for row in stream:
+            out.append(_batch_entry(row))
+        return out
+
+    async def cancel_batch(self, batch_id: str) -> None:
+        await self._batch_call(self._get_client().messages.batches.cancel(batch_id))
 
     async def generate(self, req: AdapterRequest) -> AdapterResponse:
         import anthropic
@@ -104,6 +147,30 @@ class AnthropicAdapter:
         return _to_response(msg, req.model)
 
 
+def _system_block(req: AdapterRequest) -> dict[str, Any]:
+    """Tools render before the system prompt, so this one breakpoint covers both."""
+    block: dict[str, Any] = {"type": "text", "text": req.system}
+    if req.cache_ttl == "1h":
+        block["cache_control"] = {"type": "ephemeral", "ttl": "1h"}
+    elif req.cache_ttl is not None:
+        block["cache_control"] = {"type": "ephemeral"}
+    return block
+
+
+def _batch_entry(row: Any) -> BatchEntry:
+    result = row.result
+    if result.type == "succeeded":
+        try:
+            return BatchEntry(row.custom_id, response=_to_response(result.message, ""))
+        except ProviderError as exc:
+            return BatchEntry(row.custom_id, error=exc)
+    if result.type == "errored":
+        kind = getattr(getattr(result.error, "error", result.error), "type", "")
+        if kind in ("invalid_request_error", "invalid_request"):
+            return BatchEntry(row.custom_id, error=ProviderRequestError(str(kind)))
+    return BatchEntry(row.custom_id, error=ServerError(str(result.type)))  # expired, canceled, ...
+
+
 def _map_status(status: int, message: str) -> ProviderError:
     if status == 402 or looks_like_quota(message):
         return QuotaExceeded(f"http {status}")
@@ -118,11 +185,14 @@ def _map_status(status: int, message: str) -> ProviderError:
 
 def _to_response(msg: Any, model: str) -> AdapterResponse:
     u = msg.usage
+    writes = getattr(u, "cache_creation_input_tokens", 0) or 0
+    long_writes = getattr(getattr(u, "cache_creation", None), "ephemeral_1h_input_tokens", 0) or 0
     usage = Usage(
         tokens_in=u.input_tokens or 0,
         tokens_out=u.output_tokens or 0,
         cached_in=getattr(u, "cache_read_input_tokens", 0) or 0,
-        cache_write_in=getattr(u, "cache_creation_input_tokens", 0) or 0,
+        cache_write_in=max(0, writes - long_writes),
+        cache_write_1h_in=long_writes,
     )
     if msg.stop_reason == "refusal":
         raise Refused("refusal", usage=usage)

@@ -6,7 +6,14 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from assistant.ai.types import AdapterRequest, AdapterResponse, ProviderError, ToolCall, Usage
+from assistant.ai.types import (
+    AdapterRequest,
+    AdapterResponse,
+    BatchEntry,
+    ProviderError,
+    ToolCall,
+    Usage,
+)
 
 Step = (
     BaseModel | dict[str, Any] | str | ProviderError | list[ToolCall]
@@ -20,16 +27,45 @@ class FakeAdapter:
     list[ToolCall] -> tool calls; callable -> computed from the request."""
 
     def __init__(self, name: str, steps: list[Step] | None = None, *,
-                 usage: Usage | None = None, stream_chunks: int = 3) -> None:
+                 usage: Usage | None = None, stream_chunks: int = 3,
+                 supports_batch: bool = False) -> None:
         self.name = name
         self.steps: list[Step] = list(steps or [])
         self.usage = usage or Usage(tokens_in=1000, tokens_out=200)
         self.stream_chunks = stream_chunks
         self.requests: list[AdapterRequest] = []  # fmt: skip
+        self.supports_batch = supports_batch
+        self.batches: dict[str, list[tuple[str, AdapterRequest]]] = {}
+        self.batch_done = True  # False: a batch stays in progress
+        self.cancelled: list[str] = []
+        self.overrides: dict[str, BatchEntry] = {}  # custom_id -> a canned result
 
     @property
     def calls(self) -> int:
         return len(self.requests)
+
+    async def submit_batch(self, requests: list[tuple[str, AdapterRequest]]) -> str:
+        batch_id = f"fakebatch-{len(self.batches) + 1}"
+        self.batches[batch_id] = list(requests)
+        return batch_id
+
+    async def batch_ended(self, batch_id: str) -> bool:
+        return self.batch_done
+
+    async def batch_results(self, batch_id: str) -> list[BatchEntry]:
+        out = []
+        for custom_id, req in self.batches[batch_id]:
+            if custom_id in self.overrides:
+                out.append(self.overrides[custom_id])
+                continue
+            try:
+                out.append(BatchEntry(custom_id, response=await self.generate(req)))
+            except ProviderError as exc:
+                out.append(BatchEntry(custom_id, error=exc))
+        return out
+
+    async def cancel_batch(self, batch_id: str) -> None:
+        self.cancelled.append(batch_id)
 
     async def generate(self, req: AdapterRequest) -> AdapterResponse:
         self.requests.append(req)

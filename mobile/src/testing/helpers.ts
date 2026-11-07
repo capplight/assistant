@@ -2,7 +2,7 @@ import path from 'path';
 
 import type { FetchLike } from '@/api/client';
 import { MemorySecretStore } from '@/api/tokens';
-import { InMemoryOutboxRepository, InMemoryRecordsRepository, setOutboxForTests } from '@/db';
+import { InMemoryOutboxRepository, InMemoryPagesRepository, InMemoryRecordsRepository, setOutboxForTests } from '@/db';
 import i18n from '@/i18n';
 import type { FileOps } from '@/records/capture';
 import { setServicesForTests } from '@/services';
@@ -10,6 +10,7 @@ import { useAssistant } from '@/store/assistant';
 import { useOnboarding } from '@/store/onboarding';
 import { usePages } from '@/store/pages';
 import { useToast } from '@/store/toast';
+import { useUndo } from '@/store/undo';
 
 export const APP_DIR = path.resolve(__dirname, '../app');
 
@@ -36,6 +37,7 @@ export function jsonResponse(status: number, body?: unknown, headers: Record<str
 }
 
 export let testRecords = new InMemoryRecordsRepository();
+export let testPages = new InMemoryPagesRepository();
 
 /** Reset all local state between tests; returns the in-memory outbox for assertions. Network: offline. */
 export function resetApp(o: { fetch?: FetchLike } = {}): InMemoryOutboxRepository {
@@ -43,10 +45,12 @@ export function resetApp(o: { fetch?: FetchLike } = {}): InMemoryOutboxRepositor
   usePages.getState().reset();
   useAssistant.getState().reset();
   useToast.setState({ toast: null });
+  useUndo.setState({ strip: null });
   void i18n.changeLanguage('ru');
   const outbox = new InMemoryOutboxRepository();
   testRecords = new InMemoryRecordsRepository();
-  setOutboxForTests(outbox, testRecords);
+  testPages = new InMemoryPagesRepository();
+  setOutboxForTests(outbox, testRecords, testPages);
   setServicesForTests({
     fetch: o.fetch ?? offlineFetch,
     secrets: new MemorySecretStore(),
@@ -64,6 +68,7 @@ export function finishOnboarding(mode: 'full' | 'no_ai' = 'full'): void {
   s.acceptConsent(mode);
   s.setPath('gallery');
   s.complete();
+  s.markPhoneAsked(); // S04b has its own tests
 }
 
 /** renderRouter() switches Jest to fake timers (expo-router/testing-library); detect that. */

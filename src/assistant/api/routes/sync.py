@@ -5,7 +5,8 @@ of one user's rows take a per-user advisory lock before taking a seq, so seq ord
 order per user and a client that stores `next_since` never misses a change.
 
 Soft-deleted records come back as items with `deleted_at` (trash); records purged after 30 days
-come back as tombstones. Week 2: items only; other synced entities join the same response.
+come back as tombstones. Pages (`screens`, `screen_items`) are in the same stream; other synced
+entities join the same response.
 """
 
 from typing import Annotated
@@ -16,9 +17,11 @@ from sqlalchemy import select, update
 from assistant.api.consent_gate import require_base_consent
 from assistant.api.deps import CurrentUser, Db
 from assistant.api.routes.items import items_out
-from assistant.api.schemas import SyncOut, TombstoneOut
+from assistant.api.routes.pages import page_item_out, page_out
+from assistant.api.schemas import PageItemOut, SyncOut, TombstoneOut
 from assistant.db.models import Item
-from assistant.db.models_v2 import Device, SyncTombstone
+from assistant.db.models_pages import Screen, ScreenItem
+from assistant.db.models_v2 import Device, HiddenReason, SyncTombstone
 
 router = APIRouter(prefix="/sync", tags=["sync"])
 GatedUser = Annotated[CurrentUser, Depends(require_base_consent)]
@@ -33,7 +36,9 @@ async def sync(
     items = list(
         await db.scalars(
             select(Item)
-            .where(Item.user_id == user.id, Item.seq > since)
+            .where(Item.user_id == user.id, Item.seq > since,
+                   # part of a recording, reaches the phone through it
+                   Item.hidden_reason.is_distinct_from(HiddenReason.VOICE_FRAGMENT))
             .order_by(Item.seq)
             .limit(limit + 1)
         )
@@ -46,12 +51,34 @@ async def sync(
             .limit(limit + 1)
         )
     )
-    merged = sorted([(i.seq, i) for i in items] + [(t.seq, t) for t in tombs],
+    screens = list(
+        await db.scalars(
+            select(Screen)
+            .where(Screen.user_id == user.id, Screen.seq > since)
+            .order_by(Screen.seq)
+            .limit(limit + 1)
+        )
+    )
+    links = [
+        page_item_out(link, page_id, item_id)
+        for link, page_id, item_id in await db.execute(
+            select(ScreenItem, Screen.public_id, Item.public_id)
+            .join(Screen, Screen.id == ScreenItem.screen_id)
+            .join(Item, Item.id == ScreenItem.item_id)
+            .where(ScreenItem.user_id == user.id, ScreenItem.seq > since,
+                   Item.hidden_reason.is_distinct_from(HiddenReason.VOICE_FRAGMENT))
+            .order_by(ScreenItem.seq)
+            .limit(limit + 1)
+        )
+    ]
+    merged = sorted([(row.seq, row) for row in (*items, *tombs, *screens, *links)],
                     key=lambda pair: pair[0])  # fmt: skip
     page = merged[:limit]
     has_more = len(merged) > limit
     page_items = [row for _, row in page if isinstance(row, Item)]
     page_tombs = [row for _, row in page if isinstance(row, SyncTombstone)]
+    page_screens = [row for _, row in page if isinstance(row, Screen)]
+    page_links = [row for _, row in page if isinstance(row, PageItemOut)]
     next_since = page[-1][0] if page else since
 
     if user.device_id is not None and since > 0:  # what this phone confirms it already has
@@ -62,8 +89,10 @@ async def sync(
         )
     return SyncOut(
         items=await items_out(db, page_items),
+        screens=[page_out(row) for row in page_screens],
+        screen_items=page_links,
         tombstones=[
-            TombstoneOut(entity="item", id=t.public_id, seq=t.seq, deleted_at=t.deleted_at)
+            TombstoneOut(entity=t.entity, id=t.public_id, seq=t.seq, deleted_at=t.deleted_at)
             for t in page_tombs
         ],  # fmt: skip
         next_since=next_since,

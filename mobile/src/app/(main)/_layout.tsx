@@ -18,6 +18,8 @@ export default function MainLayout() {
         <Tabs.Screen name="index" />
         <Tabs.Screen name="page/[id]" />
         <Tabs.Screen name="more" />
+        <Tabs.Screen name="records" />
+        <Tabs.Screen name="record/[id]" />
       </Tabs>
     </KeyboardAvoidingView>
   );

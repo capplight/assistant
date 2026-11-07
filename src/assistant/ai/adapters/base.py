@@ -13,7 +13,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel
 
-from assistant.ai.types import AdapterRequest, AdapterResponse
+from assistant.ai.types import AdapterRequest, AdapterResponse, BatchEntry
 
 
 @runtime_checkable
@@ -21,6 +21,21 @@ class ProviderAdapter(Protocol):
     name: str  # anthropic | openai | google | groq | fake...
 
     async def generate(self, req: AdapterRequest) -> AdapterResponse: ...
+
+
+@runtime_checkable
+class BatchAdapter(Protocol):
+    """A provider batch (about half price, hours of delay). `supports_batch` says it is real."""
+
+    supports_batch: bool
+
+    async def submit_batch(self, requests: list[tuple[str, AdapterRequest]]) -> str: ...
+
+    async def batch_ended(self, batch_id: str) -> bool: ...
+
+    async def batch_results(self, batch_id: str) -> list[BatchEntry]: ...
+
+    async def cancel_batch(self, batch_id: str) -> None: ...
 
 
 def strict_json_schema(schema: type[BaseModel]) -> dict[str, Any]:

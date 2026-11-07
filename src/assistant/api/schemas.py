@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from assistant.db.models_v2 import ConsentKind, Platform, PushProvider
 
@@ -183,6 +183,29 @@ ItemSourceIn = Literal["typed", "mic", "share", "camera", "files"]
 MAX_ITEM_TEXT = 100_000
 
 
+class SourceMetaIn(BaseModel):
+    """What the phone may say about a capture. Only these keys are kept: the rest of
+    items.source_meta belongs to the server. Voice: fragments of one recording, linked by
+    recording_id (fragment 0 uses the recording id as its client_id). Share: file_name, mime."""
+
+    recording_id: uuid.UUID | None = None
+    fragment: int | None = Field(default=None, ge=0, le=63)
+    fragments: int | None = Field(default=None, ge=1, le=64)
+    duration_ms: int | None = Field(default=None, ge=0)
+    total_duration_ms: int | None = Field(default=None, ge=0)
+    file_name: str | None = Field(default=None, max_length=255)
+    mime: str | None = Field(default=None, max_length=127)
+
+    @model_validator(mode="after")
+    def _fragment_fits(self) -> "SourceMetaIn":
+        if self.recording_id is not None and self.fragment is None:
+            raise ValueError("recording_id needs fragment")
+        if self.fragment is not None and self.fragments is not None \
+                and self.fragment >= self.fragments:
+            raise ValueError("fragment out of range")
+        return self
+
+
 class ItemCreateIn(BaseModel):
     """Exactly one of `text`, `upload_id`, `url`. With `upload_id`, `text` may be added as a
     caption (Share sheet note); it is kept in source_meta.caption, not in the record text."""
@@ -196,6 +219,7 @@ class ItemCreateIn(BaseModel):
     title: str | None = Field(default=None, max_length=500)
     occurred_at: datetime | None = None  # when it happened on the phone (offline capture)
     content_hash: Sha256Hex | None = None  # phone-side hash; the server recomputes it
+    source_meta: SourceMetaIn | None = None
 
 
 class ReviewFieldOut(BaseModel):
@@ -229,7 +253,12 @@ class ItemOut(BaseModel):
     merged_fragments: list[dict[str, Any]]
     source_meta: dict[str, Any]
     confidence: float | None
-    ai_generated: bool
+    ai_generated: bool  # the record itself was created by the assistant
+    ai_fields: list[str]  # fields it wrote on the person's own record: title, summary
+    # The single label (R-06): show it, as is, next to generated content. None: nothing generated.
+    ai_label: str | None
+    # pending | queued_batch | done | no_consent | deferred_budget | failed | skipped | null
+    enrich_state: str | None
     content_hash: str | None
     original_sha256: str | None
     canonical_id: uuid.UUID | None  # set when hidden as a repeat of another record
@@ -270,14 +299,131 @@ class ItemListOut(BaseModel):
 
 
 class TombstoneOut(BaseModel):
-    entity: Literal["item"]
+    entity: Literal["item", "screen", "screen_item"]
     id: uuid.UUID
     seq: int
     deleted_at: datetime
 
 
+# --- pages (docs/api/pages.md) ---
+
+PageIcon = Literal["people", "documents", "shopping", "money", "health", "home", "work", "other"]
+PageCreatedByIn = Literal["user", "onboarding_gallery", "onboarding_blank", "onboarding_phrase"]
+PageTitle = Annotated[str, Field(min_length=1, max_length=60)]
+
+
+class TemplateOut(BaseModel):
+    key: str
+    version: int
+    title: dict[str, str | None]
+    description: dict[str, str | None]
+    icon: str
+    preview_ref: str | None
+    singleton: bool
+    facet: str
+    fields: list[dict[str, Any]]
+    layouts: list[str]
+    default_layout: str
+    default_view: dict[str, Any]
+    aggregates: list[dict[str, Any]]
+    auto_rule: dict[str, Any]
+    min_app_version: str | None
+
+
+class TemplateListOut(BaseModel):
+    templates: list[TemplateOut]
+
+
+class PageOut(BaseModel):
+    id: uuid.UUID
+    client_id: uuid.UUID | None
+    kind: str
+    template_key: str
+    template_version: int
+    title: str
+    title_kk: str | None
+    icon: str
+    position: str
+    layout: str
+    view_state: dict[str, Any]
+    field_prefs: list[dict[str, Any]]
+    custom_fields: list[dict[str, Any]]
+    customized: bool
+    view_version: int
+    created_by: str
+    hidden_at: datetime | None
+    last_opened_at: datetime | None
+    seq: int
+    created_at: datetime
+    updated_at: datetime
+    deleted_at: datetime | None
+
+
+class PageListOut(BaseModel):
+    pages: list[PageOut]
+
+
+class PageCreateIn(BaseModel):
+    client_id: uuid.UUID
+    template_key: str = Field(max_length=64)
+    title: PageTitle | None = None
+    icon: PageIcon | None = None
+    layout: str | None = Field(default=None, max_length=32)
+    created_by: PageCreatedByIn = "user"
+
+
+class PageCreateOut(BaseModel):
+    page: PageOut
+    created: bool
+
+
+class PagePatchIn(BaseModel):
+    title: PageTitle | None = None
+    icon: PageIcon | None = None
+    layout: str | None = Field(default=None, max_length=32)
+    base_view_version: int | None = None
+
+
+class PageItemOut(BaseModel):
+    id: uuid.UUID
+    page_id: uuid.UUID
+    item_id: uuid.UUID
+    position: str | None
+    group_key: str | None
+    manual_order: bool
+    manual_at: datetime | None
+    pinned: bool
+    added_by: str
+    removed_at: datetime | None
+    seq: int
+    updated_at: datetime
+    updated_by: str
+
+
+class PageEntryOut(BaseModel):
+    link: PageItemOut
+    item: ItemOut
+    fields: dict[str, Any]
+
+
+class PageItemsOut(BaseModel):
+    entries: list[PageEntryOut]
+    next_cursor: uuid.UUID | None
+
+
+class PageItemAddIn(BaseModel):
+    item_id: uuid.UUID
+
+
+class PageItemAddOut(BaseModel):
+    link: PageItemOut
+    created: bool
+
+
 class SyncOut(BaseModel):
     items: list[ItemOut]  # changed since `since`, incl. trashed (deleted_at) and hidden ones
+    screens: list[PageOut]  # pages, incl. removed ones (deleted_at)
+    screen_items: list[PageItemOut]  # item-on-page links, incl. removed ones (removed_at)
     tombstones: list[TombstoneOut]  # purged for good: drop locally
     next_since: int  # pass as `since` next time
     has_more: bool  # true: call again right away with next_since

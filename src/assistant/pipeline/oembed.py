@@ -22,6 +22,8 @@ from assistant.logs import error_text
 log = logging.getLogger(__name__)
 
 PAGE_MAX_BYTES = 512 * 1024
+LINK_PAGE_MAX_BYTES = 5 * 1024 * 1024  # a shared link read in full (spec 6.1: 10 s, 5 MB)
+LINK_PAGE_TIMEOUT = 10.0
 IMAGE_MAX_BYTES = 5 * 1024 * 1024
 MAX_REDIRECTS = 3
 ALLOWED_PORTS = frozenset({80, 443})
@@ -163,6 +165,18 @@ class LinkMetadataClient:
         except Exception as e:  # never fail an item because of metadata
             log.info("link metadata failed for %s: %s", source, error_text(e))
             return None
+
+    async def fetch_html(self, url: str) -> str | None:
+        """A whole html page for its text. Same SSRF guard. None on any failure or non-html."""
+        try:
+            async with asyncio.timeout(LINK_PAGE_TIMEOUT):
+                body, ctype = await self._get_capped_inner(url, LINK_PAGE_MAX_BYTES)
+        except Exception as e:
+            log.info("page fetch failed: %s", error_text(e))
+            return None
+        if body is None or "html" not in ctype:
+            return None
+        return body.decode("utf-8", errors="replace")
 
     async def fetch_image(self, url: str) -> bytes | None:
         """Small public image (oEmbed thumbnail, og:image). None on any failure or if too big."""

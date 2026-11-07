@@ -58,12 +58,20 @@ type OnboardingState = {
   consent: ConsentRecord | null;
   path: OnboardingPath | null;
   doneAt: string | null;
+  /** S04b was shown; it opens by itself only once. */
+  phoneAskedAt: string | null;
+  phoneLinkedAt: string | null;
+  /** «Как к вам обращаться?». Kept on the phone: the API has no endpoint for it yet. */
+  displayName: string | null;
   setLanguage: (lang: Language) => void;
   toggleInterest: (key: TourInterest) => void;
   markWelcomeSeen: (skipped: boolean) => void;
   acceptConsent: (mode: ConsentRecord['mode'], texts?: AcceptedText[]) => void;
   setPath: (path: OnboardingPath) => void;
   complete: () => void;
+  markPhoneAsked: () => void;
+  markPhoneLinked: () => void;
+  setDisplayName: (name: string) => void;
   reset: () => void;
 };
 
@@ -74,6 +82,9 @@ const initial = {
   consent: null,
   path: null,
   doneAt: null,
+  phoneAskedAt: null,
+  phoneLinkedAt: null,
+  displayName: null,
 };
 
 export const useOnboarding = create<OnboardingState>()(
@@ -107,12 +118,18 @@ export const useOnboarding = create<OnboardingState>()(
         }),
       setPath: (path) => set({ path }),
       complete: () => set({ doneAt: new Date().toISOString() }),
+      markPhoneAsked: () => set((s) => ({ phoneAskedAt: s.phoneAskedAt ?? new Date().toISOString() })),
+      markPhoneLinked: () => set({ phoneLinkedAt: new Date().toISOString() }),
+      setDisplayName: (displayName) => set({ displayName }),
       reset: () => set({ ...initial }),
     }),
     {
       name: 'onboarding.v1',
       storage: persistStorage,
-      partialize: ({ language, welcomeSeenAt, interests, consent, path, doneAt }) => ({
+      partialize: ({ language, welcomeSeenAt, interests, consent, path, doneAt, phoneAskedAt, phoneLinkedAt, displayName }) => ({
+        phoneAskedAt,
+        phoneLinkedAt,
+        displayName,
         language,
         welcomeSeenAt,
         interests,

@@ -1,4 +1,4 @@
-import type { ItemKind, ItemOut, ItemSource } from '@/api/types';
+import type { ItemKind, ItemOut, ItemSource, ReviewFieldOut } from '@/api/types';
 
 import type { SqlDb } from './outbox';
 
@@ -6,6 +6,10 @@ import type { SqlDb } from './outbox';
  * Local mirror of `items` (3-engineering §3.3): what the person saved on this phone plus what
  * arrived via GET /sync. The local id is the item's `client_id`.
  * Status: `queued` = only on this phone («Ждёт связи»); otherwise the server status.
+ *
+ * Columns hold the server's state; `pending` is the overlay of changes still in the outbox
+ * («Верно», «Отменить»). A delta from /sync never undoes what the person just did, and a change
+ * the server rejected disappears by clearing the overlay.
  */
 export type RecordStatus = 'queued' | ItemOut['status'];
 
@@ -20,6 +24,13 @@ export type RecordFile = {
   durationMs?: number;
 };
 
+export type RecordPending = {
+  /** Field key → the exact value the person confirmed with «Верно». */
+  verify?: Record<string, string | null>;
+  /** «Отменить» on an automatic merge is on its way. */
+  unmerge?: boolean;
+};
+
 export type LocalRecord = {
   id: string;
   serverId: string | null;
@@ -28,9 +39,16 @@ export type LocalRecord = {
   status: RecordStatus;
   title: string | null;
   text: string | null;
+  summary: string | null;
   url: string | null;
   files: RecordFile[];
   pageId: string | null;
+  reviewFields: Record<string, ReviewFieldOut>;
+  aiGenerated: boolean;
+  hiddenReason: string | null;
+  canonicalId: string | null;
+  error: string | null;
+  pending: RecordPending;
   seq: number;
   occurredAt: string;
   createdAt: number;
@@ -44,18 +62,25 @@ export type NewRecord = Pick<LocalRecord, 'kind' | 'source'> &
 export interface RecordsRepository {
   insertLocal(r: NewRecord & { id: string }): Promise<LocalRecord>;
   get(id: string): Promise<LocalRecord | null>;
-  /** Newest first, without deleted. */
+  /** Newest first, without deleted and hidden repeats. */
   list(limit?: number): Promise<LocalRecord[]>;
-  /** POST /items succeeded: link the local record to the server item. */
+  findByServerId(serverId: string): Promise<LocalRecord | null>;
+  /** POST /items or PATCH succeeded: link the local record to the server item. */
   markSynced(id: string, item: ItemOut): Promise<void>;
   /** From GET /sync: upsert by client_id (own records) or server id (other devices). */
   applyRemote(item: ItemOut): Promise<void>;
   applyTombstone(serverId: string): Promise<void>;
+  setPending(id: string, pending: RecordPending): Promise<void>;
   getCursor(): Promise<number>;
   setCursor(seq: number): Promise<void>;
 }
 
 const CURSOR_KEY = 'sync.since';
+
+function metaString(meta: Record<string, unknown> | undefined, key: string): string | null {
+  const v = meta?.[key];
+  return typeof v === 'string' && v ? v : null;
+}
 
 function fromServer(item: ItemOut, now: number, base?: LocalRecord | null): LocalRecord {
   return {
@@ -67,9 +92,17 @@ function fromServer(item: ItemOut, now: number, base?: LocalRecord | null): Loca
     title: item.title ?? base?.title ?? null,
     // Server text wins once it has one (recognized voice / OCR); keep the local text until then.
     text: item.text ?? base?.text ?? null,
-    url: base?.url ?? null,
+    summary: item.summary ?? base?.summary ?? null,
+    url: base?.url ?? metaString(item.source_meta, 'url'),
     files: base?.files ?? [],
     pageId: base?.pageId ?? null,
+    reviewFields: item.review_fields ?? base?.reviewFields ?? {},
+    // Created by the assistant, or it wrote the title or summary of the person's own record.
+    aiGenerated: !!item.ai_generated || (item.ai_fields?.length ?? 0) > 0,
+    hiddenReason: item.hidden_reason ?? null,
+    canonicalId: item.canonical_id ?? null,
+    error: item.error ?? null,
+    pending: base?.pending ?? {},
     seq: item.seq,
     occurredAt: item.occurred_at ?? base?.occurredAt ?? item.created_at,
     createdAt: base?.createdAt ?? (Date.parse(item.created_at) || now),
@@ -77,6 +110,35 @@ function fromServer(item: ItemOut, now: number, base?: LocalRecord | null): Loca
     deletedAt: item.deleted_at ? Date.parse(item.deleted_at) || now : null,
   };
 }
+
+function newLocal(r: NewRecord & { id: string }, ts: number): LocalRecord {
+  return {
+    id: r.id,
+    serverId: null,
+    kind: r.kind,
+    source: r.source,
+    status: 'queued',
+    title: r.title ?? null,
+    text: r.text ?? null,
+    summary: null,
+    url: r.url ?? null,
+    files: r.files ?? [],
+    pageId: r.pageId ?? null,
+    reviewFields: {},
+    aiGenerated: false,
+    hiddenReason: null,
+    canonicalId: null,
+    error: null,
+    pending: {},
+    seq: 0,
+    occurredAt: r.occurredAt ?? new Date(ts).toISOString(),
+    createdAt: ts,
+    updatedAt: ts,
+    deletedAt: null,
+  };
+}
+
+const isVisible = (r: LocalRecord) => r.deletedAt === null && (r.hiddenReason === null || r.pending.unmerge === true);
 
 export class InMemoryRecordsRepository implements RecordsRepository {
   private rows = new Map<string, LocalRecord>();
@@ -87,24 +149,7 @@ export class InMemoryRecordsRepository implements RecordsRepository {
   async insertLocal(r: NewRecord & { id: string }): Promise<LocalRecord> {
     const existing = this.rows.get(r.id);
     if (existing) return existing; // idempotent: a retried save never duplicates
-    const ts = this.now();
-    const rec: LocalRecord = {
-      id: r.id,
-      serverId: null,
-      kind: r.kind,
-      source: r.source,
-      status: 'queued',
-      title: r.title ?? null,
-      text: r.text ?? null,
-      url: r.url ?? null,
-      files: r.files ?? [],
-      pageId: r.pageId ?? null,
-      seq: 0,
-      occurredAt: r.occurredAt ?? new Date(ts).toISOString(),
-      createdAt: ts,
-      updatedAt: ts,
-      deletedAt: null,
-    };
+    const rec = newLocal(r, this.now());
     this.rows.set(rec.id, rec);
     return rec;
   }
@@ -115,9 +160,13 @@ export class InMemoryRecordsRepository implements RecordsRepository {
 
   async list(limit = 200) {
     return [...this.rows.values()]
-      .filter((r) => r.deletedAt === null)
+      .filter(isVisible)
       .sort((a, b) => b.createdAt - a.createdAt)
       .slice(0, limit);
+  }
+
+  async findByServerId(serverId: string) {
+    return [...this.rows.values()].find((r) => r.serverId === serverId) ?? null;
   }
 
   async markSynced(id: string, item: ItemOut) {
@@ -127,9 +176,7 @@ export class InMemoryRecordsRepository implements RecordsRepository {
 
   async applyRemote(item: ItemOut) {
     const base =
-      (item.client_id ? this.rows.get(item.client_id) : undefined) ??
-      [...this.rows.values()].find((r) => r.serverId === item.id) ??
-      null;
+      (item.client_id ? this.rows.get(item.client_id) : undefined) ?? (await this.findByServerId(item.id));
     if (base && base.seq > item.seq) return; // older delta
     const rec = fromServer(item, this.now(), base);
     this.rows.set(rec.id, rec);
@@ -139,6 +186,11 @@ export class InMemoryRecordsRepository implements RecordsRepository {
     for (const r of this.rows.values()) {
       if (r.serverId === serverId) this.rows.set(r.id, { ...r, deletedAt: this.now() });
     }
+  }
+
+  async setPending(id: string, pending: RecordPending) {
+    const r = this.rows.get(id);
+    if (r) this.rows.set(id, { ...r, pending });
   }
 
   async getCursor() {
@@ -158,9 +210,16 @@ type Row = {
   status: RecordStatus;
   title: string | null;
   text: string | null;
+  summary: string | null;
   url: string | null;
   files: string;
   page_id: string | null;
+  review_fields: string;
+  ai_generated: number;
+  hidden_reason: string | null;
+  canonical_id: string | null;
+  error: string | null;
+  pending: string;
   seq: number;
   occurred_at: string;
   created_at: number;
@@ -176,9 +235,16 @@ const rowTo = (r: Row): LocalRecord => ({
   status: r.status,
   title: r.title,
   text: r.text,
+  summary: r.summary,
   url: r.url,
   files: JSON.parse(r.files || '[]') as RecordFile[],
   pageId: r.page_id,
+  reviewFields: JSON.parse(r.review_fields || '{}') as Record<string, ReviewFieldOut>,
+  aiGenerated: !!r.ai_generated,
+  hiddenReason: r.hidden_reason,
+  canonicalId: r.canonical_id,
+  error: r.error,
+  pending: JSON.parse(r.pending || '{}') as RecordPending,
   seq: r.seq,
   occurredAt: r.occurred_at,
   createdAt: r.created_at,
@@ -187,7 +253,8 @@ const rowTo = (r: Row): LocalRecord => ({
 });
 
 const COLS =
-  'id, server_id, kind, source, status, title, text, url, files, page_id, seq, occurred_at, created_at, updated_at, deleted_at';
+  'id, server_id, kind, source, status, title, text, summary, url, files, page_id, review_fields, ai_generated, ' +
+  'hidden_reason, canonical_id, error, pending, seq, occurred_at, created_at, updated_at, deleted_at';
 
 export class SqliteRecordsRepository implements RecordsRepository {
   constructor(
@@ -197,7 +264,7 @@ export class SqliteRecordsRepository implements RecordsRepository {
 
   private async write(r: LocalRecord, mode: 'INSERT OR IGNORE' | 'INSERT OR REPLACE') {
     await this.db.runAsync(
-      `${mode} INTO records (${COLS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `${mode} INTO records (${COLS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       r.id,
       r.serverId,
       r.kind,
@@ -205,9 +272,16 @@ export class SqliteRecordsRepository implements RecordsRepository {
       r.status,
       r.title,
       r.text,
+      r.summary,
       r.url,
       JSON.stringify(r.files),
       r.pageId,
+      JSON.stringify(r.reviewFields),
+      r.aiGenerated ? 1 : 0,
+      r.hiddenReason,
+      r.canonicalId,
+      r.error,
+      JSON.stringify(r.pending),
       r.seq,
       r.occurredAt,
       r.createdAt,
@@ -217,24 +291,7 @@ export class SqliteRecordsRepository implements RecordsRepository {
   }
 
   async insertLocal(r: NewRecord & { id: string }): Promise<LocalRecord> {
-    const ts = this.now();
-    const rec: LocalRecord = {
-      id: r.id,
-      serverId: null,
-      kind: r.kind,
-      source: r.source,
-      status: 'queued',
-      title: r.title ?? null,
-      text: r.text ?? null,
-      url: r.url ?? null,
-      files: r.files ?? [],
-      pageId: r.pageId ?? null,
-      seq: 0,
-      occurredAt: r.occurredAt ?? new Date(ts).toISOString(),
-      createdAt: ts,
-      updatedAt: ts,
-      deletedAt: null,
-    };
+    const rec = newLocal(r, this.now());
     await this.write(rec, 'INSERT OR IGNORE');
     return (await this.get(r.id)) ?? rec;
   }
@@ -246,10 +303,18 @@ export class SqliteRecordsRepository implements RecordsRepository {
 
   async list(limit = 200) {
     const rows = await this.db.getAllAsync<Row>(
-      'SELECT * FROM records WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT ?',
+      `SELECT * FROM records
+       WHERE deleted_at IS NULL
+         AND (hidden_reason IS NULL OR pending LIKE '%"unmerge":true%')
+       ORDER BY created_at DESC LIMIT ?`,
       limit,
     );
     return rows.map(rowTo);
+  }
+
+  async findByServerId(serverId: string) {
+    const row = await this.db.getFirstAsync<Row>('SELECT * FROM records WHERE server_id = ?', serverId);
+    return row ? rowTo(row) : null;
   }
 
   async markSynced(id: string, item: ItemOut) {
@@ -258,12 +323,7 @@ export class SqliteRecordsRepository implements RecordsRepository {
   }
 
   async applyRemote(item: ItemOut) {
-    let base: LocalRecord | null = null;
-    if (item.client_id) base = await this.get(item.client_id);
-    if (!base) {
-      const row = await this.db.getFirstAsync<Row>('SELECT * FROM records WHERE server_id = ?', item.id);
-      base = row ? rowTo(row) : null;
-    }
+    const base = (item.client_id ? await this.get(item.client_id) : null) ?? (await this.findByServerId(item.id));
     if (base && base.seq > item.seq) return;
     await this.write(fromServer(item, this.now(), base), 'INSERT OR REPLACE');
   }
@@ -275,6 +335,10 @@ export class SqliteRecordsRepository implements RecordsRepository {
       this.now(),
       serverId,
     );
+  }
+
+  async setPending(id: string, pending: RecordPending) {
+    await this.db.runAsync('UPDATE records SET pending = ? WHERE id = ?', JSON.stringify(pending), id);
   }
 
   async getCursor() {

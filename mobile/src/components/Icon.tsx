@@ -1,4 +1,16 @@
-import { Briefcase, Ellipsis, FileText, Layers, ShoppingCart, SquareCheck, Sun, Wallet } from 'lucide-react-native';
+import {
+  Briefcase,
+  Ellipsis,
+  FileText,
+  HeartPulse,
+  House,
+  Layers,
+  ShoppingCart,
+  SquareCheck,
+  Sun,
+  Users,
+  Wallet,
+} from 'lucide-react-native';
 
 import type { IconKey } from '@/pages/templates';
 
@@ -11,6 +23,9 @@ const ICONS = {
   work: Briefcase,
   money: Wallet,
   other: Layers,
+  people: Users,
+  health: HeartPulse,
+  home: House,
   more: Ellipsis,
 } as const;
 

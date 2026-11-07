@@ -14,20 +14,32 @@ from assistant.ai.adapters import FakeAdapter, ProviderAdapter, build_adapters
 from assistant.ai.breaker import BreakerState, CircuitBreaker
 from assistant.ai.consent import ai_consent_providers
 from assistant.ai.masking import Masker
+from assistant.ai.policy import BatchMode, StrongReason, StrongRequest
 from assistant.ai.prompting import TaskInputs, UntrustedPart, neutralize
-from assistant.ai.router import Router
+from assistant.ai.router import PreparedBatchRequest, Router
 from assistant.ai.routes import RouteTable, load_routes
-from assistant.ai.store import MemoryAIStore, PgAIStore, ensure_usage_partitions
+from assistant.ai.store import (
+    MemoryAIStore,
+    PgAIStore,
+    ensure_usage_partitions,
+    next_month_start,
+    period_starts,
+)
 from assistant.ai.types import (
     AIConsentRequired,
     AIError,
     AIUnavailable,
+    BadOutput,
+    BatchEntry,
+    BatchUnavailable,
     BudgetClass,
     BudgetExceeded,
     ImagePart,
     LLMTask,
     Outcome,
+    ProviderError,
     Result,
+    StaleBatchResult,
     StreamInterrupted,
     ToolCall,
     ToolSpec,
@@ -47,10 +59,12 @@ def build_router(settings: Settings, sessionmaker: async_sessionmaker[AsyncSessi
 
 
 __all__ = [
-    "AIConsentRequired", "AIError", "AIUnavailable", "BreakerState", "BudgetClass",
+    "AIConsentRequired", "AIError", "AIUnavailable", "BadOutput", "BatchEntry", "BatchMode",
+    "BatchUnavailable", "BreakerState", "BudgetClass",
     "BudgetExceeded", "CircuitBreaker", "FakeAdapter", "ImagePart", "LLMTask", "Masker",
-    "MemoryAIStore", "Outcome", "PgAIStore", "ProviderAdapter", "Result", "RouteTable", "Router",
-    "StreamInterrupted", "TaskInputs", "ToolCall", "ToolSpec", "UntrustedPart",
+    "MemoryAIStore", "Outcome", "PgAIStore", "PreparedBatchRequest", "ProviderAdapter",
+    "ProviderError", "Result", "RouteTable", "Router", "StaleBatchResult", "StreamInterrupted",
+    "StrongReason", "StrongRequest", "TaskInputs", "ToolCall", "ToolSpec", "UntrustedPart",
     "ai_consent_providers", "build_adapters", "build_router", "ensure_usage_partitions",
-    "load_routes", "neutralize",
+    "load_routes", "neutralize", "next_month_start", "period_starts",
 ]  # fmt: skip

@@ -14,6 +14,8 @@ Every attempt and every block is a provider_usage row; costs go to provider and 
 
 import asyncio
 import contextlib
+import hashlib
+import json
 import logging
 import time
 from collections.abc import Callable
@@ -25,17 +27,20 @@ from typing import Any, TypeVar
 from pydantic import BaseModel, ValidationError
 
 from assistant.ai.adapters.base import ProviderAdapter, strict_json_schema
-from assistant.ai.breaker import CircuitBreaker
+from assistant.ai.breaker import BreakerState, CircuitBreaker
 from assistant.ai.budget import Alert, BudgetPolicy, UserDecision, log_alert
 from assistant.ai.masking import Masker
+from assistant.ai.policy import BatchMode, StrongRequest, strong_denial
 from assistant.ai.prompting import TaskInputs, build_messages
-from assistant.ai.routes import RouteTable
-from assistant.ai.store import AIStore, UsageRecord
+from assistant.ai.routes import Route, RouteTable
+from assistant.ai.store import AIStore, UsageRecord, period_starts
 from assistant.ai.types import (
     AdapterRequest,
     AdapterResponse,
     AIConsentRequired,
     AIUnavailable,
+    BadOutput,
+    BatchUnavailable,
     BudgetClass,
     BudgetExceeded,
     LLMTask,
@@ -47,6 +52,7 @@ from assistant.ai.types import (
     RateLimited,
     Result,
     ServerError,
+    StaleBatchResult,
     StreamInterrupted,
     Tier,
     TokenHook,
@@ -60,6 +66,7 @@ log = logging.getLogger(__name__)
 T = TypeVar("T", bound=BaseModel)
 
 STREAM_TOTAL_TIMEOUT_S = 180.0
+BATCH_CACHE_TTL = "1h"  # batches run longer than 5 minutes (Anthropic's advice)
 REPAIR_PROMPT = ("Your previous answer did not match the required JSON schema. Errors: {errors}. "
                  "Answer again with JSON that matches the schema exactly.")  # fmt: skip
 _BREAKER_FAILURES = (ServerError, ProviderTimeout, RateLimited)
@@ -100,6 +107,27 @@ class _Ctx:
     job_id: int | None
     prompt_version: str | None
     images: int
+    batch: bool = False
+
+
+@dataclass(frozen=True)
+class PreparedBatchRequest:
+    """Passed every check; ready to go into a provider batch."""
+
+    request: AdapterRequest
+    provider: str
+    model: str
+    payload_sha256: str
+
+
+def _payload_hash(system: str, messages: tuple[Message, ...]) -> str:
+    """Hash of the masked prompt: it holds no PII. Images are out of scope for batches."""
+    body = json.dumps([system, [(m.role, m.text) for m in messages]], ensure_ascii=False)
+    return hashlib.sha256(body.encode()).hexdigest()
+
+
+def _input_chars(inputs: TaskInputs) -> int:
+    return sum(len(p.text) for p in inputs.untrusted) + sum(len(c) for c in inputs.context)
 
 
 class Router:
@@ -129,50 +157,32 @@ class Router:
 
     async def run(
         self, task: LLMTask, schema: type[T], inputs: TaskInputs, *, user_id: int | None,
-        no_personal_data: bool = False, strong: bool = False, stream: TokenHook | None = None,
+        no_personal_data: bool = False, strong: StrongRequest | None = None,
+        stream: TokenHook | None = None,
         tools: list[ToolSpec] | tuple[ToolSpec, ...] = (), continuing: bool = False,
         job_id: int | None = None,
     ) -> Result[T]:  # fmt: skip
         """Run one task. `user_id=None` is allowed only with `no_personal_data=True`
-        (synthetic eval data). `strong` asks for the route's escalation tier; `continuing`
-        marks a started document task that must not be cut off by the budget."""
+        (synthetic eval data). `strong` asks for the route's escalation tier with the evidence
+        ai/policy.py checks (denied = runs light); `continuing` marks a started document task
+        that must not be cut off by the budget."""
         route = self.routes.route(task)
         now = self.clock()
         ctx = _Ctx(task, route.budget_class, user_id, None, job_id,
                    inputs.prompt_version, len(inputs.images))  # fmt: skip
-        first = route.chain[0] if route.chain else "none"
 
-        # 1. consent
-        if user_id is None:
-            if not no_personal_data:
-                raise AIConsentRequired("user_id is required for personal data")
-            chain = list(route.chain)
-        else:
-            allowed = await self.store.consent_providers(user_id)
-            chain = [p for p in route.chain if allowed is not None and p in allowed]
-            if not chain:
-                await self._record(ctx, first, "-", Outcome.CONSENT_BLOCKED)
-                raise AIConsentRequired("no active ai_cross_border consent for this route")
-
-        # 2. user budget
-        decision = UserDecision(True, False)
-        if user_id is not None:
-            ctx.profile = await self.store.user_profile(user_id)
-            try:
-                decision = await self.budget.check_user(
-                    user_id, ctx.profile, route.budget_class, now, continuing=continuing)
-            except BudgetExceeded as exc:
-                await self._record(ctx, chain[0], "-", Outcome.BUDGET_BLOCKED,
-                                   error_kind=exc.reason)  # fmt: skip
-                raise
+        chain, decision = await self._admit(ctx, route, user_id, now, no_personal_data, continuing)
 
         tier = route.tier
-        escalation_blocked = False
-        if strong and route.escalate is not None:
-            if decision.escalation_allowed:
+        denied = None
+        if strong is not None:
+            denied = await self._escalation_denial(task, route, strong, inputs, user_id, decision,
+                                                   now)  # fmt: skip
+            if denied is None:
+                assert route.escalate is not None
                 tier = route.escalate
             else:
-                escalation_blocked = True
+                log.info("escalation denied for %s: %s", task, denied)
 
         # 3. providers
         plan = await self.budget.provider_plan(chain, now)
@@ -202,7 +212,7 @@ class Router:
                 req = AdapterRequest(
                     model=model, system=system, messages=msgs, schema_name=schema.__name__,
                     json_schema=json_schema, tools=tuple(tools), max_tokens=route.max_tokens,
-                    timeout_s=route.timeout_s,
+                    timeout_s=route.timeout_s, cache_ttl=route.cache_ttl,
                     effort="low" if tier is Tier.LIGHT else "medium", on_token=unmasker,
                 )  # fmt: skip
                 t0 = self.monotonic()
@@ -259,11 +269,146 @@ class Router:
                     await unmasker.flush()
                 self._track_fallback(provider)
                 return self._result(schema, data, resp, masker, provider, cost, attempt,
-                                    fallback_from, escalation_blocked, decision.warning)
+                                    fallback_from, denied, decision.warning)
 
         raise AIUnavailable(f"all providers failed for {task}: tried {tried}", last_outcome=last)
 
+    async def escalation_denial(self, task: LLMTask, req: StrongRequest, inputs: TaskInputs,
+                                user_id: int | None) -> str | None:  # fmt: skip
+        """Ask before paying for a second attempt: run(strong=...) re-checks all of it."""
+        route = self.routes.route(task)
+        now = self.clock()
+        decision = UserDecision(True, False)
+        if user_id is not None:
+            profile = await self.store.user_profile(user_id)
+            try:
+                decision = await self.budget.check_user(user_id, profile, route.budget_class, now)
+            except BudgetExceeded:
+                return "over_budget"
+        return await self._escalation_denial(task, route, req, inputs, user_id, decision, now)
+
+    # --- provider batches (ai/policy.py BatchMode; the caller owns queueing and polling) ---
+
+    def batching_available(self, task: LLMTask) -> bool:
+        adapter = self.adapters.get(self.s.ai_primary_provider)
+        return (self.routes.route(task).batch is not BatchMode.OFF
+                and getattr(adapter, "supports_batch", False))  # fmt: skip
+
+    async def charge_batch_answer(self, task: LLMTask, provider: str, model: str,
+                                  response: AdapterResponse, *,
+                                  user_id: int | None) -> Decimal:  # fmt: skip
+        """An answer nobody will use (record deleted, or pulled out and done live): still paid."""
+        route = self.routes.route(task)
+        ctx = _Ctx(task, route.budget_class, user_id, None, None, None, 0, batch=True)
+        if user_id is not None:
+            ctx.profile = await self.store.user_profile(user_id)
+        return await self._account(ctx, provider, model, response.usage, Outcome.OK, None, 1, None,
+                                   self.clock(), request_id=response.request_id)  # fmt: skip
+
+    async def prepare_batch(self, task: LLMTask, schema: type[T], inputs: TaskInputs, *,
+                            user_id: int) -> PreparedBatchRequest:  # fmt: skip
+        """All checks of a live call, at sending time. BatchUnavailable = run the task live.
+        Budgets are charged when results arrive (finish_batch)."""
+        route = self.routes.route(task)
+        if route.batch is BatchMode.OFF:
+            raise BatchUnavailable(f"batches are off for {task}")
+        now = self.clock()
+        ctx = _Ctx(task, route.budget_class, user_id, None, None, inputs.prompt_version,
+                   len(inputs.images), batch=True)  # fmt: skip
+        chain, _ = await self._admit(ctx, route, user_id, now, False, False)
+        plan = await self.budget.provider_plan(chain, now)
+        provider = self.s.ai_primary_provider
+        # Only the primary, while it is first in line. Anything else goes the normal live way.
+        if not plan.order or plan.order[0] != provider:
+            raise BatchUnavailable("primary provider is not first on the route")
+        adapter = self.adapters.get(provider)
+        model = self.routes.model(provider, route.tier)
+        if adapter is None or model is None or not getattr(adapter, "supports_batch", False):
+            raise BatchUnavailable(f"{provider} has no batch support")
+        if self.breaker.state(provider, model) is not BreakerState.CLOSED:
+            raise BatchUnavailable("circuit is not closed")
+        masker = Masker(mask_contacts=route.mask_contacts)
+        system, messages = build_messages(inputs, masker)
+        req = AdapterRequest(
+            model=model, system=system, messages=messages, schema_name=schema.__name__,
+            json_schema=strict_json_schema(schema), max_tokens=route.max_tokens,
+            timeout_s=route.timeout_s, effort="low",
+            cache_ttl=None if route.cache_ttl is None else BATCH_CACHE_TTL,
+        )  # fmt: skip
+        return PreparedBatchRequest(req, provider, model, _payload_hash(system, messages))
+
+    async def finish_batch(
+        self, task: LLMTask, schema: type[T], inputs: TaskInputs, *, user_id: int, provider: str,
+        model: str, payload_sha256: str, response: AdapterResponse,
+    ) -> Result[T]:  # fmt: skip
+        """One successful batch answer: charge at the batch price, then validate and unmask.
+
+        Raises AIConsentRequired (revoked since sending; the answer is dropped), StaleBatchResult
+        (the record changed) or BadOutput. `inputs` are rebuilt by the caller: the masking table
+        lives only in memory, so it is recomputed from the same text."""
+        route = self.routes.route(task)
+        now = self.clock()
+        ctx = _Ctx(task, route.budget_class, user_id, None, None, inputs.prompt_version,
+                   len(inputs.images), batch=True)  # fmt: skip
+        ctx.profile = await self.store.user_profile(user_id)
+        cost = await self._account(ctx, provider, model, response.usage, Outcome.OK, None, 1, None,
+                                   now, request_id=response.request_id)  # fmt: skip
+        allowed = await self.store.consent_providers(user_id)
+        if allowed is None or provider not in allowed:
+            raise AIConsentRequired("consent revoked while the batch ran")
+        masker = Masker(mask_contacts=route.mask_contacts)
+        system, messages = build_messages(inputs, masker)
+        if _payload_hash(system, messages) != payload_sha256:
+            raise StaleBatchResult(str(task))
+        try:
+            data = schema.model_validate_json(response.text)
+        except ValidationError as ve:
+            await self._record(ctx, provider, model, Outcome.INVALID_OUTPUT,
+                               error_kind="ValidationError")  # fmt: skip
+            raise BadOutput("batch answer failed validation") from ve
+        return self._result(schema, data, response, masker, provider, cost, 1, None, None, False)
+
     # --- internals ---
+
+    async def _admit(self, ctx: _Ctx, route: Route, user_id: int | None, now: datetime,
+                     no_personal_data: bool, continuing: bool) -> tuple[list[str], UserDecision]:
+        """1. consent, 2. user budget. Raises before anything leaves the country."""
+        first = route.chain[0] if route.chain else "none"
+        if user_id is None:
+            if not no_personal_data:
+                raise AIConsentRequired("user_id is required for personal data")
+            return list(route.chain), UserDecision(True, False)
+        allowed = await self.store.consent_providers(user_id)
+        chain = [p for p in route.chain if allowed is not None and p in allowed]
+        if not chain:
+            await self._record(ctx, first, "-", Outcome.CONSENT_BLOCKED)
+            raise AIConsentRequired("no active ai_cross_border consent for this route")
+        ctx.profile = await self.store.user_profile(user_id)
+        try:
+            decision = await self.budget.check_user(
+                user_id, ctx.profile, route.budget_class, now, continuing=continuing)
+        except BudgetExceeded as exc:
+            await self._record(ctx, chain[0], "-", Outcome.BUDGET_BLOCKED, error_kind=exc.reason)
+            raise
+        return chain, decision
+
+    async def _escalation_denial(self, task: LLMTask, route: Route, req: StrongRequest,
+                                 inputs: TaskInputs, user_id: int | None,
+                                 decision: UserDecision, now: datetime) -> str | None:  # fmt: skip
+        if route.escalate is None:
+            return "no_escalation_on_route"
+        denied = strong_denial(task, req, _input_chars(inputs))
+        if denied is not None:
+            return denied
+        if not decision.escalation_allowed:
+            return "over_budget"
+        if user_id is not None:
+            day, _ = period_starts(now, self.s.budget_tz)
+            used = await self.store.strong_calls_since(user_id, day, self.routes.strong_models())
+            if used >= self.s.ai_strong_daily_per_user:
+                return "daily_cap"
+        return None
+
 
     async def _call(self, adapter: ProviderAdapter, req: AdapterRequest, timeout_s: float,
                     unmasker: _StreamUnmasker | None) -> AdapterResponse:
@@ -311,7 +456,8 @@ class Router:
     ) -> Decimal:  # fmt: skip
         if not self.routes.has_price(model):
             log.warning("no price for model %s, using the default (expensive) price", model)
-        cost = self.routes.price(model).cost(usage)
+        multiplier = self.routes.batch_multiplier(provider) if ctx.batch else Decimal(1)
+        cost = self.routes.price(model).cost(usage, multiplier)
         await self._record(ctx, provider, model, outcome, usage=usage, cost=cost,
                            latency_ms=latency_ms, attempt=attempt, fallback_from=fallback_from,
                            request_id=request_id, error_kind=error_kind)  # fmt: skip
@@ -334,7 +480,8 @@ class Router:
             model=model,
             outcome=outcome.value, user_id=ctx.user_id, request_id=request_id,
             tokens_in=u.tokens_in, tokens_out=u.tokens_out, cached_in=u.cached_in,
-            cache_write_in=u.cache_write_in, images=ctx.images, cost_usd=cost,
+            cache_write_in=u.cache_write_in + u.cache_write_1h_in, images=ctx.images,
+            cost_usd=cost, batch=ctx.batch, created_at=self.clock(),
             latency_ms=latency_ms, fallback_from=fallback_from, attempt=attempt,
             job_id=ctx.job_id, prompt_version=ctx.prompt_version, error_kind=error_kind,
         )  # fmt: skip
@@ -359,12 +506,12 @@ class Router:
     @staticmethod
     def _result(schema: type[T], data: T | None, resp: AdapterResponse, masker: Masker,
                 provider: str, cost: Decimal, attempts: int, fallback_from: str | None,
-                escalation_blocked: bool, warning: bool) -> Result[T]:
+                denied: str | None, warning: bool) -> Result[T]:
         if data is not None and len(masker):
             data = schema.model_validate(masker.unmask_obj(data.model_dump(mode="json")))
         calls = [type(c)(c.id, c.name, masker.unmask_obj(c.arguments)) for c in resp.tool_calls]
         return Result(data=data, tool_calls=calls, provider=provider, model=resp.model,
                       usage=resp.usage, cost_usd=cost, attempts=attempts,
-                      fallback_from=fallback_from, escalation_blocked=escalation_blocked,
-                      budget_warning=warning)  # fmt: skip
+                      fallback_from=fallback_from, escalation_blocked=denied is not None,
+                      escalation_denied=denied, budget_warning=warning)  # fmt: skip
 

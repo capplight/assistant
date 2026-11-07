@@ -4,9 +4,13 @@ import { ApiClient, type FetchLike } from '@/api/client';
 import { getAppVersion } from '@/api/config';
 import { Api, type PutFile } from '@/api/endpoints';
 import { TokenStorage, type SecretStore } from '@/api/tokens';
-import { getOutbox, getRecords } from '@/db';
+import { getOutbox, getPagesRepo, getRecords } from '@/db';
+import { RecordActions } from '@/records/actions';
 import { Capture, type FileOps } from '@/records/capture';
+import { useDataVersion } from '@/store/data';
 import { useOnboarding } from '@/store/onboarding';
+import { syncPagesStore } from '@/store/pagesSync';
+import { useUndo } from '@/store/undo';
 import { SyncEngine, type DeviceInfo } from '@/sync/engine';
 
 /**
@@ -25,6 +29,7 @@ let overrides: Overrides = {};
 let api: Api | null = null;
 let engine: Promise<SyncEngine> | null = null;
 let capture: Promise<Capture> | null = null;
+let actions: Promise<RecordActions> | null = null;
 
 const deviceInfo: DeviceInfo = () => ({
   platform: Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'web',
@@ -32,6 +37,14 @@ const deviceInfo: DeviceInfo = () => ({
   app_version: getAppVersion(),
   capabilities: {},
 });
+
+/** Local data changed: lists reload, tabs follow the pages table. */
+export function notifyDataChanged(): void {
+  useDataVersion.getState().bump();
+  void getPagesRepo()
+    .then(syncPagesStore)
+    .catch(() => undefined);
+}
 
 function nativeFiles(): FileOps {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -63,8 +76,11 @@ export function getSyncEngine(): Promise<SyncEngine> {
         api: getApi(),
         outbox: await getOutbox(),
         records: await getRecords(),
+        pages: await getPagesRepo(),
         installId: () => getApi().client.tokens.getOrCreateInstallId(),
         deviceInfo,
+        onChanged: notifyDataChanged,
+        onAutoMerged: (recordId, date) => useUndo.getState().showMerged(recordId, date),
       }))();
   }
   return engine;
@@ -88,10 +104,43 @@ export function getCapture(): Promise<Capture> {
         outbox: await getOutbox(),
         records: await getRecords(),
         files: overrides.files ?? nativeFiles(),
-        onSaved: kickSync,
+        onSaved: () => {
+          useDataVersion.getState().bump();
+          kickSync();
+        },
       }))();
   }
   return capture;
+}
+
+/**
+ * The person opened a card. GET tells the server they are looking (their record stops waiting for
+ * the cheap overnight run) and brings what is new. Best-effort: the card already shows local data.
+ */
+export async function refreshRecord(serverId: string): Promise<void> {
+  if (useOnboarding.getState().consent === null) return;
+  try {
+    const item = await getApi().getItem(serverId);
+    await (await getRecords()).applyRemote(item);
+    useDataVersion.getState().bump();
+  } catch {
+    // offline or gone: nothing changes
+  }
+}
+
+export function getRecordActions(): Promise<RecordActions> {
+  if (!actions) {
+    actions = (async () =>
+      new RecordActions({
+        records: await getRecords(),
+        outbox: await getOutbox(),
+        onChanged: () => {
+          useDataVersion.getState().bump();
+          kickSync();
+        },
+      }))();
+  }
+  return actions;
 }
 
 /** Test hook: replace native/network pieces; resets the singletons. */
@@ -100,4 +149,5 @@ export function setServicesForTests(o: Overrides): void {
   api = null;
   engine = null;
   capture = null;
+  actions = null;
 }

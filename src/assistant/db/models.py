@@ -285,6 +285,15 @@ class Item(Base):
     )
     hidden_reason: Mapped[str | None] = mapped_column(Text)  # duplicate_merged|trashed
     ai_generated: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # --- 0006: enrichment (never holds the record back: `status` stays the ingest result) ---
+    # models_v2.EnrichState; NULL = never considered (legacy rows, hidden fragments).
+    enrich_state: Mapped[str | None] = mapped_column(Text)
+    enriched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Fields the assistant wrote on the person's own record ("title", "summary"): R-06 label.
+    ai_fields: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")
+    # Voice: fragments of one recording (records/voice.py). fragment 0 is the visible record.
+    recording_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    fragment_no: Mapped[int | None] = mapped_column(Integer)
     seq: Mapped[int] = mapped_column(
         BigInteger, server_default=FetchedValue(), server_onupdate=FetchedValue()
     )

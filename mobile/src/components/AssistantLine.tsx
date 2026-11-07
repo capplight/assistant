@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { ChevronDown, Mic, PencilLine, Plus, SendHorizontal } from 'lucide-react-native';
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -40,11 +41,18 @@ export function AssistantLine({ scope }: { scope?: 'all' } = {}) {
   const [addOpen, setAddOpen] = useState(false);
   const inputRef = useRef<React.ComponentRef<typeof TextInput>>(null);
 
+  // S04b follows the first result, once (R-60); later it is in «Ещё».
+  const askPhoneOnce = () => {
+    const s = useOnboarding.getState();
+    if (!s.phoneAskedAt && !s.phoneLinkedAt) router.push('/phone');
+  };
+
   const onVoiceFinished = async (fragments: Fragment[]) => {
     setListening(false);
     const capture = await getCapture();
     await capture.saveVoice({ fragments, pageId: current.id });
     showToast(t('saved'));
+    askPhoneOnce();
   };
   const voice = useVoiceRecorder(onVoiceFinished);
   const listening = voice.status === 'listening';
@@ -86,6 +94,7 @@ export function AssistantLine({ scope }: { scope?: 'all' } = {}) {
     };
     addMessage(reply);
     showBanner({ messageId: reply.id, text: reply.text });
+    askPhoneOnce();
   };
 
   const chip = (

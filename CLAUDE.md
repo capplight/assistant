@@ -20,6 +20,7 @@ AI-generated content (e.g. a КП); never in marketing copy or ordinary UI.
 | `src/assistant/scheduler/`, `src/assistant/qa/`, `tests/scheduler/`, `tests/qa/` | scheduler+qa | reminders (`python -m assistant.scheduler`), question answering |
 | `src/assistant/api/`, `tests/api/` | api | mobile REST API (`python -m assistant.api`): auth, devices, consents + consent gate, uploads |
 | `src/assistant/records/`, `tests/records/` | api | app records: text normalization/hash, exact-duplicate merge, trash, ingest jobs `ingest:<kind>` (OCR/STT/doc text), worker `python -m assistant.records` |
+| `src/assistant/pages/`, `api/routes/pages.py`, `db/models_pages.py`, `tests/api/test_pages*.py` | api | pages: template catalogue, placement by `auto_rule`, LexoRank (contract: `docs/api/pages.md`) |
 | `mobile/` | mobile | Expo / React Native app (see `mobile/README.md`) |
 
 Modules talk only through the DB schema (`db/models.py`), the job queue (`db/queue.py`),

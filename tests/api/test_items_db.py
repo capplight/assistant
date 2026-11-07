@@ -330,6 +330,8 @@ async def test_sync_order_pagination_and_tombstones(db_app):
     app, _, _ = db_app
     async with client(app) as c:
         h = await _signed_in(c)
+        # A new account already has «Сегодня» in the stream (0007); this test is about items.
+        start = (await c.get("/v1/sync", headers=h)).json()["next_since"]
         ids = []
         for n in range(3):
             r = await c.post("/v1/items", json={"client_id": _cid(), "text": f"запись {n}"},
@@ -345,15 +347,15 @@ async def test_sync_order_pagination_and_tombstones(db_app):
         assert full["next_since"] == seqs[-1]
         assert full["items"][2]["deleted_at"] is not None  # trash travels as an item
 
-        page1 = (await c.get("/v1/sync?since=0&limit=2", headers=h)).json()
+        page1 = (await c.get(f"/v1/sync?since={start}&limit=2", headers=h)).json()
         assert page1["has_more"] is True and len(page1["items"]) == 2
         page2 = (await c.get(f"/v1/sync?since={page1['next_since']}&limit=2", headers=h)).json()
         assert page2["has_more"] is False
         assert [i["id"] for i in page1["items"] + page2["items"]] == [ids[2], ids[0], ids[1]]
 
         empty = (await c.get(f"/v1/sync?since={full['next_since']}", headers=h)).json()
-        assert empty == {"items": [], "tombstones": [], "next_since": full["next_since"],
-                         "has_more": False}  # fmt: skip
+        assert empty == {"items": [], "screens": [], "screen_items": [], "tombstones": [],
+                         "next_since": full["next_since"], "has_more": False}  # fmt: skip
 
         other = await _signed_in(c)  # another user sees nothing of this
         assert (await c.get("/v1/sync", headers=other)).json()["items"] == []

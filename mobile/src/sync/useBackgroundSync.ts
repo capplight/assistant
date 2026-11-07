@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
 
-import { getApi, kickSync } from '@/services';
+import { getApi, kickSync, notifyDataChanged } from '@/services';
 import { useOnboarding } from '@/store/onboarding';
 
 /** While the app is in the foreground, retry due outbox entries this often (backoff decides per entry). */
@@ -20,6 +20,7 @@ export function useBackgroundSync(): void {
     void getApi()
       .client.ensureSession()
       .catch(() => undefined);
+    notifyDataChanged(); // pages table → tabs (and pages from before week 3 → pages table)
   }, []);
 
   useEffect(() => {

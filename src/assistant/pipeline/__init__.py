@@ -8,6 +8,10 @@ arrive in the bot, which routes them here by callback_data prefix.
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from assistant.notify import Notifier
+from assistant.pipeline.oembed import LinkMeta, LinkMetadataClient, parse_page_meta
+
+__all__ = ["CB_BOOKING", "CB_PICK", "JOB_PROCESS_ITEM", "LinkMeta", "LinkMetadataClient",
+           "parse_page_meta", "process_item"]  # fmt: skip
 
 JOB_PROCESS_ITEM = "process_item"
 

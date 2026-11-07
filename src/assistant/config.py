@@ -125,6 +125,18 @@ class Settings(BaseSettings):
     budget_import_once_usd: float = 1.0
     # At this share of the monthly budget: no escalation to strong models.
     budget_escalation_cutoff: float = 0.8
+    # Escalations to the strong model per user per day (ai/policy.py) [proposal]. KP tasks run
+    # strong by route and are not counted here. Over the cap the task runs on the light model.
+    ai_strong_daily_per_user: int = 20
+    # Provider batches (routes.yaml `batch`): how often the worker sends what has queued up.
+    ai_batch_flush_seconds: float = 300.0
+    ai_batch_flush_min_requests: int = 50  # this many waiting: send without waiting further
+    ai_batch_poll_seconds: float = 300.0
+    # A user's records per sending. The next ones wait until these are charged, so a big import
+    # cannot overrun a wallet before its first results arrive.
+    ai_batch_user_requests: int = 200
+    # The single label on generated content (R-06, spec 5.9), until the lawyer's opinion.
+    label_ai_generated: str = "Подготовил помощник (ИИ) по вашим записям — проверьте"
 
 
 @lru_cache

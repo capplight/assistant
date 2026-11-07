@@ -1,8 +1,13 @@
 import type { Api } from '@/api/endpoints';
 import { ApiError, isOfflineError, isRetryable } from '@/api/errors';
-import type { ConsentsIn, DeviceIn, ItemCreateIn, ItemKind, ItemSource } from '@/api/types';
+import type { ConsentsIn, DeviceIn, ItemCreateIn, ItemKind, ItemOut, ItemSource, PageCreateIn } from '@/api/types';
 import type { OutboxEntry, OutboxRepository } from '@/db/outbox';
+import type { PagesRepository } from '@/db/pages';
 import type { RecordFile, RecordsRepository } from '@/db/records';
+import type { RenamePayload } from '@/pages/service';
+import type { UnmergePayload, VerifyPayload } from '@/records/actions';
+import { TEMPLATE_DEFAULT_TITLE } from '@/pages/templates';
+import type { Page } from '@/store/pages';
 
 /** Payload of `item.create`. `uploadIds` is filled in as files get uploaded (progress survives restarts). */
 export type ItemPayload = {
@@ -21,6 +26,11 @@ export type ItemPayload = {
 
 export type ConsentPayload = { request: ConsentsIn };
 
+/** `pages.create`. Rows queued in weeks 1-2 have the same shape, with integer positions. */
+export type PagesCreatePayload = { pages: (Omit<Page, 'position'> & { position: string | number })[] };
+
+const SERVER_CREATED_BY = new Set(['user', 'onboarding_gallery', 'onboarding_blank', 'onboarding_phrase']);
+
 /** Backoff: 2 s, 4 s, 8 s … capped at 10 min, ±20% jitter; server `retry_after` wins when larger. */
 export function backoffMs(
   attempts: number,
@@ -38,10 +48,15 @@ export type SyncDeps = {
   api: Api;
   outbox: OutboxRepository;
   records: RecordsRepository;
+  pages: PagesRepository;
   installId: () => Promise<string>;
   deviceInfo: DeviceInfo;
   now?: () => number;
   random?: () => number;
+  /** Local records or pages changed: reload lists. */
+  onChanged?: () => void;
+  /** The server hid a new record as an exact repeat (the person can undo it). */
+  onAutoMerged?: (recordId: string, canonicalCreatedAt: string) => void;
 };
 
 export type PushResult = { sent: number; retried: number; failed: number; offline: boolean };
@@ -75,13 +90,15 @@ export class SyncEngine {
       do {
         this.again = false;
         const res = await this.push();
+        let applied = 0;
         if (!res.offline) {
           try {
-            await this.pull();
+            applied = await this.pull();
           } catch {
             // pull is best-effort; cursor only moves on success
           }
         }
+        if (res.sent > 0 || res.failed > 0 || applied > 0) this.d.onChanged?.();
       } while (this.again);
     })().finally(() => {
       this.running = null;
@@ -94,7 +111,7 @@ export class SyncEngine {
     const pending = await this.d.outbox.listPending(500);
     for (const entry of pending) {
       const sender = this.senderFor(entry);
-      if (!sender) continue; // no endpoint yet (pages: week 3, chat: week 5) — stays queued
+      if (!sender) continue; // no endpoint yet (chat: week 5) — stays queued
       const barrier = BARRIERS.has(entry.kind);
       if (entry.nextAttemptAt > this.now()) {
         if (barrier) break;
@@ -131,11 +148,31 @@ export class SyncEngine {
     for (let page = 0; page < 50; page++) {
       const out = await this.d.api.sync(since);
       for (const item of out.items ?? []) {
+        const before = await this.d.records.findByServerId(item.id);
         await this.d.records.applyRemote(item);
+        applied++;
+        // Files and voice are compared once their text is ready, long after POST /items: the
+        // record the person sees disappears here, so this is where «Отменить» has to be offered.
+        if (before && !before.hiddenReason && item.hidden_reason === 'duplicate_merged') {
+          const original = item.canonical_id ? await this.d.records.findByServerId(item.canonical_id) : null;
+          this.d.onAutoMerged?.(before.id, original?.occurredAt ?? item.updated_at);
+        }
+      }
+      for (const screen of out.screens ?? []) {
+        // «Сегодня» is a built-in screen on the phone, it has no links (docs/api/pages.md).
+        if (screen.kind === 'system_today') continue;
+        await this.d.pages.applyRemote(screen);
+        applied++;
+      }
+      for (const link of out.screen_items ?? []) {
+        await this.d.pages.applyLink(link);
         applied++;
       }
       for (const t of out.tombstones ?? []) {
         if (t.entity === 'item' || t.entity === 'items') await this.d.records.applyTombstone(t.id);
+        else if (t.entity === 'screen') await this.d.pages.applyTombstone(t.id);
+        else if (t.entity === 'screen_item') await this.d.pages.removeLink(t.id);
+        applied++;
       }
       if (typeof out.next_since === 'number' && out.next_since >= since) {
         since = out.next_since;
@@ -154,6 +191,14 @@ export class SyncEngine {
         return () => this.sendDevice();
       case 'item.create':
         return (e) => this.sendItem(e);
+      case 'item.verify':
+        return (e) => this.sendVerify(e);
+      case 'item.unmerge':
+        return (e) => this.sendUnmerge(e);
+      case 'pages.create':
+        return (e) => this.sendPages(e);
+      case 'pages.update':
+        return (e) => this.sendRename(e);
       case 'capture.text':
         return (e) => this.sendLegacyText(e);
       default:
@@ -196,10 +241,145 @@ export class SyncEngine {
       ...(p.contentHash ? { content_hash: p.contentHash } : {}),
       ...(p.sourceMeta ? { source_meta: p.sourceMeta } : {}),
     };
-    const { item } = await this.d.api.createItem(body);
-    // Voice: several fragments share one local record (sourceMeta.recording_id).
-    const localId = typeof p.sourceMeta?.recording_id === 'string' ? p.sourceMeta.recording_id : p.clientId;
-    if (localId === p.clientId) await this.d.records.markSynced(localId, item);
+    // A page not on the server yet: wait for it (its pages.create row is ahead in the outbox).
+    const page = p.pageId ? await this.d.pages.get(p.pageId) : null;
+    if (page && !page.serverId && page.syncState === 'pending') throw new Error('page_not_synced');
+    const { item, duplicate } = await this.d.api.createItem(body);
+    // Voice: the first fragment is the record, the server joins the others into it (records/voice.py).
+    const recordingId = typeof p.sourceMeta?.recording_id === 'string' ? p.sourceMeta.recording_id : p.clientId;
+    if (recordingId !== p.clientId) return;
+    await this.d.records.markSynced(p.clientId, item);
+    if (duplicate) this.d.onAutoMerged?.(p.clientId, duplicate.canonical_created_at);
+    // Saved from a page: the record shows there, whatever its rule says. A repeat is hidden, so
+    // the page shows the record it was merged into.
+    if (page?.serverId) await this.linkToPage(page.serverId, duplicate?.canonical_id ?? item.id);
+  }
+
+  /** The record is saved already: a refused link is not worth failing the save for. */
+  private async linkToPage(pageServerId: string, itemServerId: string): Promise<void> {
+    try {
+      const { link } = await this.d.api.addItemToPage(pageServerId, itemServerId);
+      await this.d.pages.applyLink(link);
+    } catch (e) {
+      if (isRetryable(e)) throw e;
+    }
+  }
+
+  /** «Верно». If the record changed meanwhile, confirm only values that are still what was seen. */
+  private async sendVerify(e: OutboxEntry): Promise<void> {
+    const p = e.payload as VerifyPayload;
+    const keys = Object.keys(p.fields);
+    try {
+      let item: ItemOut;
+      try {
+        item = await this.d.api.patchItem(p.serverId, { verify: keys, base_seq: p.baseSeq });
+      } catch (err) {
+        if (!(err instanceof ApiError) || err.code !== 'conflict') throw err;
+        const fresh = await this.d.api.getItem(p.serverId);
+        const same = keys.filter((k) => fresh.review_fields?.[k] && fresh.review_fields[k].value === p.fields[k]);
+        if (same.length === 0) {
+          await this.d.records.applyRemote(fresh);
+          await this.clearVerify(p.recordId, keys); // the card asks again about the new value
+          return;
+        }
+        try {
+          item = await this.d.api.patchItem(p.serverId, { verify: same, base_seq: fresh.seq });
+        } catch (again) {
+          // Changed once more in that instant: an ordinary retry, not a rejection.
+          if (again instanceof ApiError && again.code === 'conflict') throw new Error('conflict');
+          throw again;
+        }
+      }
+      await this.d.records.markSynced(p.recordId, item);
+      await this.clearVerify(p.recordId, keys);
+    } catch (err) {
+      if (!isRetryable(err)) await this.clearVerify(p.recordId, keys);
+      throw err;
+    }
+  }
+
+  private async clearVerify(recordId: string, keys: string[]): Promise<void> {
+    const rec = await this.d.records.get(recordId);
+    if (!rec) return;
+    const verify = { ...rec.pending.verify };
+    for (const k of keys) delete verify[k];
+    await this.d.records.setPending(recordId, { ...rec.pending, verify });
+  }
+
+  private async sendUnmerge(e: OutboxEntry): Promise<void> {
+    const p = e.payload as UnmergePayload;
+    try {
+      const item = await this.d.api.unmergeItem(p.serverId);
+      await this.d.records.markSynced(p.recordId, item);
+      await this.clearUnmerge(p.recordId);
+    } catch (err) {
+      if (!isRetryable(err)) await this.clearUnmerge(p.recordId); // stays hidden, as on the server
+      throw err;
+    }
+  }
+
+  private async clearUnmerge(recordId: string): Promise<void> {
+    const rec = await this.d.records.get(recordId);
+    if (!rec) return;
+    const { unmerge: _done, ...pending } = rec.pending;
+    await this.d.records.setPending(recordId, pending);
+  }
+
+  /** One POST /pages per page; idempotent by client_id, so a retry of the row is safe. */
+  private async sendPages(e: OutboxEntry): Promise<void> {
+    const { pages } = e.payload as PagesCreatePayload;
+    let rejected: unknown = null;
+    for (const raw of pages) {
+      const p: Page = { ...raw, position: typeof raw.position === 'string' ? raw.position : 'V' };
+      const local = await this.d.pages.insertLocal({
+        ...p,
+        titleKk: p.titleKk ?? null,
+        serverId: p.serverId ?? null,
+        syncState: p.syncState ?? 'pending',
+        seq: p.seq ?? 0,
+      });
+      if (local.serverId) continue;
+      const body: PageCreateIn = {
+        client_id: p.id,
+        template_key: p.templateKey,
+        ...(local.title ? { title: local.title } : {}),
+        ...(SERVER_CREATED_BY.has(p.createdBy) ? { created_by: p.createdBy as PageCreateIn['created_by'] } : {}),
+      };
+      try {
+        const { page } = await this.d.api.createPage(body);
+        await this.d.pages.markSynced(p.id, page);
+      } catch (err) {
+        const existing = err instanceof ApiError && err.code === 'singleton_exists' ? err.details?.page_id : null;
+        if (typeof existing === 'string') {
+          // One topic, one page: this local page simply is the one the account already has.
+          await this.d.pages.adopt(p.id, existing);
+          await this.d.pages.applyRemote(await this.d.api.getPage(existing));
+        } else if (isRetryable(err)) {
+          throw err;
+        } else {
+          await this.d.pages.markFailed(p.id);
+          rejected = err;
+        }
+      }
+    }
+    if (rejected) throw rejected; // the row is kept as `failed`, the other pages are on the server
+  }
+
+  private async sendRename(e: OutboxEntry): Promise<void> {
+    const p = e.payload as RenamePayload;
+    const page = await this.d.pages.get(p.pageId);
+    if (!page) return;
+    if (page.syncState === 'failed') return; // lives on this phone only
+    if (!page.serverId) throw new Error('page_not_synced');
+    try {
+      // The API has no "no name": an emptied name goes back to the template's default.
+      const out = await this.d.api.patchPage(page.serverId, { title: p.title ?? TEMPLATE_DEFAULT_TITLE[page.templateKey] });
+      await this.d.pages.clearTitleDirty(p.pageId);
+      await this.d.pages.applyRemote(out);
+    } catch (err) {
+      if (!isRetryable(err)) await this.d.pages.clearTitleDirty(p.pageId);
+      throw err;
+    }
   }
 
   /** Week-1 rows (`capture.text` without a local record). */

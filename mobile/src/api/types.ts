@@ -2,8 +2,8 @@
  * Wire shapes of the backend /v1 API (3-engineering §4).
  *
  * Auth, consents, devices, uploads: copied from `src/assistant/api/schemas.py` (exists).
- * Items and sync: from spec §4.3/§4.4, cross-checked with the in-progress server code
- * (`routes/items.py`, `routes/sync.py`) on 2026-11-07 — the backend is being built in parallel.
+ * Items, pages and sync: reconciled with `schemas.py`, `routes/items.py`, `routes/pages.py`,
+ * `routes/sync.py` and `docs/api/pages.md` on 2026-11-07.
  * Everything about items/sync lives here and in `endpoints.ts`, so adjusting to the real
  * server is a change in these two files only.
  */
@@ -44,6 +44,14 @@ export type TokenPair = {
 };
 
 export type AnonymousOut = TokenPair & { created: boolean };
+
+/** POST /auth/otp/request. Signed in: `link` is the server's default. */
+export type OtpRequestIn = { phone: string; purpose?: 'link' | 'login' };
+/** `dev_code` only with API_DEV_MODE=true and the fake SMS sender. */
+export type OtpRequestOut = { challenge_id: string; expires_at: string; dev_code?: string | null };
+export type OtpVerifyIn = { challenge_id: string; phone: string; code: string };
+/** `account_switched`: the phone already had an account; these tokens are for that account. */
+export type OtpVerifyOut = TokenPair & { account_switched: boolean };
 
 // --- consents ---
 
@@ -158,9 +166,17 @@ export type ItemCreateIn = {
   occurred_at: string;
   /**
    * Voice fragments: {recording_id, fragment, fragments, duration_ms}; share: {file_name, mime}.
-   * NOT in the server's ItemCreateIn yet (ignored as an extra field) — needed to join voice fragments.
+   * Fragment 0 uses the recording id as its client_id; the server joins the rest into that record.
    */
   source_meta?: Record<string, unknown>;
+};
+
+/** One «Проверьте» field. Keys of `review_fields` are what PATCH `verify` takes. */
+export type ReviewFieldOut = {
+  /** phone | iin_bin | iban | amount | doc_number | transcript (open list). */
+  kind: string;
+  value: string | null;
+  state: 'unverified' | 'verified';
 };
 
 export type ItemOut = {
@@ -172,11 +188,31 @@ export type ItemOut = {
   title: string | null;
   text: string | null;
   summary?: string | null;
+  review_fields?: Record<string, ReviewFieldOut>;
+  source_meta?: Record<string, unknown>;
+  /** The record itself was created by the assistant. */
+  ai_generated?: boolean;
+  /** Fields the assistant wrote on the person's own record: title, summary. */
+  ai_fields?: string[];
+  /** Public id of the record this one was merged into (hidden repeat). */
+  canonical_id?: string | null;
+  hidden_reason?: string | null;
+  /** Short code, e.g. pdf_encrypted, ingest_failed. */
+  error?: string | null;
   occurred_at: string | null;
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;
   seq: number;
+};
+
+/** PATCH /v1/items/{id}. `base_seq`: 409 `conflict` (details.seq) if the record changed since. */
+export type ItemPatchIn = {
+  title?: string | null;
+  text?: string;
+  /** Keys of `review_fields` the person confirmed with «Верно». */
+  verify?: string[];
+  base_seq?: number;
 };
 
 /** POST /v1/items response: the item + exact-duplicate check result (spec §4.3). */
@@ -189,8 +225,63 @@ export type ItemCreateOut = {
   duplicate: { canonical_id: string; canonical_created_at: string; undo_path: string } | null;
 };
 
+// --- pages (docs/api/pages.md) ---
+
+export type PageOut = {
+  id: string;
+  client_id: string | null;
+  kind: 'system_today' | 'page';
+  template_key: string;
+  template_version: number;
+  title: string;
+  title_kk: string | null;
+  icon: string;
+  position: string;
+  layout: string;
+  view_version: number;
+  created_by: string;
+  hidden_at: string | null;
+  seq: number;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+};
+
+export type PageCreateIn = {
+  client_id: string;
+  template_key: string;
+  /** 1-60 chars; default is the template title. */
+  title?: string;
+  icon?: string;
+  layout?: string;
+  created_by?: 'user' | 'onboarding_gallery' | 'onboarding_blank' | 'onboarding_phrase';
+};
+
+export type PageCreateOut = { page: PageOut; created: boolean };
+
+export type PagePatchIn = { title?: string; icon?: string; layout?: string; base_view_version?: number };
+
+export type PageItemOut = {
+  id: string;
+  page_id: string;
+  item_id: string;
+  position: string | null;
+  group_key: string | null;
+  manual_order: boolean;
+  manual_at: string | null;
+  pinned: boolean;
+  added_by: string;
+  removed_at: string | null;
+  seq: number;
+  updated_at: string;
+  updated_by: string;
+};
+
+export type PageLinkCreateOut = { link: PageItemOut; created: boolean };
+
 // --- sync (spec §4.4; aligned with routes/sync.py as of 2026-11-07) ---
 
+/** `entity`: item | screen | screen_item (docs/api/pages.md). */
 export type Tombstone = { entity: string; id: string; seq: number; deleted_at?: string };
 
 /**
@@ -200,6 +291,8 @@ export type Tombstone = { entity: string; id: string; seq: number; deleted_at?: 
  */
 export type SyncOut = {
   items?: ItemOut[];
+  screens?: PageOut[];
+  screen_items?: PageItemOut[];
   tombstones?: Tombstone[];
   next_since: number;
   has_more: boolean;

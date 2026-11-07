@@ -317,9 +317,22 @@ class RecordStatus(enum.StrEnum):
     FAILED = "failed"
 
 
+class EnrichState(enum.StrEnum):
+    """items.enrich_state (0006): how far enrichment got. The record is usable in every state."""
+
+    PENDING = "pending"  # queued, or waiting for a provider
+    QUEUED_BATCH = "queued_batch"  # nobody is waiting: goes in a provider batch
+    DONE = "done"
+    NO_CONSENT = "no_consent"  # requeued when ai_cross_border is granted
+    DEFERRED_BUDGET = "deferred_budget"  # «продолжу завтра»
+    FAILED = "failed"
+    SKIPPED = "skipped"  # no text worth enriching, or a one-off wallet is spent
+
+
 class HiddenReason(enum.StrEnum):
     DUPLICATE_MERGED = "duplicate_merged"
     TRASHED = "trashed"
+    VOICE_FRAGMENT = "voice_fragment"  # part of a recording, shown through it (0006)
 
 
 class SyncTombstone(Base):

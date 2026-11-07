@@ -19,6 +19,7 @@ from assistant.ai import (
     ToolSpec,
     UntrustedPart,
 )
+from assistant.ai.policy import StrongReason, StrongRequest
 from assistant.ai.types import (
     BadOutput,
     BudgetClass,
@@ -67,14 +68,17 @@ async def test_routes_to_light_model_of_primary_and_accounts_cost():
     assert spent[("user", "all", "month")] == Decimal("0.002050")
 
 
+MANY = StrongRequest(StrongReason.MANY_SOURCES, sources=9)
+
+
 async def test_strong_escalation_and_block_at_80_percent():
     a = FakeAdapter("anthropic", [ok()])
     env = make_env({"anthropic": a})
-    res = await env.router.run(LLMTask.ANSWER, Note, inputs(), user_id=1, strong=True)
+    res = await env.router.run(LLMTask.ANSWER, Note, inputs(), user_id=1, strong=MANY)
     assert a.requests[-1].model == "claude-sonnet-5-5" and not res.escalation_blocked
     await env.router.budget.charge_user(1, "regular", BudgetClass.ANSWERS, Decimal("2.5"),
                                         env.now[0])
-    res = await env.router.run(LLMTask.ANSWER, Note, inputs(), user_id=1, strong=True)
+    res = await env.router.run(LLMTask.ANSWER, Note, inputs(), user_id=1, strong=MANY)
     assert a.requests[-1].model == "claude-haiku-5-5" and res.escalation_blocked
     assert res.budget_warning
 

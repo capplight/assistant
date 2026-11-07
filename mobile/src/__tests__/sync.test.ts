@@ -2,6 +2,7 @@ import { ApiClient, type FetchLike } from '@/api/client';
 import { Api, type PutFile } from '@/api/endpoints';
 import { MemorySecretStore, TokenStorage } from '@/api/tokens';
 import { InMemoryOutboxRepository } from '@/db/outbox';
+import { InMemoryPagesRepository } from '@/db/pages';
 import { InMemoryRecordsRepository } from '@/db/records';
 import { Capture } from '@/records/capture';
 import { backoffMs, SyncEngine } from '@/sync/engine';
@@ -13,6 +14,7 @@ function setup(server: FakeServer, o: { put?: PutFile; fetch?: FetchLike } = {})
   const now = () => clock;
   const outbox = new InMemoryOutboxRepository(now);
   const records = new InMemoryRecordsRepository(now);
+  const pages = new InMemoryPagesRepository(now);
   const client = new ApiClient({
     fetch: o.fetch ?? server.fetch,
     tokens: new TokenStorage(new MemorySecretStore()),
@@ -29,6 +31,7 @@ function setup(server: FakeServer, o: { put?: PutFile; fetch?: FetchLike } = {})
     api,
     outbox,
     records,
+    pages,
     installId: async () => 'install-1',
     deviceInfo: () => ({ platform: 'ios', os_version: '18', app_version: '0.1.0', capabilities: {} }),
     now,
@@ -149,14 +152,14 @@ describe('outbox sync', () => {
     expect(s.callsTo('POST /items')).toHaveLength(1);
   });
 
-  it('kinds without an endpoint yet (pages, chat) stay queued and do not block', async () => {
+  it('kinds without an endpoint yet (chat) stay queued and do not block', async () => {
     const s = happyServer();
     const { outbox, engine, capture } = setup(s);
-    await outbox.enqueue('pages.create', { pages: [] });
+    await outbox.enqueue('chat.message', { text: 'x' });
     await capture.saveText({ text: 'x', source: 'typed' });
     await engine.push();
     expect(outbox.all().map((e) => [e.kind, e.status])).toEqual([
-      ['pages.create', 'pending'],
+      ['chat.message', 'pending'],
       ['item.create', 'sent'],
     ]);
   });
@@ -214,7 +217,7 @@ describe('outbox sync', () => {
             },
       );
     const { records, engine } = setup(s);
-    expect(await engine.pull()).toBe(2);
+    expect(await engine.pull()).toBe(3); // 2 items + 1 tombstone: all of them change what lists show
     expect(s.callsTo('GET /sync').map((c) => c.query.since)).toEqual(['0', '1']);
     expect(await records.getCursor()).toBe(3);
     expect((await records.list()).map((r) => r.text)).toEqual(['two']); // c1 deleted

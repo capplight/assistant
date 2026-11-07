@@ -6,7 +6,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { AppText } from '@/components/AppText';
 import { Screen } from '@/components/Screen';
 import { TemplateCard } from '@/components/TemplateCard';
-import { getOutbox } from '@/db';
+import { saveNewPages } from '@/pages/service';
 import { TEMPLATES, type TemplateKey } from '@/pages/templates';
 import { selectNoAi, useOnboarding } from '@/store/onboarding';
 import { usePages } from '@/store/pages';
@@ -32,8 +32,7 @@ export default function StartScreen() {
   const startBlank = async () => {
     setPath('blank');
     const pages = createFromOnboarding(['custom'], 'onboarding_blank');
-    const outbox = await getOutbox();
-    await outbox.enqueue('pages.create', { pages });
+    await saveNewPages(pages);
     complete();
     const first = pages[0];
     if (first) router.replace({ pathname: '/page/[id]', params: { id: first.id } });
