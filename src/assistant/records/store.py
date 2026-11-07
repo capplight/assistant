@@ -6,10 +6,11 @@ Every function works inside the caller's transaction and never does network I/O.
 
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import and_, delete, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from assistant.db.models import Item
+from assistant.config import get_settings
+from assistant.db.models import Item, Job
 from assistant.db.models_v2 import (
     Consent,
     ConsentKind,
@@ -21,10 +22,10 @@ from assistant.db.models_v2 import (
     RecordKind,
     RecordStatus,
 )
+from assistant.memory.embed_jobs import embed_key
+from assistant.memory.retention import KEEP_BELOW_CONFIDENCE as KEEP_BELOW_CONFIDENCE
 
 ITEM_TRASH_DAYS = 30  # "Удалённые записи" (spec 7.2, R-33)
-ORIGINAL_TRASH_DAYS = 7  # storage.trash_days (decision 8)
-KEEP_BELOW_CONFIDENCE = 0.7  # storage.keep_while_unsure
 AI_KINDS = (ConsentKind.PD_PROCESSING, ConsentKind.TERMS, ConsentKind.AI_CROSS_BORDER)
 
 # Kinds whose ingest sends data abroad (STT). Everything else in ingest runs locally in KZ.
@@ -108,34 +109,65 @@ def restore_item(item: Item) -> None:
 
 async def purge_trashed_items(session: AsyncSession, now: datetime | None = None,
                               limit: int = 500) -> int:  # fmt: skip
-    """Hard-delete records whose 30 days in trash are over. The delete trigger writes a sync
-    tombstone; their still-active originals go to the file trash for storage:purge."""
+    """Hard-delete records whose 30 days in trash are over, with whatever hides behind them: their
+    merged repeats and voice fragments must not outlive them. Triggers and cascades do the rest:
+    sync tombstones, chunks, page links, page summaries. Their originals, even ones the person kept,
+    go to the file trash for storage:purge: nothing is left to show them under.
+
+    The user's sync lock comes before the rows, in user order: that's the order the triggers and the
+    API take them in, so a purge can't deadlock with a writer or another purge."""
     now = now or now_utc()
-    ids = list(
-        await session.scalars(
-            select(Item.id)
+    due = (
+        await session.execute(
+            select(Item.id, Item.user_id)
             .where(Item.deleted_at.is_not(None), Item.purge_after <= now)
             .order_by(Item.purge_after)
             .limit(limit)
+        )
+    ).all()
+    if not due:
+        return 0
+    for user_id in sorted({row.user_id for row in due}):
+        await session.execute(text("SELECT sync_lock_user(:uid)"), {"uid": user_id})
+    ids = list(
+        await session.scalars(
+            select(Item.id)
+            .where(Item.id.in_([row.id for row in due]), Item.deleted_at.is_not(None),
+                   Item.purge_after <= now)
             .with_for_update(skip_locked=True)
         )
-    )
+    )  # fmt: skip
     if not ids:
         return 0
+    behind = list(
+        await session.scalars(
+            select(Item.id)
+            .where(Item.canonical_item_id.in_(ids), Item.hidden_reason.is_not(None),
+                   Item.id.not_in(ids))
+            .with_for_update()
+        )
+    )  # fmt: skip
+    gone = [*ids, *behind]
     await session.execute(
         update(File)
-        .where(File.item_id.in_(ids), File.state == FileState.ACTIVE)
-        .values(state=FileState.TRASH, trash_until=now, keep_reason=None)
-    )
-    await session.execute(delete(Item).where(Item.id.in_(ids)))
-    return len(ids)
+        .where(File.item_id.in_(gone),
+               or_(File.state == FileState.ACTIVE,
+                   and_(File.state == FileState.PINNED, File.role == FileRole.ORIGINAL)))
+        .values(state=FileState.TRASH, trash_until=now, keep_reason=None, pinned_by=None)
+    )  # fmt: skip
+    await session.execute(delete(Item).where(Item.id.in_(gone)))
+    await session.execute(
+        delete(Job).where(Job.idempotency_key.in_([embed_key(i) for i in gone]))
+    )  # fmt: skip
+    return len(gone)
 
 
 def trash_file(file: File, now: datetime | None = None) -> None:
     if file.state != FileState.ACTIVE:
         return  # pinned stays, trash keeps its date, purged is gone
     file.state = FileState.TRASH
-    file.trash_until = (now or now_utc()) + timedelta(days=ORIGINAL_TRASH_DAYS)
+    days = get_settings().storage_trash_days  # 7, decision 8; Ф-5 may make it 30
+    file.trash_until = (now or now_utc()) + timedelta(days=days)
     file.keep_reason = None
 
 

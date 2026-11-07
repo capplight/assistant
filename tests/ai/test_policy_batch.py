@@ -82,9 +82,8 @@ def test_route_table_cannot_widen_the_rules():
 
 def test_packaged_routes():
     t = load_routes(make_settings(model_fast="claude-haiku-5-5", model_strong="claude-sonnet-5-5"))
-    assert {task for task in LLMTask if t.route(task).batch is not BatchMode.OFF} == {
-        LLMTask.ENRICH, LLMTask.DUP_JUDGE, LLMTask.IMPORT_SUMMARIZE}  # fmt: skip
-    assert t.route(LLMTask.ENRICH).batch is BatchMode.BULK
+    # Off by founder decision (2026-11-07, see routes.yaml): on again only with their approval.
+    assert {task for task in LLMTask if t.route(task).batch is not BatchMode.OFF} == set()
     for task in LLMTask:
         assert (t.route(task).tier.value == "strong") == (task in ALWAYS_STRONG)
         assert t.route(task).escalate is None or task in ESCALATION_RULES

@@ -5,13 +5,17 @@ import { useTranslation } from 'react-i18next';
 import { FlatList, Pressable, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
+import { Button } from '@/components/Button';
 import { PageIcon } from '@/components/Icon';
 import { PageNameSheet } from '@/components/PageNameSheet';
 import { RecordRow } from '@/components/RecordRow';
 import { Screen } from '@/components/Screen';
+import { FindField, SearchMore } from '@/components/SearchResults';
 import { renamePage } from '@/pages/service';
 import { usePageLabels } from '@/pages/usePageLabels';
+import { searchRecords, snippetFor } from '@/records/search';
 import { usePageEntries } from '@/records/useRecords';
+import { useServerSearch } from '@/records/useServerSearch';
 import { usePages } from '@/store/pages';
 import { useTheme } from '@/theme';
 
@@ -19,7 +23,8 @@ import { useTheme } from '@/theme';
  * S37: the universal page, the same frame for every template. A view on the shared memory (R-46):
  * records come from local SQLite, online or not; the assistant line and tabs are in the layout.
  * Week 3: the list layout for all templates, «Заметки» shows it as «Последние» (stacks: F-09).
- * Not here yet: «Найти на странице» (week 4), «Порядок» and «⋯ Ещё» (week 7), «Настроить» (week 11).
+ * «Найти на странице» (S10): at once by letters on the phone, online or not; the server adds word
+ * forms, typos and meaning when it can. Not here yet: «Порядок» and «⋯ Ещё» (week 7), «Настроить» (week 11).
  */
 export default function PageScreen() {
   const theme = useTheme();
@@ -29,6 +34,11 @@ export default function PageScreen() {
   const { title } = usePageLabels();
   const entries = usePageEntries(page);
   const [renaming, setRenaming] = useState(false);
+  // Tabs reuse one screen for all pages: what was typed on page A stays with page A.
+  const [find, setFind] = useState({ pageId: id, q: '' });
+  const q = find.pageId === id ? find.q : '';
+  const searching = q.trim().length > 0;
+  const server = useServerSearch(q, { pageServerId: page?.serverId ?? null, enabled: !!page?.serverId });
 
   if (!page) {
     return (
@@ -37,6 +47,12 @@ export default function PageScreen() {
       </Screen>
     );
   }
+
+  const shown = entries ?? [];
+  const foundRecords = searching ? searchRecords(shown.map((e) => e.record), q) : null;
+  const known = new Set((foundRecords ?? []).map((r) => r.serverId));
+  const extra = server.results.filter((r) => !known.has(r.hit.item_id));
+  const nothing = searching && foundRecords?.length === 0 && extra.length === 0 && server.state !== 'loading';
 
   const header = (
     <View style={{ marginBottom: theme.space[4], gap: theme.space[4] }}>
@@ -62,7 +78,13 @@ export default function PageScreen() {
           </Pressable>
         ) : null}
       </View>
-      {entries && entries.length > 0 ? (
+      <FindField
+        testID="page-find"
+        label={t('page.find')}
+        value={q}
+        onChange={(value) => setFind({ pageId: id, q: value })}
+      />
+      {!searching && entries && entries.length > 0 ? (
         <AppText variant="section" accessibilityRole="header">
           {t('page.recent')}
         </AppText>
@@ -73,19 +95,37 @@ export default function PageScreen() {
   const example =
     page.templateKey === 'notes' || page.templateKey === 'custom'
       ? t(`page.empty_example.${page.templateKey}`)
-      : t(`tpl.line_hint.${page.templateKey}`);
+      : t(`tpl.line_hint_now.${page.templateKey}`);
 
   return (
     <Screen testID={`page-${page.templateKey}`} edges={['top']} scroll={false}>
       <FlatList
         testID="page-records"
-        data={entries ?? []}
+        data={foundRecords ? foundRecords.map((record) => ({ record })) : shown}
         keyExtractor={(e) => e.record.id}
         contentContainerStyle={{ paddingVertical: theme.space[4] }}
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={header}
+        ListFooterComponent={
+          searching ? (
+            <View style={{ gap: theme.space[3] }}>
+              <SearchMore rows={extra} state={server.state} pageId={page.id} q={q} />
+              {nothing ? (
+                <AppText testID="page-find-none" accessibilityLiveRegion="polite">
+                  {t('page.find_none')}
+                </AppText>
+              ) : null}
+              <Button
+                testID="page-find-all"
+                label={t('page.find_all')}
+                variant="text"
+                onPress={() => router.navigate({ pathname: '/search', params: { q } })}
+              />
+            </View>
+          ) : undefined
+        }
         ListEmptyComponent={
-          entries ? (
+          entries && !searching ? (
             <View
               testID="page-empty"
               style={{
@@ -105,6 +145,7 @@ export default function PageScreen() {
         renderItem={({ item }) => (
           <RecordRow
             record={item.record}
+            snippet={searching ? snippetFor(item.record, q) : null}
             onPress={() =>
               router.navigate({ pathname: '/record/[id]', params: { id: item.record.id, from: page.id } })
             }

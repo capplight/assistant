@@ -1,11 +1,11 @@
 import type { Api } from '@/api/endpoints';
-import { ApiError, isOfflineError, isRetryable } from '@/api/errors';
+import { ApiError, isOfflineError, isRetryable, SignInRequiredError } from '@/api/errors';
 import type { ConsentsIn, DeviceIn, ItemCreateIn, ItemKind, ItemOut, ItemSource, PageCreateIn } from '@/api/types';
 import type { OutboxEntry, OutboxRepository } from '@/db/outbox';
 import type { PagesRepository } from '@/db/pages';
 import type { RecordFile, RecordsRepository } from '@/db/records';
 import type { RenamePayload } from '@/pages/service';
-import type { UnmergePayload, VerifyPayload } from '@/records/actions';
+import type { CorrectPayload, TrashPayload, UnmergePayload, VerifyPayload } from '@/records/actions';
 import { TEMPLATE_DEFAULT_TITLE } from '@/pages/templates';
 import type { Page } from '@/store/pages';
 
@@ -22,9 +22,14 @@ export type ItemPayload = {
   occurredAt: string;
   pageId?: string;
   sourceMeta?: Record<string, unknown>;
+  /** Sent once more for another account: a repeat found there is not news for the person. */
+  replay?: boolean;
 };
 
-export type ConsentPayload = { request: ConsentsIn };
+/** `afterAccountSwitch`: without this consent nothing else may go to that account. */
+export type ConsentPayload = { request: ConsentsIn; afterAccountSwitch?: boolean };
+
+export type ProfilePayload = { displayName: string | null };
 
 /** `pages.create`. Rows queued in weeks 1-2 have the same shape, with integer positions. */
 export type PagesCreatePayload = { pages: (Omit<Page, 'position'> & { position: string | number })[] };
@@ -57,6 +62,10 @@ export type SyncDeps = {
   onChanged?: () => void;
   /** The server hid a new record as an exact repeat (the person can undo it). */
   onAutoMerged?: (recordId: string, canonicalCreatedAt: string) => void;
+  /** Nothing moves while true: the account needs S05 or S04b first. */
+  blocked?: () => boolean;
+  /** The server refused the consent given for this account: ask again. */
+  onAccountConsentRejected?: () => void;
 };
 
 export type PushResult = { sent: number; retried: number; failed: number; offline: boolean };
@@ -86,9 +95,11 @@ export class SyncEngine {
       this.again = true;
       return this.running;
     }
+    if (this.d.blocked?.()) return Promise.resolve();
     this.running = (async () => {
       do {
         this.again = false;
+        if (this.d.blocked?.()) break;
         const res = await this.push();
         let applied = 0;
         if (!res.offline) {
@@ -106,10 +117,18 @@ export class SyncEngine {
     return this.running;
   }
 
+  /** Resolves when no run is in flight: nothing is writing the old account's answers any more. */
+  async whenIdle(): Promise<void> {
+    while (this.running) await this.running.catch(() => undefined);
+  }
+
   async push(): Promise<PushResult> {
     const res: PushResult = { sent: 0, retried: 0, failed: 0, offline: false };
     const pending = await this.d.outbox.listPending(500);
-    for (const entry of pending) {
+    // Consent and device come first, whenever they were queued: everything else depends on them.
+    const ordered = [...pending.filter((e) => BARRIERS.has(e.kind)), ...pending.filter((e) => !BARRIERS.has(e.kind))];
+    for (const entry of ordered) {
+      if (this.d.blocked?.()) break;
       const sender = this.senderFor(entry);
       if (!sender) continue; // no endpoint yet (chat: week 5) — stays queued
       const barrier = BARRIERS.has(entry.kind);
@@ -122,6 +141,10 @@ export class SyncEngine {
         await this.d.outbox.markSent(entry.id);
         res.sent++;
       } catch (e) {
+        if (e instanceof SignInRequiredError) {
+          res.offline = true; // not this row's fault: everything waits for S04b
+          break;
+        }
         const msg = e instanceof ApiError ? e.code : e instanceof Error ? e.message : String(e);
         if (isRetryable(e)) {
           const retryAfter = e instanceof ApiError ? e.retryAfter : null;
@@ -135,6 +158,10 @@ export class SyncEngine {
         } else {
           await this.d.outbox.markFailed(entry.id, msg);
           res.failed++;
+          if (entry.kind === 'consent.accept' && (entry.payload as ConsentPayload).afterAccountSwitch) {
+            this.d.onAccountConsentRejected?.();
+            break;
+          }
         }
       }
     }
@@ -195,6 +222,14 @@ export class SyncEngine {
         return (e) => this.sendVerify(e);
       case 'item.unmerge':
         return (e) => this.sendUnmerge(e);
+      case 'item.correct':
+        return (e) => this.sendCorrect(e);
+      case 'item.delete':
+        return (e) => this.sendTrash(e, 'deleted');
+      case 'item.restore':
+        return (e) => this.sendTrash(e, 'restored');
+      case 'profile.update':
+        return (e) => this.sendProfile(e);
       case 'pages.create':
         return (e) => this.sendPages(e);
       case 'pages.update':
@@ -249,7 +284,7 @@ export class SyncEngine {
     const recordingId = typeof p.sourceMeta?.recording_id === 'string' ? p.sourceMeta.recording_id : p.clientId;
     if (recordingId !== p.clientId) return;
     await this.d.records.markSynced(p.clientId, item);
-    if (duplicate) this.d.onAutoMerged?.(p.clientId, duplicate.canonical_created_at);
+    if (duplicate && !p.replay) this.d.onAutoMerged?.(p.clientId, duplicate.canonical_created_at);
     // Saved from a page: the record shows there, whatever its rule says. A repeat is hidden, so
     // the page shows the record it was merged into.
     if (page?.serverId) await this.linkToPage(page.serverId, duplicate?.canonical_id ?? item.id);
@@ -323,6 +358,90 @@ export class SyncEngine {
     if (!rec) return;
     const { unmerge: _done, ...pending } = rec.pending;
     await this.d.records.setPending(recordId, pending);
+  }
+
+  /**
+   * «Исправить». On a conflict: if this field still holds what the person saw, only something else in
+   * the record changed, so the correction goes again on the newer version. If the field itself changed,
+   * the card shows the current value and asks again (docs/api/items.md). A refusal brings back the
+   * server's value.
+   */
+  private async sendCorrect(e: OutboxEntry): Promise<void> {
+    const p = e.payload as CorrectPayload;
+    const corrections = { [p.key]: p.value };
+    try {
+      let item: ItemOut;
+      try {
+        item = await this.d.api.patchItem(p.serverId, { corrections, base_seq: p.baseSeq });
+      } catch (err) {
+        if (!(err instanceof ApiError) || err.code !== 'conflict') throw err;
+        const fresh = await this.d.api.getItem(p.serverId);
+        if (fresh.review_fields?.[p.key]?.value !== p.seen) {
+          await this.d.records.applyRemote(fresh);
+          await this.clearCorrected(p.recordId, p.key, p.value);
+          return;
+        }
+        try {
+          item = await this.d.api.patchItem(p.serverId, { corrections, base_seq: fresh.seq });
+        } catch (again) {
+          if (again instanceof ApiError && again.code === 'conflict') throw new Error('conflict');
+          throw again;
+        }
+      }
+      await this.d.records.markSynced(p.recordId, item);
+      await this.clearCorrected(p.recordId, p.key, p.value);
+    } catch (err) {
+      if (!isRetryable(err)) await this.clearCorrected(p.recordId, p.key, p.value);
+      throw err;
+    }
+  }
+
+  /** A newer «Исправить» of the same field keeps its own value on screen. */
+  private async clearCorrected(recordId: string, key: string, value: string): Promise<void> {
+    const rec = await this.d.records.get(recordId);
+    if (rec?.pending.corrected?.[key] !== value) return;
+    const corrected = { ...rec.pending.corrected };
+    delete corrected[key];
+    await this.d.records.setPending(recordId, { ...rec.pending, corrected });
+  }
+
+  /** «Удалить» / «Вернуть». A record still on its way waits for its `item.create`, ahead in the outbox. */
+  private async sendTrash(e: OutboxEntry, overlay: 'deleted' | 'restored'): Promise<void> {
+    const { recordId } = e.payload as TrashPayload;
+    const rec = await this.d.records.get(recordId);
+    if (!rec) return;
+    const clear = async () => {
+      const now = await this.d.records.get(recordId);
+      if (!now) return;
+      const pending = { ...now.pending };
+      delete pending[overlay];
+      await this.d.records.setPending(recordId, pending);
+    };
+    if (!rec.serverId) {
+      const waiting = (await this.d.outbox.listPending(500)).some((row) => {
+        if (row.kind !== 'item.create') return false;
+        const p = row.payload as ItemPayload;
+        return p.clientId === recordId || p.sourceMeta?.recording_id === recordId;
+      });
+      if (waiting) throw new Error('record_not_synced');
+      // Lives on this phone only: the deletion or return is just local.
+      await this.d.records.setLocalTrash(recordId, overlay === 'deleted' ? (rec.pending.deleted ?? this.now()) : null);
+      await clear();
+      return;
+    }
+    try {
+      const item =
+        overlay === 'deleted' ? await this.d.api.deleteItem(rec.serverId) : await this.d.api.restoreItem(rec.serverId);
+      await this.d.records.markSynced(recordId, item);
+      await clear();
+    } catch (err) {
+      if (!isRetryable(err)) await clear();
+      throw err;
+    }
+  }
+
+  private async sendProfile(e: OutboxEntry): Promise<void> {
+    await this.d.api.patchProfile({ display_name: (e.payload as ProfilePayload).displayName });
   }
 
   /** One POST /pages per page; idempotent by client_id, so a retry of the row is safe. */

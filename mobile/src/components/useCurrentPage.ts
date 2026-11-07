@@ -20,7 +20,7 @@ export function useCurrentPage(): CurrentPage {
   const { from } = useGlobalSearchParams<{ from?: string }>();
 
   if (pathname === '/' || pathname === '') {
-    return { kind: 'today', id: 'today', title: t('tpl.today'), hintKey: 'tpl.line_hint.today' };
+    return { kind: 'today', id: 'today', title: t('tpl.today'), hintKey: 'tpl.line_hint_now.today' };
   }
   const m = /^\/page\/([^/]+)/.exec(pathname);
   const pageId = m?.[1] ? decodeURIComponent(m[1]) : pathname.startsWith('/record/') ? from : undefined;
@@ -28,14 +28,20 @@ export function useCurrentPage(): CurrentPage {
     const id = pageId;
     const page = pages.find((p) => p.id === id);
     if (page) {
-      return { kind: 'page', id, title: title(page), hintKey: `tpl.line_hint.${page.templateKey}`, page };
+      return { kind: 'page', id, title: title(page), hintKey: `tpl.line_hint_now.${page.templateKey}`, page };
     }
   }
+  if (pathname === '/search') {
+    return { kind: 'other', id: 'today', title: t('search.title'), hintKey: 'tpl.line_hint_now.today' };
+  }
+  if (pathname === '/trash') {
+    return { kind: 'other', id: 'today', title: t('trash.title'), hintKey: 'tpl.line_hint_now.today' };
+  }
   if (pathname === '/records' || pathname.startsWith('/record/')) {
-    return { kind: 'other', id: 'today', title: t('more.all_records'), hintKey: 'tpl.line_hint.today' };
+    return { kind: 'other', id: 'today', title: t('more.all_records'), hintKey: 'tpl.line_hint_now.today' };
   }
   if (pathname.startsWith('/more')) {
-    return { kind: 'more', id: 'more', title: t('more.title'), hintKey: 'tpl.line_hint.today' };
+    return { kind: 'more', id: 'more', title: t('more.title'), hintKey: 'tpl.line_hint_now.today' };
   }
-  return { kind: 'other', id: pathname, title: t('tpl.today'), hintKey: 'tpl.line_hint.today' };
+  return { kind: 'other', id: pathname, title: t('tpl.today'), hintKey: 'tpl.line_hint_now.today' };
 }

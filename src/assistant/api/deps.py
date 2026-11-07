@@ -5,7 +5,7 @@ Tests override `get_current_user` / `get_active_consent_kinds` / `get_db` to run
 
 import uuid
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Annotated
 
 from fastapi import Depends, Request
@@ -19,6 +19,7 @@ from assistant.api.storage import ObjectStorage
 from assistant.config import Settings
 from assistant.db.models import User
 from assistant.db.models_v2 import AuthSession, Consent, UserStatus
+from assistant.embeddings import ChunkEmbedder, NullChunkEmbedder
 
 
 @dataclass
@@ -29,6 +30,7 @@ class ApiContext:
     storage: ObjectStorage
     jwt_secret: bytes
     hash_key: bytes
+    embedder: ChunkEmbedder = field(default_factory=NullChunkEmbedder)
 
     def hash(self, value: str, *, purpose: str) -> str:
         return keyed_hash(self.hash_key, value, purpose=purpose)

@@ -13,6 +13,10 @@ export type OutboxKind =
   | 'item.create'
   | 'item.verify'
   | 'item.unmerge'
+  | 'item.correct'
+  | 'item.delete'
+  | 'item.restore'
+  | 'profile.update'
   | 'pages.create'
   | 'pages.update'
   | 'capture.text'
@@ -47,6 +51,8 @@ export interface OutboxRepository {
   updatePayload(id: string, payload: unknown): Promise<void>;
   get(id: string): Promise<OutboxEntry | null>;
   countPending(): Promise<number>;
+  /** Oldest first: captures already sent, to replay them on another account. */
+  listSent(kind: OutboxKind): Promise<OutboxEntry[]>;
 }
 
 export const OUTBOX_SCHEMA_VERSION = 1;
@@ -123,6 +129,8 @@ export const OUTBOX_MIGRATIONS: readonly string[] = [
      seq INTEGER NOT NULL DEFAULT 0
    );
    CREATE UNIQUE INDEX IF NOT EXISTS page_links_page_item ON page_links (page_server_id, item_server_id);`,
+  // v4 (week 4): how long a deleted record can still be brought back
+  `ALTER TABLE records ADD COLUMN purge_after INTEGER;`,
 ];
 
 type Row = {
@@ -251,6 +259,14 @@ export class SqliteOutboxRepository implements OutboxRepository {
     const row = await this.db.getFirstAsync<{ n: number }>("SELECT COUNT(*) AS n FROM outbox WHERE status = 'pending'");
     return row?.n ?? 0;
   }
+
+  async listSent(kind: OutboxKind): Promise<OutboxEntry[]> {
+    const rows = await this.db.getAllAsync<Row>(
+      "SELECT * FROM outbox WHERE status = 'sent' AND kind = ? ORDER BY created_at ASC",
+      kind,
+    );
+    return rows.map(fromRow);
+  }
 }
 
 /** For tests and for platforms without SQLite. Same semantics as the SQLite implementation. */
@@ -318,5 +334,9 @@ export class InMemoryOutboxRepository implements OutboxRepository {
 
   async countPending(): Promise<number> {
     return (await this.listPending(Number.MAX_SAFE_INTEGER)).length;
+  }
+
+  async listSent(kind: OutboxKind): Promise<OutboxEntry[]> {
+    return this.all().filter((r) => r.status === 'sent' && r.kind === kind);
   }
 }

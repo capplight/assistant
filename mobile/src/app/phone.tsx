@@ -4,12 +4,13 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, TextInput, View } from 'react-native';
 
-import { confirmPhone, sendPhoneCode } from '@/account/phone';
+import { confirmPhone, saveDisplayName, sendPhoneCode } from '@/account/phone';
 import { errorMessage, NetworkError } from '@/api/errors';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
 import { useOnboarding } from '@/store/onboarding';
+import { useSession } from '@/store/session';
 import { useToast } from '@/store/toast';
 import { MAX_FONT_SCALE, useTheme } from '@/theme';
 
@@ -33,17 +34,19 @@ type Step = 'phone' | 'code' | 'name';
 /**
  * S04b «Номер и имя» (F-21): after the first result, once; later from «Ещё». «Позже» always works,
  * with the honest line about losing records. `next=home`: there is no screen to go back to.
+ * `reason=expired`: the linked account's session was refused, this is the way back in; local data
+ * stays and «Позже» keeps working on this phone alone. `step=name`: only «Как к вам обращаться?».
  */
 export default function PhoneScreen() {
   const theme = useTheme();
   const { t } = useTranslation();
-  const { next } = useLocalSearchParams<{ next?: string }>();
+  const { next, reason, step: startStep } = useLocalSearchParams<{ next?: string; reason?: string; step?: string }>();
+  const expired = reason === 'expired';
   const markPhoneAsked = useOnboarding((s) => s.markPhoneAsked);
-  const setDisplayName = useOnboarding((s) => s.setDisplayName);
   const language = useOnboarding((s) => s.language);
   const showToast = useToast((s) => s.show);
 
-  const [step, setStep] = useState<Step>('phone');
+  const [step, setStep] = useState<Step>(startStep === 'name' ? 'name' : 'phone');
   const [country, setCountry] = useState<0 | 1>(defaultCountry);
   const [number, setNumber] = useState('');
   const [code, setCode] = useState('');
@@ -57,7 +60,8 @@ export default function PhoneScreen() {
   }, [markPhoneAsked]);
 
   const leave = () => {
-    if (next === 'home' || !router.canGoBack()) router.replace('/');
+    if (useSession.getState().needsSignIn) useSession.getState().postponeSignIn();
+    if (expired || next === 'home' || !router.canGoBack()) router.replace('/');
     else router.back();
   };
 
@@ -91,8 +95,15 @@ export default function PhoneScreen() {
     setError(null);
     try {
       const out = await confirmPhone({ challengeId, phone, code });
-      if (out.account_switched) showToast(t('phone.switched'), 4000);
-      if (out.user.display_name) setDisplayName(out.user.display_name);
+      if (out.needsConsent) {
+        router.replace('/account-consent'); // it asks for the name afterwards
+        return;
+      }
+      if (out.switched) showToast(t('phone.switched'), 4000);
+      if (expired && out.user.display_name) {
+        leave(); // back to where they were: nothing to ask
+        return;
+      }
       setName(out.user.display_name ?? '');
       setStep('name');
     } catch (e) {
@@ -126,8 +137,9 @@ export default function PhoneScreen() {
       {step === 'phone' ? (
         <View style={{ gap: theme.space[4] }}>
           <AppText variant="title1" accessibilityRole="header">
-            {t('phone.title')}
+            {expired ? t('phone.expired_title') : t('phone.title')}
           </AppText>
+          {expired ? <AppText testID="phone-expired">{t('phone.expired_body')}</AppText> : null}
           <View style={{ flexDirection: 'row', gap: theme.space[2] }}>
             <Pressable
               testID="phone-country"
@@ -167,7 +179,7 @@ export default function PhoneScreen() {
           {errorLine}
           <Button testID="phone-get-code" label={t('phone.get_code')} disabled={busy || !number} onPress={requestCode} />
           <Button testID="phone-later" label={t('phone.later')} variant="outline" onPress={leave} />
-          <AppText variant="meta">{t('phone.warn')}</AppText>
+          <AppText variant="meta">{expired ? t('phone.expired_later') : t('phone.warn')}</AppText>
         </View>
       ) : null}
 
@@ -232,7 +244,7 @@ export default function PhoneScreen() {
             label={t('phone.done')}
             disabled={!name.trim()}
             onPress={() => {
-              setDisplayName(name.trim());
+              void saveDisplayName(name);
               leave();
             }}
           />

@@ -354,8 +354,9 @@ async def test_sync_order_pagination_and_tombstones(db_app):
         assert [i["id"] for i in page1["items"] + page2["items"]] == [ids[2], ids[0], ids[1]]
 
         empty = (await c.get(f"/v1/sync?since={full['next_since']}", headers=h)).json()
-        assert empty == {"items": [], "screens": [], "screen_items": [], "tombstones": [],
-                         "next_since": full["next_since"], "has_more": False}  # fmt: skip
+        assert empty == {"items": [], "screens": [], "screen_items": [], "screen_summaries": [],
+                         "tombstones": [], "next_since": full["next_since"],
+                         "has_more": False}  # fmt: skip
 
         other = await _signed_in(c)  # another user sees nothing of this
         assert (await c.get("/v1/sync", headers=other)).json()["items"] == []

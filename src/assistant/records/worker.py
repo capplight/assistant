@@ -17,6 +17,7 @@ from assistant.db import queue
 from assistant.db.models import Job
 from assistant.db.models_v2 import RecordKind
 from assistant.logs import error_text
+from assistant.memory import purge_files
 from assistant.records import batching, enrich, store, voice
 from assistant.records.ingest import JOB_PREFIX, IngestDeps, give_up, run_ingest
 
@@ -86,10 +87,17 @@ async def run_one(maker: async_sessionmaker[AsyncSession], deps: IngestDeps) -> 
     return True
 
 
-async def purge_once(maker: async_sessionmaker[AsyncSession]) -> int:
+async def purge_once(maker: async_sessionmaker[AsyncSession],
+                     deps: IngestDeps | None = None) -> int:  # fmt: skip
+    """Records whose 30 days are over, then the objects of trashed files (storage:purge). Objects
+    second: a record purged now hands its originals over to this very pass."""
     async with maker() as s:
         n = await store.purge_trashed_items(s)
         await s.commit()
+    if deps is not None:
+        files = await purge_files(maker, deps.storage)
+        if files:
+            log.info("purged %s originals from storage", files)
     return n
 
 
@@ -102,7 +110,7 @@ async def worker_loop(maker: async_sessionmaker[AsyncSession], deps: IngestDeps,
         try:
             if time.monotonic() >= next_purge:
                 next_purge = time.monotonic() + PURGE_EVERY_SECONDS
-                purged = await purge_once(maker)
+                purged = await purge_once(maker, deps)
                 if purged:
                     log.info("purged %s records from trash", purged)
             if deps.router is not None and deps.settings is not None \

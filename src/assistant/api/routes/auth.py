@@ -6,7 +6,15 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Request, Response
 
 from assistant.api import auth_service as svc
-from assistant.api.deps import AuthUser, Ctx, Db, OptionalUser, client_ip_hash
+from assistant.api.consent_gate import AI_CONSENTS, BASE_CONSENTS, missing_consents
+from assistant.api.deps import (
+    AuthUser,
+    Ctx,
+    Db,
+    OptionalUser,
+    active_consent_kinds,
+    client_ip_hash,
+)
 from assistant.api.errors import ApiError
 from assistant.api.phone import Phone, PhoneError, normalize_phone
 from assistant.api.schemas import (
@@ -117,4 +125,8 @@ async def otp_verify(body: OtpVerifyIn, user: OptionalUser, ctx: Ctx, db: Db) ->
         target.country = target.country or phone.country
     device_id = user.device_id if user is not None and not switched else None
     pair = await svc.issue_session(db, ctx, target, device_id=device_id)
-    return OtpVerifyOut(**pair.model_dump(), account_switched=switched)
+    # Consents stay with their account: nothing is copied from the caller's (docs/api/auth.md).
+    kinds = await active_consent_kinds(db, target.id)
+    return OtpVerifyOut(**pair.model_dump(), account_switched=switched,
+                        app_enabled=not missing_consents(kinds, BASE_CONSENTS),
+                        ai_enabled=not missing_consents(kinds, AI_CONSENTS))  # fmt: skip

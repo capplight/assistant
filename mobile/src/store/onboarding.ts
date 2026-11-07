@@ -50,6 +50,16 @@ export type ConsentRecord = {
 
 export const CONSENT_TEXT_VERSION_DRAFT = 'draft-2026-11-05';
 
+/**
+ * The account these tokens are for has no consent yet (S05 again), or its records are still being
+ * moved. Nothing is sent or fetched while this is set. Survives a restart.
+ */
+export type AccountConsent = {
+  userId: string;
+  /** Another account than the one this phone's records came from. */
+  switched: boolean;
+};
+
 type OnboardingState = {
   language: Language;
   welcomeSeenAt: string | null;
@@ -61,8 +71,9 @@ type OnboardingState = {
   /** S04b was shown; it opens by itself only once. */
   phoneAskedAt: string | null;
   phoneLinkedAt: string | null;
-  /** «Как к вам обращаться?». Kept on the phone: the API has no endpoint for it yet. */
+  /** «Как к вам обращаться?». The server's name wins after a sign-in. */
   displayName: string | null;
+  accountConsent: AccountConsent | null;
   setLanguage: (lang: Language) => void;
   toggleInterest: (key: TourInterest) => void;
   markWelcomeSeen: (skipped: boolean) => void;
@@ -71,7 +82,11 @@ type OnboardingState = {
   complete: () => void;
   markPhoneAsked: () => void;
   markPhoneLinked: () => void;
-  setDisplayName: (name: string) => void;
+  setDisplayName: (name: string | null) => void;
+  requireAccountConsent: (c: AccountConsent) => void;
+  clearAccountConsent: () => void;
+  /** This account's own consents, from the server: what the phone remembered was another account's. */
+  setConsentFromServer: (mode: ConsentRecord['mode']) => void;
   reset: () => void;
 };
 
@@ -85,6 +100,7 @@ const initial = {
   phoneAskedAt: null,
   phoneLinkedAt: null,
   displayName: null,
+  accountConsent: null,
 };
 
 export const useOnboarding = create<OnboardingState>()(
@@ -121,12 +137,40 @@ export const useOnboarding = create<OnboardingState>()(
       markPhoneAsked: () => set((s) => ({ phoneAskedAt: s.phoneAskedAt ?? new Date().toISOString() })),
       markPhoneLinked: () => set({ phoneLinkedAt: new Date().toISOString() }),
       setDisplayName: (displayName) => set({ displayName }),
+      requireAccountConsent: (accountConsent) => set({ accountConsent }),
+      clearAccountConsent: () => set({ accountConsent: null }),
+      setConsentFromServer: (mode) =>
+        set({
+          consent: {
+            mode,
+            kinds:
+              mode === 'full'
+                ? ['pd_processing', 'ai_cross_border', 'terms', 'age_confirmed_18', 'push_content']
+                : ['pd_processing', 'terms', 'age_confirmed_18'],
+            textVersion: CONSENT_TEXT_VERSION_DRAFT,
+            texts: [],
+            acceptedAt: new Date().toISOString(),
+            synced: true,
+          },
+        }),
       reset: () => set({ ...initial }),
     }),
     {
       name: 'onboarding.v1',
       storage: persistStorage,
-      partialize: ({ language, welcomeSeenAt, interests, consent, path, doneAt, phoneAskedAt, phoneLinkedAt, displayName }) => ({
+      partialize: ({
+        language,
+        welcomeSeenAt,
+        interests,
+        consent,
+        path,
+        doneAt,
+        phoneAskedAt,
+        phoneLinkedAt,
+        displayName,
+        accountConsent,
+      }) => ({
+        accountConsent,
         phoneAskedAt,
         phoneLinkedAt,
         displayName,

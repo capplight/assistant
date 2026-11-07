@@ -1,6 +1,6 @@
 import { ApiClient } from '@/api/client';
 import { resolveApiBaseUrl } from '@/api/config';
-import { ApiError, errorMessage, isRetryable, NetworkError } from '@/api/errors';
+import { ApiError, errorMessage, isRetryable, NetworkError , SignInRequiredError } from '@/api/errors';
 import { base64url, KEYS, MemorySecretStore, TokenStorage } from '@/api/tokens';
 import { FakeServer, tokenPair } from '@/testing/fakeServer';
 
@@ -106,6 +106,62 @@ describe('auth', () => {
     await client.request('GET', '/x');
     expect(s.callsTo('POST /auth/anonymous')).toHaveLength(1);
     expect(s.callsTo('GET /x')[0]?.headers.Authorization).toBe('Bearer access-n');
+  });
+
+  const rejected = (account_linked: boolean | null) =>
+    new FakeServer()
+      .on('POST /auth/refresh', () => ({
+        status: 401,
+        body: { code: 'invalid_refresh', message_ru: '', message_kk: '', details: { account_linked } },
+      }))
+      .on('POST /auth/anonymous', () => ({ status: 200, body: { ...tokenPair('n'), created: false } }))
+      .on('POST /auth/otp/request', () => ({ status: 200, body: { challenge_id: 'c', expires_at: 'x' } }))
+      .on('GET /x', () => ({ status: 200, body: 1 }));
+  const expiredPair = (is_anonymous: boolean) => {
+    const pair = tokenPair('old');
+    return { ...pair, access_expires_at: new Date(0).toISOString(), user: { ...pair.user, is_anonymous } } as never;
+  };
+
+  it('a linked account: asks for the phone, never makes a new anonymous account, also not at the next launch', async () => {
+    const s = rejected(true);
+    const { client, tokens } = setup(s);
+    await tokens.saveTokens(expiredPair(false));
+    await expect(client.request('GET', '/x')).rejects.toBeInstanceOf(SignInRequiredError);
+    expect(await tokens.getSession()).toBeNull();
+    await expect(client.ensureSession()).rejects.toBeInstanceOf(SignInRequiredError);
+    await expect(client.request('GET', '/x')).rejects.toBeInstanceOf(SignInRequiredError);
+    expect(s.callsTo('POST /auth/anonymous')).toHaveLength(0);
+    expect(s.callsTo('GET /x')).toHaveLength(0);
+  });
+
+  it('the server does not know the token: what the phone remembers decides', async () => {
+    const linked = rejected(null);
+    const one = setup(linked);
+    await one.tokens.saveTokens(expiredPair(false));
+    await expect(one.client.request('GET', '/x')).rejects.toBeInstanceOf(SignInRequiredError);
+
+    const anon = rejected(null);
+    const two = setup(anon);
+    await two.tokens.saveTokens(expiredPair(true));
+    await two.client.request('GET', '/x');
+    expect(anon.callsTo('POST /auth/anonymous')).toHaveLength(1);
+  });
+
+  it('the server says the account is anonymous although the phone thought otherwise: device key', async () => {
+    const s = rejected(false);
+    const { client, tokens } = setup(s);
+    await tokens.saveTokens(expiredPair(false));
+    await client.request('GET', '/x');
+    expect(s.callsTo('POST /auth/anonymous')).toHaveLength(1);
+  });
+
+  it('phone sign-in after that goes with no Authorization header', async () => {
+    const s = rejected(true);
+    const { client, tokens } = setup(s);
+    await tokens.saveTokens(expiredPair(false));
+    await client.request('GET', '/x').catch(() => undefined);
+    await client.requestOptionalAuth('POST', '/auth/otp/request', { body: { phone: '+77010000000' } });
+    expect(s.callsTo('POST /auth/otp/request')[0]?.headers.Authorization).toBeUndefined();
   });
 });
 

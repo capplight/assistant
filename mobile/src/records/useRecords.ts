@@ -5,11 +5,11 @@ import { pageEntries, type PageEntry } from '@/pages/contents';
 import { useDataVersion } from '@/store/data';
 import type { Page } from '@/store/pages';
 
-/** Upper bound for one screen; the list itself is virtualized. Search and paging come in week 4. */
-const LIST_LIMIT = 2000;
+/** Upper bound for one screen and for search on the phone; the list itself is virtualized. */
+export const LIST_LIMIT = 2000;
 
 /** Loads from local SQLite only, again after every local change. null = not loaded yet. */
-function useLocalQuery<T>(load: () => Promise<T>, deps: unknown[]): T | null {
+export function useLocalQuery<T>(load: () => Promise<T>, deps: unknown[]): T | null {
   const version = useDataVersion((s) => s.version);
   // Keyed: tabs reuse one screen for all pages, and page B must not flash page A's records.
   const key = JSON.stringify(deps);
@@ -43,6 +43,10 @@ export function usePageEntries(page: Page | undefined): PageEntry[] | null {
 
 export function useAllRecords(): LocalRecord[] | null {
   return useLocalQuery(async () => (await getRecords()).list(LIST_LIMIT), []);
+}
+
+export function useTrash(): LocalRecord[] | null {
+  return useLocalQuery(async () => (await getRecords()).listTrash(LIST_LIMIT), []);
 }
 
 /** undefined = still loading; null = there is no such record. */

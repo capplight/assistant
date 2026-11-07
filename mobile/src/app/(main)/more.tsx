@@ -14,6 +14,7 @@ import { addCustomPage } from '@/pages/service';
 import { MAX_TAB_PAGES, MAX_TAB_PAGES_LARGE_FONT } from '@/pages/templates';
 import { usePageLabels } from '@/pages/usePageLabels';
 import { useOnboarding } from '@/store/onboarding';
+import { useSession } from '@/store/session';
 import { useToast } from '@/store/toast';
 import { selectSortedPages, usePages } from '@/store/pages';
 import { useTheme } from '@/theme';
@@ -27,6 +28,8 @@ export default function MoreScreen() {
   const language = useOnboarding((s) => s.language);
   const setLanguage = useOnboarding((s) => s.setLanguage);
   const phoneLinked = useOnboarding((s) => s.phoneLinkedAt !== null);
+  const needsConsent = useOnboarding((s) => s.accountConsent !== null);
+  const needsSignIn = useSession((s) => s.needsSignIn);
   const showToast = useToast((s) => s.show);
   const [naming, setNaming] = useState(false);
   const overflow = pages.slice(theme.largeFont ? MAX_TAB_PAGES_LARGE_FONT : MAX_TAB_PAGES);
@@ -87,14 +90,23 @@ export default function MoreScreen() {
           ))}
         </View>
       ) : null}
+      {needsSignIn
+        ? row('sign_in', t('phone.sign_in_row'), () => router.push('/phone?reason=expired'), t('phone.sign_in_hint'))
+        : null}
+      {needsConsent
+        ? row('consent', t('account_consent.row'), () => router.push('/account-consent'), t('account_consent.row_hint'))
+        : null}
       {row('add_page', t('more.add_page'), () => setNaming(true), t('tpl.hint.custom'))}
       {row('my_pages', t('more.my_pages'), undefined, t('more.later'))}
       {row('all_records', t('more.all_records'), () => router.navigate('/records'))}
+      {row('trash', t('trash.title'), () => router.navigate('/trash'), t('trash.hint'))}
       {row('did', t('more.did'), undefined, t('more.later'))}
       {row('chat', t('more.chat'), () => router.push('/chat'))}
       {row('import', t('more.import'), undefined, t('more.later'))}
       {row('lang', `${t('lang.choose')}: ${t(`lang.${language}`)}`, () => setLanguage(nextLang), t(`lang.${nextLang}`))}
-      {phoneLinked
+      {needsSignIn
+        ? null
+        : phoneLinked
         ? row('phone', t('phone.linked'))
         : row('phone', t('phone.more_row'), () => router.push('/phone'), t('phone.more_hint'))}
       {row('settings', t('more.settings'), undefined, t('more.later'))}

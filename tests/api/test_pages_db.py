@@ -296,6 +296,9 @@ async def test_parallel_requests_on_real_connections(tmp_path):
     try:
         async with client(app) as c:
             h = await _signed_in(c)
+            today = (await c.get("/v1/pages", headers=h)).json()["pages"][0]["id"]
+            async with maker() as s:
+                user_id = (await _page_row(s, today)).user_id
 
             async def post(client_id: str, key: str):
                 body = {"client_id": client_id, "template_key": key}
@@ -316,8 +319,12 @@ async def test_parallel_requests_on_real_connections(tmp_path):
             pages = (await c.get("/v1/pages", headers=h)).json()["pages"]
             assert len(pages) == 20 and len({p["position"] for p in pages}) == 20
 
-            async with maker() as s:
-                user_id = (await _page_row(s, pages[0]["id"])).user_id
+            shop = next(p for p in pages if p["template_key"] == "shopping")
+            await c.delete(f"/v1/pages/{shop['id']}", headers=h)
+            codes = [r.status_code for r in await asyncio.gather(
+                *(post(_cid(), "shopping") for _ in range(6)))]  # fmt: skip
+            assert sorted(codes) == [200] + [409] * 5  # one revival; the rest see it live
+
             notes = next(p for p in pages if p["template_key"] == "notes")
             await asyncio.gather(*(_note(c, h, f"запись {n}") for n in range(12)))
             body = (await c.get(f"/v1/pages/{notes['id']}/items", headers=h)).json()
@@ -328,7 +335,10 @@ async def test_parallel_requests_on_real_connections(tmp_path):
             assert seqs == sorted(seqs) and len(seqs) == 12
     finally:
         if user_id is not None:
-            async with maker() as s:
+            async with maker() as s:  # jobs have no foreign key: they would stay behind
+                await s.execute(text(
+                    "DELETE FROM jobs WHERE (payload ->> 'item_id')::bigint IN "
+                    "(SELECT id FROM items WHERE user_id = :u)"), {"u": user_id})  # fmt: skip
                 await s.execute(text("DELETE FROM users WHERE id = :u"), {"u": user_id})
                 await s.commit()
         await engine.dispose()
@@ -401,18 +411,127 @@ async def test_removing_a_page_keeps_the_items_and_restore_brings_all_back(db_ap
         assert (await _link(s, page["id"], a)).manual_order is True
 
 
-async def test_restore_refused_when_the_topic_was_added_again(db_app):
+async def test_adding_a_removed_topic_again_revives_its_page(db_app):
+    app, _, s = db_app
+    async with client(app) as c:
+        h = await _signed_in(c)
+        old = await _add_page(c, h, "notes", title="Мои заметки", layout="list")
+        tasks = await _add_page(c, h, "tasks")
+        kept, gone = await _note(c, h, "оставить"), await _note(c, h, "убрать со страницы")
+        await s.execute(update(ScreenItem).where(
+            ScreenItem.screen_id == (await _page_row(s, old["id"])).id,
+            ScreenItem.item_id == select(Item.id).where(Item.public_id == uuid.UUID(gone))
+            .scalar_subquery(),
+        ).values(removed_by_user_at=datetime.now(UTC)))  # fmt: skip
+        await s.commit()
+        await c.delete(f"/v1/pages/{old['id']}", headers=h)
+        since = (await c.get(f"/v1/pages/{tasks['id']}", headers=h)).json()["seq"]
+        later = await _note(c, h, "пока страницы не было")
+
+        client_id = _cid()
+        body = {"client_id": client_id, "template_key": "notes", "title": "Другое"}
+        r = await c.post("/v1/pages", json=body, headers=h)
+        assert r.status_code == 200, r.text
+        out = r.json()
+        assert out["created"] is False and out["revived"] is True
+        page = out["page"]
+        assert page["id"] == old["id"] and page["position"] == old["position"]
+        assert (page["title"], page["layout"]) == ("Мои заметки", "list")  # as it was
+        assert page["deleted_at"] is None and page["client_id"] == client_id
+
+        tabs = [p["id"] for p in (await c.get("/v1/pages", headers=h)).json()["pages"]]
+        assert tabs[1:] == [old["id"], tasks["id"]]  # its old place in the tabs
+        on_page = await _ids_on(c, h, old["id"])
+        assert kept in on_page and later in on_page and gone not in on_page  # R-54
+
+        synced = await _sync_all(c, h, since)
+        assert synced["screens"][-1]["id"] == old["id"]
+        assert synced["screens"][-1]["deleted_at"] is None
+
+        # A retry of that request is the same page, not a conflict.
+        retry = await c.post("/v1/pages", json=body, headers=h)
+        assert retry.status_code == 200 and retry.json()["page"]["id"] == old["id"]
+        assert retry.json()["revived"] is False
+        # The «Отменить» of the removal, tapped late: it is already back.
+        undo = await c.post(f"/v1/pages/{old['id']}/restore", headers=h)
+        assert undo.status_code == 200 and undo.json()["id"] == old["id"]
+        # While it is live, one more add is the same 409 as ever.
+        r = await c.post("/v1/pages", json={"client_id": _cid(), "template_key": "notes"},
+                         headers=h)  # fmt: skip
+        assert r.status_code == 409 and r.json()["details"]["page_id"] == old["id"]
+
+
+async def test_revival_is_for_singletons_and_respects_the_limit(db_app):
     app, _, _ = db_app
+    async with client(app) as c:
+        h = await _signed_in(c)
+        mine = await _add_page(c, h, "custom", title="Ремонт")
+        await c.delete(f"/v1/pages/{mine['id']}", headers=h)
+        another = await _add_page(c, h, "custom", title="Ремонт")  # as many as wanted
+        assert another["id"] != mine["id"]
+
+        shop = await _add_page(c, h, "shopping")
+        await c.delete(f"/v1/pages/{shop['id']}", headers=h)
+        for n in range(18):  # + «Сегодня» and «Ремонт» = 20
+            await _add_page(c, h, "custom", title=f"Страница {n}")
+        r = await c.post("/v1/pages", json={"client_id": _cid(), "template_key": "shopping"},
+                         headers=h)  # fmt: skip
+        assert r.status_code == 422 and r.json()["code"] == "pages_limit"
+        assert (await c.get(f"/v1/pages/{shop['id']}", headers=h)).status_code == 404
+
+
+async def test_old_duplicates_revive_the_last_removed_and_restore_can_still_refuse(db_app):
+    """Accounts from before revival can hold several removed rows of one topic."""
+    app, _, s = db_app
     async with client(app) as c:
         h = await _signed_in(c)
         old = await _add_page(c, h, "shopping")
         await c.delete(f"/v1/pages/{old['id']}", headers=h)
-        new = await _add_page(c, h, "shopping")  # partial unique allows it after removal
-        assert new["position"] != old["position"]
+        row = await _page_row(s, old["id"])
+        await s.execute(text(
+            "INSERT INTO screens (user_id, template_key, template_version, singleton, title, icon, "
+            "position, layout, created_by, deleted_at) "
+            "SELECT user_id, template_key, template_version, singleton, 'Вторая', icon, 'zz', "
+            "layout, created_by, now() + interval '1 minute' FROM screens WHERE id = :id"),
+            {"id": row.id})  # fmt: skip
+        await s.commit()
+        r = await c.post("/v1/pages", json={"client_id": _cid(), "template_key": "shopping"},
+                         headers=h)  # fmt: skip
+        assert r.status_code == 200 and r.json()["page"]["title"] == "Вторая"
+        new = r.json()["page"]
         r = await c.post(f"/v1/pages/{old['id']}/restore", headers=h)
         assert r.status_code == 409 and r.json()["details"]["page_id"] == new["id"]
-        # A live page restores to itself, harmlessly.
-        assert (await c.post(f"/v1/pages/{new['id']}/restore", headers=h)).status_code == 200
+
+
+async def test_notes_shows_every_record(db_app):
+    """«Заметки» has the rule "always": any record, whatever it is, from before or after adding."""
+    app, _, s = db_app
+    async with client(app) as c:
+        h = await _signed_in(c)
+        before = await _note(c, h, "до страницы")
+        page = await _add_page(c, h, "notes")
+        after = await _note(c, h, "после страницы")
+        link = (await c.post("/v1/items", json={"client_id": _cid(), "url": "https://example.com/a"},
+                             headers=h)).json()["item"]["id"]  # fmt: skip
+        assert set(await _ids_on(c, h, page["id"])) == {before, after, link}
+
+
+async def test_a_new_page_does_not_link_hidden_voice_fragments(db_app):
+    app, _, s = db_app
+    async with client(app) as c:
+        h = await _signed_in(c)
+        visible = await _note(c, h, "обычная запись")
+        hidden = await _note(c, h, "кусок записи")
+        await s.execute(update(Item).where(Item.public_id == uuid.UUID(hidden))
+                        .values(hidden_reason="voice_fragment", fragment_no=1))  # fmt: skip
+        await s.commit()
+        page = await _add_page(c, h, "notes")
+        linked = set(await s.scalars(
+            select(Item.public_id)
+            .join(ScreenItem, ScreenItem.item_id == Item.id)
+            .where(ScreenItem.screen_id == (await _page_row(s, page["id"])).id)
+        ))  # fmt: skip
+    assert linked == {uuid.UUID(visible)}
 
 
 # --- placement (auto_rule) ---
@@ -679,7 +798,7 @@ async def test_sync_carries_pages_links_and_removals_in_seq_order(db_app):
         first = await _sync_all(c, h)
         assert [p["kind"] for p in first["screens"]] == ["system_today"]
         assert first["items"] == [] and first["screen_items"] == []
-        assert first["next_since"] == first["screens"][0]["seq"]
+        assert first["next_since"] >= first["screens"][0]["seq"]  # a summary may come after it
 
         page = await _add_page(c, h, "notes")
         nid = await _note(c, h, "запись")
@@ -689,11 +808,12 @@ async def test_sync_carries_pages_links_and_removals_in_seq_order(db_app):
         link = delta["screen_items"][0]
         assert (link["page_id"], link["item_id"]) == (page["id"], nid)
         assert link["seq"] > delta["items"][0]["seq"]
-        assert delta["next_since"] == link["seq"]
+        assert delta["next_since"] >= link["seq"]  # a summary may come after it
 
         none = (await c.get(f"/v1/sync?since={delta['next_since']}", headers=h)).json()
-        assert none == {"items": [], "screens": [], "screen_items": [], "tombstones": [],
-                        "next_since": delta["next_since"], "has_more": False}  # fmt: skip
+        assert none == {"items": [], "screens": [], "screen_items": [], "screen_summaries": [],
+                        "tombstones": [], "next_since": delta["next_since"],
+                        "has_more": False}  # fmt: skip
 
         await c.delete(f"/v1/pages/{page['id']}", headers=h)
         gone = await _sync_all(c, h, delta["next_since"])

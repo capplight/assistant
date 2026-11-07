@@ -17,10 +17,12 @@ from sqlalchemy import select, update
 from assistant.api.consent_gate import require_base_consent
 from assistant.api.deps import CurrentUser, Db
 from assistant.api.routes.items import items_out
+from assistant.api.routes.memory import summary_out
 from assistant.api.routes.pages import page_item_out, page_out
-from assistant.api.schemas import PageItemOut, SyncOut, TombstoneOut
+from assistant.api.schemas import PageItemOut, PageSummaryOut, SyncOut, TombstoneOut
 from assistant.db.models import Item
 from assistant.db.models_pages import Screen, ScreenItem
+from assistant.db.models_search import ScreenSummary
 from assistant.db.models_v2 import Device, HiddenReason, SyncTombstone
 
 router = APIRouter(prefix="/sync", tags=["sync"])
@@ -71,7 +73,17 @@ async def sync(
             .limit(limit + 1)
         )
     ]
-    merged = sorted([(row.seq, row) for row in (*items, *tombs, *screens, *links)],
+    summaries = [
+        summary_out(row, page_id)
+        for row, page_id in await db.execute(
+            select(ScreenSummary, Screen.public_id)
+            .join(Screen, Screen.id == ScreenSummary.screen_id)
+            .where(ScreenSummary.user_id == user.id, ScreenSummary.seq > since)
+            .order_by(ScreenSummary.seq)
+            .limit(limit + 1)
+        )
+    ]
+    merged = sorted([(row.seq, row) for row in (*items, *tombs, *screens, *links, *summaries)],
                     key=lambda pair: pair[0])  # fmt: skip
     page = merged[:limit]
     has_more = len(merged) > limit
@@ -79,6 +91,7 @@ async def sync(
     page_tombs = [row for _, row in page if isinstance(row, SyncTombstone)]
     page_screens = [row for _, row in page if isinstance(row, Screen)]
     page_links = [row for _, row in page if isinstance(row, PageItemOut)]
+    page_summaries = [row for _, row in page if isinstance(row, PageSummaryOut)]
     next_since = page[-1][0] if page else since
 
     if user.device_id is not None and since > 0:  # what this phone confirms it already has
@@ -91,6 +104,7 @@ async def sync(
         items=await items_out(db, page_items),
         screens=[page_out(row) for row in page_screens],
         screen_items=page_links,
+        screen_summaries=page_summaries,
         tombstones=[
             TombstoneOut(entity=t.entity, id=t.public_id, seq=t.seq, deleted_at=t.deleted_at)
             for t in page_tombs

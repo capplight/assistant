@@ -12,9 +12,11 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
+import yaml
 from sqlalchemy import select, text, update
 
 from assistant.ai import BatchEntry, FakeAdapter, PgAIStore, Router, load_routes
+from assistant.ai.routes import DEFAULT_ROUTES_FILE, RouteTable
 from assistant.ai.types import ServerError, Usage
 from assistant.api import consent_texts
 from assistant.config import Settings
@@ -23,6 +25,7 @@ from assistant.db.models_ai import AIBatch, AIBatchRequest, ProviderUsage
 from assistant.db.models_v2 import ConsentKind, File
 from assistant.records import (
     FakeLinkReader,
+    FakeOcr,
     FakeTranscriber,
     IngestDeps,
     LinkContent,
@@ -89,6 +92,16 @@ def _router(app, adapter: FakeAdapter, **kw) -> Router:
     maker = app.state.ctx.sessionmaker
     return Router(settings=settings, routes=load_routes(settings), adapters={"anthropic": adapter},
                   store=PgAIStore(maker))  # fmt: skip
+
+
+def _batch_router(app, adapter: FakeAdapter, **kw) -> Router:
+    """Batches are off in routes.yaml. The mechanism stays, so it is tested with them on."""
+    settings = _settings(**kw)
+    raw = yaml.safe_load(DEFAULT_ROUTES_FILE.read_text(encoding="utf-8"))
+    raw["tasks"]["enrich"]["batch"] = "bulk"
+    return Router(settings=settings, routes=RouteTable(raw, settings),
+                  adapters={"anthropic": adapter},
+                  store=PgAIStore(app.state.ctx.sessionmaker))  # fmt: skip
 
 
 def _deps(app, router=None, **kw) -> IngestDeps:
@@ -650,7 +663,7 @@ async def _imported(c, h, s, body: str = LONG) -> dict:
 async def test_import_waits_for_a_batch_at_half_price(db_app):
     app, _, s = db_app
     fake = _batch_adapter()
-    router = _router(app, fake)
+    router = _batch_router(app, fake)
     deps = _deps(app, router)
     maker = app.state.ctx.sessionmaker
     async with client(app) as c:
@@ -683,7 +696,7 @@ async def test_import_waits_for_a_batch_at_half_price(db_app):
 async def test_live_capture_never_waits_for_a_batch(db_app):
     app, _, s = db_app
     fake = _batch_adapter()
-    deps = _deps(app, _router(app, fake))
+    deps = _deps(app, _batch_router(app, fake))
     async with client(app) as c:
         h = await _signed_in(c)
         item = await _note(c, h, source="typed")
@@ -695,7 +708,7 @@ async def test_live_capture_never_waits_for_a_batch(db_app):
 async def test_opening_a_waiting_record_pulls_it_out(db_app):
     app, _, s = db_app
     fake = _batch_adapter([envelope(title="Сейчас")])
-    router = _router(app, fake)
+    router = _batch_router(app, fake)
     deps = _deps(app, router)
     maker = app.state.ctx.sessionmaker
     async with client(app) as c:
@@ -722,7 +735,7 @@ async def test_opening_a_waiting_record_pulls_it_out(db_app):
 async def test_failed_batch_answers_run_live(db_app):
     app, _, s = db_app
     fake = _batch_adapter([envelope(title="Живой")])
-    router = _router(app, fake)
+    router = _batch_router(app, fake)
     deps = _deps(app, router)
     maker = app.state.ctx.sessionmaker
     async with client(app) as c:
@@ -747,7 +760,7 @@ async def test_failed_batch_answers_run_live(db_app):
 async def test_invalid_batch_answer_runs_live(db_app):
     app, _, s = db_app
     fake = _batch_adapter(["not json"])
-    router = _router(app, fake)
+    router = _batch_router(app, fake)
     deps = _deps(app, router)
     maker = app.state.ctx.sessionmaker
     async with client(app) as c:
@@ -765,7 +778,7 @@ async def test_invalid_batch_answer_runs_live(db_app):
 async def test_batch_past_its_deadline_is_cancelled(db_app):
     app, _, s = db_app
     fake = _batch_adapter()
-    router = _router(app, fake)
+    router = _batch_router(app, fake)
     deps = _deps(app, router)
     maker = app.state.ctx.sessionmaker
     async with client(app) as c:
@@ -786,7 +799,7 @@ async def test_batch_past_its_deadline_is_cancelled(db_app):
 async def test_consent_revoked_while_batch_ran_drops_the_answer(db_app):
     app, _, s = db_app
     fake = _batch_adapter()
-    router = _router(app, fake)
+    router = _batch_router(app, fake)
     deps = _deps(app, router)
     maker = app.state.ctx.sessionmaker
     async with client(app) as c:
@@ -803,7 +816,7 @@ async def test_consent_revoked_while_batch_ran_drops_the_answer(db_app):
 async def test_no_consent_at_sending_means_nothing_is_sent(db_app):
     app, _, s = db_app
     fake = _batch_adapter()
-    router = _router(app, fake)
+    router = _batch_router(app, fake)
     deps = _deps(app, router)
     maker = app.state.ctx.sessionmaker
     async with client(app) as c:
@@ -819,7 +832,7 @@ async def test_no_consent_at_sending_means_nothing_is_sent(db_app):
 async def test_batch_without_support_falls_back_to_live(db_app):
     app, _, s = db_app
     fake = FakeAdapter("anthropic", [envelope(title="Живой")], supports_batch=False)
-    deps = _deps(app, _router(app, fake))
+    deps = _deps(app, _batch_router(app, fake))
     async with client(app) as c:
         h = await _signed_in(c)
         item = await _imported(c, h, s)
@@ -831,7 +844,7 @@ async def test_batch_without_support_falls_back_to_live(db_app):
 async def test_flush_waits_for_more_unless_old_enough(db_app):
     app, _, s = db_app
     fake = _batch_adapter()
-    router = _router(app, fake, ai_batch_flush_seconds=3600, ai_batch_flush_min_requests=2)
+    router = _batch_router(app, fake, ai_batch_flush_seconds=3600, ai_batch_flush_min_requests=2)
     deps = _deps(app, router)
     maker = app.state.ctx.sessionmaker
     async with client(app) as c:
@@ -847,7 +860,7 @@ async def test_flush_waits_for_more_unless_old_enough(db_app):
 async def test_a_users_next_records_wait_for_the_running_batch(db_app):
     app, _, s = db_app
     fake = _batch_adapter()
-    router = _router(app, fake, ai_batch_user_requests=1)
+    router = _batch_router(app, fake, ai_batch_user_requests=1)
     deps = _deps(app, router)
     maker = app.state.ctx.sessionmaker
     async with client(app) as c:
@@ -864,7 +877,7 @@ async def test_a_users_next_records_wait_for_the_running_batch(db_app):
 async def test_deleted_record_batch_answer_is_still_accounted(db_app):
     app, _, s = db_app
     fake = _batch_adapter()
-    router = _router(app, fake)
+    router = _batch_router(app, fake)
     deps = _deps(app, router)
     maker = app.state.ctx.sessionmaker
     async with client(app) as c:
@@ -877,3 +890,209 @@ async def test_deleted_record_batch_answer_is_still_accounted(db_app):
         assert await poll_batches(maker, router, router.s) == 1
     rows = list(await s.scalars(select(ProviderUsage).where(ProviderUsage.batch.is_(True))))
     assert len(rows) == 1 and rows[0].user_id is None and rows[0].cost_usd > 0
+
+
+async def test_as_shipped_an_import_runs_live_and_nothing_goes_to_a_batch(db_app):
+    app, _, s = db_app
+    fake = _batch_adapter([envelope(title="Живой")])
+    deps = _deps(app, _router(app, fake))
+    async with client(app) as c:
+        h = await _signed_in(c)
+        item = await _imported(c, h, s)
+        await _drain(app, deps)
+        row = await _row(s, item["id"])
+    assert row.title == "Живой" and row.enrich_state == "done"
+    assert fake.calls == 1 and not fake.batches
+    assert await s.scalar(select(AIBatchRequest.id)) is None
+
+
+async def test_turning_batches_off_sends_what_was_waiting_live(db_app):
+    app, _, s = db_app
+    fake = _batch_adapter([envelope(title="Живой")])
+    parked = _deps(app, _batch_router(app, fake))
+    async with client(app) as c:
+        h = await _signed_in(c)
+        item = await _imported(c, h, s)
+        await _drain(app, parked)
+        assert (await _row(s, item["id"])).enrich_state == "queued_batch"
+
+        shipped = _router(app, fake)
+        assert await flush_batches(app.state.ctx.sessionmaker, shipped, shipped.s) == 0
+        await _drain(app, _deps(app, shipped))
+        row = await _row(s, item["id"])
+    assert row.title == "Живой" and fake.calls == 1 and not fake.batches
+
+
+# --- «Исправить»
+
+RECEIPT = "Итого 389 990 ₸, звонить +7 701 123 45 67, ещё 1 500 ₸"
+
+
+async def _receipt(app, c, h, fake: FakeAdapter) -> dict:
+    deps = _deps(app, _router(app, fake), ocr=FakeOcr(RECEIPT, 0.95))
+    upload = await _upload(c, h, b"receipt-photo", "image/png")
+    body = {"client_id": str(uuid.uuid4()), "upload_id": upload, "source": "camera"}
+    r = await c.post("/v1/items", json=body, headers=h)
+    assert r.status_code == 201, r.text
+    await _drain(app, deps)
+    return await _get(c, h, r.json()["item"]["id"])
+
+
+async def test_correcting_a_field(db_app):
+    app, _, s = db_app
+    amounts = dict(people=[], orgs=[], phones=[], dates=[], places=[], amounts=["389 990 ₸"])
+    fake = FakeAdapter("anthropic", [envelope(entities=amounts, title="Чек")])
+    async with client(app) as c:
+        h = await _signed_in(c)
+        item = await _receipt(app, c, h, fake)
+        url = f"/v1/items/{item['id']}"
+        assert item["status"] == "needs_review"
+        assert item["review_fields"]["amount_1"]["value"] == "389 990 ₸"
+        fix = {"corrections": {"amount_1": "389 900 ₸"}}
+
+        no_base = await c.patch(url, json=fix, headers=h)
+        assert no_base.status_code == 422 and no_base.json()["code"] == "validation_error"
+        stale = await c.patch(url, json={**fix, "base_seq": item["seq"] - 1}, headers=h)
+        assert stale.status_code == 409 and stale.json()["details"]["seq"] == item["seq"]
+        empty = {"corrections": {"amount_1": "  "}, "base_seq": item["seq"]}
+        blank = await c.patch(url, json=empty, headers=h)
+        assert blank.status_code == 422
+        unknown = await c.patch(url, json={"corrections": {"nope": "1"}, "base_seq": item["seq"]},
+                                headers=h)  # fmt: skip
+        assert unknown.status_code == 422 and unknown.json()["code"] == "review_field_unknown"
+
+        r = await c.patch(url, json={**fix, "base_seq": item["seq"]}, headers=h)
+        assert r.status_code == 200, r.text
+        out = r.json()
+        assert out["review_fields"]["amount_1"] == {
+            "kind": "amount", "value": "389 900 ₸", "state": "verified"}  # fmt: skip
+        assert out["review_fields"]["phone_1"]["state"] == "unverified"
+        assert out["status"] == "needs_review" and out["seq"] > item["seq"]
+        # Search and answers read the text, and only the whole number is touched.
+        assert "389 900 ₸" in out["text"] and "389 990" not in out["text"]
+        assert "1 500 ₸" in out["text"] and out["content_hash"] != item["content_hash"]
+        row = await _row(s, item["id"])
+        assert row.envelope["entities"]["amounts"][0]["value"] == "389900"
+
+        changes = (await c.get(f"/v1/sync?since={item['seq']}", headers=h)).json()
+        assert [i["id"] for i in changes["items"]] == [item["id"]]
+        assert changes["items"][0]["review_fields"]["amount_1"]["value"] == "389 900 ₸"
+
+        # The answer got lost: the phone sends the same thing again.
+        again = await c.patch(url, json={**fix, "base_seq": item["seq"]}, headers=h)
+        assert again.status_code == 200 and again.json()["seq"] == out["seq"]
+
+        # The text changed, so it is read again: the person's number is no reason to doubt it.
+        fake.steps = [envelope(
+            entities={**amounts, "amounts": ["389 900 ₸"]}, title="Чек на 389 900 ₸",
+            critical_numbers=["389 900"])]  # fmt: skip
+        await _drain(app, _deps(app, _router(app, fake), ocr=FakeOcr(RECEIPT, 0.95)))
+        got = await _get(c, h, item["id"])
+        assert got["title"] == "Чек на 389 900 ₸"
+        assert got["review_fields"]["amount_1"]["value"] == "389 900 ₸"
+        open_fields = [k for k, v in got["review_fields"].items() if v["state"] != "verified"]
+        assert sorted(open_fields) == ["amount_2", "phone_1"]
+
+        # Everything settled: the record is done. The value needs no source, or even a format.
+        done = await c.patch(url, json={"corrections": {"phone_1": "не помню"},
+                                        "verify": ["amount_2"], "base_seq": got["seq"]},
+                             headers=h)  # fmt: skip
+        assert done.status_code == 200 and done.json()["status"] == "ready"
+
+        await c.delete(url, headers=h)
+        seq = (await _get(c, h, item["id"]))["seq"]
+        trashed = await c.patch(url, json={"corrections": {"amount_1": "1"}, "base_seq": seq},
+                                headers=h)  # fmt: skip
+        assert trashed.status_code == 409 and trashed.json()["code"] == "item_deleted"
+
+
+async def test_a_late_fragment_does_not_undo_a_correction(db_app):
+    app, _, _ = db_app
+    audio = {b"frag-0": ("Первая часть, платёж 125 000 тенге.", 0.95),
+             b"frag-1": ("Вторая часть без чисел.", 0.95)}  # fmt: skip
+    deps = _deps(app, transcriber=Scripted(audio))
+    recording = str(uuid.uuid4())
+    async with client(app) as c:
+        h = await _signed_in(c)
+        first = await _fragment(c, h, recording, 0, 1)
+        await _drain(app, deps)
+        got = await _get(c, h, first["id"])
+        assert got["review_fields"]["amount_1"]["value"] == "125 000 тенге"
+        r = await c.patch(f"/v1/items/{first['id']}",
+                          json={"corrections": {"amount_1": "126 000 тенге"},
+                                "base_seq": got["seq"]}, headers=h)  # fmt: skip
+        assert r.status_code == 200, r.text
+        await _fragment(c, h, recording, 1, 2)
+        await _drain(app, deps)
+        got = await _get(c, h, first["id"])
+    assert got["text"] == "Первая часть, платёж 126 000 тенге."
+    field = got["review_fields"]["amount_1"]
+    assert (field["value"], field["state"]) == ("126 000 тенге", "verified")
+    assert got["review_fields"]["late_fragment_2"]["state"] == "unverified"
+
+
+async def test_a_passage_is_fixed_in_the_text_not_as_a_value(db_app):
+    app, _, s = db_app
+    async with client(app) as c:
+        h = await _signed_in(c)
+        item = await _note(c, h, "Неразборчиво")
+        row = await _row(s, item["id"])
+        row.review_fields = {"transcript": {"kind": "transcript", "value": None,
+                                            "state": "unverified"}}  # fmt: skip
+        await s.commit()
+        got = await _get(c, h, item["id"])
+        r = await c.patch(f"/v1/items/{item['id']}",
+                          json={"corrections": {"transcript": "текст"}, "base_seq": got["seq"]},
+                          headers=h)  # fmt: skip
+    assert r.status_code == 422 and r.json()["code"] == "review_field_not_editable"
+
+
+async def test_second_account_gets_no_ai_until_its_own_consent(db_app):
+    """Signing in to a phone's account from an account with every consent copies nothing."""
+    app, sms, s = db_app
+    phone = "+77015550077"
+    fake = FakeAdapter("anthropic", [envelope(title="Разобрал")])
+    router = _router(app, fake)
+    deps = _deps(app, router, transcriber=Scripted(AUDIO))
+
+    async def otp(c, headers=None) -> dict:
+        req = await c.post("/v1/auth/otp/request", json={"phone": phone}, headers=headers)
+        assert req.status_code == 200, req.text
+        r = await c.post("/v1/auth/otp/verify", headers=headers, json={
+            "challenge_id": req.json()["challenge_id"], "phone": phone,
+            "code": sms.last_code_for(phone)})  # fmt: skip
+        assert r.status_code == 200, r.text
+        return r.json()
+
+    async with client(app) as c:
+        second = await otp(c)  # a phone account, never asked for consent
+        assert second["app_enabled"] is False and second["ai_enabled"] is False
+        h_first = await _signed_in(c)
+        pair = await otp(c, h_first)
+        assert pair["account_switched"] is True and pair["user"]["id"] == second["user"]["id"]
+        assert pair["app_enabled"] is False and pair["ai_enabled"] is False
+        assert pair["user"]["is_anonymous"] is False
+        h = {"Authorization": f"Bearer {pair['access_token']}"}
+
+        assert (await c.get("/v1/consents", headers=h)).json()["active"] == []
+        blocked = await c.post("/v1/items", json={"client_id": str(uuid.uuid4()), "text": LONG},
+                               headers=h)  # fmt: skip
+        assert blocked.status_code == 403 and blocked.json()["code"] == "consent_required"
+
+        r = await c.post("/v1/consents", json=_grant_body(*BASE), headers=h)
+        assert r.json()["app_enabled"] is True and r.json()["ai_enabled"] is False
+        note = await _note(c, h)
+        voice = await _fragment(c, h, str(uuid.uuid4()), 0, 1)
+        await _drain(app, deps)
+        row = await _row(s, note["id"])
+        assert row.enrich_state == "no_consent"
+        maker = app.state.ctx.sessionmaker
+        assert await run_enrich(maker, router, row.id, live=True) == "no_consent"
+        assert (await _get(c, h, voice["id"]))["status"] == "needs_consent"
+        assert fake.calls == 0
+
+        r = await c.post("/v1/consents", json=_grant_body(ConsentKind.AI_CROSS_BORDER), headers=h)
+        assert r.json()["ai_enabled"] is True
+        await _drain(app, deps)
+        assert (await _row(s, note["id"])).title == "Разобрал"
+        assert fake.calls >= 1

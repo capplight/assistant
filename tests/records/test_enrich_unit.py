@@ -15,6 +15,8 @@ from assistant.records.enrich import (
     MAX_INPUT_CHARS,
     SYSTEM_PROMPT,
     Envelope,
+    _with_correction,
+    apply_corrections,
     apply_envelope,
     build_inputs,
     checked_envelope,
@@ -327,3 +329,76 @@ async def test_a_slow_site_is_given_up_on(monkeypatch):
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
         client = LinkMetadataClient(http, resolver=resolver)
         assert await client.fetch_html("https://slow.example/") is None
+
+
+# --- «Исправить»
+
+
+@pytest.mark.parametrize(("text", "old", "new", "expected"), [
+    ("итого 500 ₸", "500 ₸", "600 ₸", "итого 600 ₸"),
+    ("сначала 1 500 ₸, потом 500 ₸", "500 ₸", "600 ₸", "сначала 1 500 ₸, потом 600 ₸"),
+    ("всего 5 000 000", "5 000", "6 000", "всего 5 000 000"),
+    ("дата 12.11.2026", "12.11", "13.11", "дата 12.11.2026"),
+    ("сумма 389 990 тг", "389990", "1", "сумма 1 тг"),
+    ("тел +77011234567", "+7 701 123 45 67", "+77770000000", "тел +77770000000"),
+    ("Ерланов и Ерлан", "Ерлан", "Ержан", "Ерланов и Ержан"),
+    ("сумма 100", "100", r"\\1 ₸", r"сумма \\1 ₸"),  # the person's text is not a pattern
+    ("ничего такого", "100", "200", "ничего такого"),
+])  # fmt: skip
+def test_correction_replaces_only_a_whole_value(text, old, new, expected):
+    assert _with_correction(text, old, new) == expected
+
+
+def _photo(text: str, value: str = "100 ₸") -> Item:
+    return item(text, kind="image", review_fields={
+        "amount_1": {"kind": "amount", "value": value, "state": "unverified"}})  # fmt: skip
+
+
+def test_what_the_person_entered_survives_a_new_envelope_without_a_source():
+    # The wrong value is spelled differently in the text, so the text stays as it was.
+    rec = _photo("чек на сто тенге " * 6 + "итог 1OO тг")
+    assert apply_corrections(rec, {"amount_1": "200 ₸"}) is True
+    assert "200" not in rec.text
+    field = rec.review_fields["amount_1"]
+    assert (field["value"], field["state"], field["was"]) == ("200 ₸", "verified", ["100 ₸"])
+
+    # The model cites the person's number and the summary uses it: neither is thrown away.
+    apply_envelope(rec, env(summary="Чек на 200 ₸", entities=dict(amounts=["200 ₸"])),
+                   provider="p", model="m", escalated=False, now=NOW)  # fmt: skip
+    assert rec.envelope["rejected"] == {}
+    assert [a["text"] for a in rec.envelope["entities"]["amounts"]] == ["200 ₸"]
+    assert rec.summary == "Чек на 200 ₸"
+    assert set(rec.review_fields) == {"amount_1"} and rec.status == "ready"
+
+
+def test_a_replaced_value_does_not_come_back():
+    rec = _photo("итого 100 ₸, ещё итого 100 ₸ " * 4)
+    apply_corrections(rec, {"amount_1": "200 ₸"})
+    assert rec.text.count("100 ₸") == 7 and rec.text.count("200 ₸") == 1
+    apply_envelope(rec, env(entities=dict(amounts=["100 ₸"]), critical_numbers=["200"]),
+                   provider="p", model="m", escalated=False, now=NOW)  # fmt: skip
+    # In the envelope the person's value stands in for it; no new «Проверьте» on either.
+    assert [a["text"] for a in rec.envelope["entities"]["amounts"]] == ["200 ₸"]
+    assert set(rec.review_fields) == {"amount_1"}
+    assert rec.review_fields["amount_1"]["value"] == "200 ₸"
+
+
+def test_correcting_keeps_the_currency_and_tolerates_words():
+    rec = _photo("итого 100 ₸ " * 8)
+    rec.envelope = {"entities": {"amounts": [{"text": "100 ₸", "value": "100", "currency": "KZT"}],
+                                 "phones": [], "dates": [], "places": [], "people": [],
+                                 "orgs": []},
+                    "critical_numbers": [], "verify_fields": []}  # fmt: skip
+    apply_corrections(rec, {"amount_1": "250"})
+    assert rec.envelope["entities"]["amounts"] == [
+        {"text": "250", "value": "250", "currency": "KZT"}]  # fmt: skip
+    apply_corrections(rec, {"amount_1": "не помню"})
+    assert rec.envelope["entities"]["amounts"][0]["value"] is None
+    assert rec.review_fields["amount_1"]["was"] == ["100 ₸", "250"]
+
+
+def test_correcting_to_the_same_value_is_just_a_confirmation():
+    rec = _photo("итого 100 ₸ " * 8)
+    assert apply_corrections(rec, {"amount_1": "100 ₸"}) is False
+    assert rec.review_fields["amount_1"]["state"] == "verified"
+    assert "was" not in rec.review_fields["amount_1"]

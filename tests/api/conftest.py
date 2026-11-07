@@ -69,9 +69,12 @@ async def db_app(tmp_path: Path) -> AsyncIterator[tuple[FastAPI, FakeSmsSender, 
         app = create_app(make_settings(), sessionmaker=maker, sms=sms,
                          storage=make_storage(tmp_path))  # fmt: skip
         check = maker()
-        # Each test starts with an empty queue: a test on real connections can commit jobs, and
-        # worker tests claim the oldest job first. The deletion is rolled back with the rest.
-        await check.execute(text("DELETE FROM jobs"))
+        # Worker tests claim the oldest job first, so a job left behind breaks them in odd ways.
+        left = await check.scalar(text("SELECT count(*) FROM jobs"))
+        assert not left, (
+            f"{left} committed jobs in this test database: a test leaked them, or it ran before "
+            "the leak was fixed. Fix the test; on an old database run DELETE FROM jobs once."
+        )
         await check.commit()
         try:
             yield app, sms, check

@@ -153,6 +153,11 @@ export function happyServer(): FakeServer {
   const s = new FakeServer();
   const items = new Map<string, ReturnType<typeof itemOut>>();
   let seq = 0;
+  /** The id in /items/{id}... is the server id `srv-<client id>`. */
+  const serverItem = (path: string, s: number, extra: Record<string, unknown>) => {
+    const clientId = (path.split('/')[2] ?? '').replace(/^srv-/, '');
+    return { ...(items.get(clientId) ?? itemOut(clientId, s)), seq: s, ...extra };
+  };
   s.on('POST /auth/anonymous', () => ({ status: 200, body: { ...tokenPair(), created: true } }))
     .on('POST /auth/refresh', () => ({ status: 200, body: tokenPair() }))
     .on('POST /consents', () => ({
@@ -213,6 +218,16 @@ export function happyServer(): FakeServer {
       status: 201,
       body: { link: linkOut(c.path.split('/')[2] ?? '', (c.body as { item_id: string }).item_id, ++seq), created: true },
     }))
+    .on('PATCH /me', (c) => ({ status: 200, body: { ...tokenPair().user, ...(c.body as object) } }))
+    .on('DELETE /items/*', (c) => ({
+      status: 200,
+      body: serverItem(c.path, ++seq, { deleted_at: new Date().toISOString(), purge_after: new Date(Date.now() + 30 * 86_400_000).toISOString() }),
+    }))
+    .on('POST /items/*/restore', (c) => ({
+      status: 200,
+      body: serverItem(c.path, ++seq, { deleted_at: null, purge_after: null }),
+    }))
+    .on('GET /search', () => ({ status: 200, body: { results: [], semantic: true } }))
     .on('GET /sync', (c) => {
       const since = Number(c.query.since ?? 0);
       const list = [...items.values()].filter((i) => i.seq > since);

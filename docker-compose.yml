@@ -39,6 +39,15 @@ services:
     depends_on: { migrate: { condition: service_completed_successfully } }
     restart: unless-stopped
 
+  # TEI (bge-m3) runs next to it; set TEI_URL in .env. Without one, chunks wait in the queue.
+  worker-embed:
+    build: .
+    command: python -m assistant.memory
+    env_file: .env
+    environment: *dburl
+    depends_on: { migrate: { condition: service_completed_successfully } }
+    restart: unless-stopped
+
   scheduler:
     build: .
     command: python -m assistant.scheduler

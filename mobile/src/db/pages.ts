@@ -41,6 +41,11 @@ export interface PagesRepository {
   applyLink(link: PageItemOut): Promise<void>;
   removeLink(linkId: string): Promise<void>;
   linksFor(pageServerId: string): Promise<PageLink[]>;
+  /**
+   * Another account: its pages are other pages. Pages wait to be created there (a topic the account
+   * already has adopts its page), and links, which name server ids, are gone.
+   */
+  detachFromAccount(): Promise<void>;
 }
 
 const parseTs = (iso: string | null | undefined, now: number): number | null => (iso ? Date.parse(iso) || now : null);
@@ -167,6 +172,13 @@ export class InMemoryPagesRepository implements PagesRepository {
 
   async linksFor(pageServerId: string) {
     return [...this.links.values()].filter((l) => l.pageServerId === pageServerId);
+  }
+
+  async detachFromAccount() {
+    for (const [k, p] of this.rows) {
+      if (p.serverId) this.rows.set(k, { ...p, serverId: null, syncState: 'pending', seq: 0 });
+    }
+    this.links.clear();
   }
 }
 
@@ -343,5 +355,12 @@ export class SqlitePagesRepository implements PagesRepository {
   async linksFor(pageServerId: string) {
     const rows = await this.db.getAllAsync<LinkRow>('SELECT * FROM page_links WHERE page_server_id = ?', pageServerId);
     return rows.map(linkFromRow);
+  }
+
+  async detachFromAccount() {
+    await this.db.runAsync(
+      "UPDATE pages SET server_id = NULL, sync_state = 'pending', seq = 0 WHERE server_id IS NOT NULL",
+    );
+    await this.db.runAsync('DELETE FROM page_links');
   }
 }

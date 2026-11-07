@@ -164,6 +164,25 @@ async def _live_singleton(db: AsyncSession, user_id: int, key: str) -> Screen | 
     )  # fmt: skip
 
 
+async def _removed_singleton(db: AsyncSession, user_id: int, key: str) -> Screen | None:
+    """The page to bring back. Accounts from before revival can have several: the last removed."""
+    return await db.scalar(
+        select(Screen)
+        .where(Screen.user_id == user_id, Screen.template_key == key,
+               Screen.singleton.is_(True), Screen.deleted_at.is_not(None))
+        .order_by(Screen.deleted_at.desc(), Screen.id.desc())
+        .limit(1)
+    )  # fmt: skip
+
+
+async def _bring_back(db: AsyncSession, page: Screen) -> None:
+    """Id, tab position, name, layout and rows stay; what was saved meanwhile is placed."""
+    await _check_room(db, page.user_id)
+    page.deleted_at = None
+    await db.flush()
+    await fill_page(db, page)
+
+
 def _singleton_exists(existing: Screen) -> ApiError:
     return ApiError(409, "singleton_exists", details={"page_id": str(existing.public_id)})
 
@@ -203,6 +222,13 @@ async def add_page(body: PageCreateIn, user: GatedUser, db: Db,
         rival = await _live_singleton(db, user.id, template.key)
         if rival is not None:
             raise _singleton_exists(rival)
+        removed = await _removed_singleton(db, user.id, template.key)
+        if removed is not None:
+            # The new client_id goes on the page, so a retry of this request finds it above.
+            removed.client_id = body.client_id
+            await _bring_back(db, removed)
+            response.status_code = 200
+            return PageCreateOut(page=page_out(removed), created=False, revived=True)
     await _check_room(db, user.id)
 
     page = await create_page(db, user.id, template, client_id=body.client_id, title=title,
@@ -266,11 +292,8 @@ async def restore_page(page_id: uuid.UUID, user: GatedUser, db: Db) -> PageOut:
     if page.singleton:
         rival = await _live_singleton(db, user.id, page.template_key)
         if rival is not None:
-            raise _singleton_exists(rival)
-    await _check_room(db, user.id)
-    page.deleted_at = None
-    await db.flush()
-    await fill_page(db, page)  # what was saved while the page was gone
+            raise _singleton_exists(rival)  # only accounts with duplicates from before revival
+    await _bring_back(db, page)
     return page_out(page)
 
 

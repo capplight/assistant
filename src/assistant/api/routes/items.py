@@ -40,10 +40,12 @@ from assistant.db.models_v2 import (
     Upload,
     UploadState,
 )
+from assistant.memory import enqueue_embed
 from assistant.pages import place_item
 from assistant.records import (
     CROSS_BORDER_KINDS,
     ai_consent_covers,
+    apply_corrections,
     children,
     content_hash,
     detect_lang,
@@ -166,6 +168,26 @@ async def _get(db: AsyncSession, user: CurrentUser, item_id: uuid.UUID,
     if item is None:
         raise ApiError(404, "not_found")
     return item
+
+
+def _check_correctable(item: Item, corrections: dict[str, str]) -> None:
+    fields = item.review_fields or {}
+    for key in corrections:
+        if key not in fields:
+            raise ApiError(422, "review_field_unknown", details={"field": key})
+        # «Проверьте» on a whole passage has no value of its own: that is a text edit + «Верно».
+        if fields[key].get("value") is None or fields[key].get("kind") == "transcript":
+            raise ApiError(422, "review_field_not_editable", details={"field": key})
+
+
+def _retry_of_fix(item: Item, body: ItemPatchIn) -> bool:
+    """The answer to a correction got lost and the phone sends it again: its base_seq is old because
+    of that very correction. Answer as if it had just worked."""
+    fields = item.review_fields or {}
+    return (bool(body.corrections) and body.model_fields_set <= {"corrections", "base_seq"}
+            and all(fields.get(key, {}).get("value") == value
+                    and fields.get(key, {}).get("state") == "verified"
+                    for key, value in body.corrections.items()))  # fmt: skip
 
 
 async def _duplicate(db: AsyncSession, item: Item) -> DuplicateOut | None:
@@ -355,27 +377,34 @@ async def get_item(item_id: uuid.UUID, user: GatedUser, db: Db) -> ItemOut:
 @router.patch("/{item_id}", response_model=ItemOut)
 async def patch_item(item_id: uuid.UUID, body: ItemPatchIn, user: GatedUser, db: Db) -> ItemOut:
     item = await _get(db, user, item_id, lock=True)
-    if body.base_seq is not None and body.base_seq != item.seq:
+    if body.base_seq is not None and body.base_seq != item.seq and not _retry_of_fix(item, body):
         raise ApiError(409, "conflict", details={"seq": item.seq})
     if item.deleted_at is not None:
         raise ApiError(409, "item_deleted")
+    text_before = item.text
+    embeddable = (item.title, item.text)
     if "title" in body.model_fields_set:
         item.title = body.title.strip() if body.title and body.title.strip() else None
         item.source_meta = {**(item.source_meta or {}), "title_source": "user"}
         item.ai_fields = [f for f in (item.ai_fields or []) if f != "title"]
     if "text" in body.model_fields_set and body.text is not None:
-        text = normalize_text(body.text) or None
-        changed = text != item.text
-        item.text = text
-        item.text_lang = detect_lang(text)
-        item.content_hash = content_hash(text)
-        if changed:  # the summary described the old text; a new one is on its way
-            item.summary = None
-            item.ai_fields = [f for f in (item.ai_fields or []) if f != "summary"]
-            if item.recording_id is not None:
-                item.source_meta = {**(item.source_meta or {}), "text_edited": True}
-            await enqueue_enrich(db, item, suffix=":edit", live=True)
-    if body.verify:
+        item.text = normalize_text(body.text) or None
+    corrected = False
+    if body.corrections:
+        _check_correctable(item, body.corrections)
+        corrected = apply_corrections(item, body.corrections)
+    text_changed = item.text != text_before
+    if text_changed:  # the summary described the old text; a new one is on its way
+        item.text_lang = detect_lang(item.text)
+        item.content_hash = content_hash(item.text)
+        item.summary = None
+        item.ai_fields = [f for f in (item.ai_fields or []) if f != "summary"]
+    # A late fragment must not rebuild a recording over what the person changed.
+    if (text_changed or corrected) and item.recording_id is not None:
+        item.source_meta = {**(item.source_meta or {}), "text_edited": True}
+    if text_changed:
+        await enqueue_enrich(db, item, suffix=":edit", live=True)
+    if body.verify or body.corrections:
         fields = {k: dict(v) for k, v in (item.review_fields or {}).items()}
         for key in body.verify:
             if key in fields:
@@ -389,6 +418,8 @@ async def patch_item(item_id: uuid.UUID, body: ItemPatchIn, user: GatedUser, db:
                 file = await original_file(db, owner.id, lock=True)
                 if file is not None and file.keep_reason == KeepReason.LOW_CONFIDENCE:
                     trash_file(file)
+    if (item.title, item.text) != embeddable and item.hidden_reason is None:
+        await enqueue_embed(db, item)
     await db.flush()
     return await one_out(db, item)
 
@@ -429,5 +460,7 @@ async def unmerge_item(item_id: uuid.UUID, user: GatedUser, db: Db) -> ItemOut:
             item.status = RecordStatus.NEEDS_CONSENT
         else:
             await enqueue_ingest(db, item, suffix=f":unmerge:{uuid.uuid4().hex[:12]}")
+    if item.text is not None:
+        await enqueue_embed(db, item)
     await db.flush()
     return await one_out(db, item)

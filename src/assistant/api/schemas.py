@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from assistant.db.models_v2 import ConsentKind, Platform, PushProvider
 
@@ -70,6 +70,13 @@ class OtpVerifyOut(TokenPair):
     # True when the phone already belonged to another account and we signed into it.
     # Moving the anonymous account's data/consents into it is not implemented yet.
     account_switched: bool
+    # Consents of the account these tokens are for (docs/api/auth.md), same as GET /v1/consents.
+    app_enabled: bool  # pd_processing + terms active; false: show S05 before anything else
+    ai_enabled: bool  # pd_processing + terms + ai_cross_border active
+
+
+class MePatchIn(BaseModel):
+    display_name: str | None = Field(default=None, max_length=100)  # null or blank: forget it
 
 
 # --- devices ---
@@ -290,7 +297,24 @@ class ItemPatchIn(BaseModel):
     title: str | None = Field(default=None, max_length=500)
     text: str | None = Field(default=None, max_length=MAX_ITEM_TEXT)
     verify: list[str] = Field(default_factory=list, max_length=100)  # review_fields keys: «Верно»
+    # «Исправить»: review_fields key -> the person's value. Needs base_seq.
+    corrections: dict[str, Annotated[str, Field(max_length=500)]] = Field(
+        default_factory=dict, max_length=100)
     base_seq: int | None = None  # optimistic check: 409 conflict if the record changed since
+
+    @field_validator("corrections")
+    @classmethod
+    def _one_line_values(cls, values: dict[str, str]) -> dict[str, str]:
+        cleaned = {key: " ".join(value.split()) for key, value in values.items()}
+        if not all(cleaned.values()):
+            raise ValueError("a correction cannot be empty")
+        return cleaned
+
+    @model_validator(mode="after")
+    def _corrections_need_base(self) -> "ItemPatchIn":
+        if self.corrections and self.base_seq is None:
+            raise ValueError("corrections need base_seq")
+        return self
 
 
 class ItemListOut(BaseModel):
@@ -375,6 +399,7 @@ class PageCreateIn(BaseModel):
 class PageCreateOut(BaseModel):
     page: PageOut
     created: bool
+    revived: bool = False  # True: a removed singleton page came back, with its id and order
 
 
 class PagePatchIn(BaseModel):
@@ -420,10 +445,45 @@ class PageItemAddOut(BaseModel):
     created: bool
 
 
+class PageSummaryOut(BaseModel):
+    page_id: uuid.UUID
+    item_count: int
+    last_titles: list[str]
+    aggregates: dict[str, Any]
+    seq: int
+    updated_at: datetime
+
+
+class PageRefOut(BaseModel):
+    id: uuid.UUID
+    title: str
+    icon: str
+
+
+class SearchHitOut(BaseModel):
+    item_id: uuid.UUID
+    kind: str
+    status: str
+    title: str | None
+    snippet: str
+    highlights: list[list[int]]  # [start, end) in `snippet`, UTF-16 units
+    occurred_at: datetime | None
+    created_at: datetime
+    ai_label: str | None
+    pages: list[PageRefOut]
+    matched_by: list[str]  # words | typo | meaning
+
+
+class SearchOut(BaseModel):
+    results: list[SearchHitOut]
+    semantic: bool  # false: search by meaning did not run this time
+
+
 class SyncOut(BaseModel):
     items: list[ItemOut]  # changed since `since`, incl. trashed (deleted_at) and hidden ones
     screens: list[PageOut]  # pages, incl. removed ones (deleted_at)
     screen_items: list[PageItemOut]  # item-on-page links, incl. removed ones (removed_at)
+    screen_summaries: list[PageSummaryOut]  # gone with their page: no tombstones of their own
     tombstones: list[TombstoneOut]  # purged for good: drop locally
     next_since: int  # pass as `since` next time
     has_more: bool  # true: call again right away with next_since

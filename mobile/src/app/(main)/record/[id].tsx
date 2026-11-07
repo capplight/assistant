@@ -2,31 +2,40 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Check, ChevronLeft, TriangleAlert } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Modal, Pressable, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
+import { isTrashed } from '@/db/records';
 import { recordTitle, sourceLine, statusLine } from '@/records/format';
 import { pluralForm, reviewRows, type ReviewRow } from '@/records/review';
 import { useRecord } from '@/records/useRecords';
 import { getRecordActions, refreshRecord } from '@/services';
-import { useTheme } from '@/theme';
+import { useUndo } from '@/store/undo';
+import { MAX_FONT_SCALE, useTheme } from '@/theme';
+
+/** The server's limit for one «Исправить». */
+const MAX_FIX = 500;
+const NUMERIC_FIELDS = new Set(['phone', 'amount', 'iin_bin']);
 
 const KNOWN_FIELDS = new Set(['phone', 'amount', 'iin_bin', 'iban', 'doc_number', 'transcript']);
 
 /**
- * S09: the record card. What it is, where from, what was understood, and «Проверьте» / «Верно»
- * (R-36: only «Верно» removes the mark; it works offline through the outbox).
+ * S09: the record card. What it is, where from, what was understood, and «Проверьте»: «Верно» or
+ * «Исправить» (R-36: only the person removes the mark), «Удалить». All of them work offline through
+ * the outbox. A whole recognized passage has no value of its own to correct: only «Верно» there.
  * Not here yet: «Ещё», «Показать ещё на…», stacks, originals (later weeks).
  */
 export default function RecordScreen() {
   const theme = useTheme();
   const { t, i18n } = useTranslation();
-  const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
+  const { id, from, q } = useLocalSearchParams<{ id: string; from?: string; q?: string }>();
   const record = useRecord(id);
+  const showDeleted = useUndo((s) => s.showDeleted);
   const [asking, setAsking] = useState<ReviewRow | null>(null);
+  const [fixing, setFixing] = useState<string | null>(null);
   const serverId = record?.serverId;
 
   useEffect(() => {
@@ -35,6 +44,7 @@ export default function RecordScreen() {
 
   const back = () => {
     if (from) router.navigate({ pathname: '/page/[id]', params: { id: from } });
+    else if (q) router.navigate({ pathname: '/search', params: { q } });
     else router.navigate('/records');
   };
 
@@ -52,7 +62,12 @@ export default function RecordScreen() {
   );
 
   if (record === undefined) return <Screen testID="record-loading" edges={['top']}>{null}</Screen>;
-  if (record === null) {
+  const closeSheet = () => {
+    setAsking(null);
+    setFixing(null);
+  };
+
+  if (record === null || isTrashed(record)) {
     return (
       <Screen testID="record-missing" edges={['top']}>
         {backRow}
@@ -170,9 +185,26 @@ export default function RecordScreen() {
         </View>
       ) : null}
 
+      <Button
+        testID="record-delete"
+        label={t('record.delete')}
+        variant="text"
+        labelColor="alarm"
+        style={{ marginTop: theme.space[8] }}
+        onPress={() => {
+          const recordId = record.id;
+          void getRecordActions().then((a) => a.remove(recordId));
+          showDeleted(recordId);
+          back();
+        }}
+      />
+
       {asking ? (
-        <Modal visible transparent animationType="slide" onRequestClose={() => setAsking(null)}>
-          <View style={[styles.scrim, { backgroundColor: theme.colors.scrim }]}>
+        <Modal visible transparent animationType="slide" onRequestClose={closeSheet}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={[styles.scrim, { backgroundColor: theme.colors.scrim }]}
+          >
             <SafeAreaView
               edges={['bottom']}
               testID="check-sheet"
@@ -188,26 +220,73 @@ export default function RecordScreen() {
               ]}
             >
               <AppText variant="meta">{fieldLabel(asking.kind)}</AppText>
-              <AppText variant="title2" accessibilityRole="header">
-                {t('check.confirm', { value: asking.value ?? '' })}
-              </AppText>
-              <Button
-                testID="check-ok"
-                label={t('check.ok')}
-                onPress={() => {
-                  const key = asking.key;
-                  setAsking(null);
-                  void getRecordActions().then((a) => a.verify(record.id, key));
-                }}
-              />
-              <Button
-                testID="check-close"
-                label={t('common.close')}
-                variant="outline"
-                onPress={() => setAsking(null)}
-              />
+              {fixing === null ? (
+                <>
+                  <AppText variant="title2" accessibilityRole="header">
+                    {t('check.confirm', { value: asking.value ?? '' })}
+                  </AppText>
+                  <Button
+                    testID="check-ok"
+                    label={t('check.ok')}
+                    onPress={() => {
+                      const key = asking.key;
+                      closeSheet();
+                      void getRecordActions().then((a) => a.verify(record.id, key));
+                    }}
+                  />
+                  {asking.value !== null && asking.kind !== 'transcript' ? (
+                    <Button
+                      testID="check-fix"
+                      label={t('check.fix')}
+                      variant="outline"
+                      onPress={() => setFixing(asking.value ?? '')}
+                    />
+                  ) : null}
+                  <Button testID="check-close" label={t('common.close')} variant="text" onPress={closeSheet} />
+                </>
+              ) : (
+                <>
+                  <AppText variant="title2" accessibilityRole="header">
+                    {t('check.fix_title')}
+                  </AppText>
+                  <TextInput
+                    testID="check-fix-input"
+                    accessibilityLabel={fieldLabel(asking.kind)}
+                    autoFocus
+                    value={fixing}
+                    onChangeText={setFixing}
+                    maxLength={MAX_FIX}
+                    keyboardType={NUMERIC_FIELDS.has(asking.kind) ? 'phone-pad' : 'default'}
+                    maxFontSizeMultiplier={MAX_FONT_SCALE}
+                    style={[
+                      theme.type.body,
+                      {
+                        minHeight: theme.size.primaryTouch,
+                        borderWidth: 1,
+                        borderColor: theme.colors.lineStrong,
+                        borderRadius: theme.radius.input,
+                        paddingHorizontal: theme.space[3],
+                        color: theme.colors.ink,
+                        backgroundColor: theme.colors.bg,
+                      },
+                    ]}
+                  />
+                  <Button
+                    testID="check-fix-save"
+                    label={t('check.save')}
+                    disabled={!fixing.trim()}
+                    onPress={() => {
+                      const { key } = asking;
+                      const value = fixing;
+                      closeSheet();
+                      void getRecordActions().then((a) => a.correct(record.id, key, value));
+                    }}
+                  />
+                  <Button testID="check-fix-cancel" label={t('check.cancel')} variant="text" onPress={closeSheet} />
+                </>
+              )}
             </SafeAreaView>
-          </View>
+          </KeyboardAvoidingView>
         </Modal>
       ) : null}
     </Screen>

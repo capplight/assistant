@@ -10,6 +10,7 @@ import { Screen } from '@/components/Screen';
 import { TemplateCard } from '@/components/TemplateCard';
 import { saveNewPages } from '@/pages/service';
 import { DEFAULT_PREMARKED, GALLERY_ORDER, TEMPLATES, type TemplateKey } from '@/pages/templates';
+import { useSavedLine } from '@/store/connectivity';
 import { premarksFor, useOnboarding } from '@/store/onboarding';
 import { usePages } from '@/store/pages';
 import { useTheme } from '@/theme';
@@ -23,6 +24,7 @@ const isTemplateKey = (s: string): s is TemplateKey => TEMPLATES.some((t) => t.k
  * «Подходит» creates local pages; the server gets them via outbox (one POST /pages per page).
  */
 export default function GalleryScreen() {
+  const savedLine = useSavedLine();
   const theme = useTheme();
   const { t } = useTranslation();
   const params = useLocalSearchParams<{ mark?: string; from?: string }>();
@@ -73,7 +75,7 @@ export default function GalleryScreen() {
         </Pressable>
       ) : (
         <AppText color="done" style={{ marginBottom: theme.space[2] }}>
-          {t('phrase.saved')}
+          {savedLine}
         </AppText>
       )}
       <AppText variant="title1" accessibilityRole="header">

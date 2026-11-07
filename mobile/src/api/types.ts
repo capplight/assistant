@@ -50,8 +50,14 @@ export type OtpRequestIn = { phone: string; purpose?: 'link' | 'login' };
 /** `dev_code` only with API_DEV_MODE=true and the fake SMS sender. */
 export type OtpRequestOut = { challenge_id: string; expires_at: string; dev_code?: string | null };
 export type OtpVerifyIn = { challenge_id: string; phone: string; code: string };
-/** `account_switched`: the phone already had an account; these tokens are for that account. */
-export type OtpVerifyOut = TokenPair & { account_switched: boolean };
+/**
+ * `account_switched`: the phone already had an account; these tokens are for that account.
+ * app_enabled, ai_enabled: consents of the account the tokens are for. They, not account_switched,
+ * decide about S05 (docs/api/auth.md).
+ */
+export type OtpVerifyOut = TokenPair & { account_switched: boolean; app_enabled: boolean; ai_enabled: boolean };
+/** PATCH /me, the name from S04b. Up to 100 chars; null or blank forgets it. */
+export type ProfilePatchIn = { display_name: string | null };
 
 // --- consents ---
 
@@ -203,6 +209,8 @@ export type ItemOut = {
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;
+  /** In «Удалённые записи» until this time. */
+  purge_after?: string | null;
   seq: number;
 };
 
@@ -212,6 +220,8 @@ export type ItemPatchIn = {
   text?: string;
   /** Keys of `review_fields` the person confirmed with «Верно». */
   verify?: string[];
+  /** «Исправить»: key of `review_fields` → the value the person typed. */
+  corrections?: Record<string, string>;
   base_seq?: number;
 };
 
@@ -224,6 +234,30 @@ export type ItemCreateOut = {
   auto_merged: boolean;
   duplicate: { canonical_id: string; canonical_created_at: string; undo_path: string } | null;
 };
+
+// --- search (docs/api/search.md) ---
+
+export type SearchHitOut = {
+  item_id: string;
+  kind: ItemKind;
+  status: ItemStatus;
+  title: string | null;
+  /** Plain text, about 200 characters. */
+  snippet: string;
+  /** [start, end) offsets inside the snippet, UTF-16. */
+  highlights: [number, number][];
+  occurred_at: string | null;
+  created_at: string;
+  /** Show it as is next to the title (R-06). */
+  ai_label: string | null;
+  pages: { id: string; title: string; icon: string }[];
+  matched_by: ('words' | 'typo' | 'meaning')[];
+};
+
+export type SearchIn = { q: string; page_id?: string; limit?: number };
+
+/** : words and typos only this time. Not an error, nothing to tell the person. */
+export type SearchOut = { results: SearchHitOut[]; semantic: boolean };
 
 // --- pages (docs/api/pages.md) ---
 
@@ -257,7 +291,8 @@ export type PageCreateIn = {
   created_by?: 'user' | 'onboarding_gallery' | 'onboarding_blank' | 'onboarding_phrase';
 };
 
-export type PageCreateOut = { page: PageOut; created: boolean };
+/** `revived`: a removed topic page came back, with its id, order and rows; `created` is false. */
+export type PageCreateOut = { page: PageOut; created: boolean; revived?: boolean };
 
 export type PagePatchIn = { title?: string; icon?: string; layout?: string; base_view_version?: number };
 
@@ -281,6 +316,16 @@ export type PageLinkCreateOut = { link: PageItemOut; created: boolean };
 
 // --- sync (spec §4.4; aligned with routes/sync.py as of 2026-11-07) ---
 
+/** Counted by the server for each page. The phone counts its own lists, so it does not keep these. */
+export type PageSummaryOut = {
+  page_id: string;
+  item_count: number;
+  last_titles: string[];
+  aggregates: Record<string, unknown>;
+  seq: number;
+  updated_at: string;
+};
+
 /** `entity`: item | screen | screen_item (docs/api/pages.md). */
 export type Tombstone = { entity: string; id: string; seq: number; deleted_at?: string };
 
@@ -293,6 +338,7 @@ export type SyncOut = {
   items?: ItemOut[];
   screens?: PageOut[];
   screen_items?: PageItemOut[];
+  screen_summaries?: PageSummaryOut[];
   tombstones?: Tombstone[];
   next_since: number;
   has_more: boolean;

@@ -25,16 +25,21 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
-async def user_out(db: AsyncSession, user: User) -> UserOut:
+async def has_verified_phone(db: AsyncSession, user_id: int) -> bool:
     phone = await db.scalar(
         select(AuthIdentity.id).where(
-            AuthIdentity.user_id == user.id,
+            AuthIdentity.user_id == user_id,
             AuthIdentity.provider == AuthProvider.PHONE,
             AuthIdentity.verified_at.is_not(None),
         )
     )
+    return phone is not None
+
+
+async def user_out(db: AsyncSession, user: User) -> UserOut:
+    linked = await has_verified_phone(db, user.id)
     return UserOut(id=user.public_id, display_name=user.display_name, locale=user.locale,
-                   tz=user.tz, country=user.country, is_anonymous=phone is None,
+                   tz=user.tz, country=user.country, is_anonymous=not linked,
                    age_confirmed=user.age_confirmed_at is not None)  # fmt: skip
 
 
@@ -102,13 +107,20 @@ async def anonymous_sign_in(
     return user, True
 
 
+def _refresh_rejected(linked: bool | None) -> ApiError:
+    """`account_linked` tells the phone how to recover (docs/api/auth.md): true = phone sign-in,
+    false = POST /auth/anonymous, null = this token is unknown, use what the phone remembers."""
+    return ApiError(401, "invalid_refresh", details={"account_linked": linked})
+
+
 async def rotate_refresh(db: AsyncSession, ctx: ApiContext, refresh_token: str) -> TokenPair:
     refresh_hash = ctx.hash(refresh_token, purpose="refresh")
     session = await db.scalar(
         select(AuthSession).where(AuthSession.refresh_hash == refresh_hash).with_for_update()
     )
     if session is None:
-        raise ApiError(401, "invalid_refresh")
+        raise _refresh_rejected(None)
+    linked = await has_verified_phone(db, session.user_id)
     now = _now()
     if session.revoked_at is not None:
         # Reuse of a rotated token: someone else may hold the chain. Revoke all of the user's
@@ -120,9 +132,9 @@ async def rotate_refresh(db: AsyncSession, ctx: ApiContext, refresh_token: str) 
             stmt = stmt.where(AuthSession.device_id == session.device_id)
         await db.execute(stmt.values(revoked_at=now))
         await db.commit()
-        raise ApiError(401, "invalid_refresh")
+        raise _refresh_rejected(linked)
     if session.expires_at <= now:
-        raise ApiError(401, "invalid_refresh")
+        raise _refresh_rejected(linked)
     user = await db.get(User, session.user_id)
     assert user is not None  # FK
     ensure_active(user)

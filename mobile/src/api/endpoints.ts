@@ -20,10 +20,14 @@ import type {
   PageLinkCreateOut,
   PageOut,
   PagePatchIn,
+  ProfilePatchIn,
+  SearchIn,
+  SearchOut,
   ServerConsentKind,
   SyncOut,
   UploadIn,
   UploadOut,
+  UserOut,
 } from './types';
 
 /** Reads a local file and PUTs it to a presigned URL. Injected so tests don't touch the filesystem. */
@@ -38,14 +42,16 @@ export class Api {
 
   // phone (S04b): link to this account, or sign into the account that already has this phone
   requestOtp(body: OtpRequestIn): Promise<OtpRequestOut> {
-    return this.client.request('POST', '/auth/otp/request', { body });
+    return this.client.requestOptionalAuth('POST', '/auth/otp/request', { body });
   }
 
-  /** Saves the new tokens: from here on the app works as this account. */
-  async verifyOtp(body: OtpVerifyIn): Promise<OtpVerifyOut> {
-    const out = await this.client.request<OtpVerifyOut>('POST', '/auth/otp/verify', { body });
-    await this.client.tokens.saveTokens(out);
-    return out;
+  /** Does not save the tokens: the caller first has to stop whatever works as the old account. */
+  verifyOtp(body: OtpVerifyIn): Promise<OtpVerifyOut> {
+    return this.client.requestOptionalAuth('POST', '/auth/otp/verify', { body });
+  }
+
+  patchProfile(body: ProfilePatchIn): Promise<UserOut> {
+    return this.client.request('PATCH', '/me', { body });
   }
 
   // consents — the text endpoint is public (shown before any account data matters)
@@ -101,6 +107,20 @@ export class Api {
   /** «Отменить» for an automatically merged exact repeat: the record is visible again. */
   unmergeItem(id: string): Promise<ItemOut> {
     return this.client.request('POST', `/items/${encodeURIComponent(id)}/unmerge`);
+  }
+
+  /** To «Удалённые записи» for 30 days. Repeatable. */
+  deleteItem(id: string): Promise<ItemOut> {
+    return this.client.request('DELETE', `/items/${encodeURIComponent(id)}`);
+  }
+
+  restoreItem(id: string): Promise<ItemOut> {
+    return this.client.request('POST', `/items/${encodeURIComponent(id)}/restore`);
+  }
+
+  // search — docs/api/search.md
+  search(query: SearchIn): Promise<SearchOut> {
+    return this.client.request('GET', '/search', { query });
   }
 
   // pages — docs/api/pages.md

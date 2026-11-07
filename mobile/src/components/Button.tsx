@@ -14,6 +14,8 @@ type Props = Omit<PressableProps, 'children' | 'style'> & {
   style?: StyleProp<ViewStyle>;
   /** Defaults to 56 (main button). */
   minHeight?: number;
+  /** A text button for what cannot be mistaken: «Удалить» is `alarm`. */
+  labelColor?: 'alarm';
 };
 
 /** Button with visible label, ≥56 pt by default, wraps text instead of truncating. */
@@ -23,6 +25,7 @@ export function Button({
   icon,
   style,
   minHeight,
+  labelColor,
   disabled,
   accessibilityLabel,
   ...rest
@@ -30,7 +33,7 @@ export function Button({
   const theme = useTheme();
   const { colors } = theme;
   const bg = variant === 'primary' ? colors.accent : 'transparent';
-  const fg = variant === 'primary' ? 'onAccent' : 'accent';
+  const fg = labelColor ?? (variant === 'primary' ? 'onAccent' : 'accent');
   return (
     <Pressable
       accessibilityRole="button"

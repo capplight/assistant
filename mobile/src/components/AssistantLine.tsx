@@ -4,6 +4,7 @@ import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
+import { looksLikeQuestion } from '@/records/search';
 import { getCapture } from '@/services';
 import { MAX_FONT_SCALE, useTheme } from '@/theme';
 import { useAssistant } from '@/store/assistant';
@@ -72,6 +73,11 @@ export function AssistantLine({ scope }: { scope?: 'all' } = {}) {
     // Consent gate (3-engineering §6.14): nothing is sent before S05.
     if (!value || !consentGiven) return;
     setText('');
+    // v0: a question looks through what is saved, everything else is saved (R-53). The server decides from week 5.
+    if (looksLikeQuestion(value)) {
+      router.navigate({ pathname: '/search', params: { q: value, from: 'line' } });
+      return;
+    }
     const userMsg = {
       id: newId(),
       role: 'user' as const,
@@ -81,19 +87,19 @@ export function AssistantLine({ scope }: { scope?: 'all' } = {}) {
       at: new Date().toISOString(),
     };
     addMessage(userMsg);
-    // v0: the line only records (week 2); questions/actions via /chat/messages come in week 5.
+    // v0: no answers yet; questions and actions via /chat/messages come in week 5.
     const capture = await getCapture();
     await capture.saveText({ text: value, source: 'typed', pageId: current.id });
     const reply = {
       id: newId(),
       role: 'assistant' as const,
-      text: t('phrase.saved'),
+      text: t('line.saved'),
       pageId: current.id,
       pageTitle: current.title,
       at: new Date().toISOString(),
     };
     addMessage(reply);
-    showBanner({ messageId: reply.id, text: reply.text });
+    showBanner({ messageId: reply.id, text: reply.text, saved: true });
     askPhoneOnce();
   };
 

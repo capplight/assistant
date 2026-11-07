@@ -55,6 +55,37 @@ async def enqueue(
     return job
 
 
+async def enqueue_again(
+    session: AsyncSession,
+    kind: str,
+    payload: dict,
+    idempotency_key: str,
+    *,
+    again_if: tuple[JobStatus, ...] = (JobStatus.DONE, JobStatus.FAILED, JobStatus.RUNNING),
+) -> None:
+    """One row per subject, for work to redo when the subject changes: add the job or put it back
+    in the queue. Back from RUNNING means the worker must not close it: see `still_mine`."""
+    now = datetime.now(UTC)
+    stmt = (
+        pg_insert(Job)
+        .values(kind=kind, payload=payload, run_after=now, status=JobStatus.QUEUED, attempts=0,
+                max_attempts=5, idempotency_key=idempotency_key)
+        .on_conflict_do_update(
+            index_elements=["idempotency_key"],
+            index_where=Job.idempotency_key.is_not(None),
+            set_={"status": JobStatus.QUEUED, "run_after": now, "attempts": 0, "locked_at": None,
+                  "last_error": None},
+            where=Job.status.in_(again_if),
+        )
+    )  # fmt: skip
+    await session.execute(stmt)
+
+
+def still_mine(job: Job, locked_at: datetime | None) -> bool:
+    """False: while this worker ran, `enqueue_again` queued the job anew, so it isn't over."""
+    return job.status == JobStatus.RUNNING and job.locked_at == locked_at
+
+
 async def claim(session: AsyncSession, kinds: list[str] | None = None) -> Job | None:
     """Lock and mark one ready job as running. Commit the session right after to release the row."""
     now = datetime.now(UTC)

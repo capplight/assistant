@@ -5,7 +5,8 @@
 
 Three short transactions per job; no transaction is open while reading the original from
 storage or calling OCR/STT/a link. The last one queues enrichment (`ai:enrich`, records/enrich.py).
-Voice fragments of one recording come together in records/voice.py. Embeddings and stacks: later.
+It also queues `embed:item` (assistant.memory). Voice fragments of one recording come together in
+records/voice.py. Stacks: later.
 
 Consent gate: kinds in CROSS_BORDER_KINDS (voice -> STT abroad) run only when ai_cross_border
 covers the transcriber's recipient; otherwise the record becomes `needs_consent` and is
@@ -21,11 +22,18 @@ from typing import Protocol
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from assistant.ai import Router
-from assistant.config import Settings
+from assistant.config import Settings, get_settings
 from assistant.db import queue
 from assistant.db.models import Item, Job
 from assistant.db.models_v2 import KeepReason, RecordKind, RecordStatus
 from assistant.logs import error_text
+from assistant.memory import (
+    OriginalFacts,
+    OriginalFate,
+    StorageFlags,
+    enqueue_embed,
+    original_fate,
+)
 from assistant.pages import place_item
 from assistant.records import enrich, store, voice
 from assistant.records.adapters import FakeOcr, FakeTranscriber, Ocr, Transcriber
@@ -58,6 +66,8 @@ MAX_TEXT_CHARS = 200_000
 
 class BlobReader(Protocol):
     async def get(self, key: str) -> bytes | None: ...
+
+    async def delete(self, key: str) -> None: ...  # the purge in records.worker
 
 
 @dataclass
@@ -273,12 +283,18 @@ async def _finish(maker: async_sessionmaker[AsyncSession], item_id: int,
 
         file = await store.original_file(s, item.id, lock=True)
         if file is not None:
-            if result.keep_original is not None:
-                store.keep_file(file, result.keep_original)
-            elif unsure:
-                store.keep_file(file, KeepReason.LOW_CONFIDENCE)
-            else:
+            fate = original_fate(
+                OriginalFacts(has_text=bool(text), confidence=result.confidence,
+                              data_not_smaller=result.keep_original == KeepReason.SIZE_RULE,
+                              text_possible=kind_needs_text(str(item.kind))),
+                StorageFlags(keep_while_unsure=get_settings().storage_keep_while_unsure),
+            )  # fmt: skip
+            if fate == OriginalFate.TRASH:
                 store.trash_file(file, now)
+            elif fate == OriginalFate.KEEP_SIZE:
+                store.keep_file(file, KeepReason.SIZE_RULE)
+            else:
+                store.keep_file(file, KeepReason.LOW_CONFIDENCE)
 
         if (item.hidden_reason is None and item.content_hash
                 and not (item.source_meta or {}).get("unmerged")):  # fmt: skip
@@ -291,6 +307,7 @@ async def _finish(maker: async_sessionmaker[AsyncSession], item_id: int,
                     store.trash_file(file, now)
         if item.hidden_reason is None:
             await enrich.enqueue_enrich(s, item)
+            await enqueue_embed(s, item)
         await s.flush()
         await place_item(s, item)  # the text is known now: rules by words can match
         status = str(item.status)

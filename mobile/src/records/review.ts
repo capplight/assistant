@@ -1,17 +1,21 @@
 import type { LocalRecord } from '@/db/records';
 
-/** A «Проверьте» field as the card shows it: server state + «Верно» still on its way. */
+/** A «Проверьте» field as the card shows it: server state + «Верно» / «Исправить» still on their way. */
 export type ReviewRow = { key: string; kind: string; value: string | null; verified: boolean };
 
 export function reviewRows(rec: LocalRecord): ReviewRow[] {
   const pending = rec.pending.verify ?? {};
-  return Object.entries(rec.reviewFields).map(([key, f]) => ({
-    key,
-    kind: f.kind,
-    value: f.value,
-    // A value that changed after «Верно» has to be confirmed again.
-    verified: f.state === 'verified' || (key in pending && pending[key] === f.value),
-  }));
+  const corrected = rec.pending.corrected ?? {};
+  return Object.entries(rec.reviewFields).map(([key, f]) => {
+    const typed = corrected[key];
+    return {
+      key,
+      kind: f.kind,
+      value: typed ?? f.value,
+      // What the person typed needs no checking. A value that changed after «Верно» is asked again.
+      verified: typed !== undefined || f.state === 'verified' || (key in pending && pending[key] === f.value),
+    };
+  });
 }
 
 export const unverifiedCount = (rec: LocalRecord): number => reviewRows(rec).filter((r) => !r.verified).length;

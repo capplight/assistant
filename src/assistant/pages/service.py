@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from assistant.db.ids import uuid7
 from assistant.db.models import Item
 from assistant.db.models_pages import AddedBy, Screen, ScreenCreatedBy, ScreenItem, ScreenTemplate
+from assistant.db.models_v2 import HiddenReason
 from assistant.pages import lexorank
 from assistant.pages.rules import ItemFacts, matches
 
@@ -156,7 +157,8 @@ async def place_item(session: AsyncSession, item: Item) -> int:
 
 async def fill_page(session: AsyncSession, page: Screen) -> int:
     """Bring in what the memory already holds, so a new page isn't empty if something matches.
-    Trashed and merged items are included (reads hide them): restoring one needs no extra work."""
+    Trashed and merged items are included (reads hide them): restoring one needs no extra work.
+    Voice fragments are not: a fragment reaches pages through its recording."""
     await lock_user(session, page.user_id)
     rule = (await _rules(session, [page]))[page.id]
     if not rule.get("any"):
@@ -165,7 +167,8 @@ async def fill_page(session: AsyncSession, page: Screen) -> int:
     rows = await session.execute(
         select(Item.id, Item.kind, Item.envelope, Item.title, Item.summary,
                func.coalesce(Item.text, Item.raw_text).label("body"), when.label("when"))
-        .where(Item.user_id == page.user_id)
+        .where(Item.user_id == page.user_id,
+               Item.hidden_reason.is_distinct_from(HiddenReason.VOICE_FRAGMENT))
         .order_by(when.desc(), Item.id.desc())
     )  # fmt: skip
     found = [r for r in rows if matches(rule, ItemFacts(kind=str(r.kind), envelope=r.envelope,

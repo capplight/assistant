@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 
+import { useSavedLine } from '@/store/connectivity';
 import { useAssistant } from '@/store/assistant';
 import { useTheme } from '@/theme';
 
@@ -18,6 +19,7 @@ export function AnswerBanner() {
   const { t } = useTranslation();
   const banner = useAssistant((s) => s.banner);
   const closeBanner = useAssistant((s) => s.closeBanner);
+  const savedLine = useSavedLine();
   if (!banner) return null;
   return (
     <View
@@ -36,7 +38,7 @@ export function AnswerBanner() {
         },
       ]}
     >
-      <AppText numberOfLines={2}>{banner.text}</AppText>
+      <AppText numberOfLines={2}>{banner.saved ? savedLine : banner.text}</AppText>
       <View style={[styles.row, { gap: theme.space[2], flexDirection: theme.largeFont ? 'column' : 'row' }]}>
         <Button
           testID="answer-open"

@@ -5,7 +5,8 @@ Public surface for other modules (api, future router/enrichment):
 - store: `find_canonical`, `merge_into`, `unmerge`, `trash_item`, `restore_item`,
   `purge_trashed_items`, `trash_file`, `original_file`, `ai_consent_covers`
 - ingest: `enqueue_ingest`, `requeue_needs_consent`, `run_ingest`, `IngestDeps`, `JOB_PREFIX`
-- enrich: `Envelope`, `enqueue_enrich`, `run_enrich`, `promote_if_waiting`, `JOB_ENRICH`
+- enrich: `Envelope`, `enqueue_enrich`, `run_enrich`, `promote_if_waiting`, `apply_corrections`,
+  `JOB_ENRICH`
 - batching: `flush_batches`, `poll_batches`, `batch_tick`
 - voice: `enqueue_sweep`, `children`, `sweep_recording`
 - links: `LinkReader`, `LinkContent`, `WebLinkReader`, `FakeLinkReader`
@@ -28,6 +29,7 @@ from assistant.records.batching import batch_tick, flush_batches, poll_batches
 from assistant.records.enrich import (
     JOB_ENRICH,
     Envelope,
+    apply_corrections,
     enqueue_enrich,
     promote_if_waiting,
     run_enrich,
@@ -61,7 +63,8 @@ __all__ = [
     "FakeLinkReader", "FakeOcr", "FakeTranscriber",
     "IngestDeps", "LinkContent", "LinkReader", "Ocr", "OcrResult", "TesseractOcr", "Transcriber",
     "Transcript", "WebLinkReader",
-    "ai_consent_covers", "batch_tick", "children", "content_hash", "detect_lang", "enqueue_enrich",
+    "ai_consent_covers", "apply_corrections", "batch_tick", "children", "content_hash",
+    "detect_lang", "enqueue_enrich",
     "enqueue_ingest", "enqueue_sweep", "find_canonical", "flush_batches",
     "make_ocr", "make_transcriber", "merge_into", "normalize_text", "original_file", "poll_batches",
     "promote_if_waiting", "purge_trashed_items", "requeue_needs_consent", "restore_item",

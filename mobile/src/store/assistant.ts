@@ -11,7 +11,8 @@ export type ChatMessage = {
   at: string;
 };
 
-export type Banner = { messageId: string; text: string };
+/** `saved`: «Сохранил.», worded by whether the phone is online right now. */
+export type Banner = { messageId: string; text: string; saved?: boolean };
 
 type AssistantState = {
   /** «Про: все страницы» toggle on the context chip. */

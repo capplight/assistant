@@ -1,4 +1,4 @@
-# Mobile app — week 3 (pages, record card, «Проверьте», S04b)
+# Mobile app — week 4 (search, trash, «Исправить», account decisions)
 
 Expo SDK 58 (React Native 0.88, New Architecture), TypeScript strict, expo-router.
 Spec: `../docs/spec/SPEC.md`, `../docs/spec/final/2-design.md`, `../docs/spec/final/3-engineering.md` §2.1, §11.2 (week 1, Mobile).
@@ -66,7 +66,10 @@ src/
     (main)/record/[id].tsx   record card (S09), `from` = the page it was opened from
     (main)/records.tsx       «Все записи»
     (main)/more.tsx          «Ещё» (S42)
-    phone.tsx                number, SMS code, name (S04b)
+    (main)/search.tsx        search from the assistant line and «Искать по всем страницам»
+    (main)/trash.tsx         «Удалённые записи» (S31)
+    phone.tsx                number, SMS code, name (S04b); `reason=expired`: sign in again
+    account-consent.tsx      S05 again, for an account with no consent of its own
     chat.tsx                 «Переписка» (S36, full screen placeholder)
   components/                AssistantLine, AnswerBanner, BottomTabs, AddSheet, TemplateCard, …
   theme/                     tokens from 2-design §2: colors (light/dark), typography, spacing, radii, motion
@@ -84,6 +87,44 @@ src/
   __tests__/                 onboarding, main, api (auth/refresh/errors), consent, sync, capture (share/voice), unit, fonts
   testing/                   helpers + FakeServer (fetch mock)
 ```
+
+## Week 4: what works
+
+Contracts: `../docs/api/auth.md`, `search.md`, `pages.md`. **Checked by tests with a fake server and on a real
+SQLite engine, not against the real server and not on a device.**
+
+- **Phone on another account** (`account/phone.ts`, `account/switch.ts`). The account's own `app_enabled` decides.
+  Nothing is resent. While S05 is open or postponed nothing is sent or fetched (`syncBlocked()`), and that holds over a
+  restart. «Позже» is on the screen: consent must be free; the app then works on this phone alone and asks at next launch.
+  **What happens to the old anonymous account's local records:** until consent, all stay on the phone and go nowhere.
+  After consent: live ones are queued for the new account under the same `client_id` from local text and files
+  («Ждёт связи» until sent); consent and device go first; never-sent ones stay queued (half-done uploads restart).
+  Deleted records and hidden repeats are not sent and stay local. A record with no local content stays on this phone
+  only. «Верно», «Исправить», «Удалить» on the way are dropped: they name old ids (a deletion stays local). Review marks
+  are re-created by the server. Pages are re-created; a topic the account has adopts its page. The copy on the old
+  anonymous account stays there untouched (no merge on the server).
+  If the account already has consent, the same move happens at once, and its «Без ИИ» choice stands.
+- **Rejected refresh**: `details.account_linked` (else the remembered `is_anonymous`). Linked: S04b with no
+  `Authorization`, tokens cleared, no `/auth/anonymous`; local data and the outbox stay. Anonymous: device key, as before.
+- **«Заметки»** shows every visible record, also offline and saved elsewhere, except those removed from the page (R-54,
+  no such action until week 7) and beyond the newest 2000 on the phone (`LIST_LIMIT`).
+- **Re-adding a removed topic page**: the tab goes to the old place at once; `POST /pages` (`revived`) replaces the
+  removed row, links are back because they are keyed by the server id.
+- **«Исправить»** on S09: overlay + `item.correct` → `PATCH /items/{id}` with `corrections`, `base_seq`. On conflict: the field unchanged, it goes
+  again on the newer version; the field changed, the card shows the current value and asks again. No «Исправить» for a whole transcript or an empty value (server: 422).
+- **Name**: `profile.update` → `PATCH /me`, only when typed. After a sign-in the server's name wins.
+- **«Найти на странице»** (S10): on the phone at once (`records/search.ts`: case, ё, Kazakh letters as Russian ones, digits
+  without spaces); online the server adds word forms, typos, meaning. No FTS5: a filter over the newest 2000 records.
+- **Search in the line**: v0 tells a question by its first word or «?» (`looksLikeQuestion`), and opens the results screen
+  with «Сохранить как запись» in case it was a note. Instead of S08: answers and chips come with chat in week 5.
+- **«Удалённые записи»** (S31) from «Ещё»: local, offline, «Вернуть»; `item.delete` / `item.restore`. «Удалить запись» on S09
+  with the undo strip. A tombstone deletes the local row.
+- **`/sync`**: `screen_summaries` are ignored (the phone counts its own lists); the cursor is always `next_since`.
+  «Сохранить оригинал» (`/items/{id}/original/pin`) is not on the card yet: not in the week 4 list.
+- **Undo strip**: 10 s, 15 s at font ≥150%, 30 s with a screen reader (the numbers of 2-design 4.3).
+  Not done: staying while it has screen reader focus.
+- **Copy**: «Сделаю, когда появится связь» only when the last request got no answer; otherwise «Сохранил.»
+  Hints in the line say what v0 does (`tpl.line_hint_now`); the spec's `tpl.line_hint` wait for their features.
 
 ## Week 3: what works
 
@@ -110,12 +151,11 @@ SQLite engine, not yet against the real server or on a device.**
   (`duplicate`) and from `/sync` (files and voice are compared later). Outbox `item.unmerge` → `POST /items/{id}/unmerge`.
 - **S04b**: after the first result, once (path 3: after S35; paths 1, 2: after the first record in the line). Number
   (+7 / +996 by the phone's region, tap to change), SMS code, name. «Позже» with the honest line. Later: «Ещё».
-  `account_switched`: the sync cursor goes back to 0, consent (same texts) and device are sent again.
+  Another account: see week 4.
 - **LexoRank** (`pages/lexorank.ts`) passes `../docs/spec/vectors/lexorank.json`, the file the server's tests use.
 - **SQLite** migrations run in a transaction. `sqlite.test.ts` runs them and all repository SQL on Node's SQLite.
 
-Not yet: «Исправить» on «Проверьте» (no API to change a field's value), the name on the server (no endpoint, kept on
-the phone), «Как показывать?» for «Своя страница» (always a list), offline placement by rules other than «always»,
+Not yet: «Как показывать?» for «Своя страница» (always a list), offline placement by rules other than «always»,
 `GET /page-templates` (the catalog is still local), voice for the name, the «укажите номер» card on «Сегодня» (R-08).
 
 ## Week 2: what works
@@ -123,7 +163,7 @@ the phone), «Как показывать?» for «Своя страница» (
 - **API client** (`src/api/`): base URL from config, JSON, `X-App-Version`, 15 s timeout. Anonymous account
   on first launch (`POST /v1/auth/anonymous` with a 32-byte device key generated once and kept in
   `expo-secure-store`); access/refresh tokens in secure store; `401` → `POST /v1/auth/refresh` (rotation,
-  single-flight) → retry; rejected refresh → sign in again with the same device key. Errors
+  single-flight) → retry; rejected refresh → see week 4. Errors
   `{code, message_ru, message_kk, retry_after?}` → `ApiError`, no answer → `NetworkError`;
   `errorMessage()` picks the server text by language or a local fallback.
   All paths/bodies are in `src/api/endpoints.ts` + `src/api/types.ts` — they are the only place to change if the server moves.
@@ -182,7 +222,7 @@ directly), background sync while the app is closed (`expo-background-task`), pus
 - «+» sheet options, «Как выглядит», Terms/Policy links, «Настраиваю для другого человека», most «Ещё»
   entries (Мои страницы, Что я сделал, Настройки, …) are placeholders.
 - Answer banner shows a local confirmation, not a real answer; no source chips or AI label yet (week 5).
-- «Найти на странице» is off the page until it works (week 4); «Порядок», «⋯ Ещё» week 7; «Настроить» week 11.
+- «Порядок», «⋯ Ещё» week 7; «Настроить» week 11.
 - Seed pages (Заметки / Дела и напоминания / Расходы) exist before onboarding; onboarding replaces them.
 - SQLite is plain (no SQLCipher / drizzle / FTS5 yet). Ids are pseudo-random UUID-shaped (TODO expo-crypto).
 - Theme follows the phone only (switch comes with S23). Reduce Motion is not wired (no animations yet).

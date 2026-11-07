@@ -9,7 +9,16 @@ import { useTheme } from '@/theme';
 import { AppText } from './AppText';
 
 /** One record in a list (S37 «Последние»). The whole card opens S09. */
-export function RecordRow({ record, onPress }: { record: LocalRecord; onPress: () => void }) {
+export function RecordRow({
+  record,
+  onPress,
+  snippet,
+}: {
+  record: LocalRecord;
+  onPress: () => void;
+  /** Search: the place that matched, when the title does not show it. */
+  snippet?: string | null;
+}) {
   const theme = useTheme();
   const { t, i18n } = useTranslation();
   const title = recordTitle(record, t);
@@ -37,6 +46,7 @@ export function RecordRow({ record, onPress }: { record: LocalRecord; onPress: (
       ]}
     >
       <AppText numberOfLines={3}>{title}</AppText>
+      {snippet && snippet !== title ? <AppText variant="meta">{snippet}</AppText> : null}
       <AppText variant="meta">{source}</AppText>
       {status ? <AppText variant="meta">{status}</AppText> : null}
       {record.aiGenerated ? <AppText variant="meta">{t('ai.label_short')}</AppText> : null}

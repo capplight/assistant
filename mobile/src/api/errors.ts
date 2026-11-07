@@ -30,6 +30,17 @@ export class NetworkError extends Error {
 }
 
 /**
+ * The linked account's refresh token was rejected: only the phone number can open it again (S04b).
+ * Never answered by a new anonymous account: that would hide the person's records from them.
+ */
+export class SignInRequiredError extends Error {
+  constructor() {
+    super('sign_in_required');
+    this.name = 'SignInRequiredError';
+  }
+}
+
+/**
  * Worth retrying later: network, timeouts, 5xx, 429, and `consent_required`
  * (consent may still be on its way in the outbox).
  */

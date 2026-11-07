@@ -10,6 +10,10 @@ export const KEYS = {
   access: 'auth.access_token',
   accessExp: 'auth.access_expires_at',
   refresh: 'auth.refresh_token',
+  /** '1': the account has a verified phone, a rejected refresh must not make a new anonymous one. */
+  linked: 'auth.linked',
+  /** Whose tokens these are: a different id after S04b means another account. */
+  userId: 'auth.user_id',
 } as const;
 
 export interface SecretStore {
@@ -95,10 +99,28 @@ export class TokenStorage {
     await this.store.set(KEYS.refresh, session.refreshToken);
     await this.store.set(KEYS.access, session.accessToken);
     await this.store.set(KEYS.accessExp, String(session.accessExpiresAt));
+    if (pair.user) {
+      if (pair.user.is_anonymous) await this.store.delete(KEYS.linked);
+      else await this.store.set(KEYS.linked, '1');
+      await this.store.set(KEYS.userId, pair.user.id);
+    }
     this.cache = session;
     return session;
   }
 
+  async isLinked(): Promise<boolean> {
+    return (await this.store.get(KEYS.linked)) === '1';
+  }
+
+  async markLinked(): Promise<void> {
+    await this.store.set(KEYS.linked, '1');
+  }
+
+  async getUserId(): Promise<string | null> {
+    return this.store.get(KEYS.userId);
+  }
+
+  /** The account stays known (`linked`, `userId`): only the tokens go. */
   async clearSession(): Promise<void> {
     this.cache = null;
     await Promise.all([

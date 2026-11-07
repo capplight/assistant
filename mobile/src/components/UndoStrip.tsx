@@ -1,29 +1,50 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, StyleSheet, View } from 'react-native';
 
 import { formatShortDate } from '@/records/format';
 import { getRecordActions } from '@/services';
 import { useToast } from '@/store/toast';
-import { UNDO_STRIP_MS, useUndo } from '@/store/undo';
+import { undoStripMs, useUndo } from '@/store/undo';
 import { useTheme } from '@/theme';
 
 import { AppText } from './AppText';
 import { Button } from './Button';
 
-/** «Уже было — добавил к записи от 12 мар · Отменить»: lives with the assistant line (2-design S37). */
+/**
+ * «Уже было — добавил к записи от 12 мар · Отменить», «Удалил запись · Отменить»: lives with the
+ * assistant line (2-design S37). Stays longer with a large font or a screen reader (2-design 4.3).
+ * Not done: «не исчезает, пока на ней фокус», React Native does not report screen reader focus.
+ */
 export function UndoStrip() {
   const theme = useTheme();
   const { t, i18n } = useTranslation();
   const strip = useUndo((s) => s.strip);
   const hide = useUndo((s) => s.hide);
   const showToast = useToast((s) => s.show);
+  const [screenReader, setScreenReader] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    void AccessibilityInfo.isScreenReaderEnabled()
+      .then((on) => {
+        if (alive) setScreenReader(on);
+      })
+      .catch(() => undefined);
+    const sub = AccessibilityInfo.addEventListener('screenReaderChanged', setScreenReader);
+    return () => {
+      alive = false;
+      sub.remove();
+    };
+  }, []);
+
+  const durationMs = undoStripMs({ largeFont: theme.largeFont, screenReader });
 
   useEffect(() => {
     if (!strip) return;
-    const timer = setTimeout(() => hide(strip.id), UNDO_STRIP_MS);
+    const timer = setTimeout(() => hide(strip.id), durationMs);
     return () => clearTimeout(timer);
-  }, [strip, hide]);
+  }, [strip, hide, durationMs]);
 
   if (!strip) return null;
   return (
@@ -42,7 +63,9 @@ export function UndoStrip() {
       ]}
     >
       <AppText variant="meta" color="ink" style={styles.text}>
-        {t('dedup.exact', { date: formatShortDate(strip.canonicalDate, i18n.language) })}
+        {strip.kind === 'merged'
+          ? t('dedup.exact', { date: formatShortDate(strip.canonicalDate, i18n.language) })
+          : t('record.deleted')}
       </AppText>
       <Button
         testID="undo-strip-undo"
@@ -52,7 +75,9 @@ export function UndoStrip() {
         onPress={() => {
           hide(strip.id);
           showToast(t('common.undone'));
-          void getRecordActions().then((a) => a.unmerge(strip.recordId));
+          void getRecordActions().then((a) =>
+            strip.kind === 'merged' ? a.unmerge(strip.recordId) : a.restore(strip.recordId),
+          );
         }}
       />
     </View>

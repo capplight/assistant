@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from assistant.db import queue
 from assistant.db.models import Item, Job
 from assistant.db.models_v2 import HiddenReason, RecordStatus
+from assistant.memory import enqueue_embed
 from assistant.pages import place_item
 from assistant.records import enrich, store
 from assistant.records.textnorm import (
@@ -184,6 +185,7 @@ async def assemble(session: AsyncSession, rows: list[Item], now: datetime) -> It
             row.source_meta = {**(row.source_meta or {}), "fragment_result": spent}
     if record.hidden_reason is None and record.status != RecordStatus.FAILED:
         await enrich.enqueue_enrich(session, record)
+        await enqueue_embed(session, record)
     await session.flush()
     await place_item(session, record)
     return record

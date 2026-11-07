@@ -8,7 +8,7 @@ import type { SqlDb } from './outbox';
  * Status: `queued` = only on this phone («Ждёт связи»); otherwise the server status.
  *
  * Columns hold the server's state; `pending` is the overlay of changes still in the outbox
- * («Верно», «Отменить»). A delta from /sync never undoes what the person just did, and a change
+ * («Верно», «Исправить», «Отменить», «Удалить», «Вернуть»). A delta from /sync never undoes what the person just did, and a change
  * the server rejected disappears by clearing the overlay.
  */
 export type RecordStatus = 'queued' | ItemOut['status'];
@@ -29,6 +29,12 @@ export type RecordPending = {
   verify?: Record<string, string | null>;
   /** «Отменить» on an automatic merge is on its way. */
   unmerge?: boolean;
+  /** Field key → the value the person typed with «Исправить». */
+  corrected?: Record<string, string>;
+  /** «Удалить» is on its way: when it was pressed (ms). */
+  deleted?: number;
+  /** «Вернуть» is on its way. */
+  restored?: boolean;
 };
 
 export type LocalRecord = {
@@ -54,6 +60,8 @@ export type LocalRecord = {
   createdAt: number;
   updatedAt: number;
   deletedAt: number | null;
+  /** Server's end of the 30 days in «Удалённые записи». */
+  purgeAfter: number | null;
 };
 
 export type NewRecord = Pick<LocalRecord, 'kind' | 'source'> &
@@ -64,13 +72,24 @@ export interface RecordsRepository {
   get(id: string): Promise<LocalRecord | null>;
   /** Newest first, without deleted and hidden repeats. */
   list(limit?: number): Promise<LocalRecord[]>;
+  /** «Удалённые записи», last deleted first: what can still be brought back. */
+  listTrash(limit?: number): Promise<LocalRecord[]>;
   findByServerId(serverId: string): Promise<LocalRecord | null>;
   /** POST /items or PATCH succeeded: link the local record to the server item. */
   markSynced(id: string, item: ItemOut): Promise<void>;
   /** From GET /sync: upsert by client_id (own records) or server id (other devices). */
   applyRemote(item: ItemOut): Promise<void>;
+  /** Purged for good on the server after its 30 days: nothing to bring back any more. */
   applyTombstone(serverId: string): Promise<void>;
   setPending(id: string, pending: RecordPending): Promise<void>;
+  /** A record the server does not have: its trash date lives only here. null = not deleted. */
+  setLocalTrash(id: string, deletedAt: number | null): Promise<void>;
+  /**
+   * Another account: server ids, review marks and changes on their way mean nothing there. Records
+   * stay on the phone. `requeued` go back to «Ждёт связи»; the others (deleted, repeats, nothing
+   * left to send) keep their status, with no server id. Local deletions stay deleted.
+   */
+  detachFromAccount(requeued: ReadonlySet<string>): Promise<void>;
   getCursor(): Promise<number>;
   setCursor(seq: number): Promise<void>;
 }
@@ -92,7 +111,7 @@ function fromServer(item: ItemOut, now: number, base?: LocalRecord | null): Loca
     title: item.title ?? base?.title ?? null,
     // Server text wins once it has one (recognized voice / OCR); keep the local text until then.
     text: item.text ?? base?.text ?? null,
-    summary: item.summary ?? base?.summary ?? null,
+    summary: item.summary ?? null,
     url: base?.url ?? metaString(item.source_meta, 'url'),
     files: base?.files ?? [],
     pageId: base?.pageId ?? null,
@@ -108,6 +127,7 @@ function fromServer(item: ItemOut, now: number, base?: LocalRecord | null): Loca
     createdAt: base?.createdAt ?? (Date.parse(item.created_at) || now),
     updatedAt: now,
     deletedAt: item.deleted_at ? Date.parse(item.deleted_at) || now : null,
+    purgeAfter: item.purge_after ? Date.parse(item.purge_after) || null : null,
   };
 }
 
@@ -135,10 +155,40 @@ function newLocal(r: NewRecord & { id: string }, ts: number): LocalRecord {
     createdAt: ts,
     updatedAt: ts,
     deletedAt: null,
+    purgeAfter: null,
   };
 }
 
-const isVisible = (r: LocalRecord) => r.deletedAt === null && (r.hiddenReason === null || r.pending.unmerge === true);
+/** How long a deleted record can be brought back (R-33). */
+export const TRASH_DAYS = 30;
+const DAY_MS = 86_400_000;
+
+/** Deleted, counting what is still on its way. */
+export const isTrashed = (r: LocalRecord): boolean =>
+  !r.pending.restored && (r.pending.deleted !== undefined || r.deletedAt !== null);
+
+const trashedAt = (r: LocalRecord): number => r.pending.deleted ?? r.deletedAt ?? 0;
+
+/** When the record is gone for good: the server's date, or 30 days from the local deletion. */
+export const purgeAt = (r: LocalRecord): number => r.purgeAfter ?? trashedAt(r) + TRASH_DAYS * DAY_MS;
+
+const isVisible = (r: LocalRecord) => !isTrashed(r) && (r.hiddenReason === null || r.pending.unmerge === true);
+
+/** A deleted repeat was never shown as a record of its own. */
+const inTrash = (r: LocalRecord, now: number) => isTrashed(r) && r.hiddenReason === null && purgeAt(r) > now;
+
+const byTrashedAt = (a: LocalRecord, b: LocalRecord) => trashedAt(b) - trashedAt(a);
+
+const detached = (r: LocalRecord, requeued: ReadonlySet<string>): LocalRecord => ({
+  ...r,
+  serverId: null,
+  status: requeued.has(r.id) ? 'queued' : r.status,
+  reviewFields: {},
+  pending: {},
+  seq: 0,
+  deletedAt: r.pending.restored ? null : (r.pending.deleted ?? r.deletedAt),
+  purgeAfter: null,
+});
 
 export class InMemoryRecordsRepository implements RecordsRepository {
   private rows = new Map<string, LocalRecord>();
@@ -165,6 +215,20 @@ export class InMemoryRecordsRepository implements RecordsRepository {
       .slice(0, limit);
   }
 
+  async listTrash(limit = 200) {
+    const now = this.now();
+    return [...this.rows.values()]
+      .filter((r) => inTrash(r, now))
+      .sort(byTrashedAt)
+      .slice(0, limit);
+  }
+
+  async detachFromAccount(requeued: ReadonlySet<string>) {
+    for (const r of this.rows.values()) {
+      if (r.serverId !== null || Object.keys(r.pending).length > 0) this.rows.set(r.id, detached(r, requeued));
+    }
+  }
+
   async findByServerId(serverId: string) {
     return [...this.rows.values()].find((r) => r.serverId === serverId) ?? null;
   }
@@ -183,14 +247,17 @@ export class InMemoryRecordsRepository implements RecordsRepository {
   }
 
   async applyTombstone(serverId: string) {
-    for (const r of this.rows.values()) {
-      if (r.serverId === serverId) this.rows.set(r.id, { ...r, deletedAt: this.now() });
-    }
+    for (const r of this.rows.values()) if (r.serverId === serverId) this.rows.delete(r.id);
   }
 
   async setPending(id: string, pending: RecordPending) {
     const r = this.rows.get(id);
     if (r) this.rows.set(id, { ...r, pending });
+  }
+
+  async setLocalTrash(id: string, deletedAt: number | null) {
+    const r = this.rows.get(id);
+    if (r) this.rows.set(id, { ...r, deletedAt, purgeAfter: null });
   }
 
   async getCursor() {
@@ -225,6 +292,7 @@ type Row = {
   created_at: number;
   updated_at: number;
   deleted_at: number | null;
+  purge_after: number | null;
 };
 
 const rowTo = (r: Row): LocalRecord => ({
@@ -250,11 +318,12 @@ const rowTo = (r: Row): LocalRecord => ({
   createdAt: r.created_at,
   updatedAt: r.updated_at,
   deletedAt: r.deleted_at,
+  purgeAfter: r.purge_after,
 });
 
 const COLS =
   'id, server_id, kind, source, status, title, text, summary, url, files, page_id, review_fields, ai_generated, ' +
-  'hidden_reason, canonical_id, error, pending, seq, occurred_at, created_at, updated_at, deleted_at';
+  'hidden_reason, canonical_id, error, pending, seq, occurred_at, created_at, updated_at, deleted_at, purge_after';
 
 export class SqliteRecordsRepository implements RecordsRepository {
   constructor(
@@ -264,7 +333,7 @@ export class SqliteRecordsRepository implements RecordsRepository {
 
   private async write(r: LocalRecord, mode: 'INSERT OR IGNORE' | 'INSERT OR REPLACE') {
     await this.db.runAsync(
-      `${mode} INTO records (${COLS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `${mode} INTO records (${COLS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       r.id,
       r.serverId,
       r.kind,
@@ -287,6 +356,7 @@ export class SqliteRecordsRepository implements RecordsRepository {
       r.createdAt,
       r.updatedAt,
       r.deletedAt,
+      r.purgeAfter,
     );
   }
 
@@ -304,12 +374,33 @@ export class SqliteRecordsRepository implements RecordsRepository {
   async list(limit = 200) {
     const rows = await this.db.getAllAsync<Row>(
       `SELECT * FROM records
-       WHERE deleted_at IS NULL
+       WHERE (deleted_at IS NULL OR pending LIKE '%"restored":true%')
+         AND pending NOT LIKE '%"deleted":%'
          AND (hidden_reason IS NULL OR pending LIKE '%"unmerge":true%')
        ORDER BY created_at DESC LIMIT ?`,
       limit,
     );
     return rows.map(rowTo);
+  }
+
+  async listTrash(limit = 200) {
+    const rows = await this.db.getAllAsync<Row>(
+      `SELECT * FROM records
+       WHERE (deleted_at IS NOT NULL OR pending LIKE '%"deleted":%')
+         AND pending NOT LIKE '%"restored":true%'
+         AND hidden_reason IS NULL`,
+    );
+    const now = this.now();
+    return rows
+      .map(rowTo)
+      .filter((r) => inTrash(r, now))
+      .sort(byTrashedAt)
+      .slice(0, limit);
+  }
+
+  async detachFromAccount(requeued: ReadonlySet<string>) {
+    const rows = await this.db.getAllAsync<Row>("SELECT * FROM records WHERE server_id IS NOT NULL OR pending != '{}'");
+    for (const row of rows) await this.write(detached(rowTo(row), requeued), 'INSERT OR REPLACE');
   }
 
   async findByServerId(serverId: string) {
@@ -329,16 +420,15 @@ export class SqliteRecordsRepository implements RecordsRepository {
   }
 
   async applyTombstone(serverId: string) {
-    await this.db.runAsync(
-      'UPDATE records SET deleted_at = ?, updated_at = ? WHERE server_id = ?',
-      this.now(),
-      this.now(),
-      serverId,
-    );
+    await this.db.runAsync('DELETE FROM records WHERE server_id = ?', serverId);
   }
 
   async setPending(id: string, pending: RecordPending) {
     await this.db.runAsync('UPDATE records SET pending = ? WHERE id = ?', JSON.stringify(pending), id);
+  }
+
+  async setLocalTrash(id: string, deletedAt: number | null) {
+    await this.db.runAsync('UPDATE records SET deleted_at = ?, purge_after = NULL WHERE id = ?', deletedAt, id);
   }
 
   async getCursor() {

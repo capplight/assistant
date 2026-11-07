@@ -45,17 +45,19 @@ batch_discount: {anthropic: 0.5}
 #   off    - someone waits for the result
 #   bulk   - only records nobody is waiting for (import, backlog); live captures run now
 #   always - nothing on screen depends on it
+#
+# BATCHES ARE OFF for every task (founder decision 2026-11-07): Anthropic batches retain data for
+# 29 days and are not eligible for zero data retention. The mechanism and its tests stay. Turning
+# any task on needs founder approval and a review of the consent text first.
 defaults: {tier: light, timeout_s: 30, max_tokens: 4000, mask_contacts: true,
            chain: [primary, fallback], cache: 5m, batch: "off", batch_max_wait_h: 6}
 
 tasks:
-  # A new record is on the screen: live. Import and backlog can wait (opening one pulls it out).
-  enrich: {budget_class: background, escalate: strong, mask_contacts: false, batch: bulk}
+  enrich: {budget_class: background, escalate: strong, mask_contacts: false, batch: "off"}
   # A new stack shows at once, with «Отменить» (spec 6.4), and its name is what you read.
   stack_name: {budget_class: background}
-  # «Объединить?» is a suggestion nobody waits for (spec 6.3).
-  dup_judge: {budget_class: background, batch: always}
-  import_summarize: {budget_class: import, batch: always, batch_max_wait_h: 24}
+  dup_judge: {budget_class: background, batch: "off"}
+  import_summarize: {budget_class: import, batch: "off", batch_max_wait_h: 24}
   intent: {budget_class: answers, timeout_s: 15}
   reminder_parse: {budget_class: answers, timeout_s: 15}
   answer: {budget_class: answers, escalate: strong, timeout_s: 8}

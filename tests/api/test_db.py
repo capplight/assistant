@@ -331,3 +331,78 @@ async def test_upload_presign_put_complete(db_app):
     assert file.storage_key.startswith(f"u/{t['user']['id']}/")
     failed = await s.scalar(select(Upload).where(Upload.public_id == uuid.UUID(bad["id"])))
     assert failed is not None and failed.state == "failed"
+
+
+# --- a rejected refresh, the name ---
+
+
+async def _link(c, sms, tokens: dict | None, phone: str) -> dict:
+    headers = _auth(tokens) if tokens else None
+    req = await c.post("/v1/auth/otp/request", json={"phone": phone}, headers=headers)
+    r = await c.post("/v1/auth/otp/verify", headers=headers, json={
+        "challenge_id": req.json()["challenge_id"], "phone": phone,
+        "code": sms.last_code_for(phone)})  # fmt: skip
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+async def _rejected(c, refresh_token: str) -> object:
+    r = await c.post("/v1/auth/refresh", json={"refresh_token": refresh_token})
+    assert r.status_code == 401 and r.json()["code"] == "invalid_refresh"
+    return r.json()["details"]["account_linked"]
+
+
+async def test_a_rejected_refresh_says_whether_the_account_is_linked(db_app):
+    app, sms, s = db_app
+    async with client(app) as c:
+        assert await _rejected(c, "x" * 40) is None  # not a token we know
+
+        anon = await _anon(c)
+        fresh = (await c.post("/v1/auth/refresh",
+                              json={"refresh_token": anon["refresh_token"]})).json()  # fmt: skip
+        assert await _rejected(c, anon["refresh_token"]) is False  # reused
+
+        anon2 = await _anon(c)
+        linked = await _link(c, sms, anon2, "+77015550021")
+        assert linked["user"]["is_anonymous"] is False and fresh["user"]["is_anonymous"] is True
+        body = {"refresh_token": linked["refresh_token"]}
+        rotated = (await c.post("/v1/auth/refresh", json=body)).json()
+        assert rotated["user"]["is_anonymous"] is False
+        assert await _rejected(c, linked["refresh_token"]) is True  # reused
+
+        other = await _link(c, sms, None, "+77015550022")
+        await s.execute(text("UPDATE auth_sessions SET expires_at = now() - interval '1 day' "
+                             "WHERE user_id = (SELECT id FROM users WHERE public_id = :u)"),
+                        {"u": other["user"]["id"]})  # fmt: skip
+        await s.commit()
+        assert await _rejected(c, other["refresh_token"]) is True  # expired
+
+        # Phone sign-in afterwards: no header, into the same account, without a switch.
+        back = await _link(c, sms, None, "+77015550022")
+        assert back["user"]["id"] == other["user"]["id"] and back["account_switched"] is False
+
+
+async def test_the_name_is_saved_on_the_account(db_app):
+    app, sms, _ = db_app
+    async with client(app) as c:
+        t = await _anon(c)
+        h = _auth(t)
+        assert (await c.patch("/v1/me", json={"display_name": "Али"}, headers=h)).status_code == 403
+        assert (await c.get("/v1/me", headers=h)).status_code == 403
+        await c.post("/v1/consents", json=_grant_body(*S05), headers=h)
+        assert (await c.get("/v1/me", headers=h)).json()["display_name"] is None
+
+        r = await c.patch("/v1/me", json={"display_name": "  Али\n Нуржан  "}, headers=h)
+        assert r.status_code == 200 and r.json()["display_name"] == "Али Нуржан"
+        assert r.json()["id"] == t["user"]["id"]
+        assert (await c.patch("/v1/me", json={}, headers=h)).json()["display_name"] == "Али Нуржан"
+        long = await c.patch("/v1/me", json={"display_name": "я" * 101}, headers=h)
+        assert long.status_code == 422
+
+        linked = await _link(c, sms, t, "+77015550023")  # it stays through linking and in tokens
+        assert linked["user"]["display_name"] == "Али Нуржан"
+        assert (linked["app_enabled"], linked["account_switched"]) == (True, False)
+        h = _auth(linked)
+        cleared = await c.patch("/v1/me", json={"display_name": " "}, headers=h)
+        assert cleared.json()["display_name"] is None
+        assert (await c.patch("/v1/me", json={"display_name": None}, headers=h)).status_code == 200

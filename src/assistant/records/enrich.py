@@ -9,9 +9,11 @@ record and its text at once and in "Без ИИ" mode; `enrich_state` tells how 
 The model is not trusted with anything code can check. Every number and date it returns must be
 found in the record's text or it is dropped; amounts become Decimal here; nothing proposed is
 executed; a title or summary with an unfound number is thrown away. The person's own title and
-any «Верно» are never overwritten. No transaction is open during a provider call.
+any «Верно» or «Исправить» are never overwritten: what the person entered needs no source. No
+transaction is open during a provider call.
 """
 
+import copy
 import hashlib
 import logging
 import re
@@ -42,6 +44,7 @@ from assistant.db import queue
 from assistant.db.models import Item, Job
 from assistant.db.models_ai import AIBatchRequest
 from assistant.db.models_v2 import EnrichState, HiddenReason, RecordKind, RecordSource, RecordStatus
+from assistant.memory import enqueue_embed
 from assistant.pages import place_item
 from assistant.records import store
 
@@ -280,15 +283,25 @@ def checked_envelope(env: Envelope, source: str) -> tuple[dict, dict]:
 # --- applying
 
 
+def _mark(value: object) -> str:
+    """What makes two spellings the same value: the digits, or the words if it has none."""
+    text = str(value or "")
+    return _digits(text) or " ".join(text.lower().split())
+
+
 def _review_from_envelope(item: Item, data: dict) -> dict[str, dict]:
-    """«Проверьте» the model pointed to, once its value is confirmed to be in the text."""
+    """«Проверьте» the model pointed to, once its value is confirmed to be in the text. Nothing the
+    person settled comes back: not a value they confirmed, not one they replaced, whatever kind the
+    model calls it."""
     if not _recognised(item):
         return {}
     fields = dict(item.review_fields or {})
     seen = {(v.get("kind"), _digits(str(v.get("value") or ""))) for v in fields.values()}
+    settled = {_mark(v.get("value")) for v in fields.values() if v.get("state") == "verified"}
+    settled.update(_mark(old) for v in fields.values() for old in v.get("was") or [])
 
     def add(kind: str, value: str) -> None:
-        if (kind, _digits(value)) in seen and _digits(value):
+        if _mark(value) in settled or ((kind, _digits(value)) in seen and _digits(value)):
             return
         seen.add((kind, _digits(value)))
         n = 1 + sum(1 for k in fields if k.startswith(f"{kind}_"))
@@ -316,9 +329,98 @@ def _recognised(item: Item) -> bool:
     return bool(pdf.get("ocr_pages"))
 
 
+# --- «Исправить»: the person's value wins, and needs no source
+
+
+_FIELD_LIST = {"phone": "phones", "date": "dates"}
+_SPACE = r"[\s\u00a0\u202f]"
+
+
+def _with_correction(text: str, old: str, new: str) -> str:
+    """`text` with the first `old` replaced, however it is spaced. Only a whole value: "500 ₸" is
+    not the tail of "1 500 ₸". Not found: `text` as it was."""
+    compact = re.sub(r"\s", "", old)
+    if not compact:
+        return text
+    before = rf"(?<!\d{_SPACE})(?<!\d[.,])" if compact[0].isdigit() else ""
+    after = rf"(?!{_SPACE}?\d)(?![.,]\d)" if compact[-1].isdigit() else ""
+    body = f"{_SPACE}*".join(re.escape(c) for c in compact)
+    return re.sub(rf"(?<!\w){before}{body}{after}(?!\w)", lambda _: new, text, count=1)
+
+
+def _correct_amount(old: dict, new: str) -> dict:
+    parsed = parse_amount(new) or {"text": new, "value": None, "currency": None}
+    return {**parsed, "currency": parsed["currency"] or old.get("currency")}
+
+
+def carry_corrections(data: dict, fields: dict) -> None:
+    """Put the person's values into an envelope, in place of the ones they replaced. Safe to repeat.
+    Runs on every new envelope too: the model only sees the record's text."""
+    ent = data.get("entities")
+    if not isinstance(ent, dict):
+        return
+    for field in (fields or {}).values():
+        gone = {_mark(old) for old in field.get("was") or []}
+        if not gone:
+            continue
+        new, kind = str(field.get("value")), field.get("kind")
+
+        def swap(values: list[str], new: str = new, gone: set[str] = gone) -> list[str]:
+            return list(dict.fromkeys(new if _mark(v) in gone else v for v in values))
+
+        for name in ("phones", "dates", "places", "people", "orgs"):
+            ent[name] = swap(ent.get(name) or [])
+        data["critical_numbers"] = swap(data.get("critical_numbers") or [])
+        for v in data.get("verify_fields") or []:
+            if _mark(v.get("value")) in gone:
+                v["value"] = new
+        amounts = [_correct_amount(a, new) if _mark(a.get("text")) in gone else a
+                   for a in ent.get("amounts") or []]  # fmt: skip
+        if kind == "amount" and not any(_mark(a.get("text")) == _mark(new) for a in amounts):
+            amounts.append(_correct_amount({}, new))
+        ent["amounts"] = amounts
+        if kind == "amount":
+            continue
+        name = _FIELD_LIST.get(str(kind))
+        target = ent[name] if name else data["critical_numbers"]
+        if (name or kind in ("iban", "iin_bin", "doc_number")) and new not in target:
+            target.append(new)
+
+
+def apply_corrections(item: Item, corrections: dict[str, str]) -> bool:
+    """«Исправить»: each review field takes the person's value and stops asking. The value also
+    replaces the wrong one in the text and the title (search and answers read those) and in the
+    envelope. It is never checked against the source. The caller has checked the keys and handles a
+    changed text. True if a value changed."""
+    fields = {key: dict(v) for key, v in (item.review_fields or {}).items()}
+    changed = False
+    for key, new in corrections.items():
+        field = fields[key]
+        old = str(field.get("value"))
+        field["state"] = "verified"
+        if new == old:
+            continue
+        changed = True
+        field["value"] = new
+        field["was"] = [*field.get("was", []), old]
+        if item.text:
+            item.text = _with_correction(item.text, old, new)
+        if item.title and (item.source_meta or {}).get("title_source") != "user":
+            item.title = _with_correction(item.title, old, new)[:500]
+    item.review_fields = fields
+    if changed and item.envelope:
+        envelope = copy.deepcopy(item.envelope)
+        carry_corrections(envelope, fields)
+        item.envelope = envelope
+    return changed
+
+
 def apply_envelope(item: Item, env: Envelope, *, provider: str, model: str, escalated: bool,
                    now: datetime) -> None:  # fmt: skip
-    data, rejected = checked_envelope(env, item.text or "")
+    fields = item.review_fields or {}
+    entered = [str(v.get("value")) for v in fields.values() if v.get("was")]
+    data, rejected = checked_envelope(env, "\n".join([item.text or "", *entered]))
+    carry_corrections(data, fields)
     meta = dict(item.source_meta or {})
     ai_fields = [f for f in (item.ai_fields or []) if f not in ("title", "summary")]
     if data["title"] and meta.get("title_source") != "user":
@@ -509,6 +611,7 @@ async def store_envelope(maker: async_sessionmaker[AsyncSession], item_id: int, 
         state = str(item.enrich_state)
         await s.flush()
         await place_item(s, item)  # rules that read the envelope can match now
+        await enqueue_embed(s, item)  # chunks are embedded with the title, which may be new
         await s.commit()
     return state
 

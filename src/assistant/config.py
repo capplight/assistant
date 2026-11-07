@@ -40,6 +40,21 @@ class Settings(BaseSettings):
     embeddings_model: str = "voyage-3.5"
     embeddings_dim: int = 1024
 
+    # Embeddings for chunks and search: local TEI + bge-m3 (spec 5.5), never a foreign provider.
+    # Empty URL: no embeddings, search runs on words and typos.
+    chunk_embedder: str = "tei"  # tei | none
+    tei_url: str = ""
+    chunk_embedding_model: str = "BAAI/bge-m3"  # migration 0009's HNSW index is for this one
+
+    # Search (docs/api/search.md). Both numbers are UNVERIFIED until tried on the real model.
+    search_embed_timeout_seconds: float = 0.5  # slower than this: answer without meaning (spec 8.1)
+    search_vector_min_similarity: float = 0.45  # below this a neighbour is not a result (US-5)
+
+    # Originals (spec 7.1, decision 8, Ф-5)
+    storage_trash_days: int = 7
+    storage_pin_enabled: bool = True
+    storage_keep_while_unsure: bool = True
+
     # Place resolution
     places_provider: str = "google"  # google | none
     places_api_key: SecretStr = Field(default=SecretStr(""))

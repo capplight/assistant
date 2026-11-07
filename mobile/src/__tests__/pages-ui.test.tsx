@@ -245,7 +245,6 @@ describe('sync reaches the screen', () => {
 });
 
 describe('S04b', () => {
-  let outbox: ReturnType<typeof resetApp>;
   const setup = () => {
     const s = happyServer();
     s.on('POST /auth/otp/request', () => ({
@@ -255,7 +254,7 @@ describe('S04b', () => {
       status: 200,
       body: { ...tokenPair('linked'), account_switched: false },
     }));
-    outbox = resetApp({ fetch: s.fetch });
+    resetApp({ fetch: s.fetch });
     const o = useOnboarding.getState();
     o.markWelcomeSeen(false);
     o.acceptConsent('full');
@@ -339,33 +338,6 @@ describe('S04b', () => {
     expect(screen.getByText('Нет интернета. Для кода нужна связь. Можно указать номер позже.')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('phone-later'));
     expect(r.getPathname()).toBe('/');
-  });
-
-  it('the phone already has an account: everything is fetched from the start, consent and device go again', async () => {
-    const s = setup();
-    s.on('POST /auth/otp/verify', () => ({
-      status: 200,
-      body: { ...tokenPair('other'), account_switched: true },
-    }));
-    useOnboarding.setState((st) => ({
-      consent: st.consent && {
-        ...st.consent,
-        texts: [{ kind: 'pd_processing', version: 'v1', textHash: 'h', locale: 'ru' }],
-      },
-    }));
-    await testRecords.setCursor(99);
-    await renderRouter(APP_DIR, { initialUrl: '/phone?next=home' });
-    await fireEvent.changeText(screen.getByTestId('phone-number'), '7010000000');
-    await fireEvent.press(screen.getByTestId('phone-get-code'));
-    await settle(() => screen.queryByTestId('phone-code') !== null);
-    await fireEvent.changeText(screen.getByTestId('phone-code'), '123456');
-    await fireEvent.press(screen.getByTestId('phone-verify'));
-    await settle(() => s.callsTo('POST /devices').length > 0 && s.callsTo('GET /sync').some((c) => c.query.since === '0'));
-    expect(s.callsTo('POST /consents').at(-1)?.body).toMatchObject({
-      consents: [{ kind: 'pd_processing', version: 'v1', text_hash: 'h', locale: 'ru' }],
-    });
-    expect(outbox.all().map((e) => e.kind)).toEqual(expect.arrayContaining(['consent.accept', 'device.register']));
-    expect(screen.getByText('Этот номер уже был у вас — открыл ваши прежние записи.')).toBeTruthy();
   });
 
   it('«Ещё» offers the number until it is linked', async () => {

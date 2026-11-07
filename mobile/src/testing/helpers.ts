@@ -7,8 +7,10 @@ import i18n from '@/i18n';
 import type { FileOps } from '@/records/capture';
 import { setServicesForTests } from '@/services';
 import { useAssistant } from '@/store/assistant';
+import { useConnectivity } from '@/store/connectivity';
 import { useOnboarding } from '@/store/onboarding';
 import { usePages } from '@/store/pages';
+import { useSession } from '@/store/session';
 import { useToast } from '@/store/toast';
 import { useUndo } from '@/store/undo';
 
@@ -44,6 +46,8 @@ export function resetApp(o: { fetch?: FetchLike } = {}): InMemoryOutboxRepositor
   useOnboarding.getState().reset();
   usePages.getState().reset();
   useAssistant.getState().reset();
+  useSession.getState().reset();
+  useConnectivity.setState({ online: true });
   useToast.setState({ toast: null });
   useUndo.setState({ strip: null });
   void i18n.changeLanguage('ru');

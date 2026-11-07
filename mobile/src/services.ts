@@ -4,12 +4,14 @@ import { ApiClient, type FetchLike } from '@/api/client';
 import { getAppVersion } from '@/api/config';
 import { Api, type PutFile } from '@/api/endpoints';
 import { TokenStorage, type SecretStore } from '@/api/tokens';
-import { getOutbox, getPagesRepo, getRecords } from '@/db';
+import { getOutbox, getPagesRepo, getRecords, type LocalRecord } from '@/db';
 import { RecordActions } from '@/records/actions';
 import { Capture, type FileOps } from '@/records/capture';
 import { useDataVersion } from '@/store/data';
+import { useConnectivity } from '@/store/connectivity';
 import { useOnboarding } from '@/store/onboarding';
 import { syncPagesStore } from '@/store/pagesSync';
+import { useSession } from '@/store/session';
 import { useUndo } from '@/store/undo';
 import { SyncEngine, type DeviceInfo } from '@/sync/engine';
 
@@ -63,10 +65,21 @@ export function getApi(): Api {
       baseUrl: overrides.baseUrl,
       tokens: new TokenStorage(overrides.secrets),
       locale: () => useOnboarding.getState().language,
+      isLinked: () => useOnboarding.getState().phoneLinkedAt !== null,
+      onSignInRequired: () => useSession.getState().setNeedsSignIn(true),
+      onReachable: (reachable) => useConnectivity.getState().setOnline(reachable),
     });
     api = new Api(client, overrides.putFile ?? ((uri, put) => nativePut()(uri, put)));
   }
   return api;
+}
+
+/**
+ * Nothing goes to or comes from the server: the account has no consent yet (it may belong to
+ * another account than the phone's records), or a linked account has to sign in first.
+ */
+export function syncBlocked(): boolean {
+  return useOnboarding.getState().accountConsent !== null || useSession.getState().needsSignIn;
 }
 
 export function getSyncEngine(): Promise<SyncEngine> {
@@ -81,6 +94,9 @@ export function getSyncEngine(): Promise<SyncEngine> {
         deviceInfo,
         onChanged: notifyDataChanged,
         onAutoMerged: (recordId, date) => useUndo.getState().showMerged(recordId, date),
+        blocked: syncBlocked,
+        onAccountConsentRejected: () =>
+          useOnboarding.getState().requireAccountConsent({ userId: '', switched: false }),
       }))();
   }
   return engine;
@@ -91,7 +107,7 @@ export function getSyncEngine(): Promise<SyncEngine> {
  * without a local consent record this is a no-op (anonymous sign-in happens with the consent send).
  */
 export function kickSync(): void {
-  if (useOnboarding.getState().consent === null) return;
+  if (useOnboarding.getState().consent === null || syncBlocked()) return;
   void getSyncEngine()
     .then((e) => e.run())
     .catch(() => undefined);
@@ -106,6 +122,8 @@ export function getCapture(): Promise<Capture> {
         files: overrides.files ?? nativeFiles(),
         onSaved: () => {
           useDataVersion.getState().bump();
+          // Until this save's own attempt says otherwise, do not tell an online person to wait.
+          useConnectivity.getState().setOnline(true);
           kickSync();
         },
       }))();
@@ -118,7 +136,7 @@ export function getCapture(): Promise<Capture> {
  * the cheap overnight run) and brings what is new. Best-effort: the card already shows local data.
  */
 export async function refreshRecord(serverId: string): Promise<void> {
-  if (useOnboarding.getState().consent === null) return;
+  if (useOnboarding.getState().consent === null || syncBlocked()) return;
   try {
     const item = await getApi().getItem(serverId);
     await (await getRecords()).applyRemote(item);
@@ -141,6 +159,14 @@ export function getRecordActions(): Promise<RecordActions> {
       }))();
   }
   return actions;
+}
+
+/** A search hit that is not on this phone yet: bring it here, so the card can open. */
+export async function fetchRecord(serverId: string): Promise<LocalRecord | null> {
+  const records = await getRecords();
+  await records.applyRemote(await getApi().getItem(serverId));
+  useDataVersion.getState().bump();
+  return records.findByServerId(serverId);
 }
 
 /** Test hook: replace native/network pieces; resets the singletons. */

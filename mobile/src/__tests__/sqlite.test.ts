@@ -106,6 +106,70 @@ d('SQLite repositories', () => {
     expect(await records.getCursor()).toBe(42);
   });
 
+  it('the trash: overlay, server date, tombstone; the same answers as in memory', async () => {
+    const db = open();
+    await migrate(db);
+    const now = Date.parse('2026-11-07T10:00:00Z');
+    const records = new SqliteRecordsRepository(db, () => now);
+    await records.applyRemote(itemOut('a', 1, { text: 'a' }));
+    await records.applyRemote(itemOut('b', 2, { text: 'b' }));
+
+    await records.setPending('a', { deleted: now });
+    expect((await records.list()).map((r) => r.id)).toEqual(['b']);
+    expect((await records.listTrash()).map((r) => r.id)).toEqual(['a']);
+
+    await records.applyRemote(
+      itemOut('a', 3, { deleted_at: '2026-11-07T10:00:00Z', purge_after: '2026-12-07T10:00:00Z' }),
+    );
+    await records.setPending('a', { restored: true });
+    expect((await records.list()).map((r) => r.id).sort()).toEqual(['a', 'b']);
+    expect(await records.listTrash()).toEqual([]);
+
+    await records.setPending('a', {});
+    expect((await records.get('a'))?.purgeAfter).toBe(Date.parse('2026-12-07T10:00:00Z'));
+    expect((await records.listTrash()).map((r) => r.id)).toEqual(['a']);
+    await records.applyTombstone('srv-a');
+    expect(await records.get('a')).toBeNull();
+
+    await records.applyRemote(itemOut('old', 4, { deleted_at: '2026-01-01T00:00:00Z', purge_after: '2026-01-31T00:00:00Z' }));
+    expect(await records.listTrash()).toEqual([]);
+  });
+
+  it('another account: records stay, ids and marks go; pages wait to be created, links are gone', async () => {
+    const db = open();
+    await migrate(db);
+    const records = new SqliteRecordsRepository(db, () => 1000);
+    const pages = new SqlitePagesRepository(db, () => 1000);
+    await records.applyRemote(
+      itemOut('a', 1, { text: 'a', status: 'ready', review_fields: { x: { kind: 'amount', value: '5', state: 'verified' } } }),
+    );
+    await records.applyRemote(itemOut('gone', 2, { text: 'g', status: 'ready' }));
+    await records.setPending('gone', { deleted: 900 });
+    await records.insertLocal({ id: 'new', kind: 'note', source: 'typed', text: 'n' });
+    await pages.applyRemote(pageOut('p', 3, { id: 'S1', template_key: 'notes' }));
+    await pages.applyLink(linkOut('S1', 'srv-a', 4));
+
+    await records.detachFromAccount(new Set(['a']));
+    await pages.detachFromAccount();
+
+    expect(await records.get('a')).toMatchObject({ serverId: null, status: 'queued', seq: 0, reviewFields: {}, text: 'a' });
+    expect(await records.get('gone')).toMatchObject({ serverId: null, status: 'ready', deletedAt: 900, pending: {} });
+    expect((await records.listTrash(10)).map((r) => r.id)).toEqual(['gone']);
+    expect((await records.get('new'))?.status).toBe('queued');
+    expect(await pages.get('p')).toMatchObject({ serverId: null, syncState: 'pending', seq: 0 });
+    expect(await pages.linksFor('S1')).toEqual([]);
+  });
+
+  it('sent captures can be listed for another account', async () => {
+    const db = open();
+    await migrate(db);
+    const outbox = new SqliteOutboxRepository(db);
+    const row = await outbox.enqueue('item.create', { clientId: 'a' });
+    await outbox.enqueue('item.create', { clientId: 'b' });
+    await outbox.markSent(row.id);
+    expect((await outbox.listSent('item.create')).map((e) => e.id)).toEqual([row.id]);
+  });
+
   it('pages and links: create, sync, adopt, rename, order on the page', async () => {
     const db = open();
     await migrate(db);

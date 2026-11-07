@@ -103,12 +103,25 @@ Only `client_id` and `template_key` are required. `title` is 1-60 chars; default
 title (`custom`: «Моя страница»). `created_by`: `user` (default) | `onboarding_gallery` |
 `onboarding_blank` | `onboarding_phrase`.
 
-`201 {"page": PageOut, "created": true}`; repeating a `client_id` gives `200` and `created: false`.
-On creation the page is filled at once from the items already in memory that match its rule.
+`201 {"page": PageOut, "created": true, "revived": false}`; repeating a `client_id` gives `200` and
+`created: false`. On creation the page is filled at once from the items already in memory that match
+its rule.
 
-Errors: `409 singleton_exists` (`details.page_id` = the existing page; open it instead) ·
-`422 pages_limit` (20 pages including «Сегодня») · `422 template_unknown` (also for `today`) ·
-`422 layout_not_allowed` · `422 validation_error`.
+**Adding a removed topic again.** Every template except `custom` allows one page. If the account
+removed its page of that topic, `POST /v1/pages` brings **that page** back instead of making a new
+one: `200 {"page": PageOut, "created": false, "revived": true}`.
+- `page.id` is the old page's id: upsert by `id`, and treat your local page with this `client_id`
+  and the old removed page as one.
+- Its tab position, title, icon, layout, and rows come back as they were, with rows it had by hand
+  and rows the person removed untouched. Items saved while it was gone are placed. `title`, `icon`,
+  `layout`, and `created_by` in the request are not applied.
+- `page.client_id` becomes the one you sent, so retrying this request gives `200`, `created: false`,
+  the same page (`revived: false`). Use a new `client_id` for each new tap: repeating a `client_id`
+  of a page removed later returns it still removed.
+
+Errors: `409 singleton_exists` when the topic has a live page (`details.page_id` = that page; open it
+instead) · `422 pages_limit` (20 pages including «Сегодня»; also when reviving) ·
+`422 template_unknown` (also for `today`) · `422 layout_not_allowed` · `422 validation_error`.
 
 ### `GET /v1/pages/{id}`
 `PageOut`. `404 not_found` when removed or foreign.
@@ -127,8 +140,9 @@ not block a rename. Returns `PageOut`. «Сегодня»: `403 page_system`.
 
 ### `POST /v1/pages/{id}/restore`
 Undo of the removal: returns `PageOut`, the old links and order are back, and items saved in
-between are placed. Errors: `409 singleton_exists` if the topic was added again meanwhile,
-`422 pages_limit`.
+between are placed. On a page that is already live (added again meanwhile, see above) it just returns
+the page: `200`, no conflict. Errors: `422 pages_limit`; `409 singleton_exists` only for an account
+that still holds a second removed page of the topic from before revival.
 
 ## Page contents
 
@@ -210,7 +224,7 @@ Code decides, no model call. A rule is
 
 | Condition | Holds when |
 |---|---|
-| `{"always": true}` | always |
+| `{"always": true}` | always (`notes`: «Заметки» shows every record) |
 | `{"kinds": ["pdf", ...]}` | `item.kind` is listed |
 | `{"envelope_types": ["receipt", ...]}` | `item.envelope.type` is listed |
 | `{"aspects": ["reminder", ...]}` | envelope has that part: `reminder`, `task`, `kp` (from `proposed`), `amount` (from `entities.amounts`) |
