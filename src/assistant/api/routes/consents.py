@@ -16,6 +16,7 @@ from assistant.api.errors import ApiError
 from assistant.api.schemas import ConsentOut, ConsentsIn, ConsentsOut, ConsentTextOut, LocaleStr
 from assistant.db.models import User
 from assistant.db.models_v2 import Consent, ConsentKind
+from assistant.records import requeue_needs_consent
 
 router = APIRouter(prefix="/consents", tags=["consents"])
 
@@ -77,6 +78,7 @@ async def grant(
 
     now = datetime.now(UTC)
     ip_hash = client_ip_hash(request, ctx)
+    ai_granted = False
     for text in known:
         exists = await db.scalar(
             select(Consent.id).where(Consent.user_id == user.id, Consent.kind == text.kind,
@@ -89,11 +91,14 @@ async def grant(
                        providers=list(text.providers), text_hash=text.text_hash,
                        locale=text.locale, granted_at=now, device_id=user.device_id,
                        ip_hash=ip_hash, screen=body.screen))  # fmt: skip
+        ai_granted = ai_granted or text.kind == ConsentKind.AI_CROSS_BORDER
         if text.kind == ConsentKind.TERMS:
             row = await db.get(User, user.id)
             if row is not None and row.age_confirmed_at is None:
                 row.age_confirmed_at = now
     await db.flush()
+    if ai_granted:  # voice saved in "Без ИИ" mode: "разберу после разрешения"
+        await requeue_needs_consent(db, user.id, grant_marker=now.strftime("%Y%m%dT%H%M%S%f"))
     return await _state(db, user.id)
 
 

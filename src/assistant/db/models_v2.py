@@ -277,3 +277,59 @@ class Upload(Base):
     file_id: Mapped[int | None] = mapped_column(ForeignKey("files.id", ondelete="SET NULL"))
     error: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = _now()
+
+
+# --- 0004: records (items) and sync. The Item model itself lives in assistant.db.models. ---
+
+
+class RecordKind(enum.StrEnum):
+    NOTE = "note"
+    VOICE = "voice"
+    IMAGE = "image"
+    SCREENSHOT = "screenshot"
+    PDF = "pdf"
+    DOCX = "docx"
+    XLSX = "xlsx"
+    LINK = "link"
+    EMAIL = "email"
+    TG_MESSAGE = "tg_message"
+    KP = "kp"
+    FILE_OTHER = "file_other"
+
+
+class RecordSource(enum.StrEnum):
+    TYPED = "typed"
+    MIC = "mic"
+    SHARE = "share"
+    CAMERA = "camera"
+    FILES = "files"
+    IMPORT_TELEGRAM = "import_telegram"
+    BOT_FORWARD = "bot_forward"
+    SYSTEM = "system"
+
+
+class RecordStatus(enum.StrEnum):
+    PENDING = "pending"
+    PROCESSING = "processing"
+    READY = "ready"
+    NEEDS_REVIEW = "needs_review"
+    NEEDS_CONSENT = "needs_consent"
+    FAILED = "failed"
+
+
+class HiddenReason(enum.StrEnum):
+    DUPLICATE_MERGED = "duplicate_merged"
+    TRASHED = "trashed"
+
+
+class SyncTombstone(Base):
+    """Written by the items_sync_tombstone trigger when a row is hard-deleted (trash purge)."""
+
+    __tablename__ = "sync_tombstones"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger)  # no FK: written during account cascades
+    entity: Mapped[str] = mapped_column(Text)  # item
+    public_id: Mapped[uuid.UUID] = mapped_column(Uuid)
+    seq: Mapped[int] = mapped_column(BigInteger)
+    deleted_at: Mapped[datetime] = _now()

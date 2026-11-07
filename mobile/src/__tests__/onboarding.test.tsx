@@ -33,7 +33,7 @@ describe('first launch flow', () => {
 
     // Consent: all named providers, 18+ line, both buttons present
     expect(screen.getByText('Anthropic, OpenAI, Google, Groq')).toBeTruthy();
-    expect(screen.getByText('Мне есть 18 лет, принимаю Условия.')).toBeTruthy();
+    expect(screen.getByText('Я принимаю условия использования. Мне есть 18 лет.')).toBeTruthy();
     const agree = screen.getByTestId('consent-agree');
     const noAi = screen.getByTestId('consent-no-ai');
     expect(agree).toBeDisabled();
@@ -60,7 +60,7 @@ describe('first launch flow', () => {
     expect(screen.getByText('Моя страница')).toBeTruthy();
 
     const kinds = (await outbox.listPending()).map((e) => e.kind);
-    expect(kinds).toEqual(['consent.accept', 'pages.create']);
+    expect(kinds).toEqual(['consent.accept', 'device.register', 'pages.create']);
   });
 
   it('skip → consent «Согласен» → gallery path creates the chosen pages', async () => {

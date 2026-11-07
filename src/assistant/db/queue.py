@@ -7,6 +7,7 @@ A job that crashed mid-run (locked_at older than STALE_AFTER) is picked up again
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import or_, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from assistant.db.models import Job, JobStatus
@@ -21,11 +22,36 @@ def backoff(attempts: int) -> timedelta:
 
 
 async def enqueue(
-    session: AsyncSession, kind: str, payload: dict, *, run_after: datetime | None = None
+    session: AsyncSession,
+    kind: str,
+    payload: dict,
+    *,
+    run_after: datetime | None = None,
+    idempotency_key: str | None = None,
 ) -> Job:
-    job = Job(kind=kind, payload=payload, run_after=run_after or datetime.now(UTC))
-    session.add(job)
-    await session.flush()
+    """Add a job. With idempotency_key (UNIQUE, e.g. `item:42:ingest:v1`) a repeat call returns
+    the existing job instead of adding a second one, whatever its status."""
+    run_after = run_after or datetime.now(UTC)
+    if idempotency_key is None:
+        job = Job(kind=kind, payload=payload, run_after=run_after)
+        session.add(job)
+        await session.flush()
+        return job
+    stmt = (
+        pg_insert(Job)
+        .values(kind=kind, payload=payload, run_after=run_after, status=JobStatus.QUEUED,
+                attempts=0, max_attempts=5, idempotency_key=idempotency_key)
+        .on_conflict_do_nothing(
+            index_elements=["idempotency_key"],
+            index_where=Job.idempotency_key.is_not(None),
+        )
+        .returning(Job.id)
+    )  # fmt: skip
+    job_id = await session.scalar(stmt)
+    if job_id is None:
+        job_id = await session.scalar(select(Job.id).where(Job.idempotency_key == idempotency_key))
+    job = await session.get(Job, job_id)
+    assert job is not None
     return job
 
 

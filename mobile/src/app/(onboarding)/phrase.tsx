@@ -6,14 +6,14 @@ import { Pressable, TextInput, View } from 'react-native';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
-import { getOutbox } from '@/db';
 import { premarksFromPhrase } from '@/pages/premarks';
+import { getCapture } from '@/services';
 import { selectNoAi, useOnboarding } from '@/store/onboarding';
 import { MAX_FONT_SCALE, useTheme } from '@/theme';
 
 /**
- * S03 — first phrase (path 3). Week-1 stub: typed only; voice recording arrives in week 2
- * (expo-audio, no live transcription — R-17). The phrase is stored in the outbox; no backend yet.
+ * S03 — first phrase (path 3). Typed here; the phrase becomes a local record + outbox item
+ * (synced when online). TODO: voice on S03 (the assistant line already records voice).
  */
 export default function PhraseScreen() {
   const theme = useTheme();
@@ -31,8 +31,8 @@ export default function PhraseScreen() {
   const submit = async (value: string) => {
     const phrase = value.trim();
     if (!phrase) return;
-    const outbox = await getOutbox();
-    await outbox.enqueue('capture.text', { text: phrase, pageId: 'today', origin: 'onboarding_phrase' });
+    const capture = await getCapture();
+    await capture.saveText({ text: phrase, source: 'typed', pageId: 'today' });
     router.push({ pathname: '/gallery', params: { from: 'phrase', mark: premarksFromPhrase(phrase).join(',') } });
   };
 

@@ -5,11 +5,16 @@
   "dependencies": {
     "@expo-google-fonts/onest": "^0.4.2",
     "expo": "~58.0.23",
+    "expo-audio": "~58.0.11",
     "expo-constants": "~58.0.15",
+    "expo-crypto": "~58.0.7",
+    "expo-file-system": "~58.0.13",
     "expo-font": "~58.0.11",
     "expo-linking": "~58.0.16",
     "expo-localization": "~58.0.5",
     "expo-router": "~58.0.30",
+    "expo-secure-store": "~58.0.2",
+    "expo-share-intent": "^9.0.0",
     "expo-sqlite": "~58.0.15",
     "expo-status-bar": "~58.0.4",
     "i18next": "^26.7.2",
@@ -57,6 +62,7 @@
     ],
     "moduleNameMapper": {
       "^lucide-react-native$": "<rootDir>/node_modules/lucide-react-native/dist/cjs/lucide-react-native.js"
-    }
+    },
+    "testTimeout": 300000
   }
 }

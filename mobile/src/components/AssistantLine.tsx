@@ -3,21 +3,26 @@ import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-import { getOutbox } from '@/db';
+import { getCapture } from '@/services';
 import { MAX_FONT_SCALE, useTheme } from '@/theme';
 import { useAssistant } from '@/store/assistant';
 import { selectNoAi, useOnboarding } from '@/store/onboarding';
+import { useToast } from '@/store/toast';
 import { newId } from '@/utils/id';
+import type { Fragment } from '@/voice/session';
+import { useVoiceRecorder } from '@/voice/useVoiceRecorder';
 
 import { AddSheet } from './AddSheet';
 import { AppText } from './AppText';
 import { Button } from './Button';
 import { useCurrentPage } from './useCurrentPage';
+import { VoiceListening } from './VoiceListening';
 
 /**
  * The persistent assistant line (F-37, R-52, 2-design §4.3): [+] [Про: <page> · field] (mic).
- * Same on every page, above the tabs. Week 1: UI only — sending writes to the local outbox,
- * the mic shows the «Слушаю» state without recording (no live transcription by design, R-17).
+ * Same on every page, above the tabs. v0 (week 2) «only record»: typed text and voice become local
+ * records + outbox entries (synced in the background, offline-first). Voice: fragments ≤3 min, no live
+ * transcription (R-17). «Без ИИ»: no mic at all — «Написать» focuses the field (R-05).
  */
 export function AssistantLine({ scope }: { scope?: 'all' } = {}) {
   const theme = useTheme();
@@ -26,12 +31,30 @@ export function AssistantLine({ scope }: { scope?: 'all' } = {}) {
   const noAi = useOnboarding(selectNoAi);
   const consentGiven = useOnboarding((s) => s.consent !== null);
   const store = useAssistant();
-  const { setAboutAll, listening, setListening, showBanner, addMessage } = store;
+  const { setAboutAll, setListening, showBanner, addMessage } = store;
+  const language = useOnboarding((s) => s.language);
+  const showToast = useToast((s) => s.show);
   // In «Переписка» the line always works over all pages.
   const aboutAll = scope === 'all' || store.aboutAll;
   const [text, setText] = useState('');
   const [addOpen, setAddOpen] = useState(false);
   const inputRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+
+  const onVoiceFinished = async (fragments: Fragment[]) => {
+    setListening(false);
+    const capture = await getCapture();
+    await capture.saveVoice({ fragments, pageId: current.id });
+    showToast(t('saved'));
+  };
+  const voice = useVoiceRecorder(onVoiceFinished);
+  const listening = voice.status === 'listening';
+
+  const startVoice = async () => {
+    // Consent gate: no recording before S05; never in «Без ИИ» (voice needs AI, R-05).
+    if (!consentGiven || noAi) return;
+    setListening(true);
+    await voice.start();
+  };
 
   const chipLabel = aboutAll ? t('line.about_all') : t('line.about', { page: current.title });
   const placeholder = noAi ? t('line.no_ai_hint') : t('line.placeholder');
@@ -50,13 +73,9 @@ export function AssistantLine({ scope }: { scope?: 'all' } = {}) {
       at: new Date().toISOString(),
     };
     addMessage(userMsg);
-    const outbox = await getOutbox();
-    await outbox.enqueue(noAi ? 'capture.text' : 'chat.message', {
-      clientId: userMsg.id,
-      text: value,
-      pageId: current.id,
-      scope: aboutAll ? 'all' : 'page',
-    });
+    // v0: the line only records (week 2); questions/actions via /chat/messages come in week 5.
+    const capture = await getCapture();
+    await capture.saveText({ text: value, source: 'typed', pageId: current.id });
     const reply = {
       id: newId(),
       role: 'assistant' as const,
@@ -153,7 +172,7 @@ export function AssistantLine({ scope }: { scope?: 'all' } = {}) {
         accessibilityRole="button"
         accessibilityLabel={t('line.mic')}
         disabled={!consentGiven}
-        onPress={() => setListening(true)}
+        onPress={startVoice}
         style={[styles.round, roundBtn, { backgroundColor: theme.colors.accent }, theme.elevation?.mic]}
       >
         <Mic size={28} color={theme.colors.onAccent} />
@@ -196,20 +215,35 @@ export function AssistantLine({ scope }: { scope?: 'all' } = {}) {
         },
       ]}
     >
-      {listening ? (
-        <View
-          testID="assistant-listening"
-          accessibilityLiveRegion="polite"
-          style={[styles.row, { gap: theme.space[3] }]}
-        >
-          <View style={[styles.round, roundBtn, { borderWidth: 4, borderColor: theme.colors.accent }]}>
-            <Mic size={28} color={theme.colors.accent} />
-          </View>
-          <AppText variant="bodyStrong" style={styles.flex}>
-            {t('line.listening')}
+      {voice.status === 'denied' ? (
+        <View style={[styles.row, { gap: theme.space[2] }]} accessibilityLiveRegion="polite">
+          <AppText variant="meta" style={styles.flex}>
+            {t('voice.denied')}
           </AppText>
-          <Button label={t('line.done')} onPress={() => setListening(false)} testID="assistant-listening-done" />
+          <Button
+            testID="voice-denied-write"
+            label={t('line.write')}
+            variant="text"
+            onPress={() => {
+              voice.resetDenied();
+              setListening(false);
+              inputRef.current?.focus();
+            }}
+          />
         </View>
+      ) : null}
+      {listening ? (
+        <VoiceListening
+          elapsedMs={voice.elapsedMs}
+          level={voice.level}
+          continuing={voice.continuing}
+          kkBeta={language === 'kk'}
+          onDone={() => void voice.finish()}
+          onCancel={() => {
+            setListening(false);
+            void voice.cancel();
+          }}
+        />
       ) : theme.largeFont ? (
         // ≥150%: two rows — chip, then [+] field (mic)
         <>

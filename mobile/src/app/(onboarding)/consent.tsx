@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { ChevronDown, ChevronRight } from 'lucide-react-native';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, View } from 'react-native';
 
@@ -8,8 +8,10 @@ import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { Checkbox } from '@/components/Checkbox';
 import { Screen } from '@/components/Screen';
+import { buildConsentRequest, bundledConsentTextsSync, loadConsentTexts, type ConsentTexts } from '@/consent/texts';
 import { getOutbox } from '@/db';
 import { CONSENT_RETENTION_DAYS_PLACEHOLDER } from '@/i18n';
+import { getApi, kickSync } from '@/services';
 import { useOnboarding, type ConsentRecord } from '@/store/onboarding';
 import { useTheme } from '@/theme';
 
@@ -17,24 +19,53 @@ import { useTheme } from '@/theme';
  * S05 — consent before the first phrase (R-03/R-04). DRAFT text for the lawyer (2-design §7.5).
  * Two clearly separated items, all recipients named, 18+ line, «Согласен» and «Без ИИ» equally prominent
  * (both outline, same weight — exception to «one accent button per screen»).
- * TODO(week 1 backend): text, recipients list, {N}, version and hash come from GET /consents/text.
+ *
+ * Legal texts (checkbox labels, 18+ line, push line, recipients) come from GET /v1/consents/text;
+ * offline — from the bundled snapshot of the same server texts. Whatever is on screen when the
+ * button is pressed is what gets recorded: exact version + sha256 per kind (POST /v1/consents via
+ * the outbox, then POST /v1/devices). Navigation never waits for the network.
+ * TODO: {N} days still a placeholder (server text has no retention value yet).
  */
 export default function ConsentScreen() {
   const theme = useTheme();
   const { t } = useTranslation();
   const acceptConsent = useOnboarding((s) => s.acceptConsent);
+  const language = useOnboarding((s) => s.language);
+  // Bundled texts render synchronously (offline-first); server texts replace them when they arrive.
+  const [fetched, setFetched] = useState<{ lang: string; texts: ConsentTexts } | null>(null);
+  const texts: ConsentTexts = fetched?.lang === language ? fetched.texts : bundledConsentTextsSync(language);
+  const [busy, setBusy] = useState(false);
   const [storage, setStorage] = useState(false);
   const [cross, setCross] = useState(false);
   const [showRecipients, setShowRecipients] = useState(false);
 
+  useEffect(() => {
+    let alive = true;
+    void loadConsentTexts(getApi(), language).then((x) => {
+      if (alive && Object.values(x).some((t) => t.source === 'server')) setFetched({ lang: language, texts: x });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [language]);
+
   const accept = async (mode: ConsentRecord['mode']) => {
-    acceptConsent(mode);
-    const consent = useOnboarding.getState().consent;
-    // Recorded locally first; the backend receives it via the outbox (no sync in week 1).
+    if (busy) return;
+    setBusy(true);
+    const request = buildConsentRequest(mode, texts);
+    acceptConsent(
+      mode,
+      request.consents.map((c) => ({ kind: c.kind, version: c.version, textHash: c.text_hash, locale: c.locale })),
+    );
+    // Local first; the outbox sends consents, then registers the device (devices need consent).
     const outbox = await getOutbox();
-    await outbox.enqueue('consent.accept', consent);
+    await outbox.enqueue('consent.accept', { request });
+    await outbox.enqueue('device.register', {});
+    kickSync();
     router.replace('/start');
   };
+
+  const providers = texts.ai_cross_border.providers.join(', ') || t('consent.recipients');
 
   const divider = (
     <View style={{ height: 1, backgroundColor: theme.colors.lineStrong, marginVertical: theme.space[4] }} />
@@ -62,7 +93,7 @@ export default function ConsentScreen() {
         {t('consent.storage_title')}
       </AppText>
       <AppText style={{ marginTop: theme.space[2] }}>{t('consent.storage_body')}</AppText>
-      <Checkbox testID="consent-storage" label={t('consent.storage_check')} checked={storage} onChange={setStorage} />
+      <Checkbox testID="consent-storage" label={texts.pd_processing.text} checked={storage} onChange={setStorage} />
 
       {divider}
 
@@ -88,17 +119,17 @@ export default function ConsentScreen() {
       </Pressable>
       {/* Recipients are always named on the screen; the toggle only adds the explanation. */}
       <AppText variant="bodyStrong" testID="consent-recipients">
-        {t('consent.recipients')}
+        {providers}
       </AppText>
       {showRecipients ? <AppText variant="meta">{t('consent.recipients_note')}</AppText> : null}
       <AppText variant="meta" style={{ marginTop: theme.space[2] }}>
-        {t('consent.push_line')}
+        {texts.push_content.text}
       </AppText>
-      <Checkbox testID="consent-cross" label={t('consent.cross_check')} checked={cross} onChange={setCross} />
+      <Checkbox testID="consent-cross" label={texts.ai_cross_border.text} checked={cross} onChange={setCross} />
 
       {divider}
 
-      <AppText>{t('consent.age')}</AppText>
+      <AppText testID="consent-terms">{texts.terms.text}</AppText>
       <View style={[styles.row, styles.wrap, { columnGap: theme.space[4] }]}>
         {link(t('consent.terms'))}
         {link(t('consent.policy'))}
@@ -111,7 +142,7 @@ export default function ConsentScreen() {
           variant="outline"
           label={t('consent.agree')}
           accessibilityLabel={t('consent.agree_a11y')}
-          disabled={!storage || !cross}
+          disabled={!storage || !cross || busy}
           onPress={() => accept('full')}
         />
         <Button
@@ -119,7 +150,7 @@ export default function ConsentScreen() {
           variant="outline"
           label={t('consent.no_ai')}
           accessibilityLabel={t('consent.no_ai_a11y')}
-          disabled={!storage}
+          disabled={!storage || busy}
           onPress={() => accept('no_ai')}
         />
         <AppText variant="meta">{t('consent.no_ai_hint')}</AppText>

@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from assistant.api.deps import ApiContext
 from assistant.api.errors import install_error_handlers
-from assistant.api.routes import auth, consents, devices, misc, uploads
+from assistant.api.routes import auth, consents, devices, items, misc, sync, uploads
 from assistant.api.sms import SmsSender, make_sms_sender
 from assistant.api.storage import LocalObjectStorage, ObjectStorage, make_storage
 from assistant.config import Settings, get_settings
@@ -29,6 +29,17 @@ def _secret(value: str, name: str, settings: Settings) -> bytes:
     raise RuntimeError(f"{name.upper()} must be set (or API_DEV_MODE=true for local dev)")
 
 
+def storage_from_settings(settings: Settings) -> ObjectStorage:
+    """The object store the API (uploads) and the ingest worker (reads originals) share."""
+    jwt_secret = _secret(settings.jwt_secret.get_secret_value(), "jwt_secret", settings)
+    return make_storage(
+        settings.storage_backend,
+        local_dir=settings.storage_local_dir,
+        public_base_url=settings.api_public_base_url,
+        secret=hmac.digest(jwt_secret, b"storage", "sha256"),
+    )
+
+
 def create_app(
     settings: Settings | None = None,
     *,
@@ -43,12 +54,7 @@ def create_app(
         from assistant.db.session import get_sessionmaker
 
         sessionmaker = get_sessionmaker()
-    storage = storage or make_storage(
-        settings.storage_backend,
-        local_dir=settings.storage_local_dir,
-        public_base_url=settings.api_public_base_url,
-        secret=hmac.digest(jwt_secret, b"storage", "sha256"),
-    )
+    storage = storage or storage_from_settings(settings)
     ctx = ApiContext(settings=settings, sessionmaker=sessionmaker,
                      sms=sms or make_sms_sender(settings.sms_provider), storage=storage,
                      jwt_secret=jwt_secret, hash_key=hash_key)  # fmt: skip
@@ -66,7 +72,8 @@ def create_app(
         return response
 
     v1 = APIRouter(prefix="/v1")
-    for router in (auth.router, consents.router, devices.router, uploads.router, misc.ai):
+    for router in (auth.router, consents.router, devices.router, uploads.router, items.router,
+                   sync.router, misc.ai):
         v1.include_router(router)
     if isinstance(storage, LocalObjectStorage):
         v1.include_router(misc.dev_storage)

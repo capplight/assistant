@@ -106,8 +106,12 @@ describe('outbox', () => {
     const b = await repo.enqueue('chat.message', { text: 'b' });
     expect((await repo.listPending()).map((e) => e.id)).toEqual([a.id, b.id]);
     await repo.markSent(a.id);
-    await repo.markFailed(b.id, 'offline');
+    await repo.markRetry(b.id, 'offline', 5000);
+    expect((await repo.get(b.id))?.attempts).toBe(1);
+    expect(await repo.countPending()).toBe(1);
+    await repo.markFailed(b.id, 'validation_error');
     expect(await repo.countPending()).toBe(0);
+    expect(repo.all()).toHaveLength(2); // never deleted
   });
 
   it('sqlite: migrates once and inserts with JSON payload', async () => {
@@ -115,7 +119,8 @@ describe('outbox', () => {
     await migrate(db);
     await migrate(db); // idempotent
     const creates = calls.filter((c) => c.sql.includes('CREATE TABLE IF NOT EXISTS outbox'));
-    expect(creates).toHaveLength(OUTBOX_MIGRATIONS.length);
+    expect(creates).toHaveLength(1);
+    expect(calls.filter((c) => c.sql.startsWith('PRAGMA user_version ='))).toHaveLength(OUTBOX_MIGRATIONS.length);
 
     const repo = new SqliteOutboxRepository(db, () => 42);
     const e = await repo.enqueue('pages.create', { pages: [1] });

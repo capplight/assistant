@@ -8,7 +8,8 @@
     "scheme": "assistant",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "kz.assistant.mobile"
     },
     "android": {
       "adaptiveIcon": {
@@ -17,7 +18,8 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "kz.assistant.mobile"
     },
     "web": {
       "bundler": "metro",
@@ -28,7 +30,48 @@
       "expo-status-bar",
       "expo-font",
       "expo-sqlite",
-      "expo-localization"
+      "expo-localization",
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": true
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Микрофон нужен, чтобы записывать то, что вы говорите помощнику.",
+          "recordAudioAndroid": true,
+          "enableBackgroundRecording": false
+        }
+      ],
+      [
+        "expo-share-intent",
+        {
+          "iosActivationRules": {
+            "NSExtensionActivationSupportsText": true,
+            "NSExtensionActivationSupportsWebURLWithMaxCount": 1,
+            "NSExtensionActivationSupportsWebPageWithMaxCount": 1,
+            "NSExtensionActivationSupportsImageWithMaxCount": 10,
+            "NSExtensionActivationSupportsFileWithMaxCount": 10
+          },
+          "androidIntentFilters": [
+            "text/*",
+            "image/*",
+            "audio/*",
+            "application/pdf",
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.ms-excel",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          ],
+          "androidMultiIntentFilters": [
+            "image/*",
+            "audio/*",
+            "application/pdf"
+          ]
+        }
+      ]
     ]
   }
 }

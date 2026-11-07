@@ -8,6 +8,7 @@ import enum
 import uuid
 from datetime import date, datetime, time
 
+import sqlalchemy as sa
 from geoalchemy2 import Geography
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
@@ -23,6 +24,7 @@ from sqlalchemy import (
     String,
     Text,
     Time,
+    TypeDecorator,
     UniqueConstraint,
     Uuid,
     func,
@@ -30,6 +32,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.schema import FetchedValue
 
 from assistant.db.ids import uuid7
 
@@ -42,6 +45,33 @@ class Base(DeclarativeBase):
 
 def _enum(cls: type[enum.Enum]) -> Enum:
     return Enum(cls, name=cls.__name__.lower(), values_callable=lambda e: [m.value for m in e])
+
+
+class TextEnum(TypeDecorator):
+    """`text + CHECK` column read as a StrEnum member when the value is known, else as str.
+
+    items.kind/source/status became text in 0004 and hold both legacy bot values (this module's
+    enums) and app values (assistant.db.models_v2.RecordKind etc.). StrEnum == str, so legacy
+    comparisons keep working and new values never raise LookupError.
+    """
+
+    impl = Text
+    cache_ok = True
+
+    def __init__(self, enum_cls: type[enum.StrEnum]) -> None:
+        super().__init__()
+        self.enum_cls = enum_cls
+
+    def process_bind_param(self, value, dialect):  # type: ignore[no-untyped-def]
+        return None if value is None else str(value)
+
+    def process_result_value(self, value, dialect):  # type: ignore[no-untyped-def]
+        if value is None:
+            return None
+        try:
+            return self.enum_cls(value)
+        except ValueError:
+            return value
 
 
 class ItemKind(enum.StrEnum):
@@ -170,11 +200,18 @@ class Trip(Base):
 
 
 class Item(Base):
-    """One thing the user sent: a link, screenshot, forwarded post, note."""
+    """One record: a note, voice, photo, document, link (app) or a forwarded post (legacy bot).
+
+    0004 generalized it for the app (spec 3-engineering 3.3) without dropping the travel
+    columns. kind/source/status are text + CHECK holding both legacy values (ItemKind, ...)
+    and app values (models_v2.RecordKind, RecordSource, RecordStatus). `seq` is set by the
+    `items_sync_seq` trigger on every insert/update (shared `sync_seq`).
+    """
 
     __tablename__ = "items"
     __table_args__ = (
         UniqueConstraint("user_id", "url_hash", name="uq_items_user_url"),
+        UniqueConstraint("user_id", "client_id", name="uq_items_user_client"),
         Index("ix_items_tsv", "tsv", postgresql_using="gin"),
         Index(
             "ix_items_embedding",
@@ -182,24 +219,35 @@ class Item(Base):
             postgresql_using="hnsw",
             postgresql_ops={"embedding": "vector_cosine_ops"},
         ),
+        Index("ix_items_user_seq", "user_id", "seq"),
+        Index("ix_items_user_content_hash", "user_id", "content_hash"),
+        Index("ix_items_user_original_sha256", "user_id", "original_sha256"),
     )
+    __mapper_args__ = {"eager_defaults": True}  # fetch trigger-set seq after INSERT/UPDATE
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, unique=True, default=uuid7, server_default=sa.text("gen_random_uuid()")
+    )
+    client_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     trip_id: Mapped[int | None] = mapped_column(
         ForeignKey("trips.id", ondelete="SET NULL"), index=True
     )
-    kind: Mapped[ItemKind] = mapped_column(_enum(ItemKind))
-    source: Mapped[ItemSource] = mapped_column(_enum(ItemSource))
-    status: Mapped[ItemStatus] = mapped_column(_enum(ItemStatus), default=ItemStatus.PENDING)
+    kind: Mapped[str] = mapped_column(TextEnum(ItemKind))
+    source: Mapped[str] = mapped_column(TextEnum(ItemSource))
+    status: Mapped[str] = mapped_column(
+        TextEnum(ItemStatus), default=ItemStatus.PENDING, server_default="pending"
+    )
 
-    # Input as received
+    # Input as received (legacy bot)
     raw_text: Mapped[str | None] = mapped_column(Text)
     url: Mapped[str | None] = mapped_column(Text)
     url_hash: Mapped[str | None] = mapped_column(String(64))  # sha256 of normalized url
     telegram_file_id: Mapped[str | None] = mapped_column(String(255))
-    telegram_chat_id: Mapped[int] = mapped_column(BigInteger)
-    telegram_message_id: Mapped[int] = mapped_column(BigInteger)
+    # Nullable since 0004 (app records have no Telegram message); copied into source_meta.
+    telegram_chat_id: Mapped[int | None] = mapped_column(BigInteger)
+    telegram_message_id: Mapped[int | None] = mapped_column(BigInteger)
 
     # Extraction result
     title: Mapped[str | None] = mapped_column(String(500))
@@ -212,11 +260,39 @@ class Item(Base):
     error: Mapped[str | None] = mapped_column(Text)
 
     embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM))
-    # Filled by trigger from title/summary/raw_text (see migration), 'simple' config: ru+kk+en mix.
+    # Filled by trigger from title/summary/raw_text/text, 'simple' config: ru+kk+en mix.
     tsv: Mapped[str | None] = mapped_column(TSVECTOR)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # --- 0004: app record (spec 3-engineering 3.3) ---
+    # Canonical text, stored instead of the original (OCR / transcript / extracted / typed).
+    text: Mapped[str | None] = mapped_column(Text)
+    text_lang: Mapped[str | None] = mapped_column(Text)  # ru|kk|en|other
+    envelope: Mapped[dict | None] = mapped_column(JSONB)
+    envelope_version: Mapped[int | None] = mapped_column(Integer)
+    # {"<field id>": {"kind": "phone", "value": "...", "state": "unverified|verified"}}
+    review_fields: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
+    merged_fragments: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")
+    source_meta: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
+    occurred_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    content_hash: Mapped[str | None] = mapped_column(Text)  # sha256 hex of normalized text
+    original_sha256: Mapped[str | None] = mapped_column(Text)
+    simhash: Mapped[int | None] = mapped_column(BigInteger)
+    canonical_item_id: Mapped[int | None] = mapped_column(
+        ForeignKey("items.id", ondelete="SET NULL", name="fk_items_canonical")
+    )
+    hidden_reason: Mapped[str | None] = mapped_column(Text)  # duplicate_merged|trashed
+    ai_generated: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    seq: Mapped[int] = mapped_column(
+        BigInteger, server_default=FetchedValue(), server_onupdate=FetchedValue()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    purge_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     places: Mapped[list["Place"]] = relationship(secondary="item_places")
 
@@ -323,6 +399,8 @@ class Job(Base):
     locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_error: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # 0004: e.g. item:<id>:ingest:v1; UNIQUE when set, so a re-enqueue is a no-op.
+    idempotency_key: Mapped[str | None] = mapped_column(Text)
 
 
 class ProcessedUpdate(Base):

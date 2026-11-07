@@ -36,6 +36,8 @@ class ObjectStorage(Protocol):
 
     async def head(self, key: str) -> ObjectInfo | None: ...
 
+    async def get(self, key: str) -> bytes | None: ...  # ingest reads originals
+
     async def delete(self, key: str) -> None: ...
 
 
@@ -117,6 +119,14 @@ class LocalObjectStorage:
             return ObjectInfo(len(data), hashlib.sha256(data).hexdigest())
 
         return await asyncio.to_thread(stat)
+
+    async def get(self, key: str) -> bytes | None:
+        path = self._path(key)
+
+        def read() -> bytes | None:
+            return path.read_bytes() if path.is_file() else None
+
+        return await asyncio.to_thread(read)
 
     async def delete(self, key: str) -> None:
         await asyncio.to_thread(self._path(key).unlink, missing_ok=True)

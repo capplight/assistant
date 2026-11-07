@@ -1,21 +1,59 @@
 import path from 'path';
 
-import { InMemoryOutboxRepository, setOutboxForTests } from '@/db';
+import type { FetchLike } from '@/api/client';
+import { MemorySecretStore } from '@/api/tokens';
+import { InMemoryOutboxRepository, InMemoryRecordsRepository, setOutboxForTests } from '@/db';
 import i18n from '@/i18n';
+import type { FileOps } from '@/records/capture';
+import { setServicesForTests } from '@/services';
 import { useAssistant } from '@/store/assistant';
 import { useOnboarding } from '@/store/onboarding';
 import { usePages } from '@/store/pages';
+import { useToast } from '@/store/toast';
 
 export const APP_DIR = path.resolve(__dirname, '../app');
 
-/** Reset all local state between tests; returns the in-memory outbox for assertions. */
-export function resetApp(): InMemoryOutboxRepository {
+/** fetch that behaves like a phone without network. */
+export const offlineFetch: FetchLike = async () => {
+  throw new TypeError('Network request failed');
+};
+
+/** Files "persisted" in memory: size = path length, sha256 = fixed fake. */
+export const fakeFiles: FileOps = {
+  persist: async (_src, name) => `file:///doc/records/${name}`,
+  size: async (uri) => uri.length,
+  sha256: async () => 'a'.repeat(64),
+};
+
+/** JSON Response for fetch mocks. */
+export function jsonResponse(status: number, body?: unknown, headers: Record<string, string> = {}): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: { get: (k: string) => headers[k] ?? headers[k.toLowerCase()] ?? null },
+    text: async () => (body === undefined ? '' : JSON.stringify(body)),
+  } as unknown as Response;
+}
+
+export let testRecords = new InMemoryRecordsRepository();
+
+/** Reset all local state between tests; returns the in-memory outbox for assertions. Network: offline. */
+export function resetApp(o: { fetch?: FetchLike } = {}): InMemoryOutboxRepository {
   useOnboarding.getState().reset();
   usePages.getState().reset();
   useAssistant.getState().reset();
+  useToast.setState({ toast: null });
   void i18n.changeLanguage('ru');
   const outbox = new InMemoryOutboxRepository();
-  setOutboxForTests(outbox);
+  testRecords = new InMemoryRecordsRepository();
+  setOutboxForTests(outbox, testRecords);
+  setServicesForTests({
+    fetch: o.fetch ?? offlineFetch,
+    secrets: new MemorySecretStore(),
+    files: fakeFiles,
+    putFile: async () => undefined,
+    baseUrl: () => 'http://api.test',
+  });
   return outbox;
 }
 
@@ -26,4 +64,27 @@ export function finishOnboarding(mode: 'full' | 'no_ai' = 'full'): void {
   s.acceptConsent(mode);
   s.setPath('gallery');
   s.complete();
+}
+
+/** renderRouter() switches Jest to fake timers (expo-router/testing-library); detect that. */
+function fakeTimersOn(): boolean {
+  return typeof (setTimeout as unknown as { clock?: unknown }).clock === 'object' || jest.isMockFunction(setTimeout);
+}
+
+/**
+ * Wait for async app work (fetch mocks, outbox writes) step by step: each step is one awaited act()
+ * that advances 20 ms of (fake or real) time. Unlike polling waitFor, steps never overlap, and it
+ * works under the fake timers renderRouter() turns on (a plain setTimeout would never fire there).
+ */
+export async function settle(cond: () => boolean, maxSteps = 500): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { act } = require('expo-router/testing-library') as typeof import('expo-router/testing-library');
+  for (let i = 0; i < maxSteps; i++) {
+    if (cond()) return;
+    await act(async () => {
+      if (fakeTimersOn()) await jest.advanceTimersByTimeAsync(20);
+      else await new Promise((r) => setTimeout(r, 20));
+    });
+  }
+  if (!cond()) throw new Error('settle: condition not met');
 }

@@ -3,7 +3,7 @@ import { Dimensions } from 'react-native';
 
 import { usePages } from '@/store/pages';
 
-import { APP_DIR, finishOnboarding, resetApp } from '@/testing/helpers';
+import { APP_DIR, finishOnboarding, resetApp, settle, testRecords } from '@/testing/helpers';
 
 describe('main navigation', () => {
   let outbox: ReturnType<typeof resetApp>;
@@ -60,8 +60,9 @@ describe('main navigation', () => {
     await fireEvent.press(screen.getByTestId('assistant-send'));
 
     const pending = await outbox.listPending();
-    expect(pending.map((e) => e.kind)).toEqual(['chat.message']);
-    expect(pending[0]?.payload).toMatchObject({ text: 'Купить хлеб', pageId: 'today', scope: 'page' });
+    expect(pending.map((e) => e.kind)).toEqual(['item.create']);
+    expect(pending[0]?.payload).toMatchObject({ text: 'Купить хлеб', pageId: 'today', kind: 'note', source: 'typed' });
+    expect((await testRecords.list())[0]).toMatchObject({ text: 'Купить хлеб', status: 'queued' });
 
     expect(screen.getByTestId('answer-banner')).toBeTruthy();
     expect(screen.getByText('Открыть ответ')).toBeTruthy();
@@ -71,6 +72,21 @@ describe('main navigation', () => {
     expect(screen.getByText('Вы: Купить хлеб')).toBeTruthy();
     // Same assistant line in Переписка, over all pages
     expect(within(screen.getByTestId('context-chip')).getByText('Про: все страницы')).toBeTruthy();
+  });
+
+  it('mic → «Слушаю…» with timer and level ring → «Готово» → voice record queued + «Сохранено»', async () => {
+    await renderRouter(APP_DIR, { initialUrl: '/' });
+    await fireEvent.press(screen.getByTestId('assistant-mic'));
+    await settle(() => screen.queryByTestId('assistant-listening') !== null);
+    expect(screen.getByText('Слушаю…')).toBeTruthy();
+    expect(screen.getByTestId('voice-timer')).toHaveTextContent('0:00');
+    expect(screen.getByTestId('voice-level-ring')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('assistant-listening-done'));
+    await settle(() => outbox.all().length === 1 && screen.queryByText('Сохранено') !== null);
+    const [entry] = await outbox.listPending();
+    expect(entry?.payload).toMatchObject({ kind: 'voice', source: 'mic', file: { mime: 'audio/mp4' } });
+    expect(screen.getByText('Сохранено')).toBeTruthy();
+    expect(screen.queryByTestId('assistant-listening')).toBeNull();
   });
 
   it('«Без ИИ» replaces the mic with «Написать»', async () => {

@@ -173,3 +173,111 @@ class UploadOut(BaseModel):
 
 class AiPingOut(BaseModel):
     ok: bool
+
+
+# --- items (records) and sync ---
+
+ItemKindIn = Literal["note", "voice", "image", "screenshot", "pdf", "docx", "xlsx", "link",
+                     "file_other"]  # fmt: skip
+ItemSourceIn = Literal["typed", "mic", "share", "camera", "files"]
+MAX_ITEM_TEXT = 100_000
+
+
+class ItemCreateIn(BaseModel):
+    """Exactly one of `text`, `upload_id`, `url`. With `upload_id`, `text` may be added as a
+    caption (Share sheet note); it is kept in source_meta.caption, not in the record text."""
+
+    client_id: uuid.UUID  # made on the phone; repeat POST with it = same record (idempotent)
+    kind: ItemKindIn | None = None  # default: note for text, link for url, from mime for uploads
+    source: ItemSourceIn = "typed"
+    text: str | None = Field(default=None, max_length=MAX_ITEM_TEXT)
+    upload_id: uuid.UUID | None = None  # a completed /v1/uploads id
+    url: str | None = Field(default=None, max_length=4096, pattern=r"^https?://")
+    title: str | None = Field(default=None, max_length=500)
+    occurred_at: datetime | None = None  # when it happened on the phone (offline capture)
+    content_hash: Sha256Hex | None = None  # phone-side hash; the server recomputes it
+
+
+class ReviewFieldOut(BaseModel):
+    kind: str  # phone | iin_bin | iban | amount | doc_number | transcript
+    value: str | None
+    state: Literal["unverified", "verified"]
+
+
+class ItemFileOut(BaseModel):
+    id: uuid.UUID
+    role: str
+    mime: str
+    bytes: int
+    sha256: str
+    state: str  # active | trash | pinned | purged
+    keep_reason: str | None
+    trash_until: datetime | None  # "Оригинал удалю через N дн."
+
+
+class ItemOut(BaseModel):
+    id: uuid.UUID
+    client_id: uuid.UUID | None
+    kind: str
+    source: str
+    status: str  # pending | processing | ready | needs_review | needs_consent | failed
+    title: str | None
+    text: str | None
+    text_lang: str | None
+    summary: str | None
+    review_fields: dict[str, ReviewFieldOut]
+    merged_fragments: list[dict[str, Any]]
+    source_meta: dict[str, Any]
+    confidence: float | None
+    ai_generated: bool
+    content_hash: str | None
+    original_sha256: str | None
+    canonical_id: uuid.UUID | None  # set when hidden as a repeat of another record
+    hidden_reason: str | None  # duplicate_merged | null
+    error: str | None  # short code, e.g. pdf_encrypted, ingest_failed
+    files: list[ItemFileOut]
+    seq: int
+    occurred_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+    deleted_at: datetime | None  # in "Удалённые записи" when set
+    purge_after: datetime | None
+
+
+class DuplicateOut(BaseModel):
+    canonical_id: uuid.UUID
+    canonical_created_at: datetime
+    undo_path: str  # POST here = "Отменить" (until actions/inverse exist)
+
+
+class ItemCreateOut(BaseModel):
+    item: ItemOut
+    created: bool  # False = this client_id was already stored (retry)
+    auto_merged: bool  # exact repeat: hidden and attached to `duplicate.canonical_id`
+    duplicate: DuplicateOut | None
+
+
+class ItemPatchIn(BaseModel):
+    title: str | None = Field(default=None, max_length=500)
+    text: str | None = Field(default=None, max_length=MAX_ITEM_TEXT)
+    verify: list[str] = Field(default_factory=list, max_length=100)  # review_fields keys: «Верно»
+    base_seq: int | None = None  # optimistic check: 409 conflict if the record changed since
+
+
+class ItemListOut(BaseModel):
+    items: list[ItemOut]
+    next_cursor: str | None
+
+
+class TombstoneOut(BaseModel):
+    entity: Literal["item"]
+    id: uuid.UUID
+    seq: int
+    deleted_at: datetime
+
+
+class SyncOut(BaseModel):
+    items: list[ItemOut]  # changed since `since`, incl. trashed (deleted_at) and hidden ones
+    tombstones: list[TombstoneOut]  # purged for good: drop locally
+    next_since: int  # pass as `since` next time
+    has_more: bool  # true: call again right away with next_since

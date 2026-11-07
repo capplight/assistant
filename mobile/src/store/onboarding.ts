@@ -34,13 +34,17 @@ export type OnboardingPath = 'gallery' | 'blank' | 'phrase_first' | 'skipped';
  */
 export type ConsentKind = 'pd_processing' | 'ai_cross_border' | 'terms' | 'age_confirmed_18' | 'push_content';
 
+/** What exactly was shown and accepted for one server kind (proof: version + sha256 of the text). */
+export type AcceptedText = { kind: string; version: string; textHash: string; locale: string };
+
 export type ConsentRecord = {
   mode: 'full' | 'no_ai';
   kinds: ConsentKind[];
-  /** Text version + hash come from GET /consents/text later; local draft until then. */
+  /** Version of the first accepted text (kept for compatibility); details in `texts`. */
   textVersion: string;
+  texts: AcceptedText[];
   acceptedAt: string;
-  /** Not yet sent to the backend — synced via outbox later. */
+  /** Not yet confirmed by the backend — sent via the outbox (`consent.accept`). */
   synced: boolean;
 };
 
@@ -57,7 +61,7 @@ type OnboardingState = {
   setLanguage: (lang: Language) => void;
   toggleInterest: (key: TourInterest) => void;
   markWelcomeSeen: (skipped: boolean) => void;
-  acceptConsent: (mode: ConsentRecord['mode']) => void;
+  acceptConsent: (mode: ConsentRecord['mode'], texts?: AcceptedText[]) => void;
   setPath: (path: OnboardingPath) => void;
   complete: () => void;
   reset: () => void;
@@ -86,15 +90,17 @@ export const useOnboarding = create<OnboardingState>()(
         })),
       markWelcomeSeen: (skipped) =>
         set((s) => ({ welcomeSeenAt: new Date().toISOString(), path: skipped ? 'skipped' : s.path })),
-      acceptConsent: (mode) =>
+      acceptConsent: (mode, texts = []) =>
         set({
           consent: {
             mode,
+            // «Без ИИ»: everything except ai_cross_border and push_content (3-engineering §4.2).
             kinds:
               mode === 'full'
                 ? ['pd_processing', 'ai_cross_border', 'terms', 'age_confirmed_18', 'push_content']
-                : ['pd_processing', 'terms', 'age_confirmed_18', 'push_content'],
-            textVersion: CONSENT_TEXT_VERSION_DRAFT,
+                : ['pd_processing', 'terms', 'age_confirmed_18'],
+            textVersion: texts[0]?.version ?? CONSENT_TEXT_VERSION_DRAFT,
+            texts,
             acceptedAt: new Date().toISOString(),
             synced: false,
           },

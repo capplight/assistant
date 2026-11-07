@@ -1,0 +1,50 @@
+# AI routes (spec 3-engineering 5.2). Order in `chain` = priority.
+# `primary` / `fallback` resolve to settings.ai_primary_provider / ai_fallback_provider;
+# a provider name (anthropic | openai | google | groq) is used as is.
+# Model names and prices: [verify at the week-0 bake-off / price check]. Anthropic models
+# default to settings.model_fast / model_strong (MODEL_FAST / MODEL_STRONG).
+
+models:
+  anthropic: {light: "${MODEL_FAST}", strong: "${MODEL_STRONG}"}
+  openai: {light: gpt-5-mini, strong: gpt-5}
+  google: {light: gemini-2.5-flash, strong: gemini-2.5-pro}
+  groq: {light: llama-3.3-70b-versatile, strong: llama-3.3-70b-versatile}
+
+# USD per 1M tokens: in (uncached), out, cached_in (cache read), cache_write.
+# Unknown model -> `default` (deliberately expensive so budgets stay conservative).
+prices:
+  claude-haiku-5-5: {in: 0.10, out: 0.50, cached_in: 0.01, cache_write: 0.125}
+  claude-sonnet-5-5: {in: 2.00, out: 10.00, cached_in: 0.20, cache_write: 2.50}
+  gpt-5-mini: {in: 0.25, out: 2.00, cached_in: 0.025, cache_write: 0.25}
+  gpt-5: {in: 1.25, out: 10.00, cached_in: 0.125, cache_write: 1.25}
+  gemini-2.5-flash: {in: 0.30, out: 2.50, cached_in: 0.03, cache_write: 0.30}
+  gemini-2.5-pro: {in: 1.25, out: 10.00, cached_in: 0.125, cache_write: 1.25}
+  llama-3.3-70b-versatile: {in: 0.59, out: 0.79, cached_in: 0.59, cache_write: 0.59}
+  default: {in: 5.00, out: 25.00, cached_in: 5.00, cache_write: 5.00}
+
+# Per task: budget_class, tier (light|strong), escalate (tier allowed on request, if budget
+# < 80%), timeout_s (first token for streams), max_tokens, mask_contacts (phones/emails), chain.
+defaults: {tier: light, timeout_s: 30, max_tokens: 4000, mask_contacts: true,
+           chain: [primary, fallback]}
+
+tasks:
+  enrich: {budget_class: background, escalate: strong, mask_contacts: false}
+  stack_name: {budget_class: background}
+  dup_judge: {budget_class: background}
+  import_summarize: {budget_class: import}
+  intent: {budget_class: answers, timeout_s: 15}
+  reminder_parse: {budget_class: answers, timeout_s: 15}
+  answer: {budget_class: answers, escalate: strong, timeout_s: 8}
+  query_plan: {budget_class: answers, escalate: strong, timeout_s: 8}
+  answer_general: {budget_class: answers, escalate: strong, timeout_s: 8}
+  stack_summary: {budget_class: answers, escalate: strong}
+  draft: {budget_class: answers}
+  chat: {budget_class: answers, escalate: strong, timeout_s: 8}
+  chat_summarize: {budget_class: background}
+  page_group: {budget_class: answers}
+  expense_extract: {budget_class: background, escalate: strong}
+  kp_extract: {budget_class: documents, tier: strong, timeout_s: 60, max_tokens: 16000}
+  kp_edit: {budget_class: documents, tier: strong, timeout_s: 60, max_tokens: 16000}
+  profile_extract: {budget_class: documents, tier: strong, timeout_s: 60}
+  price_list_extract: {budget_class: documents, tier: strong, timeout_s: 60, max_tokens: 16000}
+  vision_ocr: {budget_class: background, chain: [google, primary], timeout_s: 30}

@@ -4,9 +4,11 @@ import { newId } from '@/utils/id';
 
 /**
  * Outbox: every local change that must reach the backend is written here first
- * (offline-first, 3-engineering §2.1 / §6.7 offline). No sync yet — week 2 adds the sender.
+ * (offline-first, 3-engineering §2.1 / §6.7 offline). The sender is `src/sync/engine.ts`.
+ * Rows are never deleted: `sent` stays as history, `failed` = permanent server rejection (kept for support).
  */
-export type OutboxKind = 'consent.accept' | 'pages.create' | 'capture.text' | 'chat.message';
+export type OutboxKind =
+  'consent.accept' | 'device.register' | 'item.create' | 'pages.create' | 'capture.text' | 'chat.message';
 
 export type OutboxStatus = 'pending' | 'sent' | 'failed';
 
@@ -18,6 +20,8 @@ export type OutboxEntry = {
   status: OutboxStatus;
   attempts: number;
   lastError: string | null;
+  /** Earliest time (ms) of the next attempt — retry backoff. 0 = now. */
+  nextAttemptAt: number;
   createdAt: number;
   updatedAt: number;
 };
@@ -27,7 +31,13 @@ export interface OutboxRepository {
   /** Oldest first. */
   listPending(limit?: number): Promise<OutboxEntry[]>;
   markSent(id: string): Promise<void>;
+  /** Permanent failure (server rejected it): kept, not retried automatically. */
   markFailed(id: string, error: string): Promise<void>;
+  /** Transient failure: stays pending, attempts + 1, next try not before `nextAttemptAt`. */
+  markRetry(id: string, error: string, nextAttemptAt: number): Promise<void>;
+  /** Store progress (e.g. the upload id after the file is uploaded) so a retry doesn't redo it. */
+  updatePayload(id: string, payload: unknown): Promise<void>;
+  get(id: string): Promise<OutboxEntry | null>;
   countPending(): Promise<number>;
 }
 
@@ -46,6 +56,28 @@ export const OUTBOX_MIGRATIONS: readonly string[] = [
      updated_at INTEGER NOT NULL
    );
    CREATE INDEX IF NOT EXISTS outbox_status_created ON outbox (status, created_at);`,
+  // v2 (week 2): retry backoff + local records (items mirror) + sync cursor
+  `ALTER TABLE outbox ADD COLUMN next_attempt_at INTEGER NOT NULL DEFAULT 0;
+   CREATE TABLE IF NOT EXISTS records (
+     id TEXT PRIMARY KEY NOT NULL,
+     server_id TEXT,
+     kind TEXT NOT NULL,
+     source TEXT NOT NULL,
+     status TEXT NOT NULL,
+     title TEXT,
+     text TEXT,
+     url TEXT,
+     files TEXT NOT NULL DEFAULT '[]',
+     page_id TEXT,
+     seq INTEGER NOT NULL DEFAULT 0,
+     occurred_at TEXT NOT NULL,
+     created_at INTEGER NOT NULL,
+     updated_at INTEGER NOT NULL,
+     deleted_at INTEGER
+   );
+   CREATE UNIQUE INDEX IF NOT EXISTS records_server_id ON records (server_id);
+   CREATE INDEX IF NOT EXISTS records_created ON records (created_at);
+   CREATE TABLE IF NOT EXISTS sync_state (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);`,
 ];
 
 type Row = {
@@ -55,6 +87,7 @@ type Row = {
   status: OutboxStatus;
   attempts: number;
   last_error: string | null;
+  next_attempt_at?: number;
   created_at: number;
   updated_at: number;
 };
@@ -66,6 +99,7 @@ const fromRow = (r: Row): OutboxEntry => ({
   status: r.status,
   attempts: r.attempts,
   lastError: r.last_error,
+  nextAttemptAt: r.next_attempt_at ?? 0,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 });
@@ -97,6 +131,7 @@ export class SqliteOutboxRepository implements OutboxRepository {
       status: 'pending',
       attempts: 0,
       lastError: null,
+      nextAttemptAt: 0,
       createdAt: ts,
       updatedAt: ts,
     };
@@ -127,13 +162,36 @@ export class SqliteOutboxRepository implements OutboxRepository {
   }
 
   async markFailed(id: string, error: string): Promise<void> {
-    // Stays retryable: status back to pending is the sender's decision (backoff), here we only record.
     await this.db.runAsync(
       "UPDATE outbox SET status = 'failed', attempts = attempts + 1, last_error = ?, updated_at = ? WHERE id = ?",
       error,
       this.now(),
       id,
     );
+  }
+
+  async markRetry(id: string, error: string, nextAttemptAt: number): Promise<void> {
+    await this.db.runAsync(
+      'UPDATE outbox SET attempts = attempts + 1, last_error = ?, next_attempt_at = ?, updated_at = ? WHERE id = ?',
+      error,
+      nextAttemptAt,
+      this.now(),
+      id,
+    );
+  }
+
+  async updatePayload(id: string, payload: unknown): Promise<void> {
+    await this.db.runAsync(
+      'UPDATE outbox SET payload = ?, updated_at = ? WHERE id = ?',
+      JSON.stringify(payload),
+      this.now(),
+      id,
+    );
+  }
+
+  async get(id: string): Promise<OutboxEntry | null> {
+    const row = await this.db.getFirstAsync<Row>('SELECT * FROM outbox WHERE id = ?', id);
+    return row ? fromRow(row) : null;
   }
 
   async countPending(): Promise<number> {
@@ -159,6 +217,7 @@ export class InMemoryOutboxRepository implements OutboxRepository {
       status: 'pending',
       attempts: 0,
       lastError: null,
+      nextAttemptAt: 0,
       createdAt: ts,
       updatedAt: ts,
     };
@@ -182,6 +241,26 @@ export class InMemoryOutboxRepository implements OutboxRepository {
     const r = this.rows.get(id);
     if (r)
       this.rows.set(id, { ...r, status: 'failed', attempts: r.attempts + 1, lastError: error, updatedAt: this.now() });
+  }
+
+  async markRetry(id: string, error: string, nextAttemptAt: number): Promise<void> {
+    const r = this.rows.get(id);
+    if (r)
+      this.rows.set(id, { ...r, attempts: r.attempts + 1, lastError: error, nextAttemptAt, updatedAt: this.now() });
+  }
+
+  async updatePayload(id: string, payload: unknown): Promise<void> {
+    const r = this.rows.get(id);
+    if (r) this.rows.set(id, { ...r, payload: JSON.parse(JSON.stringify(payload)) as unknown, updatedAt: this.now() });
+  }
+
+  async get(id: string): Promise<OutboxEntry | null> {
+    return this.rows.get(id) ?? null;
+  }
+
+  /** Test helper: every row, any status. */
+  all(): OutboxEntry[] {
+    return [...this.rows.values()].sort((a, b) => a.createdAt - b.createdAt);
   }
 
   async countPending(): Promise<number> {

@@ -79,6 +79,53 @@ class Settings(BaseSettings):
     upload_url_ttl_seconds: int = 600
     upload_max_bytes: int = 50 * 1024 * 1024
 
+    # Ingest worker (python -m assistant.records). OCR runs locally (Tesseract) in KZ.
+    ocr_provider: str = "auto"  # auto (tesseract if on PATH, else fake) | tesseract | fake
+    ocr_langs: str = "rus+kaz+eng"
+    # STT for voice records uses stt_provider above: fake | groq | openai (only fake exists yet;
+    # anything else leaves voice jobs retrying until a provider is wired in the AI router).
+
+    # --- AI layer (assistant.ai, spec 3-engineering 5) ---
+    # Keys come only from env / local .env (never committed, never logged).
+    openai_api_key: SecretStr = Field(default=SecretStr(""))
+    google_api_key: SecretStr = Field(default=SecretStr(""))  # Gemini
+    groq_api_key: SecretStr = Field(default=SecretStr(""))
+    # Kill switch per recipient (spec 5.1 `ai.providers_enabled`); consent filters further.
+    ai_providers_enabled: list[str] = ["anthropic", "openai", "google", "groq"]
+    ai_primary_provider: str = "anthropic"
+    ai_fallback_provider: str = "openai"  # set by the week-0 bake-off
+    # Empty = the packaged default src/assistant/ai/routes.yaml.
+    ai_routes_file: str = ""
+    # Our monthly spend cap per provider, USD [proposal]. 80% -> end of route, 100% -> off.
+    # A provider without an entry gets share_of_primary x the primary's cap.
+    ai_provider_monthly_usd: dict[str, float] = {"anthropic": 300.0}
+    ai_fallback_share_of_primary: float = 0.5
+    ai_fallback_emergency_daily_usd: float = 15.0
+    ai_fallback_alert_minutes: float = 10.0
+    # Legacy bot consents stored no provider list; the bot only ever sent data to Anthropic.
+    ai_legacy_consent_providers: list[str] = ["anthropic"]
+    # 429 with retry-after below this -> wait and retry the same provider once.
+    ai_retry_after_max_s: float = 2.0
+    # Circuit breaker per (provider, model): N errors within window -> open, then half-open.
+    ai_breaker_failures: int = 5
+    ai_breaker_window_s: float = 60.0
+    ai_breaker_open_s: float = 120.0
+
+    # Per-user AI budgets by users.profile (02-resolutions 2.2), USD. Day/month boundaries
+    # are computed in budget_tz.
+    budget_tz: str = "Asia/Almaty"
+    budget_family_alert_daily_usd: float = 0.50
+    budget_regular_background_daily_usd: float = 0.10
+    budget_regular_monthly_usd: float = 3.0
+    budget_work_background_daily_usd: float = 0.10
+    budget_work_monthly_usd: float = 8.0
+    # Work profile: documents (KP, TZ) are a separate wallet, no daily threshold [proposal:
+    # the spec gives no number for this wallet].
+    budget_work_documents_monthly_usd: float = 8.0
+    budget_import_once_usd: float = 1.0
+    # At this share of the monthly budget: no escalation to strong models.
+    budget_escalation_cutoff: float = 0.8
+
 
 @lru_cache
 def get_settings() -> Settings:
