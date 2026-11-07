@@ -344,3 +344,111 @@ export type SyncOut = {
   has_more: boolean;
   [entity: string]: unknown;
 };
+
+// --- chat (week 5): one conversation for every page — docs/api/chat.md (2026-11-07) ---
+// Every chat shape is here and the decoding in endpoints.ts, so a contract change is two files.
+
+export type ChatInputKind = 'typed' | 'voice' | 'share';
+
+/** POST /v1/chat/messages (SSE). Idempotent by `client_id`: the same one again resumes the first reply. */
+export type ChatMessageIn = {
+  client_id: string;
+  text: string;
+  /** Server id of the page the line is on; null on «Сегодня» and screens that are not pages. */
+  page_id: string | null;
+  visible_item_ids?: string[];
+  view_version?: number | null;
+  selected_item_id?: string | null;
+  lang: Locale;
+  input_kind: ChatInputKind;
+};
+
+export type ChatPageRef = { id: string; title: string; icon: string | null };
+
+/** `sources` event entry: «Нашёл…» while the answer is written. `ref` is its id inside the reply. */
+export type ChatSourceOut = {
+  ref: string;
+  item_id: string;
+  title: string | null;
+  snippet: string | null;
+  kind: string | null;
+  occurred_at: string | null;
+  created_at?: string | null;
+  /** Where the chip opens the record; null → the record card alone. */
+  page: ChatPageRef | null;
+  pages?: ChatPageRef[];
+};
+
+/** A chip under the answer: only records the answer is based on. `label` is ready to show. */
+export type ChatCitationOut = {
+  ref: string;
+  item_id: string;
+  chunk_id: string | null;
+  page: ChatPageRef | null;
+  title: string | null;
+  label: string | null;
+  occurred_at: string | null;
+};
+
+export type ChatAnswerKind = 'action' | 'text' | 'choice' | 'deferred';
+export type ChatMessageState = 'pending' | 'done' | 'deferred' | 'failed';
+export type ChatDelivery = 'streamed' | 'banner_pending' | 'banner_shown' | 'opened' | 'dismissed';
+
+/** One message of the conversation (history, `snapshot`, delivery answer). */
+export type ChatMessageOut = {
+  id: string;
+  client_id: string | null;
+  role: 'user' | 'assistant';
+  /** On an answer: the id of the person's message. */
+  reply_to: string | null;
+  page: ChatPageRef | null;
+  input_kind: ChatInputKind | null;
+  text: string;
+  answer_kind: ChatAnswerKind | null;
+  state: ChatMessageState;
+  citations: ChatCitationOut[];
+  checked: { ok: boolean; removed: number } | null;
+  delivery: ChatDelivery | null;
+  ai_label: string | null;
+  created_at: string;
+};
+
+/** GET /v1/chat/messages?before=&around=&limit= — oldest first. */
+export type ChatHistoryOut = { messages: ChatMessageOut[]; has_more_before: boolean; has_more_after: boolean };
+
+export type ChatDeliveryState = 'banner_shown' | 'opened' | 'dismissed';
+
+/** SSE events of one reply, decoded (unknown events are dropped by the decoder). `eventId` = SSE `id:`. */
+export type ChatEvent = (
+  | { type: 'accepted'; messageId: string | null; replyId: string | null }
+  | { type: 'status'; text: string }
+  | { type: 'sources'; sources: ChatSourceOut[] }
+  | { type: 'token'; text: string }
+  | { type: 'citations'; citations: ChatCitationOut[] }
+  | { type: 'checked'; ok: boolean; removed: number }
+  /** The full checked answer; `aiLabel` set when the assistant wrote it (R-06). */
+  | { type: 'banner'; replyId: string | null; text: string; preview: string; short: boolean; aiLabel: string | null; citations: ChatCitationOut[] }
+  /** `limited`: monthly limit reached, the answer is search results without a written answer. */
+  | { type: 'done'; replyId: string | null; limited: boolean }
+  | { type: 'deferred'; replyId: string | null; text: string | null }
+  /** `retry`: «Попробуйте ещё раз» with a NEW client_id. */
+  | { type: 'error'; replyId: string | null; code: string; messageRu: string; messageKk: string; retry: boolean }
+  /** Resume of a finished reply: replace what was shown. */
+  | { type: 'snapshot'; message: ChatMessageOut }
+) & { eventId?: string | null };
+
+// --- feedback («Сообщить о проблеме», R-41) — docs/api/chat.md ---
+
+export type FeedbackReason = 'wrong' | 'offensive' | 'other';
+
+export type FeedbackIn = {
+  client_id: string;
+  target: 'answer' | 'kp' | 'item' | 'reminder';
+  /** `answer`: the server id of an assistant message of this person. */
+  target_ref: string;
+  reason: FeedbackReason;
+  comment: string | null;
+  allow_anonymized_example: boolean;
+};
+
+export type FeedbackOut = { id: string; created_at: string };

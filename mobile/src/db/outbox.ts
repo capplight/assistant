@@ -20,7 +20,9 @@ export type OutboxKind =
   | 'pages.create'
   | 'pages.update'
   | 'capture.text'
-  | 'chat.message';
+  /** Unused: questions stream live (src/chat), they are not queued here. Old rows stay pending. */
+  | 'chat.message'
+  | 'feedback.send';
 
 export type OutboxStatus = 'pending' | 'sent' | 'failed';
 

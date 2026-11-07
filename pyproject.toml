@@ -50,6 +50,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 "assistant.ai" = ["routes.yaml"]
 "assistant.records" = ["prompts/*.md"]
+"assistant.chat" = ["prompts/*.md"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

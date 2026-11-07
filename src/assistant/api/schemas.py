@@ -487,3 +487,80 @@ class SyncOut(BaseModel):
     tombstones: list[TombstoneOut]  # purged for good: drop locally
     next_since: int  # pass as `since` next time
     has_more: bool  # true: call again right away with next_since
+
+
+# --- chat (docs/api/chat.md) ---
+
+
+class ChatMessageIn(BaseModel):
+    client_id: uuid.UUID
+    text: str = Field(max_length=4000)
+    page_id: uuid.UUID | None = None
+    visible_item_ids: list[uuid.UUID] = Field(default_factory=list, max_length=40)
+    view_version: int | None = None
+    selected_item_id: uuid.UUID | None = None
+    lang: LocaleStr | None = None
+    input_kind: Literal["typed", "voice", "share"] = "typed"
+
+    @field_validator("text")
+    @classmethod
+    def _text(cls, value: str) -> str:
+        value = value.strip()
+        if not value or len(value) > 2000:
+            raise ValueError("text must be 1...2000 characters")
+        return value
+
+
+class ChatCitationOut(BaseModel):
+    ref: str
+    item_id: uuid.UUID
+    chunk_id: uuid.UUID | None = None
+    page: PageRefOut | None
+    title: str
+    label: str
+    occurred_at: datetime | None
+
+
+class ChatMessageOut(BaseModel):
+    id: uuid.UUID
+    client_id: uuid.UUID | None
+    role: Literal["user", "assistant", "tool"]
+    reply_to: uuid.UUID | None
+    page: PageRefOut | None
+    input_kind: str | None
+    text: str
+    answer_kind: str | None
+    state: Literal["pending", "done", "deferred", "failed"]
+    citations: list[ChatCitationOut]
+    checked: dict[str, Any] | None
+    delivery: str | None
+    ai_label: str | None
+    created_at: datetime
+
+
+class ChatMessagesOut(BaseModel):
+    messages: list[ChatMessageOut]
+    has_more_before: bool
+    has_more_after: bool
+
+
+class PendingBannerOut(BaseModel):
+    message: ChatMessageOut | None
+
+
+class DeliveryIn(BaseModel):
+    delivery: Literal["banner_shown", "opened", "dismissed"]
+
+
+class FeedbackIn(BaseModel):
+    client_id: uuid.UUID | None = None
+    target: Literal["answer", "kp", "item", "reminder"]
+    target_ref: uuid.UUID
+    reason: Literal["wrong", "offensive", "other"]
+    comment: str | None = Field(default=None, max_length=1000)
+    allow_anonymized_example: bool = False
+
+
+class FeedbackOut(BaseModel):
+    id: uuid.UUID
+    created_at: datetime

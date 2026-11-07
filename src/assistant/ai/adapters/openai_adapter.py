@@ -8,6 +8,11 @@ Prompt caching is automatic on both, for long enough prefixes: we keep the prefi
 `cached_tokens`. OpenAI also gets `prompt_cache_key` (the schema name, never user data) to keep
 one task's calls on the same cache. Batch APIs exist on both but are not implemented here: only
 the primary provider batches, and a batch task on a fallback provider runs live.
+
+Tool loops: Responses API input items `function_call` / `function_call_output`; with tools,
+`include=["reasoning.encrypted_content"]` (store=False keeps nothing on OpenAI's side) and the
+output items are replayed as they came (`ProviderTurn`). Groq: assistant `tool_calls` + `tool`
+messages. UNVERIFIED live, like the rest of this file.
 """
 
 import base64
@@ -26,6 +31,7 @@ from assistant.ai.types import (
     ProviderError,
     ProviderRequestError,
     ProviderTimeout,
+    ProviderTurn,
     QuotaExceeded,
     RateLimited,
     Refused,
@@ -83,10 +89,21 @@ class OpenAIAdapter:
         return self._client
 
     def request_kwargs(self, req: AdapterRequest) -> dict[str, Any]:
-        items = []
+        items: list[dict[str, Any]] = []
         for m in req.messages:
             if m.role == "assistant":
-                items.append({"role": "assistant", "content": m.text})
+                if m.raw is not None and m.raw.provider == "openai":
+                    items.extend(m.raw.payload)
+                    continue
+                if m.text:
+                    items.append({"role": "assistant", "content": m.text})
+                items.extend({"type": "function_call", "call_id": c.id, "name": c.name,
+                              "arguments": json.dumps(c.arguments, ensure_ascii=False)}
+                             for c in m.tool_calls)  # fmt: skip
+                continue
+            items.extend({"type": "function_call_output", "call_id": r.call_id,
+                          "output": r.content} for r in m.tool_results)  # fmt: skip
+            if not m.text and not m.images and m.tool_results:
                 continue
             content: list[dict[str, Any]] = [
                 {"type": "input_image", "image_url": _data_url(i.media_type, i.data)}
@@ -109,7 +126,10 @@ class OpenAIAdapter:
             kwargs["prompt_cache_key"] = req.schema_name[:64]
         if req.tools:
             kwargs["tools"] = [{"type": "function", "name": t.name, "description": t.description,
-                                "parameters": t.parameters, "strict": False} for t in req.tools]
+                                "parameters": t.parameters, "strict": True} for t in req.tools]
+            kwargs["include"] = ["reasoning.encrypted_content"]
+            if req.tool_choice == "none":
+                kwargs["tool_choice"] = "none"
         return kwargs  # fmt: skip
 
     async def generate(self, req: AdapterRequest) -> AdapterResponse:
@@ -162,8 +182,14 @@ def _responses_to_result(resp: Any, model: str) -> AdapterResponse:
                     raise Refused("refusal", usage=usage)
                 if part.type == "output_text":
                     texts.append(part.text)
+    raw = None
+    items = list(resp.output or [])
+    if calls and all(hasattr(item, "model_dump") for item in items):
+        raw = ProviderTurn("openai", [item.model_dump(mode="json", exclude_none=True)
+                                      for item in items])  # fmt: skip
     return AdapterResponse("".join(texts), usage, getattr(resp, "model", model) or model,
-                           tool_calls=calls, request_id=getattr(resp, "id", None))  # fmt: skip
+                           tool_calls=calls, request_id=getattr(resp, "id", None),
+                           raw=raw)  # fmt: skip
 
 
 class GroqAdapter:
@@ -188,6 +214,16 @@ class GroqAdapter:
     def request_kwargs(self, req: AdapterRequest) -> dict[str, Any]:
         messages: list[dict[str, Any]] = [{"role": "system", "content": req.system}]
         for m in req.messages:
+            if m.tool_calls:
+                messages.append({"role": "assistant", "content": m.text or None, "tool_calls": [
+                    {"id": c.id, "type": "function", "function": {
+                        "name": c.name, "arguments": json.dumps(c.arguments, ensure_ascii=False)}}
+                    for c in m.tool_calls]})  # fmt: skip
+                continue
+            messages.extend({"role": "tool", "tool_call_id": r.call_id, "content": r.content}
+                            for r in m.tool_results)  # fmt: skip
+            if m.tool_results and not m.text and not m.images:
+                continue
             if m.images:
                 content: list[dict[str, Any]] = [
                     {"type": "image_url", "image_url": {"url": _data_url(i.media_type, i.data)}}
@@ -207,6 +243,8 @@ class GroqAdapter:
             kwargs["tools"] = [{"type": "function", "function": {
                 "name": t.name, "description": t.description, "parameters": t.parameters}}
                 for t in req.tools]
+            if req.tool_choice == "none":
+                kwargs["tool_choice"] = "none"
         return kwargs  # fmt: skip
 
     async def generate(self, req: AdapterRequest) -> AdapterResponse:
@@ -219,6 +257,7 @@ class GroqAdapter:
             texts: list[str] = []
             usage = Usage()
             finish = None
+            parts: dict[int, dict[str, str]] = {}  # streamed tool calls, by index
             stream = await client.chat.completions.create(
                 **kwargs, stream=True, stream_options={"include_usage": True})
             async for chunk in stream:
@@ -228,6 +267,13 @@ class GroqAdapter:
                     if choice.delta and choice.delta.content:
                         texts.append(choice.delta.content)
                         await req.on_token(choice.delta.content)
+                    for tc in getattr(choice.delta, "tool_calls", None) or []:
+                        part = parts.setdefault(tc.index, {"id": "", "name": "", "args": ""})
+                        part["id"] = tc.id or part["id"]
+                        fn = getattr(tc, "function", None)
+                        if fn is not None:
+                            part["name"] = fn.name or part["name"]
+                            part["args"] += fn.arguments or ""
                     finish = choice.finish_reason or finish
         except ProviderError:
             raise
@@ -242,7 +288,12 @@ class GroqAdapter:
             raise BadOutput("length", usage=usage)
         if finish == "content_filter":
             raise Refused("content_filter", usage=usage)
-        return AdapterResponse("".join(texts), usage, req.model)
+        try:
+            calls = [ToolCall(v["id"] or f"call_{i}", v["name"], json.loads(v["args"] or "{}"))
+                     for i, v in sorted(parts.items())]  # fmt: skip
+        except json.JSONDecodeError as exc:
+            raise BadOutput("tool arguments", usage=usage) from exc
+        return AdapterResponse("".join(texts), usage, req.model, tool_calls=calls)
 
 
 def _chat_usage(u: Any) -> Usage:

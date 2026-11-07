@@ -1,6 +1,17 @@
 import type { ApiClient } from './client';
 import { ApiError } from './errors';
+import { readSse, StreamDroppedError, type SseMessage } from './sse';
 import type {
+  ChatDeliveryState,
+  ChatEvent,
+  ChatHistoryOut,
+  ChatMessageIn,
+  ChatMessageOut,
+  ChatCitationOut,
+  ChatPageRef,
+  ChatSourceOut,
+  FeedbackIn,
+  FeedbackOut,
   ConsentsIn,
   ConsentsOut,
   ConsentTextOut,
@@ -32,6 +43,141 @@ import type {
 
 /** Reads a local file and PUTs it to a presigned URL. Injected so tests don't touch the filesystem. */
 export type PutFile = (fileUri: string, put: NonNullable<UploadOut['put']>) => Promise<void>;
+
+/** No bytes for this long while an answer streams → dropped (the server sends keep-alives every ~15 s). */
+export const CHAT_IDLE_MS = 40_000;
+
+type Obj = Record<string, unknown>;
+const str = (v: unknown): string | null => (typeof v === 'string' ? v : null);
+const obj = (v: unknown): Obj | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Obj) : null);
+const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+
+function pageRef(v: unknown): ChatPageRef | null {
+  const o = obj(v);
+  const id = o && str(o.id);
+  return o && id ? { id, title: str(o.title) ?? '', icon: str(o.icon) } : null;
+}
+
+function sourceOut(v: unknown): ChatSourceOut | null {
+  const o = obj(v);
+  const itemId = o && str(o.item_id);
+  if (!o || !itemId) return null;
+  return {
+    ref: str(o.ref) ?? itemId,
+    item_id: itemId,
+    title: str(o.title),
+    snippet: str(o.snippet),
+    kind: str(o.kind),
+    occurred_at: str(o.occurred_at),
+    created_at: str(o.created_at),
+    page: pageRef(o.page),
+    pages: arr(o.pages).map(pageRef).filter((x): x is ChatPageRef => x !== null),
+  };
+}
+
+function citationOut(v: unknown): ChatCitationOut | null {
+  const o = obj(v);
+  const itemId = o && str(o.item_id);
+  if (!o || !itemId) return null;
+  return {
+    ref: str(o.ref) ?? itemId,
+    item_id: itemId,
+    chunk_id: str(o.chunk_id),
+    page: pageRef(o.page),
+    title: str(o.title),
+    label: str(o.label),
+    occurred_at: str(o.occurred_at),
+  };
+}
+
+const citations = (v: unknown) => arr(v).map(citationOut).filter((x): x is ChatCitationOut => x !== null);
+
+/** ChatMessage of docs/api/chat.md → ChatMessageOut; null when it is not one. */
+export function chatMessageOut(v: unknown): ChatMessageOut | null {
+  const o = obj(v);
+  const id = o && str(o.id);
+  const role = o && (o.role === 'user' || o.role === 'assistant') ? o.role : null;
+  if (!o || !id || !role) return null;
+  const state = o.state === 'pending' || o.state === 'deferred' || o.state === 'failed' ? o.state : 'done';
+  const checked = obj(o.checked);
+  return {
+    id,
+    client_id: str(o.client_id),
+    role,
+    reply_to: str(o.reply_to),
+    page: pageRef(o.page),
+    input_kind: (str(o.input_kind) as ChatMessageOut['input_kind']) ?? null,
+    text: str(o.text) ?? '',
+    answer_kind: (str(o.answer_kind) as ChatMessageOut['answer_kind']) ?? null,
+    state,
+    citations: citations(o.citations),
+    checked: checked ? { ok: checked.ok !== false, removed: Number(checked.removed) || 0 } : null,
+    delivery: (str(o.delivery) as ChatMessageOut['delivery']) ?? null,
+    ai_label: str(o.ai_label),
+    created_at: str(o.created_at) ?? new Date().toISOString(),
+  };
+}
+
+/** One SSE message → a typed event (docs/api/chat.md «Events»). Unknown events: null (ignored). */
+export function decodeChatEvent(m: SseMessage): ChatEvent | null {
+  let d: Obj = {};
+  try {
+    d = obj(m.data ? JSON.parse(m.data) : {}) ?? {};
+  } catch {
+    return null;
+  }
+  const e = ((): ChatEvent | null => {
+    switch (m.event) {
+      case 'accepted':
+        return { type: 'accepted', messageId: str(d.message_id), replyId: str(d.reply_id) };
+      case 'status':
+      case 'tool_activity': {
+        const text = str(d.text);
+        return text ? { type: 'status', text } : null;
+      }
+      case 'sources':
+        return { type: 'sources', sources: arr(d.sources).map(sourceOut).filter((x): x is ChatSourceOut => x !== null) };
+      case 'token': {
+        const text = str(d.text);
+        return text !== null ? { type: 'token', text } : null;
+      }
+      case 'citations':
+        return { type: 'citations', citations: citations(d.citations) };
+      case 'checked':
+        return { type: 'checked', ok: d.ok !== false, removed: Number(d.removed) || 0 };
+      case 'banner':
+        return {
+          type: 'banner',
+          replyId: str(d.reply_id),
+          text: str(d.text) ?? '',
+          preview: str(d.preview) ?? '',
+          short: d.short === true,
+          aiLabel: str(d.ai_label),
+          citations: citations(d.citations),
+        };
+      case 'done':
+        return { type: 'done', replyId: str(d.reply_id), limited: d.limited === true };
+      case 'deferred':
+        return { type: 'deferred', replyId: str(d.reply_id), text: str(d.text) };
+      case 'error':
+        return {
+          type: 'error',
+          replyId: str(d.reply_id),
+          code: str(d.code) ?? 'internal',
+          messageRu: str(d.message_ru) ?? '',
+          messageKk: str(d.message_kk) ?? '',
+          retry: d.retry === true,
+        };
+      case 'snapshot': {
+        const message = chatMessageOut(d.message);
+        return message ? { type: 'snapshot', message } : null;
+      }
+      default:
+        return null;
+    }
+  })();
+  return e ? { ...e, eventId: m.id } : null;
+}
 
 /** Typed /v1 endpoints. The ONLY place that knows paths and request bodies. */
 export class Api {
@@ -143,5 +289,65 @@ export class Api {
 
   sync(since: number, limit = 200): Promise<SyncOut> {
     return this.client.request('GET', '/sync', { query: { since, limit } });
+  }
+
+  // chat — docs/api/chat.md
+
+  /** Reads one reply's stream; throws StreamDroppedError when it ends before `done`/`deferred`/`error`. */
+  private async readReply(res: Response, onEvent: (e: ChatEvent) => void, o: { signal?: AbortSignal; idleMs?: number }): Promise<void> {
+    let finished = false;
+    await readSse(
+      res,
+      (m) => {
+        const e = decodeChatEvent(m);
+        if (!e) return;
+        if (e.type === 'done' || e.type === 'deferred' || e.type === 'error') finished = true;
+        onEvent(e);
+      },
+      { idleMs: o.idleMs ?? CHAT_IDLE_MS, signal: o.signal },
+    );
+    if (!finished) throw new StreamDroppedError('ended_early');
+  }
+
+  /**
+   * One turn. Events arrive through `onEvent` as they stream. Throws NetworkError (never reached the
+   * server), ApiError (refused before the stream), StreamDroppedError (cut off or silent before the end).
+   */
+  async chat(body: ChatMessageIn, onEvent: (e: ChatEvent) => void, o: { signal?: AbortSignal; idleMs?: number } = {}): Promise<void> {
+    const res = await this.client.openStream('POST', '/chat/messages', { body, signal: o.signal });
+    await this.readReply(res, onEvent, o);
+  }
+
+  /** A dropped reply, from after `lastEventId` («0» = from the start); a finished one comes as `snapshot`. */
+  async resumeChat(
+    replyId: string,
+    lastEventId: string | null,
+    onEvent: (e: ChatEvent) => void,
+    o: { signal?: AbortSignal; idleMs?: number } = {},
+  ): Promise<void> {
+    const res = await this.client.openStream('GET', `/chat/messages/${encodeURIComponent(replyId)}/events`, {
+      headers: { 'Last-Event-ID': lastEventId ?? '0' },
+      signal: o.signal,
+    });
+    await this.readReply(res, onEvent, o);
+  }
+
+  /** Переписка (S36): oldest first; `before` pages back, `around` opens on one answer. */
+  async chatHistory(q: { before?: string; around?: string; limit?: number } = {}): Promise<ChatHistoryOut> {
+    const out = obj(await this.client.request<unknown>('GET', '/chat/messages', { query: { limit: 50, ...q } })) ?? {};
+    return {
+      messages: arr(out.messages).map(chatMessageOut).filter((m): m is ChatMessageOut => m !== null),
+      has_more_before: out.has_more_before === true,
+      has_more_after: out.has_more_after === true,
+    };
+  }
+
+  chatDelivery(messageId: string, delivery: ChatDeliveryState): Promise<unknown> {
+    return this.client.request('POST', `/chat/messages/${encodeURIComponent(messageId)}/delivery`, { body: { delivery } });
+  }
+
+  // feedback («Сообщить о проблеме», R-41)
+  sendFeedback(body: FeedbackIn): Promise<FeedbackOut> {
+    return this.client.request('POST', '/feedback', { body, idempotencyKey: body.client_id });
   }
 }

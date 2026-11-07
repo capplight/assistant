@@ -6,7 +6,7 @@ Tests override `get_current_user` / `get_active_consent_kinds` / `get_db` to run
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import Depends, Request
 from sqlalchemy import select
@@ -21,6 +21,9 @@ from assistant.db.models import User
 from assistant.db.models_v2 import AuthSession, Consent, UserStatus
 from assistant.embeddings import ChunkEmbedder, NullChunkEmbedder
 
+if TYPE_CHECKING:
+    from assistant.chat import ChatService
+
 
 @dataclass
 class ApiContext:
@@ -31,6 +34,7 @@ class ApiContext:
     jwt_secret: bytes
     hash_key: bytes
     embedder: ChunkEmbedder = field(default_factory=NullChunkEmbedder)
+    chat: "ChatService | None" = None  # the assistant line (assistant.chat)
 
     def hash(self, value: str, *, purpose: str) -> str:
         return keyed_hash(self.hash_key, value, purpose=purpose)

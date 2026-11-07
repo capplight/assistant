@@ -160,12 +160,18 @@ class Router:
         no_personal_data: bool = False, strong: StrongRequest | None = None,
         stream: TokenHook | None = None,
         tools: list[ToolSpec] | tuple[ToolSpec, ...] = (), continuing: bool = False,
-        job_id: int | None = None,
+        job_id: int | None = None, masker: Masker | None = None,
+        pin_provider: str | None = None, tool_choice: str = "auto",
     ) -> Result[T]:  # fmt: skip
         """Run one task. `user_id=None` is allowed only with `no_personal_data=True`
         (synthetic eval data). `strong` asks for the route's escalation tier with the evidence
         ai/policy.py checks (denied = runs light); `continuing` marks a started document task
-        that must not be cut off by the budget."""
+        that must not be cut off by the budget.
+
+        Tool loops (CHAT): pass one `masker` for every step of the turn (stable placeholders),
+        and `pin_provider` = the provider of the first step: after a tool call there is no
+        switch (spec 5.5). Consent, budgets and the provider plan are still checked each step;
+        a pinned provider that is no longer allowed -> AIUnavailable."""
         route = self.routes.route(task)
         now = self.clock()
         ctx = _Ctx(task, route.budget_class, user_id, None, job_id,
@@ -187,11 +193,13 @@ class Router:
         # 3. providers
         plan = await self.budget.provider_plan(chain, now)
         order = [p for p in plan.order if p in self.adapters]
+        if pin_provider is not None:
+            order = [p for p in order if p == pin_provider]
         if not order:
             raise AIUnavailable(f"no provider available: {plan.excluded or 'no adapters'}")
 
         # 4. call
-        masker = Masker(mask_contacts=route.mask_contacts)
+        masker = masker if masker is not None else Masker(mask_contacts=route.mask_contacts)
         system, messages = build_messages(inputs, masker)
         json_schema = strict_json_schema(schema)
         unmasker = _StreamUnmasker(masker, stream) if stream is not None else None
@@ -214,6 +222,7 @@ class Router:
                     json_schema=json_schema, tools=tuple(tools), max_tokens=route.max_tokens,
                     timeout_s=route.timeout_s, cache_ttl=route.cache_ttl,
                     effort="low" if tier is Tier.LIGHT else "medium", on_token=unmasker,
+                    tool_choice=tool_choice if tools else "auto",
                 )  # fmt: skip
                 t0 = self.monotonic()
                 try:
@@ -513,5 +522,6 @@ class Router:
         return Result(data=data, tool_calls=calls, provider=provider, model=resp.model,
                       usage=resp.usage, cost_usd=cost, attempts=attempts,
                       fallback_from=fallback_from, escalation_blocked=denied is not None,
-                      escalation_denied=denied, budget_warning=warning)  # fmt: skip
+                      escalation_denied=denied, budget_warning=warning,
+                      raw=resp.raw)  # fmt: skip
 

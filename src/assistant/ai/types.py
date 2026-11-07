@@ -74,15 +74,10 @@ class ImagePart:
 
 
 @dataclass(frozen=True)
-class Message:
-    role: str  # "user" | "assistant"
-    text: str
-    images: tuple[ImagePart, ...] = ()
-
-
-@dataclass(frozen=True)
 class ToolSpec:
-    """Provider-neutral tool definition; adapters map it to tools / functions / declarations."""
+    """Provider-neutral tool definition; adapters map it to tools / functions / declarations.
+    `parameters` is a strict JSON schema (every property required, optional ones nullable,
+    additionalProperties false), so adapters may ask the provider for strict arguments."""
 
     name: str
     description: str
@@ -94,6 +89,40 @@ class ToolCall:
     id: str
     name: str
     arguments: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class ToolResult:
+    """Our answer to one ToolCall. `content` is the result as our code wrote it (JSON text);
+    build_messages masks it and wraps it in <untrusted_data>: records are data, not orders."""
+
+    call_id: str
+    name: str
+    content: str
+    is_error: bool = False
+
+
+@dataclass(frozen=True)
+class ProviderTurn:
+    """A provider's own assistant turn (Anthropic content blocks with thinking and signatures,
+    Gemini Content with thought signatures, OpenAI output items with encrypted reasoning).
+    Replayed as is to the same provider inside one tool loop; others rebuild from tool_calls."""
+
+    provider: str
+    payload: Any
+
+
+@dataclass(frozen=True)
+class Message:
+    """role "user": text (+ images) and/or tool_results; role "assistant": text and/or
+    tool_calls, with `raw` when the provider needs its own turn back."""
+
+    role: str  # "user" | "assistant"
+    text: str
+    images: tuple[ImagePart, ...] = ()
+    tool_calls: tuple[ToolCall, ...] = ()
+    tool_results: tuple[ToolResult, ...] = ()
+    raw: ProviderTurn | None = None
 
 
 @dataclass
@@ -123,6 +152,9 @@ class AdapterRequest:
     effort: str | None = None  # Anthropic output_config.effort; others ignore it
     on_token: TokenHook | None = None  # set = stream text deltas through this hook
     cache_ttl: str | None = "5m"  # "5m" | "1h" | None; adapters without the choice ignore it
+    # "auto" | "none" ("none": answer now, tools stay declared so the cached prefix holds).
+    # Forced choices are not offered: current Anthropic models reject them.
+    tool_choice: str = "auto"
 
 
 @dataclass
@@ -132,6 +164,7 @@ class AdapterResponse:
     model: str
     tool_calls: list[ToolCall] = field(default_factory=list)
     request_id: str | None = None
+    raw: ProviderTurn | None = None  # the assistant turn to replay in a tool loop
 
 
 @dataclass
@@ -244,5 +277,6 @@ class Result[T: BaseModel]:
     escalation_blocked: bool = False
     escalation_denied: str | None = None  # why: over_budget | daily_cap | a policy code
     budget_warning: bool = False
+    raw: ProviderTurn | None = None  # replay in the next step of a tool loop (same provider)
     # Everything produced here is AI-generated content (spec 5.9): UI shows labels.ai_generated.
     ai_generated: bool = True

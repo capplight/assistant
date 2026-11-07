@@ -150,6 +150,12 @@ class Settings(BaseSettings):
     # A user's records per sending. The next ones wait until these are charged, so a big import
     # cannot overrun a wallet before its first results arrive.
     ai_batch_user_requests: int = 200
+    # The assistant line (spec 5.10, R-56): input cap per step (estimated tokens), tool steps per
+    # phrase, and how long a `pending` answer may sit with nobody writing it (server restart)
+    # before a resume marks it failed.
+    chat_max_input_tokens: int = 12000
+    chat_max_tool_steps: int = 4
+    chat_stale_pending_seconds: float = 120.0
     # The single label on generated content (R-06, spec 5.9), until the lawyer's opinion.
     label_ai_generated: str = "Подготовил помощник (ИИ) по вашим записям — проверьте"
 

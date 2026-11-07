@@ -31,7 +31,8 @@ const KNOWN_FIELDS = new Set(['phone', 'amount', 'iin_bin', 'iban', 'doc_number'
 export default function RecordScreen() {
   const theme = useTheme();
   const { t, i18n } = useTranslation();
-  const { id, from, q } = useLocalSearchParams<{ id: string; from?: string; q?: string }>();
+  // `ret`: opened from a source chip of an answer → «‹ Назад к ответу» goes back there (2-design §4.4 п. 5).
+  const { id, from, q, ret } = useLocalSearchParams<{ id: string; from?: string; q?: string; ret?: string }>();
   const record = useRecord(id);
   const showDeleted = useUndo((s) => s.showDeleted);
   const [asking, setAsking] = useState<ReviewRow | null>(null);
@@ -43,7 +44,8 @@ export default function RecordScreen() {
   }, [serverId]);
 
   const back = () => {
-    if (from) router.navigate({ pathname: '/page/[id]', params: { id: from } });
+    if (ret) router.navigate(ret as never);
+    else if (from) router.navigate({ pathname: '/page/[id]', params: { id: from } });
     else if (q) router.navigate({ pathname: '/search', params: { q } });
     else router.navigate('/records');
   };
@@ -52,12 +54,12 @@ export default function RecordScreen() {
     <Pressable
       testID="record-back"
       accessibilityRole="button"
-      accessibilityLabel={t('common.back')}
+      accessibilityLabel={ret ? t('record.back_answer') : t('common.back')}
       onPress={back}
       style={[styles.back, { minHeight: theme.size.minTouch }]}
     >
       <ChevronLeft size={24} color={theme.colors.accent} />
-      <AppText color="accent">{t('common.back')}</AppText>
+      <AppText color="accent">{ret ? t('record.back_answer') : t('common.back')}</AppText>
     </Pressable>
   );
 

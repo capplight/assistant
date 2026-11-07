@@ -1,4 +1,4 @@
-# Mobile app — week 4 (search, trash, «Исправить», account decisions)
+# Mobile app — week 5 (assistant line answers, «Переписка», «Сообщить о проблеме»)
 
 Expo SDK 58 (React Native 0.88, New Architecture), TypeScript strict, expo-router.
 Spec: `../docs/spec/SPEC.md`, `../docs/spec/final/2-design.md`, `../docs/spec/final/3-engineering.md` §2.1, §11.2 (week 1, Mobile).
@@ -85,8 +85,41 @@ src/
   db/                        expo-sqlite: outbox, records, pages + links, sync cursor (SQLite and in-memory impls)
   pages/                     template catalog v1, premarks, labels, LexoRank, page contents and order, page service
   __tests__/                 onboarding, main, api (auth/refresh/errors), consent, sync, capture (share/voice), unit, fonts
-  testing/                   helpers + FakeServer (fetch mock)
+  testing/                   helpers + FakeServer (fetch mock, SSE streams)
+  chat/                      the one conversation: ask, stream, resume, queue, history, feedback
 ```
+
+## Week 5: what works
+
+Contract: `../docs/api/chat.md`; shapes only in `src/api/types.ts` + `src/api/endpoints.ts`. **Checked by tests with a
+fake server only: not against the real server, not on a device.** CI: `.github/workflows/mobile.yml` (tsc, expo lint, jest).
+
+- **Question in the line, on any page** (`components/AssistantLine.tsx` → `chat/service.ts`): `POST /chat/messages` (SSE)
+  with the page's server id. The phone still tells a question from a note (`looksLikeQuestion`): notes are saved
+  locally as before; actions on the server come in week 6. «Без ИИ»: a question is the word search, `/chat` is never called.
+- **Streaming**: `expo/fetch` (its `response.body` is a ReadableStream on iOS/Android; RN's own fetch buffers the whole
+  body). Parser `api/sse.ts`; 40 s without a byte (keep-alives come every ~15 s) counts as a drop.
+  **Unverified on a device:** that `expo/fetch` delivers chunks as they arrive over a phone network and through a proxy.
+  Fallback in the spec: `react-native-sse` (not installed).
+- **S08 banner** shows the message as it streams: «Смотрю записи…», «Нашёл у себя» (local words) first, then the text
+  (2 lines), ≤2 chips + «ещё N», the AI label. Stays until «Закрыть» or the next question. Delivery marks:
+  `banner_shown`, `opened`, `dismissed` (also when a new question replaces it).
+- **Source chip** → the record card on its page (`from`), «‹ Назад к ответу» (`ret`) back to the page or «Переписка».
+  A record not on the phone is fetched first.
+- **Dropped stream**: resume `GET /chat/messages/{reply_id}/events` with `Last-Event-ID` at 1, 2, 4, 10 s; a finished
+  reply comes as `snapshot`. Dropped before `accepted`: the same POST again (same `client_id`). Still nothing:
+  «Связь прервалась — ответ не дошёл» + «Спросить ещё раз». `error` with `retry`: a new `client_id`.
+- **Offline**: «Спрошу, когда появится интернет» + records found on the phone; asked again on foreground, the 30 s timer,
+  or the first request that gets through.
+- **S36 «Переписка»**: kept on the phone (last 300 messages, kv-store), merged with `GET /chat/messages` on open; opens on
+  the answer from the banner (scroll + screen reader focus); «Свернуть» closes that banner.
+- **«Сообщить о проблеме»**: «Ещё» under an answer → reason (`wrong` / `offensive` / `other`), comment, the example box
+  (off by default) → outbox `feedback.send` → `POST /feedback`.
+- **Copy**: S41/S03 examples no longer promise reminders; «Без ИИ» card «Напишите одну фразу». `start.phrase`
+  («— я сразу сделаю») is string 61 of 2-design §7, so it stays. Line hints show a question where questions work.
+
+Not yet: «Ответ готов» card on «Сегодня» (`GET /chat/pending-banner`) and push (week 6), «Не то», «Озвучить», voice
+questions (`upload_id`, week 6), «Ответить из общих знаний?», «Очистить переписку».
 
 ## Week 4: what works
 

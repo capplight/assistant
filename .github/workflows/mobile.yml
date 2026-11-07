@@ -1,0 +1,54 @@
+name: mobile
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/mobile.yml"
+  pull_request:
+    paths:
+      - "mobile/**"
+      - ".github/workflows/mobile.yml"
+
+concurrency:
+  group: mobile-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: mobile
+
+jobs:
+  # One job: npm ci once (the slow part), then the three checks. tsc and lint fail fast before Jest.
+  mobile-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          # ~/.npm keyed on the lockfile: npm ci downloads nothing when it did not change.
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Lint
+        run: npx expo lint
+      # Jest's transform cache (Babel output of node_modules + src): the biggest part of a cold run.
+      - uses: actions/cache@v4
+        with:
+          path: /tmp/jest-cache
+          key: jest-${{ runner.os }}-${{ hashFiles('mobile/package-lock.json') }}-${{ github.sha }}
+          restore-keys: |
+            jest-${{ runner.os }}-${{ hashFiles('mobile/package-lock.json') }}-
+      - name: Tests
+        run: npx jest --ci --cacheDirectory=/tmp/jest-cache

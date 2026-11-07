@@ -508,7 +508,7 @@ describe('copy', () => {
     await settle(() => screen.queryByTestId('page-empty') !== null);
     expect(screen.queryByText('Например: сделай КП по этому ТЗ')).toBeNull();
     const input = screen.getByTestId('assistant-input');
-    expect(input.props.accessibilityHint).toBe('Например: договор с мастером № 15');
+    expect(input.props.accessibilityHint).toBe('Например: что я обещал ТОО Арман?');
   });
 
   it('the undo strip follows 2-design 4.3: 10 s, 15 s with a large font, 30 s with a screen reader', () => {
@@ -672,7 +672,8 @@ describe('search in the assistant line', () => {
     };
   }
 
-  it('a question is not saved; first what is on the phone, then «Нашёл ещё»; a hit opens', async () => {
+  // With AI a question goes to the conversation (week5.test.tsx); «Без ИИ» keeps this search by words.
+  it('«Без ИИ»: a question is not saved; first what is on the phone, then «Нашёл ещё»; a hit opens', async () => {
     const s = happyServer();
     s.on('GET /search', () => ({
       status: 200,
@@ -686,7 +687,7 @@ describe('search in the assistant line', () => {
     }));
     s.on('GET /items/*', () => ({ status: 200, body: itemOut('b', 3, { text: 'Гарантия на технику' }) }));
     const outbox = resetApp({ fetch: s.fetch });
-    finishOnboarding();
+    finishOnboarding('no_ai');
     await testRecords.applyRemote(itemOut('a', 2, { text: 'Чек за холодильник' }));
     const r = await renderRouter(APP_DIR, { initialUrl: `/page/${notes().id}` });
     await fireEvent.changeText(screen.getByTestId('assistant-input'), 'где чек за холодильник');
@@ -704,9 +705,9 @@ describe('search in the assistant line', () => {
     expect((await testRecords.findByServerId('srv-b'))?.text).toBe('Гарантия на технику');
   });
 
-  it('offline: what is on the phone, an honest line about the rest, no answer made up', async () => {
+  it('«Без ИИ», offline: what is on the phone, an honest line about the rest, no answer made up', async () => {
     resetApp();
-    finishOnboarding();
+    finishOnboarding('no_ai');
     await testRecords.insertLocal({ id: 'a', kind: 'note', source: 'typed', text: 'Чек Magnum' });
     const r = await renderRouter(APP_DIR, { initialUrl: '/' });
     await fireEvent.changeText(screen.getByTestId('assistant-input'), 'где чек');
@@ -716,10 +717,10 @@ describe('search in the assistant line', () => {
     expect(screen.getByText('Чек Magnum')).toBeTruthy();
   });
 
-  it('nothing found: «Не нашёл», and it can still be saved as a record', async () => {
+  it('«Без ИИ», nothing found: «Не нашёл», and it can still be saved as a record', async () => {
     const s = happyServer();
     const outbox = resetApp({ fetch: s.fetch });
-    finishOnboarding();
+    finishOnboarding('no_ai');
     const r = await renderRouter(APP_DIR, { initialUrl: '/' });
     await fireEvent.changeText(screen.getByTestId('assistant-input'), 'где ключи от гаража?');
     await fireEvent.press(screen.getByTestId('assistant-send'));
@@ -739,9 +740,12 @@ describe('search in the assistant line', () => {
     const r = await renderRouter(APP_DIR, { initialUrl: '/' });
     await fireEvent.changeText(screen.getByTestId('assistant-input'), 'где чек');
     await fireEvent.press(screen.getByTestId('assistant-send'));
-    await settle(() => r.getPathname() === '/search');
+    // With AI the question waits for the conversation (week 5); nothing leaves the phone meanwhile.
+    await settle(() => screen.queryByText('Спрошу, когда появится интернет.') !== null);
     await settle(() => false, 40).catch(() => undefined);
+    expect(r.getPathname()).toBe('/');
     expect(s.callsTo('GET /search')).toHaveLength(0);
+    expect(s.calls.some((c) => c.path.startsWith('/chat'))).toBe(false);
   });
 
   it('1000 records: the phone answers well under a second', () => {

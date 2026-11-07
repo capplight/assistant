@@ -128,6 +128,16 @@ class Masker:
         return _PLACEHOLDER_RE.sub(lambda m: self._by_placeholder.get(m.group(0), m.group(0)),
                                    text)  # fmt: skip
 
+    def mask_obj(self, obj: Any) -> Any:
+        """Mask every string inside dicts/lists (tool-call arguments replayed to the model)."""
+        if isinstance(obj, str):
+            return self.mask(obj)
+        if isinstance(obj, dict):
+            return {k: self.mask_obj(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [self.mask_obj(v) for v in obj]
+        return obj
+
     def unmask_obj(self, obj: Any) -> Any:
         """Unmask every string inside dicts/lists (a model_dump or tool-call arguments)."""
         if isinstance(obj, str):

@@ -20,6 +20,8 @@ export type ApiClientOptions = {
   onSignInRequired?: () => void;
   /** Did the last request get any answer from the server? */
   onReachable?: (reachable: boolean) => void;
+  /** fetch for SSE: needs a streaming body (default `expo/fetch`; RN's own fetch buffers everything). */
+  streamFetch?: FetchLike;
 };
 
 export type RequestOptions = {
@@ -59,6 +61,7 @@ export class ApiClient {
   private readonly linkedFallback: () => boolean;
   private readonly onSignInRequired: () => void;
   private readonly onReachable: (reachable: boolean) => void;
+  private readonly streamFetchImpl: FetchLike | undefined;
 
   constructor(o: ApiClientOptions = {}) {
     this.baseUrl = o.baseUrl ?? getApiBaseUrl;
@@ -72,6 +75,80 @@ export class ApiClient {
     this.linkedFallback = o.isLinked ?? (() => false);
     this.onSignInRequired = o.onSignInRequired ?? (() => undefined);
     this.onReachable = o.onReachable ?? (() => undefined);
+    this.streamFetchImpl = o.streamFetch;
+  }
+
+  private streamFetch(): FetchLike {
+    if (this.streamFetchImpl) return this.streamFetchImpl;
+    // Lazy: the native module is not there under Jest (tests always pass their own fetch).
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { fetch: expoFetch } = require('expo/fetch') as typeof import('expo/fetch');
+    return (url, init) => expoFetch(url, init as never) as unknown as Promise<Response>;
+  }
+
+  /**
+   * POST that answers with text/event-stream. Session and one refresh on 401 as `request`; the
+   * timeout covers only the wait for the response headers (the body is read by `readSse` with its
+   * own idle limit). Error statuses become ApiError, no answer → NetworkError.
+   */
+  async openStream(
+    method: 'GET' | 'POST',
+    path: string,
+    o: { body?: unknown; idempotencyKey?: string; signal?: AbortSignal; headers?: Record<string, string> } = {},
+  ): Promise<Response> {
+    const open = async (accessToken: string): Promise<Response> => {
+      const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => ctrl.abort(), this.timeoutMs) : null;
+      const onAbort = () => ctrl?.abort();
+      o.signal?.addEventListener?.('abort', onAbort);
+      const headers: Record<string, string> = {
+        Accept: 'text/event-stream',
+        'X-App-Version': this.appVersion,
+        'Accept-Language': this.locale(),
+        Authorization: `Bearer ${accessToken}`,
+        ...o.headers,
+      };
+      if (o.body !== undefined) headers['Content-Type'] = 'application/json';
+      if (o.idempotencyKey) headers['Idempotency-Key'] = o.idempotencyKey;
+      let res: Response;
+      try {
+        res = await this.streamFetch()(this.url(path), {
+          method,
+          headers,
+          body: o.body !== undefined ? JSON.stringify(o.body) : undefined,
+          signal: ctrl?.signal,
+        });
+        this.onReachable(true);
+      } catch (e) {
+        this.onReachable(false);
+        throw new NetworkError(e);
+      } finally {
+        if (timer) clearTimeout(timer);
+        o.signal?.removeEventListener?.('abort', onAbort);
+      }
+      if (!res.ok) {
+        let body: Partial<ApiErrorBody> = {};
+        try {
+          const parsed: unknown = JSON.parse(await res.text());
+          if (parsed && typeof parsed === 'object') body = parsed as Partial<ApiErrorBody>;
+        } catch {
+          // not JSON
+        }
+        throw new ApiError(res.status, body);
+      }
+      return res;
+    };
+    let session = await this.ensureSession();
+    if (session.accessExpiresAt - EXPIRY_SKEW_MS <= this.now() || !session.accessToken) {
+      session = await this.refresh();
+    }
+    try {
+      return await open(session.accessToken);
+    } catch (e) {
+      if (!(e instanceof ApiError) || e.status !== 401) throw e;
+      session = await this.refresh();
+      return open(session.accessToken);
+    }
   }
 
   url(path: string, query?: RequestOptions['query']): string {

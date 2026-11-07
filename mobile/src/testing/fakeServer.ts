@@ -11,7 +11,52 @@ export type Call = {
   headers: Record<string, string>;
 };
 
-type Handler = (c: Call) => { status: number; body?: unknown; headers?: Record<string, string> } | 'offline';
+/** One SSE event of a fake stream; `data` is sent as JSON. */
+export type SseEvent = { event: string; data: unknown; id?: number };
+
+type Reply = {
+  status: number;
+  body?: unknown;
+  headers?: Record<string, string>;
+  /** text/event-stream: these events, one chunk each (split in two, to test framing). */
+  sse?: SseEvent[];
+  /** After the events: `end` closes without a final event; `error` breaks the read. */
+  drop?: 'end' | 'error';
+  /** Fake (or real) ms between chunks: the UI can be seen mid-stream. */
+  chunkDelayMs?: number;
+};
+
+type Handler = (c: Call) => Reply | 'offline';
+
+/** A streaming Response with `body.getReader()` like expo/fetch's. */
+export function sseResponse(events: SseEvent[], o: { drop?: 'end' | 'error'; chunkDelayMs?: number } = {}): Response {
+  const chunks: string[] = [];
+  for (const e of events) {
+    const idLine = e.id !== undefined ? `id: ${e.id}\n` : '';
+    const text = `${idLine}event: ${e.event}\ndata: ${JSON.stringify(e.data)}\n\n`;
+    const half = Math.ceil(text.length / 2);
+    chunks.push(text.slice(0, half), text.slice(half));
+  }
+  chunks.push(': keep-alive\n\n');
+  const enc = new TextEncoder();
+  let i = 0;
+  const reader = {
+    read: async (): Promise<{ done: boolean; value?: Uint8Array }> => {
+      if (o.chunkDelayMs) await new Promise((r) => setTimeout(r, o.chunkDelayMs));
+      if (i < chunks.length) return { done: false, value: enc.encode(chunks[i++]) };
+      if (o.drop === 'error') throw new TypeError('Network connection was lost');
+      return { done: true };
+    },
+    cancel: async () => undefined,
+  };
+  return {
+    ok: true,
+    status: 200,
+    headers: { get: (k: string) => (k.toLowerCase() === 'content-type' ? 'text/event-stream' : null) },
+    body: { getReader: () => reader },
+    text: async () => chunks.join(''),
+  } as unknown as Response;
+}
 
 /** Minimal in-test HTTP server: route by "METHOD /path" (path after /v1), records every call. */
 export class FakeServer {
@@ -55,6 +100,7 @@ export class FakeServer {
     if (!h) return jsonResponse(404, { code: 'not_found', message_ru: 'Не найдено.', message_kk: 'Табылмады.' });
     const r = h(call);
     if (r === 'offline') throw new TypeError('Network request failed');
+    if (r.sse) return sseResponse(r.sse, { drop: r.drop, chunkDelayMs: r.chunkDelayMs });
     return jsonResponse(r.status, r.body, r.headers);
   };
 }
@@ -228,6 +274,9 @@ export function happyServer(): FakeServer {
       body: serverItem(c.path, ++seq, { deleted_at: null, purge_after: null }),
     }))
     .on('GET /search', () => ({ status: 200, body: { results: [], semantic: true } }))
+    .on('GET /chat/messages', () => ({ status: 200, body: { messages: [], has_more_before: false, has_more_after: false } }))
+    .on('POST /chat/messages/*/delivery', () => ({ status: 200, body: {} }))
+    .on('POST /feedback', () => ({ status: 201, body: { id: 'fb-1', created_at: new Date().toISOString() } }))
     .on('GET /sync', (c) => {
       const since = Number(c.query.since ?? 0);
       const list = [...items.values()].filter((i) => i.seq > since);

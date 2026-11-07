@@ -1,7 +1,9 @@
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
 
+import { flushQueued } from '@/chat/service';
 import { getApi, kickSync, notifyDataChanged } from '@/services';
+import { useConnectivity } from '@/store/connectivity';
 import { useOnboarding } from '@/store/onboarding';
 
 /** While the app is in the foreground, retry due outbox entries this often (backoff decides per entry). */
@@ -25,16 +27,26 @@ export function useBackgroundSync(): void {
 
   useEffect(() => {
     if (!hasConsent) return;
-    kickSync();
+    // Questions asked offline go with the same triggers («Спрошу, когда появится интернет»).
+    const kick = () => {
+      kickSync();
+      void flushQueued();
+    };
+    kick();
     const sub = AppState.addEventListener('change', (st) => {
-      if (st === 'active') kickSync();
+      if (st === 'active') kick();
     });
     const timer = setInterval(() => {
-      if (AppState.currentState === 'active') kickSync();
+      if (AppState.currentState === 'active') kick();
     }, FOREGROUND_SYNC_INTERVAL_MS);
+    // Any request got an answer again: the connection is back.
+    const unsub = useConnectivity.subscribe((st, prev) => {
+      if (st.online && !prev.online) void flushQueued();
+    });
     return () => {
       sub.remove();
       clearInterval(timer);
+      unsub();
     };
   }, [hasConsent]);
 }

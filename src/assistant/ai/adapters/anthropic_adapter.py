@@ -6,6 +6,13 @@ UNVERIFIED against the live API (no key yet): request shape follows the installe
 messages.batches.create/retrieve/results/cancel). Check `cache_read_input_tokens` > 0 on the
 first real traffic: a prefix under the model's minimum (about 512 tokens) silently never caches.
 Batch results are kept by Anthropic for 29 days and batches are not eligible for zero retention.
+
+Tool loops (skill `claude-api`, checked 2026-11-07): tools and output_config.format go in one
+request; tools are `strict`; forced tool_choice (any/tool) is rejected by current models, so only
+`auto` / `none`; parallel tool_use blocks are answered with all tool_result blocks in one user
+message; the assistant turn (thinking blocks with signatures + tool_use) is replayed unchanged
+(`ProviderTurn`), as the API requires within a tool loop. UNVERIFIED live: the replay dumps SDK
+blocks with model_dump(exclude_none) and sends them back as params.
 """
 
 import base64
@@ -21,9 +28,11 @@ from assistant.ai.types import (
     AdapterResponse,
     BadOutput,
     BatchEntry,
+    Message,
     ProviderError,
     ProviderRequestError,
     ProviderTimeout,
+    ProviderTurn,
     QuotaExceeded,
     RateLimited,
     Refused,
@@ -50,15 +59,7 @@ class AnthropicAdapter:
         return self._client
 
     def request_kwargs(self, req: AdapterRequest) -> dict[str, Any]:
-        messages = []
-        for m in req.messages:
-            content: list[dict[str, Any]] = []
-            for img in m.images:
-                content.append({"type": "image", "source": {
-                    "type": "base64", "media_type": img.media_type,
-                    "data": base64.standard_b64encode(img.data).decode()}})  # fmt: skip
-            content.append({"type": "text", "text": m.text})
-            messages.append({"role": m.role, "content": content})
+        messages = [{"role": m.role, "content": _content(m)} for m in req.messages]
         output_config: dict[str, Any] = {}
         if req.json_schema is not None:
             output_config["format"] = {"type": "json_schema", "schema": req.json_schema}
@@ -75,7 +76,10 @@ class AnthropicAdapter:
             kwargs["output_config"] = output_config
         if req.tools:
             kwargs["tools"] = [{"name": t.name, "description": t.description,
-                                "input_schema": t.parameters} for t in req.tools]  # fmt: skip
+                                "input_schema": t.parameters, "strict": True}
+                               for t in req.tools]  # fmt: skip
+            if req.tool_choice == "none":
+                kwargs["tool_choice"] = {"type": "none"}
         return kwargs
 
     # --- Message Batches: half price, most finish within an hour, 24 hours at most ---
@@ -147,6 +151,37 @@ class AnthropicAdapter:
         return _to_response(msg, req.model)
 
 
+def _content(m: Message) -> list[dict[str, Any]]:
+    if m.raw is not None and m.raw.provider == "anthropic":
+        return list(m.raw.payload)  # the model's own turn, thinking blocks included
+    content: list[dict[str, Any]] = []
+    for r in m.tool_results:  # tool_result blocks come first in a user turn
+        block: dict[str, Any] = {"type": "tool_result", "tool_use_id": r.call_id,
+                                 "content": r.content}  # fmt: skip
+        if r.is_error:
+            block["is_error"] = True
+        content.append(block)
+    for img in m.images:
+        content.append({"type": "image", "source": {
+            "type": "base64", "media_type": img.media_type,
+            "data": base64.standard_b64encode(img.data).decode()}})  # fmt: skip
+    if m.text or not (m.tool_results or m.tool_calls):
+        content.append({"type": "text", "text": m.text})
+    for c in m.tool_calls:
+        content.append({"type": "tool_use", "id": c.id, "name": c.name, "input": c.arguments})
+    return content
+
+
+def _raw_turn(msg: Any) -> ProviderTurn | None:
+    blocks = []
+    for block in getattr(msg, "content", None) or []:
+        dump = getattr(block, "model_dump", None)
+        if dump is None:
+            return None
+        blocks.append(dump(mode="json", exclude_none=True))
+    return ProviderTurn("anthropic", blocks)
+
+
 def _system_block(req: AdapterRequest) -> dict[str, Any]:
     """Tools render before the system prompt, so this one breakpoint covers both."""
     block: dict[str, Any] = {"type": "text", "text": req.system}
@@ -205,6 +240,7 @@ def _to_response(msg: Any, model: str) -> AdapterResponse:
         elif block.type == "tool_use":
             calls.append(ToolCall(block.id, block.name, dict(block.input or {})))
     return AdapterResponse("".join(texts), usage, getattr(msg, "model", model) or model,
-                           tool_calls=calls, request_id=getattr(msg, "_request_id", None))
+                           tool_calls=calls, request_id=getattr(msg, "_request_id", None),
+                           raw=_raw_turn(msg) if calls else None)
 
 

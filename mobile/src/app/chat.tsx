@@ -1,23 +1,59 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import {
+  AccessibilityInfo,
+  findNodeHandle,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/AppText';
+import { answerNotice, useLocalHitTitles } from '@/components/answerText';
 import { AssistantLine } from '@/components/AssistantLine';
 import { Button } from '@/components/Button';
-import { useAssistant } from '@/store/assistant';
+import { FeedbackSheet } from '@/components/FeedbackSheet';
+import { LocalHitChips, SourceChips } from '@/components/SourceChips';
+import { canReport, loadHistory, retry } from '@/chat/service';
+import { useAssistant, type ChatMessage } from '@/store/assistant';
 import { useTheme } from '@/theme';
 
 /**
- * S36 «Переписка» — one conversation for all pages, full screen, «Свернуть» on top,
- * the same assistant line at the bottom. Week 1: placeholder over local messages only.
- * TODO(week 5): SSE answers, source chips, actions with «Отменить», focus on the opened answer.
+ * S36 «Переписка» — one conversation for all pages (R-52), full screen, «Свернуть» on top, the same
+ * assistant line at the bottom (over all pages). Dividers «— на странице X, 14:20 —» are headers.
+ * Opened from the banner («Открыть ответ», `focus`), it is scrolled to that answer and the screen
+ * reader starts there. History is kept on the phone and completed from the server when online.
+ * Not yet: «Озвучить» (needs a speech module), «Не то» (one re-ask: server, week 6), actions with
+ * «Отменить» (week 6).
  */
 export default function ChatScreen() {
   const theme = useTheme();
   const { t, i18n } = useTranslation();
+  const { focus } = useLocalSearchParams<{ focus?: string }>();
   const messages = useAssistant((s) => s.messages);
+  const bannerId = useAssistant((s) => s.banner?.messageId);
+  const closeBanner = useAssistant((s) => s.closeBanner);
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const focusRef = useRef<React.ComponentRef<typeof View>>(null);
+  const [focusY, setFocusY] = useState<number | null>(null);
+  const [menuFor, setMenuFor] = useState<ChatMessage | null>(null);
+  const [reportFor, setReportFor] = useState<ChatMessage | null>(null);
+
+  useEffect(() => {
+    void loadHistory();
+  }, []);
+
+  useEffect(() => {
+    if (focusY === null) return;
+    scrollRef.current?.scrollTo({ y: Math.max(0, focusY - 16), animated: false });
+    const node = focusRef.current ? findNodeHandle(focusRef.current) : null;
+    if (node) AccessibilityInfo.setAccessibilityFocus(node);
+  }, [focusY]);
 
   const time = (iso: string) => {
     try {
@@ -25,6 +61,13 @@ export default function ChatScreen() {
     } catch {
       return iso.slice(11, 16);
     }
+  };
+
+  const collapse = () => {
+    // Back to the same page; the banner of the answer just read is closed (2-design S08).
+    if (focus && bannerId === focus) closeBanner();
+    if (router.canGoBack()) router.back();
+    else router.replace('/');
   };
 
   return (
@@ -42,17 +85,23 @@ export default function ChatScreen() {
           variant="text"
           minHeight={theme.size.minTouch}
           label={t('chat.collapse')}
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+          onPress={collapse}
         />
       </View>
       <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={{ padding: theme.screenPadding, gap: theme.space[3] }}>
+        <ScrollView ref={scrollRef} contentContainerStyle={{ padding: theme.screenPadding, gap: theme.space[3] }}>
           {messages.length === 0 ? <AppText color="ink2">{t('chat.empty')}</AppText> : null}
           {messages.map((m, i) => {
             const prev = messages[i - 1];
             const divider = !prev || prev.pageId !== m.pageId;
+            const focused = m.id === focus;
             return (
-              <View key={m.id} style={{ gap: theme.space[2] }}>
+              <View
+                key={m.id}
+                testID={`chat-msg-${m.id}`}
+                style={{ gap: theme.space[2] }}
+                onLayout={focused ? (e) => setFocusY(e.nativeEvent.layout.y) : undefined}
+              >
                 {divider ? (
                   <AppText variant="meta" accessibilityRole="header" style={styles.center}>
                     {t('chat.divider', { page: m.pageTitle, time: time(m.at) })}
@@ -63,7 +112,9 @@ export default function ChatScreen() {
                     {t('chat.you', { text: m.text })}
                   </AppText>
                 ) : (
-                  <AppText>{m.text}</AppText>
+                  <View ref={focused ? focusRef : undefined} accessible={focused} style={{ gap: theme.space[2] }}>
+                    <Answer m={m} onMore={() => setMenuFor(m)} />
+                  </View>
                 )}
               </View>
             );
@@ -71,7 +122,67 @@ export default function ChatScreen() {
         </ScrollView>
         <AssistantLine scope="all" />
       </KeyboardAvoidingView>
+
+      <Modal visible={menuFor !== null} transparent animationType="slide" onRequestClose={() => setMenuFor(null)}>
+        <View style={[styles.scrim, { backgroundColor: theme.colors.scrim }]}>
+          <SafeAreaView
+            edges={['bottom']}
+            testID="answer-menu"
+            style={{
+              backgroundColor: theme.colors.surface,
+              borderTopLeftRadius: theme.radius.sheet,
+              borderTopRightRadius: theme.radius.sheet,
+              padding: theme.space[5],
+              gap: theme.space[2],
+            }}
+          >
+            <Button
+              testID="answer-report"
+              label={t('feedback.open')}
+              variant="outline"
+              onPress={() => {
+                setReportFor(menuFor);
+                setMenuFor(null);
+              }}
+            />
+            <Button label={t('common.close')} variant="text" onPress={() => setMenuFor(null)} />
+          </SafeAreaView>
+        </View>
+      </Modal>
+      <FeedbackSheet message={reportFor} onClose={() => setReportFor(null)} />
     </SafeAreaView>
+  );
+}
+
+/** A whole answer: text, what is happening with it, sources, the AI label, «Ещё». */
+function Answer({ m, onMore }: { m: ChatMessage; onMore: () => void }) {
+  const theme = useTheme();
+  const { t } = useTranslation();
+  const titles = useLocalHitTitles(m.status === 'queued' ? m.localHits : undefined, t);
+  const notice = m.saved ? null : answerNotice(m, t);
+  const hits = m.status === 'queued' ? (m.localHits ?? []) : [];
+  const generated = m.status === 'done' && m.aiGenerated && !!m.text;
+  return (
+    <>
+      {m.text ? <AppText>{m.text}</AppText> : null}
+      {notice ? <AppText variant={m.text ? 'meta' : 'body'}>{notice}</AppText> : null}
+      {hits.length > 0 ? (
+        <>
+          <AppText variant="meta">{t('answer.local_found', { n: hits.length })}</AppText>
+          <LocalHitChips messageId={m.id} recordIds={hits} titles={titles} />
+        </>
+      ) : null}
+      {m.sources && m.sources.length > 0 ? <SourceChips messageId={m.id} sources={m.sources} /> : null}
+      {generated ? <AppText variant="meta">{t('ai.label')}</AppText> : null}
+      {m.status === 'interrupted' ? (
+        <Button testID={`chat-retry-${m.id}`} label={t('answer.retry')} variant="text" onPress={() => void retry(m.id)} />
+      ) : null}
+      {canReport(m) && m.status !== 'streaming' ? (
+        <View style={[styles.actions, { gap: theme.space[2] }]}>
+          <Button testID={`chat-more-${m.id}`} label={t('chat.more')} variant="text" onPress={onMore} />
+        </View>
+      ) : null}
+    </>
   );
 }
 
@@ -80,4 +191,6 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1 },
   flex: { flex: 1 },
   center: { textAlign: 'center' },
+  scrim: { flex: 1, justifyContent: 'flex-end' },
+  actions: { flexDirection: 'row', justifyContent: 'flex-end' },
 });

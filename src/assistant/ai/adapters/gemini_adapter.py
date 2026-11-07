@@ -5,6 +5,11 @@ UNVERIFIED against the live API (no key yet, `google-genai` not installed in dev
 the documented google-genai shapes; check at the week-0 bake-off (notably which JSON-schema
 keywords response_json_schema accepts together with tools).
 
+Tool loops: the model's Content is replayed as it came (`ProviderTurn`: Gemini 3 needs its thought
+signatures back), otherwise `function_call` parts; results go back as `function_response` parts in
+a user turn. The JSON schema is now sent together with tools (Gemini 3 documents structured output
+with function calling) - UNVERIFIED, the bake-off must confirm it.
+
 Prompt caching: implicit only (automatic on a stable prefix, read from
 `cached_content_token_count`). Explicit context caches bill storage per hour, and our traffic
 does not repay it. Batch mode is not implemented: Gemini is a fallback and OCR route, both live.
@@ -20,6 +25,7 @@ from assistant.ai.types import (
     ProviderError,
     ProviderRequestError,
     ProviderTimeout,
+    ProviderTurn,
     QuotaExceeded,
     RateLimited,
     Refused,
@@ -51,8 +57,17 @@ class GeminiAdapter:
 
         contents = []
         for m in req.messages:
-            parts = [types.Part.from_bytes(data=i.data, mime_type=i.media_type) for i in m.images]
-            parts.append(types.Part.from_text(text=m.text))
+            if m.raw is not None and m.raw.provider == "google":
+                contents.append(m.raw.payload)
+                continue
+            parts = [types.Part.from_function_response(name=r.name, response={
+                "error" if r.is_error else "result": r.content}) for r in m.tool_results]
+            parts += [types.Part.from_bytes(data=i.data, mime_type=i.media_type)
+                      for i in m.images]  # fmt: skip
+            if m.text or not (m.tool_results or m.tool_calls):
+                parts.append(types.Part.from_text(text=m.text))
+            parts += [types.Part.from_function_call(name=c.name, args=c.arguments)
+                      for c in m.tool_calls]  # fmt: skip
             contents.append(types.Content(role="model" if m.role == "assistant" else "user",
                                           parts=parts))  # fmt: skip
         cfg: dict[str, Any] = {
@@ -65,7 +80,10 @@ class GeminiAdapter:
                 types.FunctionDeclaration(name=t.name, description=t.description,
                                           parameters_json_schema=t.parameters)
                 for t in req.tools])]  # fmt: skip
-        if req.json_schema is not None and not req.tools:
+            if req.tool_choice == "none":
+                cfg["tool_config"] = types.ToolConfig(
+                    function_calling_config=types.FunctionCallingConfig(mode="NONE"))
+        if req.json_schema is not None:
             cfg["response_mime_type"] = "application/json"
             cfg["response_json_schema"] = req.json_schema
         return contents, types.GenerateContentConfig(**cfg)
@@ -148,7 +166,11 @@ def _to_response(resp: Any, model: str, *, text_override: str | None = None) -> 
     text = text_override if text_override is not None else _safe_text(resp)
     if not text and not calls:
         raise BadOutput("empty", usage=usage)
+    raw = None
+    if calls and candidates and getattr(candidates[0], "content", None) is not None:
+        raw = ProviderTurn("google", candidates[0].content)
     return AdapterResponse(text, usage, getattr(resp, "model_version", None) or model,
-                           tool_calls=calls, request_id=getattr(resp, "response_id", None))
+                           tool_calls=calls, request_id=getattr(resp, "response_id", None),
+                           raw=raw)
 
 

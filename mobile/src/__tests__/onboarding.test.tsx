@@ -48,7 +48,7 @@ describe('first launch flow', () => {
     expect(r.getPathname()).toBe('/start');
     expect(screen.getByText('С чего начнём?')).toBeTruthy();
     // «Без ИИ»: the phrase path is typed
-    expect(screen.getByText('Напишите одну фразу — я сразу сделаю')).toBeTruthy();
+    expect(screen.getByText('Напишите одну фразу')).toBeTruthy();
 
     await fireEvent.press(screen.getByTestId('start-blank'));
     const pages = usePages.getState().pages;

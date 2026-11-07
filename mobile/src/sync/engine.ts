@@ -1,6 +1,6 @@
 import type { Api } from '@/api/endpoints';
 import { ApiError, isOfflineError, isRetryable, SignInRequiredError } from '@/api/errors';
-import type { ConsentsIn, DeviceIn, ItemCreateIn, ItemKind, ItemOut, ItemSource, PageCreateIn } from '@/api/types';
+import type { ConsentsIn, DeviceIn, FeedbackIn, ItemCreateIn, ItemKind, ItemOut, ItemSource, PageCreateIn } from '@/api/types';
 import type { OutboxEntry, OutboxRepository } from '@/db/outbox';
 import type { PagesRepository } from '@/db/pages';
 import type { RecordFile, RecordsRepository } from '@/db/records';
@@ -236,9 +236,16 @@ export class SyncEngine {
         return (e) => this.sendRename(e);
       case 'capture.text':
         return (e) => this.sendLegacyText(e);
+      case 'feedback.send':
+        return (e) => this.sendFeedback(e);
       default:
         return null;
     }
+  }
+
+  /** «Сообщить о проблеме»: the body was built when the person pressed «Отправить». */
+  private async sendFeedback(e: OutboxEntry): Promise<void> {
+    await this.d.api.sendFeedback(e.payload as FeedbackIn);
   }
 
   private async sendConsent(e: OutboxEntry): Promise<void> {

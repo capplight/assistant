@@ -62,6 +62,8 @@ export function getApi(): Api {
   if (!api) {
     const client = new ApiClient({
       fetch: overrides.fetch,
+      // Answers stream (SSE): expo/fetch on the phone; tests pass one fetch for both.
+      streamFetch: overrides.fetch,
       baseUrl: overrides.baseUrl,
       tokens: new TokenStorage(overrides.secrets),
       locale: () => useOnboarding.getState().language,

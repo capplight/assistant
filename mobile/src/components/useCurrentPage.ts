@@ -40,6 +40,9 @@ export function useCurrentPage(): CurrentPage {
   if (pathname === '/records' || pathname.startsWith('/record/')) {
     return { kind: 'other', id: 'today', title: t('more.all_records'), hintKey: 'tpl.line_hint_now.today' };
   }
+  if (pathname === '/chat') {
+    return { kind: 'other', id: 'today', title: t('chat.title'), hintKey: 'tpl.line_hint_now.today' };
+  }
   if (pathname.startsWith('/more')) {
     return { kind: 'more', id: 'more', title: t('more.title'), hintKey: 'tpl.line_hint_now.today' };
   }
