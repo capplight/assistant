@@ -33,7 +33,11 @@ export type PageTemplate = {
   /** `true` for all but custom: one system topic — one page. */
   singleton: boolean;
   defaultLayout: Layout;
-  /** `auto_rule` is {"any": [{"always": true}]}: everything saved shows here, also offline. */
+  /**
+   * What the phone may place here by itself before the server answered (offline too). «Заметки»
+   * (founder, 2026-11-09): notes only — not tasks, shopping, receipts or documents; see
+   * `pages/contents.ts` `placesLocally`. The server's rows always win.
+   */
   placeAll: boolean;
 };
 

@@ -37,6 +37,11 @@ export type ChatNotice =
   | 'offline_action'
   | 'no_ai_action'
   | 'offline_reminder'
+  /**
+   * The stream of a change dropped: the server may still finish it in the background; its result
+   * comes through «Ответ готов» / «Что я сделал» with «Отменить» (asking again could do it twice).
+   */
+  | 'maybe_done'
   | null;
 
 /** What the line thought the phrase is, for when the server can't be asked (offline, no consent yet). */
@@ -65,7 +70,7 @@ export type ChatAction = {
  * (`count`), «Вы сами расставили 4 записи. Переставить и их?» (`manual`). Nothing was changed.
  */
 export type ChatProposal = {
-  kind: 'choice' | 'count' | 'manual';
+  kind: 'choice' | 'count' | 'manual' | 'delete';
   question: string;
   options: { id: string; label: string; kind: 'item' | 'pick' | 'yes' | 'no' | 'keep_mine' | 'cancel'; itemId: string | null }[];
   /** The option in focus first. */

@@ -456,6 +456,8 @@ describe('final contract (week 9 backend)', () => {
             kind: 'edit_reminder',
             initiated_by: 'user',
             created_at: iso(Date.now()),
+            // The explicit link (reminders.md): the action names the event that made it.
+            event_client_id: (c.body as { events: { client_id: string }[] }).events[0]!.client_id,
             changes: [{ item_id: null, reminder_id: 'r7', title: 'Свет', kind: 'reminder', text: 'Свет', page_id: null, reverted: false }],
           }),
         ],

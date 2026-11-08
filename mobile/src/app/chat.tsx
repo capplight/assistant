@@ -188,7 +188,9 @@ function Answer({ m, onMore }: { m: ChatMessage; onMore: () => void }) {
       ) : null}
       {m.sources && m.sources.length > 0 ? <SourceChips messageId={m.id} sources={m.sources} /> : null}
       {generated ? <AppText variant="meta">{t('ai.label')}</AppText> : null}
-      {m.status === 'interrupted' ? (
+      {m.notice === 'maybe_done' ? (
+        <Button testID={`chat-did-${m.id}`} label={t('more.did')} variant="text" onPress={() => router.push('/did')} />
+      ) : m.status === 'interrupted' ? (
         <Button testID={`chat-retry-${m.id}`} label={t('answer.retry')} variant="text" onPress={() => void retry(m.id)} />
       ) : null}
       {canReport(m) && m.status !== 'streaming' ? (

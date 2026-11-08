@@ -6,6 +6,7 @@ The exact-duplicate check runs here, so the response already says `auto_merged` 
 """
 
 import uuid
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Response
@@ -40,6 +41,8 @@ from assistant.db.models_v2 import (
     Upload,
     UploadState,
 )
+from assistant.dedup import exact_merge_action_id, on_unmerged, record_exact_merge, schedule_scan
+from assistant.dedup.similarity import simhash
 from assistant.memory import enqueue_embed
 from assistant.pages import place_item
 from assistant.records import (
@@ -198,7 +201,8 @@ async def _duplicate(db: AsyncSession, item: Item) -> DuplicateOut | None:
         return None
     return DuplicateOut(canonical_id=canonical.public_id,
                         canonical_created_at=canonical.occurred_at or canonical.created_at,
-                        undo_path=f"/v1/items/{item.public_id}/unmerge")  # fmt: skip
+                        undo_path=f"/v1/items/{item.public_id}/unmerge",
+                        action_id=await exact_merge_action_id(db, item))  # fmt: skip
 
 
 async def _create_out(db: AsyncSession, item: Item, created: bool) -> ItemCreateOut:
@@ -283,7 +287,7 @@ async def create_item(body: ItemCreateIn, user: GatedUser, db: Db,
 
     item = Item(user_id=user.id, client_id=body.client_id, kind=kind, source=body.source,
                 status=RecordStatus.PENDING, title=body.title, text=text,
-                text_lang=detect_lang(text), content_hash=content_hash(text),
+                text_lang=detect_lang(text), content_hash=content_hash(text), simhash=simhash(text),
                 original_sha256=file.sha256 if file else None, source_meta=meta,
                 occurred_at=body.occurred_at, recording_id=recording, fragment_no=fragment_no,
                 hidden_reason=HiddenReason.VOICE_FRAGMENT if fragment_no else None)  # fmt: skip
@@ -315,6 +319,8 @@ async def create_item(body: ItemCreateIn, user: GatedUser, db: Db,
         item.status = RecordStatus.READY  # hidden; not extracted unless unmerged
         if file is not None:
             trash_file(file)
+        await db.flush()
+        await record_exact_merge(db, item, canonical, item.created_at)
     elif kind in CROSS_BORDER_KINDS and not await ai_consent_covers(db, user.id, None):
         item.status = RecordStatus.NEEDS_CONSENT
     else:
@@ -322,6 +328,8 @@ async def create_item(body: ItemCreateIn, user: GatedUser, db: Db,
     await db.flush()
     if not item.fragment_no:  # a fragment reaches pages through its recording
         await place_item(db, item)
+    if canonical is None and text:
+        await schedule_scan(db, user.id)  # similar records (files: after their text is read)
     return await _create_out(db, item, created=True)
 
 
@@ -397,6 +405,7 @@ async def patch_item(item_id: uuid.UUID, body: ItemPatchIn, user: GatedUser, db:
     if text_changed:  # the summary described the old text; a new one is on its way
         item.text_lang = detect_lang(item.text)
         item.content_hash = content_hash(item.text)
+        item.simhash = simhash(item.text)
         item.summary = None
         item.ai_fields = [f for f in (item.ai_fields or []) if f != "summary"]
     # A late fragment must not rebuild a recording over what the person changed.
@@ -404,6 +413,7 @@ async def patch_item(item_id: uuid.UUID, body: ItemPatchIn, user: GatedUser, db:
         item.source_meta = {**(item.source_meta or {}), "text_edited": True}
     if text_changed:
         await enqueue_enrich(db, item, suffix=":edit", live=True)
+        await schedule_scan(db, user.id)
     if body.verify or body.corrections:
         fields = {k: dict(v) for k, v in (item.review_fields or {}).items()}
         for key in body.verify:
@@ -451,6 +461,7 @@ async def unmerge_item(item_id: uuid.UUID, user: GatedUser, db: Db) -> ItemOut:
     item = await _get(db, user, item_id, lock=True)
     if await unmerge(db, item) is None and item.hidden_reason is not None:
         raise ApiError(409, "conflict")
+    await on_unmerged(db, item, datetime.now(UTC))
     file = await original_file(db, item.id, lock=True)
     if file is not None and file.state == FileState.TRASH:
         file.state, file.trash_until = FileState.ACTIVE, None

@@ -296,6 +296,16 @@ Response:
 such fire for this user: drop it), `invalid`. `fires`: every fire the batch changed or created.
 `actions` (week 9): one Action per `acked` that came for a fire in state `missed` (a late
 «Сделано»), with «Отменить» (`actions.md`); an `applied` repeat never makes a second one.
+Each of these actions also has `event_client_id`: the `client_id` of the `acked` event that made
+it (match on this, not on order). Its `changes` row has `kind: "reminder"`, `item_id: null` and
+`reminder_id` = the reminder.
+
+```json
+{"results": [{"client_id": "a1b2...", "status": "applied"}], "fires": [Fire...],
+ "actions": [{"id": "0194...", "kind": "edit_reminder", "event_client_id": "a1b2...",
+              "changes": [{"kind": "reminder", "item_id": null, "reminder_id": "0193...", "...": "..."}],
+              "...": "the rest of Action"}]}
+```
 
 ### «Перенести» a missed occurrence (S06 red row)
 

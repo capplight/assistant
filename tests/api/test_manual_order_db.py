@@ -842,7 +842,8 @@ async def test_parallel_moves_on_real_connections(tmp_path):
             async with maker() as s:
                 await s.execute(text(
                     "DELETE FROM jobs WHERE (payload ->> 'item_id')::bigint IN "
-                    "(SELECT id FROM items WHERE user_id = :u)"), {"u": user_id})  # fmt: skip
+                    "(SELECT id FROM items WHERE user_id = :u) "
+                    "OR (payload ->> 'user_id')::bigint = :u"), {"u": user_id})  # fmt: skip
                 await s.execute(text("DELETE FROM users WHERE id = :u"), {"u": user_id})
                 await s.commit()
         await engine.dispose()

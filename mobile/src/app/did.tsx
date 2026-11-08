@@ -11,7 +11,7 @@ import { Screen } from '@/components/Screen';
 import { getApi, syncBlocked } from '@/services';
 import { useOnboarding } from '@/store/onboarding';
 import { useToast } from '@/store/toast';
-import { undoOf, undoServerAction } from '@/tasks/actions';
+import { isImportant, undoOf, undoServerAction } from '@/tasks/actions';
 import { rememberActions } from '@/tasks/service';
 import { useTasks } from '@/tasks/store';
 import { useTheme } from '@/theme';
@@ -23,7 +23,7 @@ const DAY = 86_400_000;
  * own (R-33: «Вы перенесли напоминание на 8:00») — newest first, with «Отменить» while the
  * server says it can (30 days). Undone ones are crossed out with «Вернуть» (= undo of the undo).
  * Sent outside: «Отправлено, отменить нельзя». From /sync (works offline) plus `GET /actions`.
- * Not here: «Только важное» (no rule for «важное» in the contract yet).
+ * [Все | Только важное]: see `isImportant` (the assistant's own changes, external, deletions, merges, imports).
  */
 export default function DidScreen() {
   const theme = useTheme();
@@ -32,6 +32,7 @@ export default function DidScreen() {
   const showToast = useToast((s) => s.show);
   const [now] = useState(() => Date.now());
   const [busy, setBusy] = useState<string | null>(null);
+  const [onlyImportant, setOnlyImportant] = useState(false);
 
   useEffect(() => {
     if (useOnboarding.getState().consent === null || syncBlocked()) return;
@@ -43,7 +44,7 @@ export default function DidScreen() {
 
   // Undo actions are shown through what they undid (crossed out + «Вернуть»), not as rows of their own.
   const list = Object.values(actions)
-    .filter((a) => !a.undo_of)
+    .filter((a) => !a.undo_of && (!onlyImportant || isImportant(a)))
     .sort((a, b) => Date.parse(b.created_at ?? '') - Date.parse(a.created_at ?? ''));
   const recent = list.filter((a) => !a.created_at || Date.parse(a.created_at) > now - 30 * DAY);
   const older = list.filter((a) => a.created_at && Date.parse(a.created_at) <= now - 30 * DAY);
@@ -130,6 +131,19 @@ export default function DidScreen() {
         <AppText variant="title1" accessibilityRole="header" style={styles.flex}>
           {t('more.did')}
         </AppText>
+      </View>
+      <View style={[styles.row, { gap: theme.space[2], marginBottom: theme.space[4], flexWrap: 'wrap' }]}>
+        {[false, true].map((on) => (
+          <Button
+            key={String(on)}
+            testID={on ? 'did-important' : 'did-all'}
+            label={on ? t('did.only_important') : t('did.all')}
+            variant={onlyImportant === on ? 'primary' : 'outline'}
+            minHeight={theme.size.minTouch}
+            accessibilityState={{ selected: onlyImportant === on }}
+            onPress={() => setOnlyImportant(on)}
+          />
+        ))}
       </View>
       {recent.length === 0 && older.length === 0 ? <AppText testID="did-empty">{t('did.empty')}</AppText> : null}
       {recent.map((a) => row(a, true))}

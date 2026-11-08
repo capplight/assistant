@@ -19,10 +19,13 @@ export function PageNameSheet({
   initial = '',
   onSave,
   onClose,
+  title,
 }: {
   initial?: string;
   onSave: (name: string) => void;
   onClose: () => void;
+  /** Another question than «Как назвать?» (a stack); then there is no «Пока без названия». */
+  title?: string;
 }) {
   const theme = useTheme();
   const { t } = useTranslation();
@@ -48,11 +51,11 @@ export function PageNameSheet({
           ]}
         >
           <AppText variant="title2" accessibilityRole="header">
-            {t('page.name_title')}
+            {title ?? t('page.name_title')}
           </AppText>
           <TextInput
             testID="page-name-input"
-            accessibilityLabel={t('page.name_title')}
+            accessibilityLabel={title ?? t('page.name_title')}
             placeholder={t('page.name_placeholder')}
             placeholderTextColor={theme.colors.ink2}
             value={name}
@@ -75,7 +78,9 @@ export function PageNameSheet({
             ]}
           />
           <Button testID="page-name-save" label={t('page.name_save')} onPress={() => onSave(name)} />
-          <Button testID="page-name-later" label={t('page.name_later')} variant="text" onPress={() => onSave('')} />
+          {title ? null : (
+            <Button testID="page-name-later" label={t('page.name_later')} variant="text" onPress={() => onSave('')} />
+          )}
           <Button testID="page-name-close" label={t('common.close')} variant="outline" onPress={onClose} />
         </SafeAreaView>
       </KeyboardAvoidingView>

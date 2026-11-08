@@ -4,9 +4,8 @@ import { comparePages, usePages, type Page } from '@/store/pages';
 import { useUndo, type ManualStripText } from '@/store/undo';
 import { newId } from '@/utils/id';
 
-import { itemKey, pageEntries, pageKey, type PageEntry } from './contents';
+import { itemKey, pageEntries, pageKey, placesLocally, type PageEntry } from './contents';
 import { between, RankError } from './lexorank';
-import { getTemplate } from './templates';
 
 /**
  * Week 7, by hand (F-41, R-54, US-27; docs/api/pages.md «Manual order»): «Выше / Ниже /
@@ -234,7 +233,7 @@ export async function pagesShowing(record: LocalRecord, pages: Page[]): Promise<
   const out = new Set<string>();
   for (const page of pages) {
     const link = await currentLink(page, record);
-    const shown = link ? !link.removedAt : getTemplate(page.templateKey).placeAll || record.pageId === page.id;
+    const shown = link ? !link.removedAt : placesLocally(page, record);
     if (shown) out.add(page.id);
   }
   return out;

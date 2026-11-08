@@ -178,6 +178,8 @@ class User(Base):
     status: Mapped[str] = mapped_column(Text, default="active", server_default="active")
     delete_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     delete_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # 0015: tombstones up to this seq were deleted (retention): an older `since` resyncs fully
+    sync_floor_seq: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
     last_active_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     trips: Mapped[list["Trip"]] = relationship(back_populates="user", cascade="all, delete-orphan")

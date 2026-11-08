@@ -15,8 +15,12 @@ from assistant.api.routes import (
     actions,
     auth,
     chat,
+    collections,
     consents,
     devices,
+    duplicates,
+    events,
+    imports,
     items,
     me,
     memory,
@@ -111,7 +115,8 @@ def create_app(
                    pages.items_router, pages.habits_router, pages.router, pages.templates_router,
                    sync.router, me.router, misc.ai, chat.router, chat.feedback_router,
                    actions.router, reminders.router, tasks.router, today.router,
-                   today.suggestions_router):
+                   today.suggestions_router, duplicates.router, duplicates.pending_router,
+                   imports.router, collections.router, events.router):
         v1.include_router(router)
     if isinstance(storage, LocalObjectStorage):
         v1.include_router(misc.dev_storage)

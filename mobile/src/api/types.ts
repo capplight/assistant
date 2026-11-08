@@ -526,6 +526,8 @@ export type ActionOut = {
   scope?: 'internal' | 'external' | null;
   created_at?: string | null;
   seq?: number;
+  /** Week 9 follow-up (reminders.md events): the `client_id` of the `acked` event that made it. */
+  event_client_id?: string | null;
 };
 
 /** `page_patch`, and `page_patches` of an undo. `group_key` = the group's title. */
@@ -546,7 +548,8 @@ export type ProposalOptionKind = 'item' | 'pick' | 'yes' | 'no' | 'keep_mine' | 
  */
 export type ProposalOut = {
   reply_id: string | null;
-  kind: 'choice' | 'count' | 'manual';
+  /** `delete`: a deletion / trash asked from the line — always a question first (founder, 2026-11-09). */
+  kind: 'choice' | 'count' | 'manual' | 'delete';
   question: string;
   count: number | null;
   item_ids: string[];
@@ -897,3 +900,125 @@ export type HabitPatchOut = { habit: HabitOut | null; action: ActionOut | null; 
 
 /** GET /actions: newest first. */
 export type ActionsPageOut = { actions: ActionOut[]; has_more: boolean };
+
+// --- week 10: repeats («Объединить?», «37 → 1»), stacks on pages, Telegram import ---
+// Written from 3-engineering §3.3, §3.7, §4.6, §4.9, §6.3, §6.10 while docs/api/duplicates.md and
+// import.md were being written; the decoders in endpoints.ts are lenient, so a renamed field is a
+// change there only (see the reconcile notes in mobile/README.md «Week 10»).
+
+/** One record of a group, as the group card shows it. `role`: `keep` = the one that stays. */
+export type DuplicateMemberOut = {
+  item_id: string;
+  role: 'keep' | 'merge';
+  title: string | null;
+  snippet: string | null;
+  kind: string | null;
+  occurred_at: string | null;
+  created_at: string | null;
+  score: number | null;
+};
+
+export type DuplicateStatus = 'auto_merged' | 'suggested' | 'merged' | 'dismissed' | 'undone';
+
+/** `duplicate_groups` (R-25): what the person sees; `near` + `suggested` = «Объединить?». */
+export type DuplicateGroupOut = {
+  id: string;
+  kind: 'exact' | 'near';
+  status: DuplicateStatus;
+  keep_item_id: string | null;
+  /** `most_complete` | `newest`: why that one stays («самая полная» / «самая новая»). */
+  keep_rule: string | null;
+  member_count: number;
+  origin: string | null;
+  members: DuplicateMemberOut[];
+  action_id: string | null;
+  seq: number;
+  created_at: string | null;
+  decided_at: string | null;
+};
+
+/** POST /duplicates/groups/{id}/merge | dismiss. `keep_item_id`: the person chose another one to keep. */
+export type DuplicateDecisionIn = { client_id: string; keep_item_id?: string };
+
+export type DuplicateDecisionOut = { group: DuplicateGroupOut | null; action: ActionOut | null; repeated: boolean };
+
+/** Something that waits for «Да» (S25): the cleanup «37 → 1», an import, anything external. */
+export type PendingActionOut = {
+  id: string;
+  kind: string;
+  status: string;
+  preview: Record<string, unknown>;
+  expires_at: string | null;
+  action_id: string | null;
+  seq: number;
+  created_at: string | null;
+};
+
+/** What a `cleanup_batch` preview says, read by code from the server's numbers. */
+export type CleanupPreview = { before: number; after: number; removed: number; groups: number };
+
+/** POST /duplicates/cleanup/plan: one «Да» for all exact repeats + the near groups to decide one by one. */
+export type CleanupPlanOut = { pending_action: PendingActionOut | null; preview: CleanupPreview | null; groups: DuplicateGroupOut[] };
+
+/** POST /pending-actions/{id}/confirm: the «Да». `action` has the one «Отменить» of the whole batch. */
+export type PendingConfirmOut = { pending_action: PendingActionOut | null; action: ActionOut | null };
+
+/** A stack (`collections`): shown as a group on its page; its rows there carry `group_key = title`. */
+export type CollectionOut = {
+  id: string;
+  page_id: string | null;
+  kind: string;
+  title: string;
+  title_kk: string | null;
+  icon: string;
+  item_count: number;
+  /** «было 37, убрал 23 повтора». */
+  before_after: { before: number | null; after: number | null; removed: number | null } | null;
+  created_by: string | null;
+  last_opened_at: string | null;
+  hidden_at: string | null;
+  seq: number;
+  updated_at: string | null;
+  deleted_at: string | null;
+};
+
+/** Changes of a stack: the stack as it is now and the action with «Отменить». */
+export type CollectionWriteOut = { collection: CollectionOut | null; action: ActionOut | null; page_patches: PagePatchOut[] };
+
+export type ImportStatus = 'created' | 'awaiting_code' | 'running' | 'paused_budget' | 'done' | 'failed' | 'cancelled';
+
+/** POST /imports/telegram/file: the uploaded `result.json` or zip. Pages: by their rules (`auto_rule`). */
+export type ImportFileIn = { client_id: string; upload_id: string };
+
+/** GET /imports/{id}: progress and the summary («Перенёс 1 200 заметок…»). */
+export type ImportOut = {
+  id: string;
+  client_id: string | null;
+  source: string;
+  status: ImportStatus;
+  total: number;
+  processed: number;
+  /** New records made by this import. */
+  created_count: number;
+  /** Repeats inside the file: not made twice. */
+  skipped_dups: number;
+  /** Brought by an earlier import already (R-28): not made again. */
+  seen_before: number;
+  /** The server's own one-line summary, when it has one. */
+  summary_ru: string | null;
+  /** `{"video": 34, "sticker": 12}`: media without text are not brought over. */
+  skipped_media: Record<string, number>;
+  failed: number;
+  /** «Разложил в 9 стопок». */
+  stacks: number;
+  /** Near repeats waiting for «Объединить?». */
+  similar_groups: number;
+  /** The cleanup «Повторов: 214 — убрать?» waiting for its «Да». */
+  cleanup: PendingActionOut | null;
+  /** The import itself, with «Отменить» (hides what it brought). */
+  action_id: string | null;
+  error: string | null;
+  seq: number;
+  started_at: string | null;
+  finished_at: string | null;
+};

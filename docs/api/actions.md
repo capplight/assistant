@@ -33,6 +33,16 @@ Week 9 adds, on the same objects (the shapes below do not change):
 | `POST /v1/reminders/events` `acked` on a **missed** fire (late «Сделано» from «Сегодня») | `edit_reminder` | «Сделано: свет» | the occurrence is `missed` again (its fires and the reminder's status) |
 | `PATCH /v1/habits/{id}` (S30 «Изменить») | `habit_change` | «Теперь: чеки кладу на страницу «Расходы»» | the rule goes back to its page |
 
+Week 10 adds (same shapes): `auto_merge_exact`, `merge_group`, `dismiss_group`, `cleanup_batch`
+(repeats, `duplicates.md`), `create_stack`, `stack_add`, `stack_remove`, `delete_stack`, and
+`user_edit` on a stack (`stacks.md`), `import_batch` (a Telegram import: «Отменить» moves what it
+brought to the trash, `import.md`). `changes[].kind` adds `merge` and `keep_apart`. From the
+assistant line every delete now asks «Да» first (`chat.md`, `confirm`).
+
+The pending «Да» endpoints exist from week 10: `GET /v1/pending-actions`,
+`POST /v1/pending-actions/{id}/confirm`, `/reject` (`duplicates.md`; first producer: the cleanup
+plan).
+
 **Ticks.** Every tick writes an action. Intended use: the 10-second «Отменить» strip after a tick
 = `POST /v1/actions/{id}/undo` of that action (it also works after the tick left the outbox).
 Tapping the box again is a new, separate change (`done: false`, «Вернул: …», its own action);

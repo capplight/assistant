@@ -26,6 +26,10 @@ AI-generated content (e.g. a КП); never in marketing copy or ordinary UI.
 | `src/assistant/actions/` | api | changes from the assistant line: intent rule, mutating tools, one action per phrase with `inverse`, undo/redo, manual-order protection (contract: `docs/api/actions.md`) |
 | `src/assistant/tasks/`, `api/routes/tasks.py`, `db/models_tasks.py` | api | «Дела» / «Покупки»: tasks with their own records, list phrases (model by default, code behind `tasks_rules_first`, Ф-1) (contract: `docs/api/today.md`) |
 | `src/assistant/suggestions/`, `api/routes/today.py` | api | «Сегодня», tips and data proposals with the R-35 limits (contract: `docs/api/today.md`) |
+| `src/assistant/dedup/`, `api/routes/duplicates.py`, `db/models_dedup.py`, `tests/dedup/` | api | repeats: similar groups (SimHash/trgm/cosine + DUP_JUDGE), «Объединить?», cleanup «37 → 1», pending «Да»; worker `python -m assistant.dedup` (scans + stacks) (contract: `docs/api/duplicates.md`) |
+| `src/assistant/stacks/`, `api/routes/collections.py` | api | stacks as groups inside pages (contract: `docs/api/stacks.md`) |
+| `src/assistant/imports/`, `api/routes/imports.py`, `tests/imports/` | api | Telegram export import; worker `python -m assistant.imports` (contract: `docs/api/import.md`) |
+| `src/assistant/analytics/`, `api/routes/events.py` | api | product events journal `analytics.events` (contract: `docs/api/events.md`) |
 | `mobile/` | mobile | Expo / React Native app (see `mobile/README.md`) |
 
 Modules talk only through the DB schema (`db/models.py`), the job queue (`db/queue.py`),

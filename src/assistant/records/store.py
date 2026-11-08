@@ -6,7 +6,7 @@ Every function works inside the caller's transaction and never does network I/O.
 
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import and_, delete, or_, select, text, update
+from sqlalchemy import delete, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from assistant.config import get_settings
@@ -111,8 +111,10 @@ async def purge_trashed_items(session: AsyncSession, now: datetime | None = None
                               limit: int = 500) -> int:  # fmt: skip
     """Hard-delete records whose 30 days in trash are over, with whatever hides behind them: their
     merged repeats and voice fragments must not outlive them. Triggers and cascades do the rest:
-    sync tombstones, chunks, page links, page summaries. Their originals, even ones the person kept,
-    go to the file trash for storage:purge: nothing is left to show them under.
+    sync tombstones, chunks, page links, page summaries. Their active originals go to the file trash
+    for storage:purge; a pinned original stays (founder 2026-11-09: what the person kept is never
+    purged with its record). It stays with `item_id` NULL until the person unpins it or the account
+    is deleted (open: where the app shows such files).
 
     The user's sync lock comes before the rows, in user order: that's the order the triggers and the
     API take them in, so a purge can't deadlock with a writer or another purge."""
@@ -150,9 +152,7 @@ async def purge_trashed_items(session: AsyncSession, now: datetime | None = None
     gone = [*ids, *behind]
     await session.execute(
         update(File)
-        .where(File.item_id.in_(gone),
-               or_(File.state == FileState.ACTIVE,
-                   and_(File.state == FileState.PINNED, File.role == FileRole.ORIGINAL)))
+        .where(File.item_id.in_(gone), File.state == FileState.ACTIVE)
         .values(state=FileState.TRASH, trash_until=now, keep_reason=None, pinned_by=None)
     )  # fmt: skip
     await session.execute(delete(Item).where(Item.id.in_(gone)))
@@ -160,6 +160,25 @@ async def purge_trashed_items(session: AsyncSession, now: datetime | None = None
         delete(Job).where(Job.idempotency_key.in_([embed_key(i) for i in gone]))
     )  # fmt: skip
     return len(gone)
+
+
+async def purge_old_tombstones(session: AsyncSession, now: datetime | None = None,
+                               limit: int = 5000) -> int:  # fmt: skip
+    """Tombstones older than `sync_tombstone_days` go; each user's `sync_floor_seq` keeps the
+    highest seq that went, so a phone that never saw them is told to sync from scratch."""
+    now = now or now_utc()
+    cutoff = now - timedelta(days=get_settings().sync_tombstone_days)
+    rows = (await session.execute(text("""
+        WITH gone AS (
+            DELETE FROM sync_tombstones WHERE id IN (
+                SELECT id FROM sync_tombstones WHERE deleted_at < :cutoff ORDER BY id LIMIT :lim)
+            RETURNING user_id, seq)
+        SELECT user_id, max(seq) AS floor, count(*) AS n FROM gone GROUP BY user_id
+    """), {"cutoff": cutoff, "lim": limit})).all()  # fmt: skip
+    for user_id, floor, _ in rows:
+        await session.execute(text("UPDATE users SET sync_floor_seq = greatest(sync_floor_seq, :f) "
+                                   "WHERE id = :u"), {"f": floor, "u": user_id})
+    return sum(r.n for r in rows)
 
 
 def trash_file(file: File, now: datetime | None = None) -> None:

@@ -19,6 +19,8 @@ import { FakeAlarms } from '@/alarms/port';
 import { useAlarms } from '@/alarms/store';
 import { useTasks } from '@/tasks/store';
 import { useToday } from '@/today/service';
+import { useDedup } from '@/dedup/store';
+import { setFilePickerForTests } from '@/dedup/pickFile';
 
 export const APP_DIR = path.resolve(__dirname, '../app');
 
@@ -56,6 +58,8 @@ export function resetApp(o: { fetch?: FetchLike; push?: FakePush; alarms?: FakeA
   useOnboarding.getState().reset();
   useAlarms.getState().reset();
   useTasks.getState().reset();
+  useDedup.getState().reset();
+  setFilePickerForTests(null);
   useToday.setState({ last: null, answered: [] });
   usePages.getState().reset();
   useAssistant.getState().reset();

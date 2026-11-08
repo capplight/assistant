@@ -54,6 +54,14 @@ _TEXTS: list[ConsentText] = [
                 "Можно записывать, какие кнопки я нажимаю, без содержания записей."),
     ConsentText(ConsentKind.ANALYTICS, f"analytics-{_V}", "kk",
                 "Жазбалардың мазмұнынсыз, қай батырмаларды басатынымды жазуға болады."),
+    # Week 10 (spec 3.2 `telegram_import`, screen `import`). Placeholder wording, like the others;
+    # the KK line awaits a native speaker's review (R-39).
+    ConsentText(ConsentKind.TELEGRAM_IMPORT, f"tg-import-{_V}", "ru",
+                "Я переношу в приложение текст из моего «Избранного» в Telegram (файл экспорта). "
+                "Файл не хранится: остаётся только текст записей."),
+    ConsentText(ConsentKind.TELEGRAM_IMPORT, f"tg-import-{_V}", "kk",
+                "Telegram-дағы «Таңдаулыларымнан» мәтінді қолданбаға көшіремін (экспорт файлы). "
+                "Файл сақталмайды: тек жазбалар мәтіні қалады."),
 ]  # fmt: skip
 
 _BY_KEY = {(t.kind, t.version, t.locale): t for t in _TEXTS}

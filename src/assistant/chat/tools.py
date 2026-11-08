@@ -10,8 +10,9 @@ carry refs (`s3`, `p2`) issued by the turn's SourceBook, never database ids.
 import json
 import logging
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
+from decimal import Decimal
 from typing import Any, Literal
 
 from pydantic import BaseModel, ValidationError
@@ -21,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from assistant.ai import ToolCall, ToolSpec
 from assistant.ai.adapters import strict_json_schema
 from assistant.chat.sources import SourceBook
+from assistant.chat.verify import Facts, facts_of
 from assistant.embeddings import ChunkEmbedder
 from assistant.memory import embed_query, search_records
 
@@ -82,6 +84,19 @@ class ToolEnv:
     min_similarity: float
     counts: set[int]  # numbers our code reported (totals): allowed in the answer
     mut: Any = None  # mutate.MutationState of the turn; None = read-only
+    # Founder 2026-11-09: numbers our code computed this turn (a total, what is left, a count
+    # from `aggregate` or any other calculation in code) are allowed in the answer. Only code
+    # adds here, through `computed_by_code`; a number the model works out itself is removed.
+    computed: Facts = field(default_factory=Facts)
+
+    def computed_by_code(self, *values: "int | float | Decimal | str | date | datetime") -> None:
+        for v in values:
+            if isinstance(v, datetime | date):
+                self.computed.add_date(v)
+            elif isinstance(v, str):
+                self.computed.update(facts_of(v))  # «125 000 ₸», «3 ноября»: as written
+            else:
+                self.computed.numbers.add(Decimal(str(v)).normalize())
 
 
 @dataclass

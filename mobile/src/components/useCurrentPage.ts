@@ -23,7 +23,9 @@ export function useCurrentPage(): CurrentPage {
     return { kind: 'today', id: 'today', title: t('tpl.today'), hintKey: 'tpl.line_hint_now.today' };
   }
   const m = /^\/page\/([^/]+)/.exec(pathname);
-  const pageId = m?.[1] ? decodeURIComponent(m[1]) : pathname.startsWith('/record/') ? from : undefined;
+  // S11 (a stack) lives inside its page too.
+  const inside = pathname.startsWith('/record/') || pathname.startsWith('/stack/');
+  const pageId = m?.[1] ? decodeURIComponent(m[1]) : inside ? from : undefined;
   if (pageId) {
     const id = pageId;
     const page = pages.find((p) => p.id === id);
@@ -43,7 +45,7 @@ export function useCurrentPage(): CurrentPage {
   if (pathname === '/chat') {
     return { kind: 'other', id: 'today', title: t('chat.title'), hintKey: 'tpl.line_hint_now.today' };
   }
-  if (pathname.startsWith('/more') || pathname === '/my-pages') {
+  if (pathname.startsWith('/more') || pathname === '/my-pages' || pathname === '/duplicates' || pathname === '/import') {
     return { kind: 'more', id: 'more', title: t('more.title'), hintKey: 'tpl.line_hint_now.today' };
   }
   return { kind: 'other', id: pathname, title: t('tpl.today'), hintKey: 'tpl.line_hint_now.today' };

@@ -436,6 +436,10 @@ async def test_late_done_on_a_missed_reminder_can_be_taken_back(env9):
         assert out["results"][0]["status"] == "applied"
         action = out["actions"][0]
         assert action["summary"]["ru"] == "Сделано: свет" and action["undoable"] is True
+        assert action["event_client_id"] == ev["client_id"]
+        assert action["changes"][0]["reminder_id"] == rid
+        row = action["changes"][0]
+        assert row["kind"] == "reminder" and row["item_id"] is None
         again = (await c.post("/v1/reminders/events", json={"events": [ev]}, headers=h)).json()
         assert again["results"][0]["status"] == "duplicate" and again["actions"] == []
         u = await c.post(f"/v1/actions/{action['id']}/undo", headers=h)

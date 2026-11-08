@@ -8,6 +8,7 @@ the per-user sync lock first, so neighbours read here can't change before the in
 import uuid
 from datetime import datetime
 
+from sqlalchemy import delete as sa_delete
 from sqlalchemy import func, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,7 +26,7 @@ from assistant.db.models_pages import (
 )
 from assistant.db.models_v2 import HiddenReason
 from assistant.pages import habits, lexorank
-from assistant.pages.rules import ItemFacts, matches
+from assistant.pages.rules import ItemFacts, excluded, matches
 
 
 async def lock_user(session: AsyncSession, user_id: int) -> None:
@@ -166,22 +167,46 @@ async def place_item(session: AsyncSession, item: Item) -> int:
         )
     )
     rules = await _rules(session, pages)
+    is_task = await session.scalar(text("SELECT 1 FROM tasks WHERE item_id = :i"),
+                                   {"i": item.id}) is not None  # fmt: skip
     facts = ItemFacts(kind=str(item.kind), envelope=item.envelope, title=item.title,
                       summary=item.summary,
-                      text=item.text if item.text is not None else item.raw_text)  # fmt: skip
+                      text=item.text if item.text is not None else item.raw_text,
+                      is_task=is_task)  # fmt: skip
     # Learned from the person's moves: such records also go where they put the others.
     learned = await habits.placements(session, item.user_id, item.envelope)
     targets = {str(h.value.get("page_id")) for h in learned}
     when = item.occurred_at or item.created_at
+    live = [p for p in pages if p.kind != ScreenKind.SYSTEM_TODAY]
+    # Which pages take it regardless of `none` (week 10): a page that takes it elsewhere lets
+    # «Заметки» leave a receipt or a task out; with no such page the record stays on «Заметки».
+    takes = {p.id: str(p.public_id) in targets or matches(rules[p.id], facts, elsewhere=False)
+             or (is_task and p.template_key in TASK_LISTS) for p in live}  # fmt: skip
     added = 0
-    for page in pages:
-        wanted = str(page.public_id) in targets or matches(rules[page.id], facts)
-        wanted = wanted and page.kind != ScreenKind.SYSTEM_TODAY
+    for page in live:
+        others = any(takes[q.id] and not excluded(rules[q.id], facts) for q in live
+                     if q.id != page.id)  # fmt: skip
+        wanted = str(page.public_id) in targets or matches(rules[page.id], facts, elsewhere=others)
         if wanted and await add_link(session, page, item.id, when):
             added += 1
+        elif not wanted and others and excluded(rules[page.id], facts):
+            await _drop_rule_row(session, page, item.id)
     for h in learned:
         h.last_used_at = func.now()
     return added
+
+
+async def _drop_rule_row(session: AsyncSession, page: Screen, item_id: int) -> None:
+    """A row the rules alone put here before the record was understood (a receipt on «Заметки»):
+    it goes once the record is known to belong elsewhere. A row the person placed, moved, pinned
+    or removed is never touched (R-54)."""
+    await session.execute(
+        sa_delete(ScreenItem)
+        .where(ScreenItem.screen_id == page.id, ScreenItem.item_id == item_id,
+               ScreenItem.added_by == AddedBy.RULE, ScreenItem.updated_by == "agent",
+               ScreenItem.manual_order.is_(False), ScreenItem.pinned.is_(False),
+               ScreenItem.removed_by_user_at.is_(None), ScreenItem.moved_ts.is_(None))
+        .execution_options(synchronize_session=False))  # fmt: skip
 
 
 async def rescue_moved(session: AsyncSession, page: Screen) -> int:
@@ -240,9 +265,34 @@ async def fill_page(session: AsyncSession, page: Screen) -> int:
         task_items = set(await session.scalars(
             text("SELECT item_id FROM tasks WHERE user_id = :u AND list_key = ANY(:l) "
                  "AND deleted_at IS NULL"), {"u": page.user_id, "l": list(lists)}))  # fmt: skip
-    found = [r for r in rows if r.id in task_items
-             or matches(rule, ItemFacts(kind=str(r.kind), envelope=r.envelope, title=r.title,
-                                        summary=r.summary, text=r.body))]  # fmt: skip
+    all_tasks: set[int] = set(await session.scalars(
+        text("SELECT item_id FROM tasks WHERE user_id = :u"), {"u": page.user_id}))
+    # Week 10 (rules.py `none`): what another page takes stays off a page whose rule says so.
+    others = list(await session.scalars(select(Screen).where(
+        Screen.user_id == page.user_id, Screen.deleted_at.is_(None), Screen.id != page.id,
+        Screen.kind != ScreenKind.SYSTEM_TODAY)))  # fmt: skip
+    other_rules = await _rules(session, others)
+    facts_of: dict[int, ItemFacts] = {}
+
+    def wanted(r) -> bool:  # type: ignore[no-untyped-def]
+        facts = ItemFacts(kind=str(r.kind), envelope=r.envelope, title=r.title,
+                          summary=r.summary, text=r.body, is_task=r.id in all_tasks)  # fmt: skip
+        facts_of[r.id] = facts
+        if not rule.get("none"):
+            return r.id in task_items or matches(rule, facts)
+        elsewhere = any(matches(other_rules[q.id], facts) or (facts.is_task and
+                                                              q.template_key in TASK_LISTS)
+                        for q in others)  # fmt: skip
+        return r.id in task_items or matches(rule, facts, elsewhere=elsewhere)
+
+    found = [r for r in rows if wanted(r)]
+    # This page now takes them: a page that leaves such records out lets its rule-placed rows go
+    # («Расходы» added: the receipts the rules had put on «Заметки» leave it).
+    for q in others:
+        if other_rules[q.id].get("none"):
+            for r in found:
+                if excluded(other_rules[q.id], facts_of[r.id]):
+                    await _drop_rule_row(session, q, r.id)
     existing = set(await session.scalars(
         select(ScreenItem.item_id).where(ScreenItem.screen_id == page.id)
     ))  # fmt: skip

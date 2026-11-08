@@ -178,6 +178,10 @@ async def assemble(session: AsyncSession, rows: list[Item], now: datetime) -> It
                                                exclude_id=record.id)  # fmt: skip
         if canonical is not None and canonical.id < record.id:
             store.merge_into(record, canonical, now)
+            from assistant import dedup  # dedup -> actions -> records
+
+            await session.flush()
+            await dedup.record_exact_merge(session, record, canonical, now)
 
     if arrived_all:  # the transcript now lives in one place only
         for row, res in done:

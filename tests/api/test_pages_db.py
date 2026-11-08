@@ -138,7 +138,10 @@ async def test_catalogue_with_etag(db_app):
                                                  "documents", "expenses"]  # fmt: skip
         notes = templates[1]
         assert notes["title"] == {"ru": "Заметки", "kk": "Жазбалар"}
-        assert notes["auto_rule"] == {"any": [{"always": True}]}
+        assert notes["version"] == 2 and notes["auto_rule"] == {
+            "any": [{"always": True}],
+            "none": [{"task_record": True}, {"envelope_types": ["task", "reminder_request",
+                                                                "shopping_list", "receipt"]}]}
         assert {"id": "text", "required": True}.items() <= notes["fields"][0].items()
         assert "ai_hints_ref" not in notes
 
@@ -338,7 +341,8 @@ async def test_parallel_requests_on_real_connections(tmp_path):
             async with maker() as s:  # jobs have no foreign key: they would stay behind
                 await s.execute(text(
                     "DELETE FROM jobs WHERE (payload ->> 'item_id')::bigint IN "
-                    "(SELECT id FROM items WHERE user_id = :u)"), {"u": user_id})  # fmt: skip
+                    "(SELECT id FROM items WHERE user_id = :u) "
+                    "OR (payload ->> 'user_id')::bigint = :u"), {"u": user_id})  # fmt: skip
                 await s.execute(text("DELETE FROM users WHERE id = :u"), {"u": user_id})
                 await s.commit()
         await engine.dispose()
@@ -503,8 +507,9 @@ async def test_old_duplicates_revive_the_last_removed_and_restore_can_still_refu
         assert r.status_code == 409 and r.json()["details"]["page_id"] == new["id"]
 
 
-async def test_notes_shows_every_record(db_app):
-    """«Заметки» has the rule "always": any record, whatever it is, from before or after adding."""
+async def test_notes_shows_every_note(db_app):
+    """«Заметки»: any note, from before or after adding (receipts, tasks and shopping go to their
+    own pages when the person has them: test below)."""
     app, _, s = db_app
     async with client(app) as c:
         h = await _signed_in(c)
@@ -514,6 +519,34 @@ async def test_notes_shows_every_record(db_app):
         link = (await c.post("/v1/items", json={"client_id": _cid(), "url": "https://example.com/a"},
                              headers=h)).json()["item"]["id"]  # fmt: skip
         assert set(await _ids_on(c, h, page["id"])) == {before, after, link}
+
+
+async def test_notes_leaves_out_receipts_and_tasks_another_page_takes(db_app):
+    app, _, s = db_app
+    async with client(app) as c:
+        h = await _signed_in(c)
+        notes = await _add_page(c, h, "notes")
+        receipt = await _note(c, h, "Чек Magnum 4 500")
+        lonely = await _note(c, h, "Чек аптека 1 200")
+        for pid in (receipt, lonely):
+            row = await _item(s, pid)
+            row.envelope = {"type": "receipt"}
+            await s.flush()
+            await place_item(s, row)
+        await s.commit()
+        # no «Расходы» yet: a receipt is not left on no page
+        assert {receipt, lonely} <= set(await _ids_on(c, h, notes["id"]))
+        expenses = await _add_page(c, h, "expenses")  # takes the receipts
+        assert set(await _ids_on(c, h, expenses["id"])) == {receipt, lonely}
+        assert not {receipt, lonely} & set(await _ids_on(c, h, notes["id"]))
+        idea = await _note(c, h, "Идея: полка над столом")
+        assert idea in await _ids_on(c, h, notes["id"])
+        shop = await _add_page(c, h, "shopping")
+        r = await c.post("/v1/tasks", json={"client_id": _cid(), "list_key": "shopping",
+                                            "title": "Хлеб"}, headers=h)  # fmt: skip
+        assert r.status_code in (200, 201), r.text
+        on_shop = set(await _ids_on(c, h, shop["id"]))
+        assert on_shop and not on_shop & set(await _ids_on(c, h, notes["id"]))
 
 
 async def test_a_new_page_does_not_link_hidden_voice_fragments(db_app):
@@ -573,8 +606,9 @@ async def test_new_items_land_by_date_and_one_item_is_on_several_pages(db_app):
         await s.commit()
         assert await place_item(s, receipt) == 0  # safe to repeat
         await s.commit()
-        assert first in await _ids_on(c, h, notes["id"])
-        assert await _ids_on(c, h, docs["id"]) == [first]  # the same record on two pages
+        # Founder 2026-11-09: «Заметки» is notes only; a receipt another page takes leaves it.
+        assert first not in await _ids_on(c, h, notes["id"])
+        assert await _ids_on(c, h, docs["id"]) == [first]
 
 
 async def test_screen_rule_replaces_the_template_rule(db_app):
@@ -816,7 +850,7 @@ async def test_sync_carries_pages_links_and_removals_in_seq_order(db_app):
                         "reminders": [], "reminder_fires": [], "tasks": [], "suggestions": [],
                          "pending_actions": [], "habits": [],
                         "tombstones": [], "next_since": delta["next_since"],
-                        "has_more": False}  # fmt: skip
+                        "has_more": False, "full_resync": False}  # fmt: skip
 
         await c.delete(f"/v1/pages/{page['id']}", headers=h)
         gone = await _sync_all(c, h, delta["next_since"])

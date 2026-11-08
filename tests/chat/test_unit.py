@@ -100,6 +100,26 @@ def test_gate_drops_unverified_sentences_and_strips_refs():
     assert [n for n, _ in events][0] == "status"  # «Пишу ответ…» before the first token
 
 
+def test_gate_allows_numbers_code_computed_only():
+    """Founder 2026-11-09: a total our code computed may be in the answer; one the model works
+    out itself is still removed."""
+    from decimal import Decimal
+
+    from assistant.chat.tools import ToolEnv
+
+    book = _book()
+    env = ToolEnv(None, None, 1, book, 0.5, 0.4, counts=set())  # type: ignore[arg-type]
+    env.computed_by_code(Decimal("12500.50"), "осталось 7 000 ₸")
+    events: list[tuple[str, dict]] = []
+    gate = AnswerGate(book, Facts(), set(), lambda n, d: events.append((n, d)),
+                      computed=env.computed)  # fmt: skip
+    text_ = "Всего 12 500,50 ₸. Осталось 7 000 ₸. Это 64% бюджета."
+    gate.feed(text_)
+    gate.finish(text_)
+    tokens = [d["text"] for n, d in events if n == "token"]
+    assert tokens == ["Всего 12 500,50 ₸. ", "Осталось 7 000 ₸. "] and gate.removed == 1
+
+
 def test_book_refs_labels_and_discard():
     book = _book()
     src = book.get("s1")

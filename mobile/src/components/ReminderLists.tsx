@@ -12,10 +12,11 @@ import {
   missedRows,
   refresh,
   takeBackDelete,
+  takeBackLateDone,
   unackLocal,
-  undoAckLate,
   type MissedRow,
 } from '@/alarms/service';
+import { getSyncEngine } from '@/services';
 import { undoServerAction } from '@/tasks/actions';
 import { useAlarms } from '@/alarms/store';
 import type { Segment } from '@/tasks/rows';
@@ -52,24 +53,23 @@ export function MissedList({ rows, now }: { rows: MissedRow[]; now: number }) {
   const { t } = useTranslation();
   if (rows.length === 0) return null;
   const done = async (row: MissedRow) => {
-    const outboxId = await ackLate(row.key);
-    const at = useAlarms.getState().local[row.key]?.ackedAt ?? 0;
+    const late = await ackLate(row.key);
+    if (!late) return;
     useUndo.getState().showCustom(t('missed.done_strip', { title: row.title }), () => {
       void (async () => {
-        if (await undoAckLate(row.key, outboxId)) return; // never went
-        // Sent: the late «Сделано» is an action (reminders.md events `actions`): its undo makes it missed again.
-        const a = Object.values(useTasks.getState().actions).find(
-          (x) =>
-            x.undoable &&
-            !x.undone_at &&
-            x.changes.some((c) => c.reminder_id === row.reminderId) &&
-            Date.parse(x.created_at ?? '') >= at - 5 * 60_000,
-        );
-        if (!a) {
+        const back = await takeBackLateDone(row.key, late, await getSyncEngine());
+        if (back.local) return; // never went
+        // Sent: the events answer named the action of this very event (`event_client_id`).
+        const actionId =
+          back.actionId ??
+          Object.values(useTasks.getState().actions).find((x) => x.event_client_id === late.eventClientId)?.id ??
+          null;
+        const a = actionId ? useTasks.getState().actions[actionId] : undefined;
+        if (!actionId || (a && (!a.undoable || a.undone_at))) {
           useToast.getState().show(t('missed.undo_gone'), 4000);
           return;
         }
-        const r = await undoServerAction(a.id);
+        const r = await undoServerAction(actionId);
         if (r.result === 'done' || r.result === 'partial' || r.result === 'queued') unackLocal(row.key);
         else useToast.getState().show(t('changes.expired'), 4000);
       })();

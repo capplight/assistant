@@ -314,8 +314,9 @@ describe('rejected refresh on a linked account', () => {
   });
 });
 
-describe('«Заметки» shows all records', () => {
-  it('saved anywhere, any kind, synced or not, whatever the rule of other pages', async () => {
+// Week 10 (founder, 2026-11-09): «Заметки» shows notes only — a PDF from the server with no row there is not one.
+describe('«Заметки» shows notes', () => {
+  it('saved anywhere, synced or not; a PDF without the server row is not a note', async () => {
     resetApp();
     finishOnboarding();
     await testRecords.insertLocal({ id: 'a', kind: 'note', source: 'typed', text: 'С другой страницы', pageId: 'other' });
@@ -324,7 +325,7 @@ describe('«Заметки» shows all records', () => {
     await renderRouter(APP_DIR, { initialUrl: `/page/${notes().id}` });
     await settle(() => screen.queryByText('С другой страницы') !== null);
     expect(screen.getByText('Голосовая запись')).toBeTruthy();
-    expect(screen.getByText('С сервера')).toBeTruthy();
+    expect(screen.queryByText('С сервера')).toBeNull();
   });
 });
 

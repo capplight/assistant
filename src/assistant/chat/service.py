@@ -86,7 +86,7 @@ from assistant.chat.tools import READ_TOOLS, TOOLS, ToolEnv, call_key, execute
 from assistant.chat.verify import Facts, check_sentence, split_sentences
 from assistant.config import Settings
 from assistant.db.models import Job, JobStatus, User
-from assistant.db.models_actions import ActionKind, Initiator
+from assistant.db.models_actions import Action, ActionKind, Initiator
 from assistant.db.models_chat import (
     AnswerKind,
     ConversationMessage,
@@ -260,7 +260,9 @@ class AnswerGate:
     counts our code made); otherwise the sentence is not sent."""
 
     def __init__(self, book: SourceBook, extra: Facts, counts: set[int],
-                 emit: Callable[[str, dict[str, Any]], None], lang: str = "ru") -> None:
+                 emit: Callable[[str, dict[str, Any]], None], lang: str = "ru",
+                 computed: Facts | None = None) -> None:  # fmt: skip
+        self.computed = computed if computed is not None else Facts()
         self.lang = lang
         self.book = book
         self.extra = extra
@@ -283,6 +285,7 @@ class AnswerGate:
     def _allowed(self) -> Facts:
         allowed = Facts()
         allowed.update(self.extra)
+        allowed.update(self.computed)  # numbers our code computed this turn (ToolEnv)
         allowed.numbers |= {Decimal(n) for n in self.counts}
         allowed.numbers.add(Decimal(len(self.book)))
         return allowed
@@ -494,7 +497,7 @@ class ChatService:
                 return
             reading = rules_first(turn.text, input_kind=turn.input_kind)
             list_page = await self._list_of_page(turn)
-            if reading.intent == Intent.UNCLEAR and list_page and not background:
+            if reading.intent == Intent.UNCLEAR and list_page:
                 if await self._save_tasks(run, turn, turn.text, list_page):
                     return  # «хлеб» on «Покупки» is a thing to buy, not a search
             if reading.intent == Intent.UNCLEAR:
@@ -506,17 +509,17 @@ class ChatService:
             listy = (reading.intent == Intent.CHANGE and save is None
                      and tasks_parse.adds_to_list(turn.text))  # «добавь в покупки молоко»
             if reading.intent == Intent.NOTE or save is not None or listy:
-                if not background and (list_page or listy
-                                       or tasks_parse.mentions_list(save or turn.text)):
+                if list_page or listy or tasks_parse.mentions_list(save or turn.text):
                     if await self._save_tasks(run, turn, save or turn.text, list_page):
                         return
                 if not listy:
                     await self._save_note(run, turn, save or turn.text)
                     return
+            # Founder 2026-11-09: a change the person asked for finishes in the background too
+            # (server restart, provider back after `deferred`): its action has «Отменить» and
+            # the answer waits as a banner (+ push). Anything that needs «Да» or «Какую?» still
+            # waits for the person: it is saved as a proposal, nothing is done.
             change = reading.intent == Intent.CHANGE
-            if background and change:  # never change things later behind the person's back
-                await self._fail(run, "not_done", text=TEXT_NOT_DONE[lang], retry=True)
-                return
             tools = (*READ_TOOLS, *MUTATING_TOOLS) if change else READ_TOOLS
             ctx, env = await assemble(
                 self.sessionmaker, self.embedder, turn, now=self.clock(),
@@ -624,7 +627,8 @@ class ChatService:
         elif fp.tool == "trash_selected" and m.selected is not None:
             run.emit("tool_activity", {"tool": "update", "text": "Убираю в корзину…",
                                        "page_id": str(m.page.id) if m.page else None})
-            await tool_update(env, UpdateArgs(records=[m.selected.ref], title=None, trash=True))
+            await tool_update(env, UpdateArgs(records=[m.selected.ref], title=None, trash=True),
+                              confirmed=turn.picked)  # fmt: skip
         else:
             return False
         if m.action_out is None and m.proposal is None and m.note is None:
@@ -789,7 +793,8 @@ class ChatService:
                 plan = prop["plan"]
                 return TurnInput(turn.user_id, turn.conversation_id, turn.message_id,
                                  plan["text"], lang, plan.get("page_pk"),
-                                 list(plan.get("visible_pks") or []), int(pk), "typed")
+                                 list(plan.get("visible_pks") or []), int(pk), "typed",
+                                 picked=True)
         else:
             env = ToolEnv(self.sessionmaker, self.embedder, turn.user_id, book,
                           self.s.search_embed_timeout_seconds,
@@ -823,7 +828,7 @@ class ChatService:
         book = ctx.book
         m: MutationState = env.mut
         change = m.allowed
-        gate = AnswerGate(book, ctx.extra, env.counts, run.emit, lang)
+        gate = AnswerGate(book, ctx.extra, env.counts, run.emit, lang, env.computed)
         masker = Masker(mask_contacts=True)
         m.masker = masker
         provider: str | None = None
@@ -1109,18 +1114,53 @@ class ChatService:
                              list(ref.get("visible_pks") or []), ref.get("selected_pk"),
                              msg.input_kind or InputKind.TYPED)  # fmt: skip
             reply_id = reply.public_id
+            done_action = (await session.get(Action, reply.action_ids[0])
+                           if reply.action_ids else None)
             await session.commit()
         run = ReplyRun(reply_pk, reply_id, turn.user_id, clock=self.clock)
         self.runs[reply_id] = run
-        if msg.choice:  # a tap: it is never carried out later
-            await self._fail(run, "not_done", text=TEXT_NOT_DONE[turn.lang], retry=True)
-            run.finish()
+        if done_action is not None:
+            # The change was committed before the server stopped; only the answer was lost.
+            # Deliver that action, never run the phrase a second time.
+            await self._deliver_done(run, turn, done_action)
+        elif msg.choice:  # a tap («Да», «Оставить мои», which record): the person decided already
+            choice = {**msg.choice}
+            if "proposal" not in choice and choice.get("reply_id"):
+                choice["proposal"] = await self._proposal_of(choice["reply_id"], turn.user_id)
+            await self._run(run, turn, choice=choice, background=True)
         else:
             await self._run(run, turn, background=True)
         async with self.sessionmaker() as session:
             state = await session.scalar(select(ConversationMessage.state)
                                          .where(ConversationMessage.id == reply_pk))
         return str(state)
+
+    async def _proposal_of(self, reply_id: str, user_id: int) -> dict[str, Any] | None:
+        """The proposal a stored tap answered (it was marked answered by that very tap)."""
+        try:
+            target = uuid.UUID(str(reply_id))
+        except ValueError:
+            return None
+        async with self.sessionmaker() as session:
+            msg = await store.by_public_id(session, user_id, target)
+            prop = msg.proposal if msg is not None and msg.role == MessageRole.ASSISTANT else None
+            await session.commit()
+        if not prop or prop.get("state") != "answered" \
+                or datetime.fromisoformat(prop["expires_at"]) <= self.clock():  # fmt: skip
+            return None
+        return prop
+
+    async def _deliver_done(self, run: ReplyRun, turn: TurnInput, action: Action) -> None:
+        from assistant.actions import actions_dicts
+
+        book = await book_for(self.sessionmaker, turn.user_id, turn.page_pk)
+        m = self._mutation(run, turn, book, True, False)
+        async with self.sessionmaker() as session:
+            out = (await actions_dicts(session, [action], self.clock()))[0]
+            await session.commit()
+        m.action_pk, m.action_public, m.action_out = action.id, str(action.public_id), out
+        m.sentences.append((action.summary or {}).get("ru") or "Сделал.")
+        await self._finish_change(run, turn, m, Decimal(0), [])
 
     # --- resume ---
 

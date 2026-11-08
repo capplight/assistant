@@ -146,6 +146,15 @@ async function localHits(text: string): Promise<string[]> {
   }
 }
 
+/**
+ * The answer is about a change (not a question): it may be finished by the server in the background
+ * (chat.md `deferred`, week 10), so the phone never offers to send it again (that could do it twice).
+ */
+function isChange(m: ChatMessage | undefined): boolean {
+  if (!m) return false;
+  return m.answerKind === 'action' || !!m.action || find(m.replyTo ?? '')?.ask?.guess === 'action';
+}
+
 function apply(answerId: string, e: ChatEvent): void {
   const { updateMessage } = store();
   if (e.eventId) updateMessage(answerId, { lastEventId: e.eventId });
@@ -227,13 +236,20 @@ function apply(answerId: string, e: ChatEvent): void {
       }));
       return;
     case 'deferred':
-      updateMessage(answerId, (m) => ({ status: 'deferred', activity: null, serverId: e.replyId ?? m.serverId ?? null }));
+      updateMessage(answerId, (m) => ({
+        status: 'deferred',
+        activity: null,
+        serverId: e.replyId ?? m.serverId ?? null,
+        ...(isChange(m) ? { notice: 'maybe_done' as const } : {}),
+      }));
       return;
     case 'error':
       updateMessage(answerId, (m) =>
         e.code === 'consent_required'
           ? { status: 'failed', activity: null, notice: 'no_ai' }
-          : e.retry
+          : (e.code === 'stream_interrupted' || e.code === 'stale') && isChange(m)
+            ? { status: 'interrupted', activity: null, notice: 'maybe_done', serverId: e.replyId ?? m.serverId ?? null }
+            : e.retry
             ? { status: 'interrupted', activity: null, newTurn: true, serverId: e.replyId ?? m.serverId ?? null }
             : { status: 'failed', activity: null, notice: 'error' },
       );
@@ -389,7 +405,8 @@ async function runTurn(answerId: string): Promise<void> {
         if (midway) {
           const delay = chatTiming.resumeBackoffMs[attempt];
           if (delay === undefined) {
-            finish('interrupted');
+            // A change may still finish on the server after the drop: do not offer to ask again.
+            finish('interrupted', isChange(find(answerId)) || question.ask?.guess === 'action' ? { notice: 'maybe_done' } : {});
             break;
           }
           await sleep(delay);
@@ -794,7 +811,15 @@ export function fromHistory(list: ChatMessageOut[], local: readonly ChatMessage[
       replyTo: question ?? pair?.replyTo,
       turnId: pair?.turnId ?? question,
       status: STATE[m.state],
-      notice: m.state === 'failed' ? 'error' : null,
+      // A change cut off midway may be finished in the background: not «не сделано».
+      notice:
+        m.state === 'failed'
+          ? m.answer_kind === 'action' || m.error_code === 'stream_interrupted'
+            ? 'maybe_done'
+            : 'error'
+          : (m.state === 'pending' || m.state === 'deferred') && m.answer_kind === 'action'
+            ? 'maybe_done'
+            : null,
       sources: m.citations.map(fromCitation),
       aiGenerated: m.ai_label !== null,
       answerKind: m.answer_kind,

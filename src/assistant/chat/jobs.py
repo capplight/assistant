@@ -3,9 +3,10 @@
 `chat:complete` is queued with every phrase (run_after = now + `chat_stale_pending_seconds`) and
 closed by the answer itself when it is saved. The worker finds the answers nobody finished:
 - `pending` with no progress (the server restarted mid-answer) or `deferred` (no provider):
-  a **question** is answered again in the background -> `banner_pending` + push «Ответ готов»;
-  a **change** is never made later behind the person's back: the answer becomes `failed`
-  (`not_done`) with «Не получилось сделать — скажите ещё раз, пожалуйста.»
+  it is answered again in the background -> `banner_pending` + push «Ответ готов». Since week 10
+  (founder 2026-11-09) a **change** the person asked for is made too, with «Отменить»; what needs
+  «Да» or «Какую?» is saved as a proposal and waits. A change committed before the stop is
+  delivered, not redone. A reminder phrase becomes `failed` (`not_done`).
 - still `deferred` after that: retried with the queue's backoff (5 attempts), then left as is.
 
 `chat:summarize` folds old messages into `conversations.summary` (CHAT_SUMMARIZE, light model,

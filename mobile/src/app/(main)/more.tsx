@@ -20,6 +20,8 @@ import { useSession } from '@/store/session';
 import { useToast } from '@/store/toast';
 import { selectSortedPages, usePages } from '@/store/pages';
 import { useTheme } from '@/theme';
+import { repeatsCount, visibleGroups } from '@/dedup/service';
+import { useDedup } from '@/dedup/store';
 
 /** S42 «Ещё»: pages that do not fit in tabs + service entries (2-design §4.2). Most entries are stubs in week 1. */
 export default function MoreScreen() {
@@ -35,6 +37,7 @@ export default function MoreScreen() {
   const showToast = useToast((s) => s.show);
   const [naming, setNaming] = useState(false);
   const alarmsOk = useAlarms((s) => (s.caps ? allDone(s.caps, s) && s.test.state === 'ok' : false));
+  const repeats = useDedup((s) => repeatsCount(visibleGroups(s.groups, s.decided)));
   const overflow = pages.slice(theme.largeFont ? MAX_TAB_PAGES_LARGE_FONT : MAX_TAB_PAGES);
 
   const row = (key: string, label: string, onPress?: () => void, meta?: string) => (
@@ -107,7 +110,8 @@ export default function MoreScreen() {
       {row('habits', t('habits.title'), () => router.push('/habits'))}
       {row('chat', t('more.chat'), () => router.push('/chat'))}
       {row('alarms', t('more.alarms'), () => router.push('/alarm-setup'), alarmsOk ? t('more.alarms_ok') : t('more.alarms_fix'))}
-      {row('import', t('more.import'), undefined, t('more.later'))}
+      {row('duplicates', t('more.duplicates'), () => router.push('/duplicates'), repeats > 0 ? t('more.duplicates_meta', { count: repeats }) : undefined)}
+      {row('import', t('more.import'), () => router.push('/import'))}
       {row('lang', `${t('lang.choose')}: ${t(`lang.${language}`)}`, () => setLanguage(nextLang), t(`lang.${nextLang}`))}
       {needsSignIn
         ? null

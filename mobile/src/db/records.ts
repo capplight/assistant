@@ -85,6 +85,12 @@ export interface RecordsRepository {
   /** A record the server does not have: its trash date lives only here. null = not deleted. */
   setLocalTrash(id: string, deletedAt: number | null): Promise<void>;
   /**
+   * Week 10: the phone itself found an exact repeat on save (2-design 3.x «Уже было»): the new
+   * record is hidden here at once, as the server will hide it. `canonicalId`: the server id of the
+   * original, when it has one.
+   */
+  markLocalRepeat(id: string, canonicalId: string | null): Promise<void>;
+  /**
    * Another account: server ids, review marks and changes on their way mean nothing there. Records
    * stay on the phone. `requeued` go back to «Ждёт связи»; the others (deleted, repeats, nothing
    * left to send) keep their status, with no server id. Local deletions stay deleted.
@@ -260,6 +266,11 @@ export class InMemoryRecordsRepository implements RecordsRepository {
     if (r) this.rows.set(id, { ...r, deletedAt, purgeAfter: null });
   }
 
+  async markLocalRepeat(id: string, canonicalId: string | null) {
+    const r = this.rows.get(id);
+    if (r) this.rows.set(id, { ...r, hiddenReason: 'duplicate_merged', canonicalId });
+  }
+
   async getCursor() {
     return this.cursor;
   }
@@ -429,6 +440,14 @@ export class SqliteRecordsRepository implements RecordsRepository {
 
   async setLocalTrash(id: string, deletedAt: number | null) {
     await this.db.runAsync('UPDATE records SET deleted_at = ?, purge_after = NULL WHERE id = ?', deletedAt, id);
+  }
+
+  async markLocalRepeat(id: string, canonicalId: string | null) {
+    await this.db.runAsync(
+      "UPDATE records SET hidden_reason = 'duplicate_merged', canonical_id = ? WHERE id = ?",
+      canonicalId,
+      id,
+    );
   }
 
   async getCursor() {

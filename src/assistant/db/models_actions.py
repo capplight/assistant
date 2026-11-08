@@ -34,6 +34,15 @@ class ActionKind(enum.StrEnum):
     DELETE_SCREEN = "delete_screen"  # week 9: «Убрать страницу»
     SCREEN_CUSTOMIZE = "screen_customize"  # week 9: name, icon, layout
     FACET_EDIT = "facet_edit"  # week 9: a task changed or ticked
+    AUTO_MERGE_EXACT = "auto_merge_exact"  # week 10: an exact repeat merged on save
+    MERGE_GROUP = "merge_group"  # week 10: «Объединить?» → «Да» (one group or several)
+    DISMISS_GROUP = "dismiss_group"  # week 10: «Это разные» (0015 adds it to the CHECK)
+    CLEANUP_BATCH = "cleanup_batch"  # week 10: «37 → 1», one «Да» for every exact repeat
+    IMPORT_BATCH = "import_batch"  # week 10: a Telegram import
+    CREATE_STACK = "create_stack"  # week 10: a stack shows up (with «Отменить»)
+    STACK_ADD = "stack_add"
+    STACK_REMOVE = "stack_remove"
+    DELETE_STACK = "delete_stack"
 
 
 class Initiator(enum.StrEnum):

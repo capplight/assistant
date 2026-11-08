@@ -43,6 +43,28 @@ export async function undoServerAction(actionId: string): Promise<{ result: Undo
   }
 }
 
+/** Kinds that always count as important, whoever did them: something gone, joined or brought in. */
+const IMPORTANT_KINDS = new Set([
+  'delete_item',
+  'delete_screen',
+  'hide_screen',
+  'delete_stack',
+  'merge_group',
+  'cleanup_batch',
+  'auto_merge_exact',
+  'import_batch',
+  'send_external',
+]);
+
+/**
+ * S20 «Только важное» (rule chosen by mobile, founder 2026-11-09): what the assistant did by itself,
+ * anything sent outside, and every deletion, merge of repeats and import. The person's own small
+ * edits (moves, ticks, renames, moved reminders) are left out; «Все» shows them.
+ */
+export function isImportant(a: ActionOut): boolean {
+  return a.initiated_by !== 'user' || a.scope === 'external' || IMPORTANT_KINDS.has(a.kind);
+}
+
 /** For S20: the undo action of an undone one («Вернуть» = undo the undo, actions.md `undo_of`). */
 export function undoOf(actionId: string): ActionOut | undefined {
   return Object.values(tasksState().actions).find((a) => a.undo_of === actionId && a.undoable && !a.undone_at);

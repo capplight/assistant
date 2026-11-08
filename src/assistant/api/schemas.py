@@ -284,7 +284,8 @@ class ItemOut(BaseModel):
 class DuplicateOut(BaseModel):
     canonical_id: uuid.UUID
     canonical_created_at: datetime
-    undo_path: str  # POST here = "Отменить" (until actions/inverse exist)
+    undo_path: str  # POST here = "Отменить" (same as POST /v1/actions/{action_id}/undo)
+    action_id: uuid.UUID | None = None  # week 10: the `auto_merge_exact` action
 
 
 class ItemCreateOut(BaseModel):
@@ -505,6 +506,9 @@ class SyncOut(BaseModel):
     tombstones: list[TombstoneOut]  # purged for good: drop locally
     next_since: int  # pass as `since` next time
     has_more: bool  # true: call again right away with next_since
+    # 0015: `since` is older than the tombstones kept (90 days): drop the local copy (keep the
+    # outbox) and sync again from since=0. Everything else in the response is empty.
+    full_resync: bool = False
 
 
 # --- chat (docs/api/chat.md) ---
@@ -631,6 +635,10 @@ class ActionOut(BaseModel):
     message_id: uuid.UUID | None
     seq: int
     created_at: datetime
+
+
+class ReminderEventActionOut(ActionOut):
+    event_client_id: uuid.UUID  # the `client_id` of the `acked` event that made this action
 
 
 class ActionsOut(BaseModel):
@@ -960,7 +968,9 @@ class ReminderEventResult(BaseModel):
 class ReminderEventsOut(BaseModel):
     results: list[ReminderEventResult]
     fires: list[FireOut]
-    actions: list["ActionOut"] = []  # week 9: a late «Сделано» on a missed one, with «Отменить»
+    # week 9: a late «Сделано» on a missed one, with «Отменить»; `event_client_id` links each to
+    # the event that made it.
+    actions: list["ReminderEventActionOut"] = []
 
 
 class ReminderActiveOut(BaseModel):

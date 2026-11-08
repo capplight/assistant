@@ -62,6 +62,9 @@ export default function ReminderScreen() {
   const [offset, setOffset] = useState<number>(first?.offsets[0] ?? 0);
   const [edited, setEdited] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // «в 7», «завтра в 10»: always asked — 7:00 or 19:00 — never a silent morning (founder, 2026-11-09).
+  const mustChoose = options.length > 1;
+  const [chose, setChose] = useState(false);
 
   const move = (ms: number) => {
     setDue((d) => d + ms);
@@ -80,6 +83,7 @@ export default function ReminderScreen() {
   const save = async () => {
     const text = title.trim();
     if (!text) return setError(t('rem.need_title'));
+    if (mustChoose && !chose && !edited) return setError(t('rem.choose_time'));
     if (due <= Date.now() + 30_000) return setError(t('rem.past'));
     const input = {
       title: text,
@@ -199,8 +203,10 @@ export default function ReminderScreen() {
       {options.length > 1 ? (
         <View style={[styles.wrap, { gap: theme.space[2], marginTop: theme.space[2] }]}>
           {options.map((o, i) =>
-            chip(`option-${i}`, o.local?.time ?? (o.due_at ? timeText(Date.parse(o.due_at)) : ''), !!o.due_at && Date.parse(o.due_at) === due, () => {
+            chip(`option-${i}`, o.local?.time ?? (o.due_at ? timeText(Date.parse(o.due_at)) : ''), chose && !!o.due_at && Date.parse(o.due_at) === due, () => {
               if (o.due_at) setDue(Date.parse(o.due_at));
+              setChose(true);
+              setError(null);
             }),
           )}
         </View>

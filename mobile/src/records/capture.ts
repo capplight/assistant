@@ -20,16 +20,30 @@ export type CaptureDeps = {
   newId?: () => string;
   /** Called after every save: kicks the sync engine (non-blocking). */
   onSaved?: () => void;
+  /** Week 10: the text was already here (exact repeat): «Уже было — добавил к записи от …». */
+  onRepeat?: (recordId: string, originalDate: string) => void;
 };
 
-/** Spec §3.3: sha256 of the normalized text, computed on the phone before sending. */
+/**
+ * The basis of `content_hash`, byte for byte as the server's `records/textnorm.hash_basis`:
+ * NFKC, lowercase, every char that is not a letter or digit → space, spaces collapsed.
+ */
 export function normalizeText(text: string): string {
-  return text.normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase();
+  return text
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
 }
 
-export function contentHash(text: string): Promise<string> {
-  return Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, normalizeText(text));
+/** sha256 of the basis; null when nothing is left to compare (only signs or emoji). */
+export async function contentHash(text: string): Promise<string | null> {
+  const basis = normalizeText(text);
+  return basis ? Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, basis) : null;
 }
+
+/** How many of the newest records the phone compares a new note with (the server checks them all). */
+const REPEAT_WINDOW = 2000;
 
 const URL_ONLY = /^https?:\/\/\S+$/i;
 
@@ -64,7 +78,13 @@ export class Capture {
     const occurredAt = new Date().toISOString();
     const url = o.url ?? (URL_ONLY.test(text) ? text : undefined);
     const kind: ItemKind = url && text === url ? 'link' : 'note';
-    const rec = await this.d.records.insertLocal({
+    // Exact repeat (3-engineering 6.3 п. 1, no model): checked here first, so it works offline and
+    // in «Без ИИ». Only notes and links typed or shared as text; files are compared by the server.
+    const basis = normalizeText(text);
+    const original = basis
+      ? (await this.d.records.list(REPEAT_WINDOW)).find((r) => r.text !== null && normalizeText(r.text) === basis)
+      : undefined;
+    let rec = await this.d.records.insertLocal({
       id,
       kind,
       source: o.source,
@@ -73,6 +93,11 @@ export class Capture {
       pageId: o.pageId,
       occurredAt,
     });
+    if (original) {
+      await this.d.records.markLocalRepeat(id, original.serverId);
+      rec = { ...rec, hiddenReason: 'duplicate_merged', canonicalId: original.serverId };
+    }
+    const hash = await contentHash(text);
     const payload: ItemPayload = {
       clientId: id,
       kind,
@@ -80,11 +105,12 @@ export class Capture {
       occurredAt,
       ...(kind === 'link' ? { url } : { text }),
       ...(o.url && kind !== 'link' ? { url: o.url } : {}),
-      contentHash: await contentHash(text),
+      ...(hash ? { contentHash: hash } : {}),
       ...(o.pageId ? { pageId: o.pageId } : {}),
     };
     await this.d.outbox.enqueue('item.create', payload);
     this.d.onSaved?.();
+    if (original) this.d.onRepeat?.(id, original.occurredAt);
     return rec;
   }
 

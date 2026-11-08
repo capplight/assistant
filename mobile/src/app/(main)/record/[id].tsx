@@ -15,6 +15,7 @@ import { useRecord } from '@/records/useRecords';
 import { getRecordActions, refreshRecord } from '@/services';
 import { useUndo } from '@/store/undo';
 import { useView } from '@/store/view';
+import { SimilarNote } from '@/components/SimilarNote';
 import { MAX_FONT_SCALE, useTheme } from '@/theme';
 
 /** The server's limit for one «Исправить». */
@@ -112,6 +113,7 @@ export default function RecordScreen() {
           {status}
         </AppText>
       ) : null}
+      <SimilarNote serverId={record.serverId} />
       {record.aiGenerated ? (
         <AppText testID="record-ai-label" variant="meta" style={{ marginBottom: theme.space[1] }}>
           {t('ai.label')}

@@ -33,3 +33,31 @@ Errors:
 - `422 review_field_not_editable`, `details.field`: `kind: transcript`, a whole passage. Correct it by
   sending `text` and `verify` for that key.
 - `422 validation_error`: no `base_seq`, or an empty value.
+
+## `content_hash`: the exact normalisation (phone and server must match byte for byte)
+
+The phone computes it before sending (spec 6.3) to say «Уже было» offline; the server computes the
+same in `assistant.records.textnorm.content_hash`. Shared vectors: `docs/spec/vectors/content_hash.json`
+(`text` → `basis` → `content_hash`); run them on the phone too. The steps, in this order:
+
+1. Unicode **NFKC**.
+2. **Lowercase** (full Unicode lowercase; JS `toLowerCase()`, Python `str.lower()`).
+3. Every character that is **not a letter or a digit** (Unicode general category `L*` or `N*`)
+   becomes a space. Punctuation, symbols (₸, %, emoji), marks, `_`, line breaks: all spaces.
+   Letters of every script stay (ё stays ё; Kazakh әғқңөұүһі stay).
+4. Collapse runs of spaces to one and trim both ends.
+5. Empty → **no hash** (`null`; nothing to compare). Else `sha256` of the UTF-8 bytes, lowercase hex.
+
+```js
+const basis = s.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+const hash = basis ? sha256Hex(new TextEncoder().encode(basis)) : null;
+```
+
+So «Купить краску для забора!», «купить  краску для забора» and «КУПИТЬ, краску для забора» are
+one hash; «Купить краску для забора 2» is another. The text hashed is what the record stores as
+`text` (after the server's own `normalize_text`: NFC, zero-width characters removed, line ends
+`\n`, lines trimmed) — the steps above make those differences irrelevant. For a file the
+comparison is `original_sha256` (the bytes), not this.
+
+`duplicate` on `POST /v1/items` (week 10) also has `action_id`: the `auto_merge_exact` action;
+«Отменить» = `POST /v1/actions/{action_id}/undo` or `undo_path` (`duplicates.md`).

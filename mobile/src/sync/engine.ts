@@ -1,4 +1,16 @@
-import { actionsOf, firesOf, habitsOf, remindersOf, suggestionsOf, tasksOf, type Api } from '@/api/endpoints';
+import {
+  actionsOf,
+  collectionsOf,
+  duplicateGroupsOf,
+  firesOf,
+  habitsOf,
+  importsOf,
+  pendingActionsOf,
+  remindersOf,
+  suggestionsOf,
+  tasksOf,
+  type Api,
+} from '@/api/endpoints';
 import { ApiError, isOfflineError, isRetryable, SignInRequiredError } from '@/api/errors';
 import type {
   ConsentsIn,
@@ -10,6 +22,10 @@ import type {
   ReminderOut,
   ReminderWithFiresOut,
   ActionOut,
+  CollectionOut,
+  DuplicateGroupOut,
+  ImportOut,
+  PendingActionOut,
   HabitOut,
   SuggestionOut,
   TaskOut,
@@ -128,7 +144,11 @@ export type QueuedReminderEvent = Omit<ReminderEventIn, 'fire_id' | 'fire_key'> 
   /** The `client_id` of the event the server called `invalid`: this is its one fixed resend. */
   retry_of?: string;
 };
-export type ReminderEventsPayload = { events: QueuedReminderEvent[] };
+export type ReminderEventsPayload = {
+  events: QueuedReminderEvent[];
+  /** Filled in from the answer: event `client_id` → the action it made (a late «Сделано»). */
+  actionIds?: Record<string, string>;
+};
 
 /** Where reminders from the server go (src/alarms/service.ts). */
 export type ReminderSink = {
@@ -146,6 +166,16 @@ export type ReminderSink = {
   /** Week 9: PATCH /reminders/{id} answered / refused for good. */
   updated(id: string, out: ReminderWithFiresOut): void;
   updateFailed(id: string): void;
+};
+
+/** Week 10: `import.telegram` — the file is uploaded once (`uploadId` kept), then the import starts. */
+export type ImportPayload = { clientId: string; file: RecordFile; uploadId?: string };
+
+/** Where repeats, stacks and imports from the server go (src/dedup/service.ts). */
+export type DedupSink = {
+  apply(x: { groups: DuplicateGroupOut[]; collections: CollectionOut[]; imports: ImportOut[]; pending: PendingActionOut[] }): void;
+  importStarted(clientId: string, out: ImportOut): void;
+  importFailed(clientId: string, code: string): void;
 };
 
 /** Where tasks and actions from the server go (src/tasks/service.ts). */
@@ -186,6 +216,8 @@ export type SyncDeps = {
   actions?: (list: ActionOut[]) => void;
   /** Week 9: suggestions (status changes) and learned rules of /sync. `pending_actions` is empty until a producer exists. */
   extras?: (x: { suggestions: SuggestionOut[]; habits: HabitOut[]; pendingActions: number }) => void;
+  /** Week 10: «Объединить?» groups, stacks, imports, things waiting for «Да» (/sync arrays). */
+  dedup?: DedupSink;
 };
 
 export type PushResult = { sent: number; retried: number; failed: number; offline: boolean };
@@ -386,6 +418,17 @@ export class SyncEngine {
         this.d.extras?.(extra);
         applied += extra.suggestions.length + extra.habits.length;
       }
+      // Week 10 (3-engineering §4.4: every entity with `seq` comes in /sync; absent arrays are fine).
+      const dedup = {
+        groups: duplicateGroupsOf(out.duplicate_groups),
+        collections: collectionsOf(out.collections),
+        imports: importsOf(out.imports),
+        pending: pendingActionsOf(out.pending_actions),
+      };
+      if (dedup.groups.length + dedup.collections.length + dedup.imports.length + dedup.pending.length > 0) {
+        this.d.dedup?.apply(dedup);
+        applied += dedup.groups.length + dedup.collections.length + dedup.imports.length;
+      }
       const acts = Array.isArray(out.actions) ? actionsOf(out.actions) : [];
       if (acts.length > 0) {
         this.d.actions?.(acts);
@@ -460,6 +503,8 @@ export class SyncEngine {
         return (e) => this.sendTaskCreate(e);
       case 'task.update':
         return (e) => this.sendTaskUpdate(e);
+      case 'import.telegram':
+        return (e) => this.sendImport(e);
       default:
         return null;
     }
@@ -771,7 +816,18 @@ export class SyncEngine {
       const out = await this.d.api.reminderEvents(events.slice(i, i + 200));
       if (out.fires.length > 0) sink?.applyServer([], out.fires);
       // Week 9: a late «Сделано» on a missed one is an action («Отменить» in S20 / on the strip).
-      if (out.actions.length > 0) this.d.actions?.(out.actions);
+      // Each names its event (`event_client_id`): kept on this row, so «Отменить» finds its own one.
+      if (out.actions.length > 0) {
+        this.d.actions?.(out.actions);
+        const linked = out.actions.filter((a) => a.event_client_id && byClient.has(a.event_client_id));
+        if (linked.length > 0) {
+          const row = await this.d.outbox.get(e.id);
+          const prev = (row?.payload as ReminderEventsPayload | undefined) ?? p;
+          const actionIds = { ...(prev.actionIds ?? {}) };
+          for (const a of linked) actionIds[a.event_client_id!] = a.id;
+          await this.d.outbox.updatePayload(e.id, { ...prev, actionIds } satisfies ReminderEventsPayload);
+        }
+      }
       const fixed = out.results
         .filter((r) => r.status === 'invalid')
         .map((r) => fixInvalid(byClient.get(r.client_id)))
@@ -813,8 +869,10 @@ export class SyncEngine {
     // Voice: the first fragment is the record, the server joins the others into it (records/voice.py).
     const recordingId = typeof p.sourceMeta?.recording_id === 'string' ? p.sourceMeta.recording_id : p.clientId;
     if (recordingId !== p.clientId) return;
+    const before = await this.d.records.get(p.clientId);
     await this.d.records.markSynced(p.clientId, item);
-    if (duplicate && !p.replay) this.d.onAutoMerged?.(p.clientId, duplicate.canonical_created_at);
+    // The phone found the repeat itself and the strip was shown at save: not news a second time.
+    if (duplicate && !p.replay && !before?.hiddenReason) this.d.onAutoMerged?.(p.clientId, duplicate.canonical_created_at);
     // Saved from a page: the record shows there, whatever its rule says. A repeat is hidden, so
     // the page shows the record it was merged into.
     if (page?.serverId) await this.linkToPage(page.serverId, duplicate?.canonical_id ?? item.id);
@@ -873,8 +931,19 @@ export class SyncEngine {
 
   private async sendUnmerge(e: OutboxEntry): Promise<void> {
     const p = e.payload as UnmergePayload;
+    const rec = await this.d.records.get(p.recordId);
+    if (!rec) return;
+    if (!rec.serverId && (await this.creating(p.recordId))) throw new Error('record_not_synced');
+    const serverId = p.serverId ?? rec.serverId;
+    // Lives on this phone only: `unmerge` stays set, so it stays shown.
+    if (!serverId) return;
+    // The phone hid it as a repeat but the server kept it apart: nothing to undo there.
+    if (rec.hiddenReason === null) {
+      await this.clearUnmerge(p.recordId);
+      return;
+    }
     try {
-      const item = await this.d.api.unmergeItem(p.serverId);
+      const item = await this.d.api.unmergeItem(serverId);
       await this.d.records.markSynced(p.recordId, item);
       await this.clearUnmerge(p.recordId);
     } catch (err) {
@@ -1067,6 +1136,34 @@ export class SyncEngine {
       if (out.action) this.d.actions?.([out.action]);
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) return; // gone already
+      throw err;
+    }
+  }
+
+  // --- week 10: Telegram import (src/dedup) ---
+
+  /**
+   * The same upload path as any file (POST /uploads → PUT → complete; the upload id is kept, so a
+   * retry never uploads twice), then POST /imports/telegram/file with the same `client_id`.
+   */
+  private async sendImport(e: OutboxEntry): Promise<void> {
+    const p = e.payload as ImportPayload;
+    try {
+      let uploadId = p.uploadId;
+      if (!uploadId) {
+        uploadId = await this.d.api.uploadFile({
+          clientId: p.clientId,
+          uri: p.file.uri,
+          mime: p.file.mime,
+          bytes: p.file.bytes,
+          sha256: p.file.sha256,
+        });
+        await this.d.outbox.updatePayload(e.id, { ...p, uploadId } satisfies ImportPayload);
+      }
+      const out = await this.d.api.importTelegramFile({ client_id: p.clientId, upload_id: uploadId });
+      this.d.dedup?.importStarted(p.clientId, out);
+    } catch (err) {
+      if (!isRetryable(err)) this.d.dedup?.importFailed(p.clientId, err instanceof ApiError ? err.code : 'failed');
       throw err;
     }
   }

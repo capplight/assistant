@@ -745,11 +745,17 @@ export function missedRows(
   return out.sort((a, b) => b.at - a.at);
 }
 
+/** What «Отменить» of a late «Сделано» needs: its outbox row and the `client_id` of its `acked` event. */
+export type LateDone = { outboxId: string | null; eventClientId: string };
+
+/** The engine's hands-off switch (SyncEngine.hold / release), passed in so this module needs no engine. */
+export type OutboxHold = { hold(id: string): Promise<void>; release(id: string): void };
+
 /**
  * [Сделано] on a missed row: a late «Сделано» (the server turns `missed` into `acked`, reminders.md).
  * Shown at once; the event goes through the outbox, offline too.
  */
-export async function ackLate(fireKey: string): Promise<string | null> {
+export async function ackLate(fireKey: string): Promise<LateDone | null> {
   const s = alarms();
   const f = s.fires[fireKey];
   if (!f) return null;
@@ -759,27 +765,44 @@ export async function ackLate(fireKey: string): Promise<string | null> {
     if (g.reminder_id === f.reminder_id && g.occurrence_at === f.occurrence_at) local[g.key] = { ...(local[g.key] ?? {}), ackedAt: at };
   }
   s.set({ local });
+  const eventClientId = newId();
   const row = await queueEvents([
-    { client_id: newId(), fire_key: fireKey, fire_id: fireId(fireKey), event: 'acked', at: new Date(at).toISOString(), meta: { surface: 'today' } },
+    { client_id: eventClientId, fire_key: fireKey, fire_id: fireId(fireKey), event: 'acked', at: new Date(at).toISOString(), meta: { surface: 'today' } },
   ]);
   await replan();
-  return row;
+  return { outboxId: row, eventClientId };
 }
 
 /**
  * «Отменить» of [Сделано] on a missed row. reminders.md has no event that takes an `acked` back:
- * only while the event still waits in the outbox can it be dropped. Returns false when it went.
+ * while the event still waits in the outbox it is dropped. The engine is held meanwhile, so the row
+ * cannot go out between the look and the drop (and a call in flight is waited for). Once it went,
+ * the server's answer linked the event to its action (`event_client_id`, kept on the outbox row by
+ * the engine): the caller undoes that action.
  */
-export async function undoAckLate(fireKey: string, outboxId: string | null): Promise<boolean> {
-  if (outboxId) {
+export async function takeBackLateDone(
+  fireKey: string,
+  done: LateDone,
+  engine: OutboxHold,
+): Promise<{ local: boolean; actionId: string | null }> {
+  if (done.outboxId) {
     const outbox = await getOutbox();
-    const row = await outbox.get(outboxId);
-    if (row && row.status !== 'pending') return false;
-    if (row) await outbox.markFailed(row.id, 'undone');
+    await engine.hold(done.outboxId);
+    try {
+      const row = await outbox.get(done.outboxId);
+      if (row && row.status !== 'pending' && row.status !== 'failed') {
+        const ids = (row.payload as { actionIds?: Record<string, string> }).actionIds ?? {};
+        return { local: false, actionId: ids[done.eventClientId] ?? null };
+      }
+      if (row?.status === 'pending') await outbox.markFailed(row.id, 'undone');
+    } finally {
+      engine.release(done.outboxId);
+    }
   }
+  // Never went (or the server refused the whole batch): the row is missed again, here only.
   unackLocal(fireKey);
   await replan();
-  return true;
+  return { local: true, actionId: null };
 }
 
 /** «Отменить» of a late «Сделано» that has not gone yet: the row is missed again here. */

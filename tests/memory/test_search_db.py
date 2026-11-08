@@ -740,7 +740,7 @@ async def test_file_purge_retries_a_failed_delete(env):
             assert (await s.get(File, file_id, populate_existing=True)).purged_at is not None
 
 
-async def test_record_purge_hands_originals_to_the_file_purge(env):
+async def test_record_purge_hands_originals_to_the_file_purge_but_keeps_pinned(env):
     app, maker, _, storage = env
     async with client(app) as c:
         h = await _signed_in(c)
@@ -751,11 +751,14 @@ async def test_record_purge_hands_originals_to_the_file_purge(env):
             await c.delete(f"/v1/items/{one}", headers=h)
             await _expire(maker, one)
         await purge_once(maker, IngestDeps(storage=storage))
-        assert await storage.get(a_key) is None and await storage.get(p_key) is None
+        assert await storage.get(a_key) is None
+        # founder 2026-11-09: an original the person pinned is not purged with its record
+        assert await storage.get(p_key) is not None
         async with maker() as s:
-            for file_id in (active, pinned):
-                row = await s.get(File, file_id, populate_existing=True)
-                assert row.state == "purged" and row.item_id is None
+            row = await s.get(File, active, populate_existing=True)
+            assert row.state == "purged" and row.item_id is None
+            row = await s.get(File, pinned, populate_existing=True)
+            assert row.state == "pinned" and row.item_id is None
 
 
 async def test_orphan_upload_goes_after_a_week(env):

@@ -177,6 +177,29 @@ class Settings(BaseSettings):
     suggestions_dismiss_limit: int = 2
     suggestions_proposals_max: int = 2
     suggestions_proposal_hours: int = 24
+    # Repeats (week 10, spec 6.3). Similar ones are only ever suggested («Объединить?» per group):
+    # `dedup_auto_merge_near` is the spec's switch and stays off (nothing else reads it yet).
+    dedup_auto_merge_near: bool = False
+    dedup_scan_delay_seconds: float = 60.0  # a scan waits this long after the last change
+    dedup_judge_per_scan: int = 50  # DUP_JUDGE calls per scan at most; the rest wait for the next
+    # Stacks (week 10, spec 6.4): a stack shows up at this many records with one key.
+    stacks_min_records: int = 5
+    stacks_per_rebuild: int = 3  # new stacks per rebuild at most, so a big import is not noisy
+    # Ф-1 is open, so off: a stack's name is written by the light model (STACK_NAME, behind the
+    # consent gate). On = code names it after its key («Ремонт», «Чеки»). Env STACKS_NAMES_BY_CODE.
+    stacks_names_by_code: bool = False
+    # Telegram import from a Telegram Desktop export (week 10, spec 6.10). The export file comes
+    # through /v1/uploads (<= upload_max_bytes); these bound what is read out of it.
+    import_max_json_bytes: int = 64 * 1024 * 1024  # result.json, also inside a zip
+    import_max_zip_members: int = 20000  # a zip with more entries is refused
+    import_max_zip_ratio: int = 100  # result.json packed more tightly than 1:100: refused
+    import_max_messages: int = 50000
+    import_enrich_wave: int = 50  # records sent to enrichment at a time (IMPORT_SUMMARIZE)
+    # Sync tombstones are kept this long (founder 2026-11-09; the spec gives no number). A phone
+    # that last synced before the oldest one kept gets `full_resync` (docs/api/sync.md).
+    sync_tombstone_days: int = 90
+    # Product events (R-40): `user_pseudo` = HMAC(user_id) with this key, not hash_key.
+    analytics_hash_key: SecretStr = Field(default=SecretStr(""))
     # The single label on generated content (R-06, spec 5.9), until the lawyer's opinion.
     label_ai_generated: str = "Подготовил помощник (ИИ) по вашим записям — проверьте"
 

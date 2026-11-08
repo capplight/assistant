@@ -1,10 +1,13 @@
 """`auto_rule`: which items land on a page. Pure code, no model call (spec 3.10).
 
     {"any": [condition, ...]}   holds when any condition holds; {"any": []} never does
+    {"any": [...], "none": [condition, ...]}   (week 10) ... unless one of `none` holds and some
+                                               other page of the person takes the record
 
 Conditions: {"always": true} · {"kinds": [...]} · {"envelope_types": [...]} · {"aspects": [...]} ·
-{"words": [...]}. A rule with an unknown condition never matches, so an old server reading a newer
-template places too little rather than too much.
+{"words": [...]} · {"task_record": true} (week 10: the record of a «Дела» / «Покупки» line).
+A rule with an unknown condition never matches, so an old server reading a newer template places
+too little rather than too much.
 """
 
 import re
@@ -13,7 +16,7 @@ from dataclasses import dataclass
 from typing import Any
 
 _WORD = re.compile(r"\w+", re.UNICODE)
-_CONDITIONS = frozenset({"always", "kinds", "envelope_types", "aspects", "words"})
+_CONDITIONS = frozenset({"always", "kinds", "envelope_types", "aspects", "words", "task_record"})
 
 
 @dataclass(frozen=True)
@@ -25,6 +28,7 @@ class ItemFacts:
     title: str | None = None
     summary: str | None = None
     text: str | None = None
+    is_task: bool = False  # a task's own record (tasks.item_id)
 
 
 def _non_empty(value: Any) -> bool:
@@ -65,6 +69,8 @@ def _holds(condition: Mapping[str, Any], facts: ItemFacts) -> bool:
     name, value = next(iter(condition.items()))
     if name == "always":
         return value is True
+    if name == "task_record":
+        return value is True and facts.is_task
     if not isinstance(value, list):
         return False
     if name == "kinds":
@@ -78,21 +84,30 @@ def _holds(condition: Mapping[str, Any], facts: ItemFacts) -> bool:
     return False
 
 
-def matches(rule: Mapping[str, Any] | None, facts: ItemFacts) -> bool:
-    if not rule:
-        return False
-    conditions = rule.get("any")
+def _any(conditions: Any, facts: ItemFacts) -> bool:
     if not isinstance(conditions, list):
         return False
     return any(isinstance(c, Mapping) and _holds(c, facts) for c in conditions)
 
 
+def excluded(rule: Mapping[str, Any] | None, facts: ItemFacts) -> bool:
+    """One of the rule's `none` conditions holds (the record belongs to another kind of page)."""
+    return bool(rule) and _any(rule.get("none") or [], facts)  # type: ignore[union-attr]
+
+
+def matches(rule: Mapping[str, Any] | None, facts: ItemFacts, *, elsewhere: bool = True) -> bool:
+    """`elsewhere`: some other page of the person takes the record. Only then does `none` keep it
+    off this page, so a record is never left on no page at all (a receipt without «Расходы» stays
+    on «Заметки»)."""
+    if not rule or not _any(rule.get("any"), facts):
+        return False
+    return not (elsewhere and excluded(rule, facts))
+
+
 def is_valid_rule(rule: Any) -> bool:
     """For code that writes `screens.rule` or a new template version."""
-    if not isinstance(rule, Mapping) or set(rule) != {"any"}:
+    if not isinstance(rule, Mapping) or "any" not in rule or not set(rule) <= {"any", "none"}:
         return False
-    conditions = rule["any"]
-    return isinstance(conditions, list) and all(
+    return all(isinstance(conditions, list) and all(
         isinstance(c, Mapping) and len(c) == 1 and next(iter(c)) in _CONDITIONS
-        for c in conditions
-    )
+        for c in conditions) for conditions in rule.values())

@@ -89,6 +89,8 @@ class TurnInput:
     visible_pks: list[int]
     selected_pk: int | None = None  # «это»: the record open or selected on the phone
     input_kind: str = "typed"
+    # The record was tapped in the answer to «Какую?» of a delete: that tap is the «Да».
+    picked: bool = False
 
 
 @dataclass

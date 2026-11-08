@@ -20,6 +20,7 @@ import { useUndo } from '@/store/undo';
 import { SyncEngine, type DeviceInfo } from '@/sync/engine';
 import { rememberActions, taskSink } from '@/tasks/service';
 import { applySyncExtras } from '@/today/service';
+import { dedupSink } from '@/dedup/service';
 
 /**
  * Composition root: one API client, one sync engine, one capture service per app process.
@@ -109,6 +110,11 @@ export function notifyDataChanged(): void {
     .catch(() => undefined);
 }
 
+/** File access (expo-file-system; tests pass fakes). */
+export function getFiles(): FileOps {
+  return overrides.files ?? nativeFiles();
+}
+
 function nativeFiles(): FileOps {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   return (require('@/records/files') as typeof import('@/records/files')).nativeFileOps;
@@ -168,6 +174,7 @@ export function getSyncEngine(): Promise<SyncEngine> {
         tasks: taskSink,
         actions: rememberActions,
         extras: applySyncExtras,
+        dedup: dedupSink,
       }))();
   }
   return engine;
@@ -197,6 +204,7 @@ export function getCapture(): Promise<Capture> {
           useConnectivity.getState().setOnline(true);
           kickSync();
         },
+        onRepeat: (recordId, date) => useUndo.getState().showMerged(recordId, date),
       }))();
   }
   return capture;

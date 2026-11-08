@@ -79,6 +79,20 @@ import type {
   TaskWriteOut,
   TodayOut,
   TodayReminderOut,
+  CleanupPlanOut,
+  CleanupPreview,
+  CollectionOut,
+  CollectionWriteOut,
+  DuplicateDecisionIn,
+  DuplicateDecisionOut,
+  DuplicateGroupOut,
+  DuplicateMemberOut,
+  DuplicateStatus,
+  ImportFileIn,
+  ImportOut,
+  ImportStatus,
+  PendingActionOut,
+  PendingConfirmOut,
 } from './types';
 
 /** Reads a local file and PUTs it to a presigned URL. Injected so tests don't touch the filesystem. */
@@ -207,6 +221,7 @@ export function actionOut(v: unknown): ActionOut | null {
     scope: o.scope === 'external' || o.scope === 'internal' ? o.scope : null,
     created_at: str(o.created_at),
     seq: typeof o.seq === 'number' ? o.seq : 0,
+    ...(str(o.event_client_id) ? { event_client_id: str(o.event_client_id) } : {}),
   };
 }
 
@@ -299,6 +314,9 @@ export function manualOut(v: unknown): ManualOut {
 }
 
 const OPTION_KINDS = new Set(['item', 'pick', 'yes', 'no', 'keep_mine', 'cancel']);
+/** Words a server may use for the «Да» of a deletion: shown and sent like `yes`. */
+const YES_WORDS = new Set(['delete', 'trash', 'confirm', 'remove']);
+const DELETE_KINDS = new Set(['delete', 'trash', 'confirm_delete', 'delete_items']);
 type ProposalOption = ProposalOut['options'][number];
 
 export function proposalOut(v: unknown): ProposalOut | null {
@@ -310,19 +328,25 @@ export function proposalOut(v: unknown): ProposalOut | null {
       const o = obj(x);
       const label = o && str(o.label);
       if (!o || !label) return null;
-      const kind = (OPTION_KINDS.has(String(o.kind)) ? o.kind : 'cancel') as ProposalOption['kind'];
+      const kind = (OPTION_KINDS.has(String(o.kind)) ? o.kind : YES_WORDS.has(String(o.kind)) ? 'yes' : 'cancel') as ProposalOption['kind'];
       return { id: str(o.id) ?? String(i), label, kind, item_id: str(o.item_id) };
     })
     .filter((x): x is ProposalOption => x !== null);
   if (options.length === 0) return null;
+  const isDelete = DELETE_KINDS.has(String(d.kind)) || DELETE_KINDS.has(String(d.action_kind));
+  // A deletion never has «Да» in focus (2-design S25): the safe answer is the one focused first.
+  let def = str(d.default);
+  if (isDelete && (!def || options.find((o) => o.id === def)?.kind === 'yes')) {
+    def = options.find((o) => o.kind !== 'yes')?.id ?? null;
+  }
   return {
     reply_id: str(d.reply_id),
-    kind: d.kind === 'count' || d.kind === 'manual' ? d.kind : 'choice',
+    kind: isDelete ? 'delete' : d.kind === 'count' || d.kind === 'manual' ? d.kind : 'choice',
     question,
     count: typeof d.count === 'number' ? d.count : null,
     item_ids: strs(d.item_ids),
     options,
-    default: str(d.default),
+    default: def,
     expires_at: str(d.expires_at),
     state: d.state === 'answered' || d.state === 'expired' ? d.state : 'open',
   };
@@ -401,7 +425,8 @@ export function decodeChatEvent(m: SseMessage): ChatEvent | null {
       }
       case 'needs_choice':
       case 'confirm':
-      case 'confirm_manual': {
+      case 'confirm_manual':
+      case 'confirm_delete': {
         const proposal = proposalOut(obj(d.proposal) ?? d);
         return proposal ? { type: 'proposal', proposal } : null;
       }
@@ -673,6 +698,162 @@ export function habitOut(v: unknown): HabitOut | null {
     updated_at: str(o.updated_at),
   };
 }
+
+// --- week 10: repeats, stacks, Telegram import (3-engineering §4.6, §4.9; see types.ts) ---
+
+const DUP_STATUSES = new Set(['auto_merged', 'suggested', 'merged', 'dismissed', 'undone']);
+
+function memberOut(v: unknown): DuplicateMemberOut | null {
+  const o = obj(v);
+  // A member may come as a bare item id, or with the item nested (`item: {id, title, …}`).
+  if (typeof v === 'string') return { item_id: v, role: 'merge', title: null, snippet: null, kind: null, occurred_at: null, created_at: null, score: null };
+  const item = o ? (obj(o.item) ?? o) : null;
+  const id = o && (str(o.item_id) ?? (item ? str(item.id) : null));
+  if (!o || !item || !id) return null;
+  return {
+    item_id: id,
+    role: o.role === 'keep' ? 'keep' : 'merge',
+    title: str(item.title),
+    snippet: str(item.snippet) ?? str(item.preview) ?? str(item.text),
+    kind: str(item.kind),
+    occurred_at: str(item.occurred_at),
+    created_at: str(item.created_at),
+    score: typeof o.score === 'number' ? o.score : null,
+  };
+}
+
+export function duplicateGroupOut(v: unknown): DuplicateGroupOut | null {
+  const o = obj(v);
+  const id = o && str(o.id);
+  if (!o || !id) return null;
+  const members = arr(o.members ?? o.items).map(memberOut).filter((x): x is DuplicateMemberOut => x !== null);
+  const keep = str(o.keep_item_id) ?? members.find((m) => m.role === 'keep')?.item_id ?? null;
+  return {
+    id,
+    kind: o.kind === 'exact' ? 'exact' : 'near',
+    status: (DUP_STATUSES.has(String(o.status)) ? o.status : 'suggested') as DuplicateStatus,
+    keep_item_id: keep,
+    keep_rule: str(o.keep_rule),
+    member_count: num(o.member_count, members.length),
+    origin: str(o.origin),
+    members: members.map((m) => ({ ...m, role: m.item_id === keep ? 'keep' : 'merge' })),
+    action_id: str(o.action_id),
+    seq: num(o.seq),
+    created_at: str(o.created_at),
+    decided_at: str(o.decided_at),
+  };
+}
+
+export const duplicateGroupsOf = (v: unknown) =>
+  arr(v).map(duplicateGroupOut).filter((x): x is DuplicateGroupOut => x !== null);
+
+export function pendingActionOut(v: unknown): PendingActionOut | null {
+  const o = obj(v);
+  const id = o && str(o.id);
+  if (!o || !id) return null;
+  return {
+    id,
+    kind: str(o.kind) ?? 'pending',
+    status: str(o.status) ?? 'proposed',
+    preview: obj(o.preview) ?? {},
+    expires_at: str(o.expires_at),
+    action_id: str(o.action_id),
+    seq: num(o.seq),
+    created_at: str(o.created_at),
+  };
+}
+
+export const pendingActionsOf = (v: unknown) =>
+  arr(v).map(pendingActionOut).filter((x): x is PendingActionOut => x !== null);
+
+/** The numbers of a `cleanup_batch` preview; null when it has none to show. */
+export function cleanupPreview(p: PendingActionOut | null): CleanupPreview | null {
+  if (!p) return null;
+  const v = p.preview;
+  // duplicates.md: `copies`, `records_before`, `records_after`, `groups`.
+  const before = num(v.records_before ?? v.before);
+  const after = num(v.records_after ?? v.after, before - num(v.copies ?? v.removed));
+  const removed = num(v.copies ?? v.removed, before - after);
+  if (removed <= 0) return null;
+  return { before, after, removed, groups: num(v.groups ?? v.group_count) };
+}
+
+function beforeAfter(v: unknown): CollectionOut['before_after'] {
+  const o = obj(v);
+  if (!o) return null;
+  const n = (x: unknown) => (typeof x === 'number' ? x : null);
+  return { before: n(o.before), after: n(o.after), removed: n(o.removed ?? o.repeats_removed) };
+}
+
+export function collectionOut(v: unknown): CollectionOut | null {
+  const o = obj(v);
+  const id = o && str(o.id);
+  const title = o && str(o.title);
+  if (!o || !id || !title) return null;
+  return {
+    id,
+    page_id: str(o.page_id) ?? str(o.screen_id),
+    kind: str(o.kind) ?? 'smart',
+    title,
+    title_kk: str(o.title_kk),
+    icon: str(o.icon) ?? 'other',
+    item_count: num(o.item_count),
+    before_after: beforeAfter(o.before_after),
+    created_by: str(o.created_by),
+    last_opened_at: str(o.last_opened_at),
+    hidden_at: str(o.hidden_at),
+    seq: num(o.seq),
+    updated_at: str(o.updated_at),
+    deleted_at: str(o.deleted_at),
+  };
+}
+
+export const collectionsOf = (v: unknown) => arr(v).map(collectionOut).filter((x): x is CollectionOut => x !== null);
+
+function collectionWrite(v: unknown): CollectionWriteOut {
+  const o = obj(v) ?? {};
+  return {
+    collection: collectionOut(o.collection),
+    action: actionOut(o.action),
+    page_patches: arr(o.page_patches).map(pagePatchOut).filter((x): x is PagePatchOut => x !== null),
+  };
+}
+
+const IMPORT_STATUSES = new Set(['created', 'awaiting_code', 'running', 'paused_budget', 'done', 'failed', 'cancelled']);
+
+export function importOut(v: unknown): ImportOut | null {
+  const o = obj(v);
+  const id = o && str(o.id);
+  if (!o || !id) return null;
+  const summary = obj(o.summary) ?? {};
+  const pick = (k: string) => o[k] ?? summary[k];
+  const media: Record<string, number> = {};
+  for (const [k, n] of Object.entries(obj(pick('skipped_media')) ?? {})) if (typeof n === 'number' && n > 0) media[k] = n;
+  return {
+    id,
+    client_id: str(o.client_id),
+    source: str(o.source) ?? 'telegram_export_file',
+    status: (IMPORT_STATUSES.has(String(o.status)) ? o.status : 'created') as ImportStatus,
+    total: num(pick('total')),
+    processed: num(pick('processed')),
+    created_count: num(pick('created_count') ?? pick('created')),
+    skipped_dups: num(pick('skipped_dups')),
+    seen_before: num(pick('seen_before')),
+    summary_ru: str(pick('summary_ru')),
+    skipped_media: media,
+    failed: num(pick('failed')),
+    stacks: num(pick('stacks') ?? pick('stack_count')),
+    similar_groups: num(pick('similar_groups') ?? pick('near_groups')),
+    cleanup: pendingActionOut(pick('cleanup') ?? pick('pending_action')),
+    action_id: str(o.action_id),
+    error: str(o.error),
+    seq: num(o.seq),
+    started_at: str(o.started_at),
+    finished_at: str(o.finished_at),
+  };
+}
+
+export const importsOf = (v: unknown) => arr(v).map(importOut).filter((x): x is ImportOut => x !== null);
 
 /** Typed /v1 endpoints. The ONLY place that knows paths and request bodies. */
 export class Api {
@@ -1052,6 +1233,120 @@ export class Api {
         }),
       ) ?? {};
     return { removed: o.removed === true, repeated: o.repeated === true, action: actionOut(o.action) };
+  }
+
+  // week 10 — repeats, stacks, Telegram import (3-engineering §4.6, §4.9)
+
+  /** GET /consents: what this account has accepted (the import needs `telegram_import`). */
+  consents(): Promise<ConsentsOut> {
+    return this.client.request('GET', '/consents');
+  }
+
+  /** «Объединить?» groups (`status=suggested`): near repeats, «Да» by group. */
+  async duplicateGroups(status = 'suggested'): Promise<DuplicateGroupOut[]> {
+    const o = await this.client.request<unknown>('GET', '/duplicates/groups', { query: { status } });
+    return duplicateGroupsOf(Array.isArray(o) ? o : obj(o)?.groups);
+  }
+
+  private async decide(id: string, what: 'merge' | 'dismiss', body: DuplicateDecisionIn): Promise<DuplicateDecisionOut> {
+    const o =
+      obj(
+        await this.client.request<unknown>('POST', `/duplicates/groups/${encodeURIComponent(id)}/${what}`, {
+          body,
+          idempotencyKey: body.client_id,
+        }),
+      ) ?? {};
+    return { group: duplicateGroupOut(o.group), action: actionOut(o.action), repeated: o.repeated === true };
+  }
+
+  /** [Объединить] — this tap is the «Да» for this group. The text is joined by code (6.3 п. 4). */
+  mergeGroup(id: string, body: DuplicateDecisionIn): Promise<DuplicateDecisionOut> {
+    return this.decide(id, 'merge', body);
+  }
+
+  /** [Это разные]: the group is not offered again. */
+  dismissGroup(id: string, body: DuplicateDecisionIn): Promise<DuplicateDecisionOut> {
+    return this.decide(id, 'dismiss', body);
+  }
+
+  /** «Убрать повторы: 37 → 1?»: a pending action for one «Да» on all exact repeats + the near groups. */
+  async cleanupPlan(body: { client_id: string; import_id?: string }): Promise<CleanupPlanOut> {
+    const o =
+      obj(await this.client.request<unknown>('POST', '/duplicates/cleanup/plan', { body, idempotencyKey: body.client_id })) ?? {};
+    const pending = pendingActionOut(o.pending_action ?? (obj(o)?.preview ? o : null));
+    return { pending_action: pending, preview: cleanupPreview(pending), groups: duplicateGroupsOf(o.near_groups ?? o.groups) };
+  }
+
+  /** «Да» of S25. Idempotent by `client_id`. `410` when it expired (24 h). */
+  async confirmPending(id: string, clientId: string): Promise<PendingConfirmOut> {
+    const o =
+      obj(
+        await this.client.request<unknown>('POST', `/pending-actions/${encodeURIComponent(id)}/confirm`, {
+          body: { client_id: clientId },
+          idempotencyKey: clientId,
+        }),
+      ) ?? {};
+    return { pending_action: pendingActionOut(o.pending_action), action: actionOut(o.action) };
+  }
+
+  /** «Нет» / «Не сейчас» of S25. */
+  rejectPending(id: string): Promise<unknown> {
+    return this.client.request('POST', `/pending-actions/${encodeURIComponent(id)}/reject`, { body: {} });
+  }
+
+  /** Stacks; `page_id` = the ones shown as groups on that page. */
+  async collections(pageId?: string): Promise<CollectionOut[]> {
+    const o = await this.client.request<unknown>('GET', '/collections', pageId ? { query: { page_id: pageId } } : {});
+    return collectionsOf(Array.isArray(o) ? o : obj(o)?.collections);
+  }
+
+  /** «Переименовать» (S11), with «Отменить». */
+  async renameCollection(id: string, title: string, clientId: string): Promise<CollectionWriteOut> {
+    return collectionWrite(
+      await this.client.request<unknown>('PATCH', `/collections/${encodeURIComponent(id)}`, {
+        body: { title, client_id: clientId },
+        idempotencyKey: clientId,
+      }),
+    );
+  }
+
+  /** «Убрать из стопки»: the assistant does not put it back (a `stack_exclusion` habit). */
+  async removeFromCollection(id: string, itemId: string, clientId: string): Promise<CollectionWriteOut> {
+    return collectionWrite(
+      await this.client.request<unknown>('DELETE', `/collections/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}`, {
+        query: { client_id: clientId },
+        idempotencyKey: clientId,
+      }),
+    );
+  }
+
+  /** «Разобрать стопку»: the records stay. */
+  async deleteCollection(id: string, clientId: string): Promise<CollectionWriteOut> {
+    return collectionWrite(
+      await this.client.request<unknown>('DELETE', `/collections/${encodeURIComponent(id)}`, {
+        query: { client_id: clientId },
+        idempotencyKey: clientId,
+      }),
+    );
+  }
+
+  /** The Telegram Desktop export, uploaded through POST /uploads first. Idempotent by `client_id`. */
+  async importTelegramFile(body: ImportFileIn): Promise<ImportOut> {
+    const o = await this.client.request<unknown>('POST', '/imports/telegram/file', { body, idempotencyKey: body.client_id });
+    const out = importOut(obj(o)?.import ?? o);
+    if (!out) throw new ApiError(502, { code: 'bad_answer' });
+    return out;
+  }
+
+  async getImport(id: string): Promise<ImportOut | null> {
+    const o = await this.client.request<unknown>('GET', `/imports/${encodeURIComponent(id)}`);
+    return importOut(obj(o)?.import ?? o);
+  }
+
+  /** [Остановить]: what came over stays (with its «Отменить»). */
+  async cancelImport(id: string): Promise<ImportOut | null> {
+    const o = await this.client.request<unknown>('POST', `/imports/${encodeURIComponent(id)}/cancel`, { body: {} });
+    return importOut(obj(o)?.import ?? o);
   }
 
   // feedback («Сообщить о проблеме», R-41)

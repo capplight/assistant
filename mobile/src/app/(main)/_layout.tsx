@@ -32,6 +32,9 @@ export default function MainLayout() {
         <Tabs.Screen name="search" />
         <Tabs.Screen name="trash" />
         <Tabs.Screen name="my-pages" />
+        <Tabs.Screen name="stack/[id]" />
+        <Tabs.Screen name="duplicates" />
+        <Tabs.Screen name="import" />
       </Tabs>
     </KeyboardAvoidingView>
   );

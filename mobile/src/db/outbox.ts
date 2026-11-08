@@ -47,7 +47,9 @@ export type OutboxKind =
   /** Week 9: a row added on «Дела» / «Покупки» by hand or offline (POST /tasks). */
   | 'task.create'
   /** A box ticked / unticked, or a row taken back (PATCH / DELETE /tasks/{id}). */
-  | 'task.update';
+  | 'task.update'
+  /** Week 10: a Telegram Desktop export (result.json / zip): upload, then POST /imports/telegram/file. */
+  | 'import.telegram';
 
 export type OutboxStatus = 'pending' | 'sent' | 'failed';
 

@@ -358,9 +358,14 @@ async def test_delete_this_asks_which_one(w6):
         assert r.status_code == 200
         assert (await c.get(f"/v1/items/{newest}", headers=h)).json()["deleted_at"] is None
 
-        # With a selected record «это» is that record, at once.
+        # With a selected record «это» is that record; deleting it still asks «Да» first
+        # (founder 2026-11-09: every delete from the line).
         evs = await say(c, h, "удали это", page_id=pid, visible_item_ids=ids,
                         selected_item_id=ids[0])
+        ask_ = last(evs, "confirm")
+        assert ask_["question"].startswith("Удалить «") and ask_["count"] == 1
+        assert (await c.get(f"/v1/items/{ids[0]}", headers=h)).json()["deleted_at"] is None
+        evs = await say(c, h, "Да", choice={"reply_id": ask_["reply_id"], "option": "yes"})
         assert last(evs, "action")["action"]["changed_item_ids"] == [ids[0]]
         others = [(await c.get(f"/v1/items/{i}", headers=h)).json()["deleted_at"] for i in ids[1:]]
         assert others == [None, None]
@@ -607,34 +612,58 @@ async def test_push_when_nobody_listens_once_per_ten_minutes(w6):
         assert len(push.sent) == 1  # at most one in 10 minutes
 
 
-async def test_deferred_question_is_finished_by_the_worker(w6):
+async def test_deferred_question_and_change_are_finished_by_the_worker(w6):
+    """Founder 2026-11-09: a change the person asked for is finished in the background too, with
+    «Отменить»; a delete still waits for «Да»."""
     push = FakePushSender()
     app = w6.make_app(_Stub(AIUnavailable("down")))
     async with client(app) as c:
         h = await signed_in(c)
         uid = await user_pk(c, h, w6.maker)
         await _push_device(w6.maker, uid)
+        pid, ids = await home_page(c, h, w6.maker, HOME[:2])
         evs = await say(c, h, "Где ключи?")
         reply = last(evs, "deferred")["reply_id"]
-        evs = await say(c, h, "разложи по темам")  # a change: never done later
+        evs = await say(c, h, "переименуй это в Ключи от дачи", page_id=pid,
+                        visible_item_ids=ids, selected_item_id=ids[0])
         change_reply = last(evs, "deferred")["reply_id"]
+        evs = await say(c, h, "удали это", page_id=pid, visible_item_ids=ids,
+                        selected_item_id=ids[1])
+        delete_reply = [d for _, n, d in evs if n in ("deferred", "done")][-1]["reply_id"]
         async with w6.maker() as s:
             await s.execute(text("UPDATE jobs SET run_after = now() - interval '1 second' "
                                  "WHERE kind = 'chat:complete' AND status = 'queued'"))
             await s.commit()
-        script = Script([ChatReply(answer="Ключи в прихожей.", citations=[],
-                                   insufficient=False)])  # fmt: skip
-        worker = ChatService(make_settings(), w6.maker, router_with(w6.maker, script),
+
+        def answer(req: AdapterRequest) -> Any:
+            if req.schema_name != "ChatReply":
+                return script_default(req)
+            last = req.messages[-1]
+            if last.tool_results:
+                return ChatReply(answer="Переименовал.", citations=[], insufficient=False)
+            if "переименуй" in last.text:
+                this = re.search(r"«здесь»\): (s\d+)", last.text).group(1)  # type: ignore[union-attr]
+                return [ToolCall("t1", "update", {"records": [this], "title": "Ключи от дачи",
+                                                  "trash": False})]
+            return ChatReply(answer="Ключи в прихожей.", citations=[], insufficient=False)
+
+        script_default = Script()
+        worker = ChatService(make_settings(), w6.maker,
+                             fake_router(w6.maker, FakeAdapter("anthropic", [answer])),
                              push=push)  # fmt: skip
-        assert await jobs.run_one(worker) and await jobs.run_one(worker)
+        while await jobs.run_one(worker):
+            pass
         await worker.drain()
         msg = (await c.get(f"/v1/chat/messages/{reply}", headers=h)).json()
         assert msg["state"] == "done" and msg["text"] == "Ключи в прихожей."
         assert msg["delivery"] == "banner_pending" and len(push.sent) == 1
         ch = (await c.get(f"/v1/chat/messages/{change_reply}", headers=h)).json()
-        assert ch["state"] == "failed" and ch["error_code"] == "not_done"
-        assert ch["text"] == "Не получилось сделать — скажите ещё раз, пожалуйста."
-        assert script.n("PageGroups") == 0
+        assert ch["state"] == "done" and ch["answer_kind"] == "action", ch
+        assert ch["delivery"] == "banner_pending" and ch["action"]["undoable"] is True
+        assert (await c.get(f"/v1/items/{ids[0]}", headers=h)).json()["title"] == "Ключи от дачи"
+        de = (await c.get(f"/v1/chat/messages/{delete_reply}", headers=h)).json()
+        assert de["proposal"]["kind"] == "count"  # waits for «Да»: nothing deleted
+        assert (await c.get(f"/v1/items/{ids[1]}", headers=h)).json()["deleted_at"] is None
         async with w6.maker() as s:
             left = await s.scalar(select(Job.id).where(Job.kind == "chat:complete",
                                                        Job.status == JobStatus.QUEUED))
@@ -660,6 +689,32 @@ async def test_crashed_answer_is_finished_not_failed(w6):
         assert await jobs.run_complete(app.state.ctx.chat, pk) == "done"
         msg = (await c.get(f"/v1/chat/messages/{reply}", headers=h)).json()
         assert msg["state"] == "done" and msg["delivery"] == "banner_pending"
+
+
+async def test_change_committed_before_a_crash_is_delivered_not_redone(w6):
+    script = Script([[ToolCall("c1", "create", {"page": None, "text": "Купить батарейки",
+                                                "title": None})],
+                     ChatReply(answer="Записал.", citations=[], insufficient=False)])
+    app = w6.make_app(router_with(w6.maker, script))
+    async with client(app) as c:
+        h = await signed_in(c)
+        pid = await page(c, h, "Дом")
+        evs = await say(c, h, "запиши купить батарейки", page_id=pid)
+        reply = last(evs, "done")["reply_id"]
+        calls = script.n("ChatReply")
+        async with w6.maker() as s:  # the change is committed, the answer was not saved
+            await s.execute(text("UPDATE conversation_messages SET state = 'pending', "
+                                 "updated_at = now() - interval '10 minutes' "
+                                 "WHERE public_id = :p"), {"p": uuid.UUID(reply)})
+            await s.commit()
+            before = await s.scalar(text("SELECT count(*) FROM items"))
+        app.state.ctx.chat.runs.clear()
+        assert await jobs.run_complete(app.state.ctx.chat, await _pk(w6.maker, reply)) == "done"
+        msg = (await c.get(f"/v1/chat/messages/{reply}", headers=h)).json()
+        assert msg["answer_kind"] == "action" and msg["action"]["undoable"] is True
+        assert script.n("ChatReply") == calls  # not asked again
+        async with w6.maker() as s:
+            assert await s.scalar(text("SELECT count(*) FROM items")) == before  # not redone
 
 
 async def _pk(maker, public_id: str) -> int:  # type: ignore[no-untyped-def]
@@ -775,3 +830,51 @@ async def test_proposal_carries_its_reply_id(w6):
         assert prop["reply_id"] == last(evs, "accepted")["reply_id"]
         msg = (await c.get(f"/v1/chat/messages/{prop['reply_id']}", headers=h)).json()
         assert msg["proposal"]["reply_id"] == prop["reply_id"] and "plan" not in msg["proposal"]
+
+
+# --- founder 2026-11-09 ---
+
+
+async def test_trash_of_one_record_from_the_model_asks_first(w6):
+    script = Script([[ToolCall("c1", "update", {"records": ["s1"], "title": None, "trash": True})],
+                     ChatReply(answer="Спрошу.", citations=[], insufficient=False)])
+    async with client(w6.make_app(router_with(w6.maker, script))) as c:
+        h = await signed_in(c)
+        pid, ids = await home_page(c, h, w6.maker, HOME[:2])
+        evs = await say(c, h, "удали плитку", page_id=pid, visible_item_ids=ids)
+        ask_ = last(evs, "confirm")
+        assert ask_["question"].startswith("Удалить «") and ask_["count"] == 1
+        for i in ids:
+            assert (await c.get(f"/v1/items/{i}", headers=h)).json()["deleted_at"] is None
+        evs = await say(c, h, "Да", choice={"reply_id": ask_["reply_id"], "option": "yes"})
+        assert last(evs, "action")["action"]["kind"] == "delete_item"
+
+
+async def test_explicit_move_of_a_hand_placed_row_needs_no_yes(w6):
+    """«перенеси это в Покупки»: the person asked for exactly this row; no confirm_manual."""
+    def move(req: AdapterRequest) -> list[ToolCall]:
+        ctx = "\n".join(m.text for m in req.messages) + req.system
+        ref = re.search(r"(p\d+) · Покупки", ctx).group(1)  # type: ignore[union-attr]
+        this = re.search(r"«здесь»\): (s\d+)", ctx).group(1)  # type: ignore[union-attr]
+        return [ToolCall("c1", "move", {"records": [this], "from_page": None, "to_page": ref,
+                                        "mode": "move"})]
+
+    script = Script([move, ChatReply(answer="Перенёс.", citations=[], insufficient=False)])
+    async with client(w6.make_app(router_with(w6.maker, script))) as c:
+        h = await signed_in(c)
+        shop = await page(c, h, "Покупки")
+        pid, ids = await home_page(c, h, w6.maker, HOME[:3])
+        async with w6.maker() as s:  # the person placed this row by hand
+            await s.execute(text(
+                "UPDATE screen_items SET manual_order = true, manual_at = now(), "
+                "updated_by = 'user' WHERE item_id = "
+                "(SELECT id FROM items WHERE public_id = :i)"),
+                {"i": uuid.UUID(ids[1])})  # fmt: skip
+            await s.commit()
+        evs = await say(c, h, "перенеси это в Покупки", page_id=pid, visible_item_ids=ids,
+                        selected_item_id=ids[1])
+        assert not by_name(evs, "confirm_manual") and not by_name(evs, "confirm")
+        action = last(evs, "action")["action"]
+        assert action["kind"] == "screen_move_items" and action["changed_item_ids"] == [ids[1]]
+        there = {r["item"]: r for r in await rows(w6.maker, shop)}
+        assert ids[1] in there

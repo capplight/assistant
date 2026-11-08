@@ -359,7 +359,7 @@ async def test_sync_order_pagination_and_tombstones(db_app):
                          "reminders": [], "reminder_fires": [], "tasks": [], "suggestions": [],
                          "pending_actions": [], "habits": [],
                          "tombstones": [], "next_since": full["next_since"],
-                         "has_more": False}  # fmt: skip
+                         "has_more": False, "full_resync": False}  # fmt: skip
 
         other = await _signed_in(c)  # another user sees nothing of this
         assert (await c.get("/v1/sync", headers=other)).json()["items"] == []

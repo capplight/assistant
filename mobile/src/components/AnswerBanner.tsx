@@ -118,7 +118,9 @@ export function AnswerBanner() {
           {t('ai.label_short')}
         </AppText>
       ) : null}
-      {message.status === 'interrupted' ? (
+      {message.notice === 'maybe_done' ? (
+        <Button testID="answer-did" label={t('more.did')} variant="text" onPress={() => router.push('/did')} />
+      ) : message.status === 'interrupted' ? (
         <Button testID="answer-retry" label={t('answer.retry')} variant="text" onPress={() => void retry(message.id)} />
       ) : null}
       {message.notice === 'offline_reminder' ? (
@@ -176,6 +178,7 @@ function ProposalPrompt({ message, box }: { message: ChatMessage; box: object[] 
                 testID={`proposal-${o.id}`}
                 label={o.label}
                 variant={isDefault ? 'primary' : o.kind === 'cancel' || o.kind === 'no' ? 'text' : 'outline'}
+                labelColor={p.kind === 'delete' && o.kind === 'yes' && !isDefault ? 'alarm' : undefined}
                 onPress={() => void answerProposal(message.id, o.id)}
               />
             </View>

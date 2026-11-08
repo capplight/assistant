@@ -94,6 +94,9 @@ async def purge_once(maker: async_sessionmaker[AsyncSession],
     async with maker() as s:
         n = await store.purge_trashed_items(s)
         await s.commit()
+    async with maker() as s:
+        await store.purge_old_tombstones(s)
+        await s.commit()
     if deps is not None:
         files = await purge_files(maker, deps.storage)
         if files:

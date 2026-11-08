@@ -37,6 +37,8 @@ import { listsForPage, setDone } from '@/tasks/service';
 import { useTasks } from '@/tasks/store';
 import { useTheme } from '@/theme';
 import { MissedList, ReminderRows, Segments, useMinuteClock, useMissed } from '@/components/ReminderLists';
+import { StackCards } from '@/components/StackCards';
+import { refreshCollections, refreshGroups } from '@/dedup/service';
 import { TaskRow } from '@/components/TaskRow';
 
 /**
@@ -87,6 +89,14 @@ export default function PageScreen() {
   const [segment, setSegment] = useState<Segment>('today');
   const now = useMinuteClock();
   const missed = useMissed(now);
+
+  // Week 10: stacks and «Объединить?» groups come with /sync; on «Заметки» ask once more when shown.
+  const isNotes = page?.templateKey === 'notes';
+  useEffect(() => {
+    if (!isNotes) return;
+    void refreshCollections();
+    void refreshGroups();
+  }, [isNotes, id]);
 
   // The marker goes after 600 ms (Reduce Motion: the same, it is a colour, not a move).
   useEffect(() => {
@@ -223,6 +233,7 @@ export default function PageScreen() {
           )}
         </View>
       ) : null}
+      {!searching && !listMode ? <StackCards page={page} entries={entries} /> : null}
       {!searching && !listMode && entries && entries.length > 0 ? (
         <AppText variant="section" accessibilityRole="header">
           {t('page.recent')}

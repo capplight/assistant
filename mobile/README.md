@@ -1,4 +1,4 @@
-# Mobile app — week 9 («Сегодня», «Дела» and «Покупки» as checklists, S20, S30)
+# Mobile app — week 10 (repeats «37 → 1», «Объединить?», stacks on «Заметки», Telegram import)
 
 Expo SDK 58 (React Native 0.88, New Architecture), TypeScript strict, expo-router.
 Spec: `../docs/spec/SPEC.md`, `../docs/spec/final/2-design.md`, `../docs/spec/final/3-engineering.md` §2.1, §11.2 (week 1, Mobile).
@@ -92,6 +92,48 @@ src/
   alarms/                    week 8: port (FakeAlarms), native + notification adapters, planner, S15 steps, service
 modules/alarms/              native Expo module: Android (Kotlin) AlarmManager + S14 + battery-guide, iOS (Swift) AlarmKit
 ```
+
+## Week 10: what works
+
+Contract: backend routes `duplicates.py`, `collections.py`, `imports.py` and `docs/api/chat.md`, `reminders.md` as of
+2026-11-09 (`docs/api/duplicates.md`, `stacks.md`, `import.md` were not written yet). Shapes only in `src/api/types.ts` +
+`src/api/endpoints.ts`, lenient decoders. **Checked by Jest with a fake server only: not against the real server, not on a
+device.** The file picker (`expo-document-picker`, new dependency) needs a development build or Expo Go; untested on a phone.
+
+- **«Уже было · Отменить» on the phone** (`records/capture.ts`): a typed / shared text equal to one of the newest 2000
+  records (same hash basis as the server's `textnorm.hash_basis`: NFKC, lowercase, non-letters → space) is hidden at once
+  with the strip, offline and in «Без ИИ» too; «Отменить» shows it again (the unmerge waits for the record to reach the
+  server). The server's later merge of the same record is not shown a second time. Fixed: the phone's `content_hash` did
+  not match the server's (punctuation).
+- **S26 «Повторы»** (`(main)/duplicates.tsx`, from «Ещё → Повторы», the «Заметки» card and S09 «Похоже на запись от …»):
+  «Убрать повторы: 37 → 1?» = `POST /duplicates/cleanup/plan` → one «Да» (`/pending-actions/{id}/confirm`) → one «Отменить»;
+  [Нет] = `/reject`. Near groups: «Оставлю эту · самая полная» ↔ «Уберу: N», [Оставить эту] on another record
+  (`keep_item_id`), [Объединить] (= the «Да» of that group) with «Отменить», [Это разные]. Nothing merges by itself.
+  Needs the internet: offline «Нужен интернет — сейчас ничего не изменилось».
+- **Stacks on «Заметки»** (`components/StackCards.tsx`): 3 big cards (count, «было → стало» when the server gives it,
+  [⋯ Ещё] Открыть / Разобрать), the rest as chips; the page's own list below is unchanged (the person's order). **S11**
+  (`(main)/stack/[id].tsx`): rows of the page with `group_key = title`, [Переименовать], [Разобрать стопку], «Убрать из
+  стопки» — each with «Отменить» (the server's action). Collections from `GET /collections` and `/sync` `collections`.
+- **S21 «Принести заметки»** (`(main)/import.tsx`): how to export «Избранное» from Telegram Desktop → [Выбрать файл]
+  (`result.json` / `.zip`, name checked) → the `telegram_import` consent once (server text, version + hash) → outbox
+  `import.telegram`: the same upload path as any file, then `POST /imports/telegram/file` (survives offline / restart) →
+  «Переношу… 120 из 1 200» (`GET /imports/{id}` every 2 s while open) [Остановить] → summary: «Перенёс заметок», «Уже были у
+  вас — не повторял», «Видео (34) не перенёс — только подписи», «Повторов: 214 — убрать?» (one «Да»), [Отменить перенос].
+  Pages: by their rules (the server takes no page list).
+- **«Заметки» shows notes only** (founder 2026-11-09): with no server row, the phone places only text / voice / link
+  records that are not a task's record and were not saved on «Дела», «Покупки», «Расходы», «Документы».
+- **S20 «Только важное»**: what the assistant did by itself, anything external, and every deletion, merge and import;
+  the person's own moves, ticks, renames and moved reminders only under «Все».
+- **From the line**: every delete comes as `confirm` → the existing question with [Да] [Не сейчас] (a `delete` kind is
+  also understood, with «Да» never in focus). A change whose stream dropped, or that the server `deferred`, says «Если я
+  успел / Сделаю чуть позже — в «Что я сделал», там же «Отменить»» with [Что я сделал] instead of «Спросить ещё раз».
+- **S13**: «в 7» — the two options must be chosen (7:00 / 19:00); [Сохранить] says «Выберите время» until then.
+- **Week 9 follow-up**: a late «Сделано» finds its action by `event_client_id` (kept on its outbox row), no more matching
+  by reminder and time; «Отменить» holds the sync engine, so an event in flight is never dropped half-sent.
+
+Not yet: «Объединить все отмеченные (N)» (no batch endpoint for near groups), «Сделать стопку страницей», the line chip
+«Про: <стопка>», stack animation (`motion.stack`), «Войти в Telegram» / «Переслать боту» (Full), a shared `result.json`
+via «Поделиться» opening S21, `/sync` arrays `duplicate_groups` / `imports` (read if present). KK strings are drafts.
 
 ## Week 9: what works
 

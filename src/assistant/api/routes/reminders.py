@@ -22,6 +22,7 @@ from assistant.api.schemas import (
     FireOut,
     FiresWindowOut,
     ReminderActiveOut,
+    ReminderEventActionOut,
     ReminderEventResult,
     ReminderEventsIn,
     ReminderEventsOut,
@@ -274,7 +275,8 @@ async def events(body: ReminderEventsIn, user: GatedUser, db: Db) -> ReminderEve
     return ReminderEventsOut(
         results=[ReminderEventResult.model_validate(r) for r in results],
         fires=[FireOut.model_validate(f) for f in await service.fires_dicts(db, fires)],
-        actions=[ActionOut.model_validate(d) for d in await actions_dicts(db, actions, now)],
+        actions=[ReminderEventActionOut.model_validate({**d, "event_client_id": a.client_id})
+                 for a, d in zip(actions, await actions_dicts(db, actions, now), strict=True)],
     )
 
 

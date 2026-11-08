@@ -1,0 +1,55 @@
+{
+ "about": "content_hash vectors: phone and server must give the same (docs/api/items.md)",
+ "cases": [
+  {
+   "text": "Купить краску для забора!",
+   "basis": "купить краску для забора",
+   "content_hash": "678c2fedd5f3b36f7704d62f60810e7071d9598dc02d28d9e046fb18a4557bca"
+  },
+  {
+   "text": "купить  краску для забора",
+   "basis": "купить краску для забора",
+   "content_hash": "678c2fedd5f3b36f7704d62f60810e7071d9598dc02d28d9e046fb18a4557bca"
+  },
+  {
+   "text": "КУПИТЬ, краску\nдля забора…",
+   "basis": "купить краску для забора",
+   "content_hash": "678c2fedd5f3b36f7704d62f60810e7071d9598dc02d28d9e046fb18a4557bca"
+  },
+  {
+   "text": "Купить краску для забора 2",
+   "basis": "купить краску для забора 2",
+   "content_hash": "6a845e4fed1bd6eeae4c95a22ff57be430a42859702b43dc995a3b06a9361dc7"
+  },
+  {
+   "text": "Ёлка — 5 000 ₸ 🎄",
+   "basis": "ёлка 5 000",
+   "content_hash": "4112d90e890a5ad8d2a1f87e6f2ae7dbcaf05ee467cde943b0f5a476530503f3"
+  },
+  {
+   "text": "Сәлем, әлем!",
+   "basis": "сәлем әлем",
+   "content_hash": "444079a885fc80b95f2a370a73af8e3912b391f7e5ccc22a0a2b19743a2d0c5b"
+  },
+  {
+   "text": "ﬁle №5 ½",
+   "basis": "file no5 1 2",
+   "content_hash": "9568539638315f11ca271f83e64be600804eb8d3994c25d9224b3521985484e7"
+  },
+  {
+   "text": "   !!! ",
+   "basis": null,
+   "content_hash": null
+  },
+  {
+   "text": "Café́ & co_ltd",
+   "basis": "café co ltd",
+   "content_hash": "483f924bf15fe250f9fb221f9bc3c301cb6882809c231a0f2e2a2ea68ad3adb8"
+  },
+  {
+   "text": "Tab\tand\r\nCRLF",
+   "basis": "tab and crlf",
+   "content_hash": "6f11109d122b94b3070194d46f702ea601189c289078038d84a8c52ba0c96566"
+  }
+ ]
+}

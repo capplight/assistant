@@ -14,10 +14,11 @@ export function answerNotice(m: ChatMessage, t: TFunction): string | null {
     case 'queued':
       return t('answer.queued');
     case 'interrupted':
-      return t('answer.interrupted');
+      return m.notice === 'maybe_done' ? t('answer.maybe_done') : t('answer.interrupted');
     case 'deferred':
-      return t('answer.deferred');
+      return m.notice === 'maybe_done' ? t('answer.change_later') : t('answer.deferred');
     case 'failed':
+      if (m.notice === 'maybe_done') return t('answer.maybe_done');
       if (m.notice === 'offline_action') return t('line.offline_action');
       if (m.notice === 'no_ai_action') return t('line.no_ai_action');
       if (m.notice === 'offline_reminder') return t('rem.offline_line');

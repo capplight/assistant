@@ -549,6 +549,9 @@ async def run_enrich(maker: async_sessionmaker[AsyncSession], router: Router, it
             await s.commit()
             return EnrichState.DONE
         user_id, inputs = item.user_id, build_inputs(item)
+        # Imported records draw on the one-off import wallet (spec 6.10, IMPORT_SUMMARIZE, $1).
+        task = (LLMTask.IMPORT_SUMMARIZE if item.source == RecordSource.IMPORT_TELEGRAM
+                else LLMTask.ENRICH)  # fmt: skip
         mode = router.routes.route(LLMTask.ENRICH).batch
         if not live and router.batching_available(LLMTask.ENRICH) and should_batch(mode, item, now):
             await _park(s, item)
@@ -558,7 +561,7 @@ async def run_enrich(maker: async_sessionmaker[AsyncSession], router: Router, it
 
     # 2. provider calls, no transaction open
     try:
-        result = await router.run(LLMTask.ENRICH, Envelope, inputs, user_id=user_id, job_id=job_id)
+        result = await router.run(task, Envelope, inputs, user_id=user_id, job_id=job_id)
     except AIConsentRequired:
         return await _set_state(maker, item_id, EnrichState.NO_CONSENT)
     except BudgetExceeded as exc:
@@ -567,9 +570,9 @@ async def run_enrich(maker: async_sessionmaker[AsyncSession], router: Router, it
     env, provider, model, escalated = result.data, result.provider, result.model, False
 
     ask = StrongRequest(StrongReason.LOW_CONFIDENCE, confidence=env.confidence)
-    if await router.escalation_denial(LLMTask.ENRICH, ask, inputs, user_id) is None:
+    if await router.escalation_denial(task, ask, inputs, user_id) is None:
         try:
-            better = await router.run(LLMTask.ENRICH, Envelope, inputs, user_id=user_id,
+            better = await router.run(task, Envelope, inputs, user_id=user_id,
                                       strong=ask, job_id=job_id)  # fmt: skip
         except (AIUnavailable, BudgetExceeded, AIConsentRequired):
             log.info("enrich item %s: strong attempt failed, keeping the light one", item_id)
@@ -612,6 +615,9 @@ async def store_envelope(maker: async_sessionmaker[AsyncSession], item_id: int, 
         await s.flush()
         await place_item(s, item)  # rules that read the envelope can match now
         await enqueue_embed(s, item)  # chunks are embedded with the title, which may be new
+        from assistant.stacks import schedule_rebuild  # stacks -> actions -> records
+
+        await schedule_rebuild(s, item.user_id)  # its topics may make or grow a stack
         await s.commit()
     return state
 

@@ -147,3 +147,16 @@ def test_extract_docx_garbage():
     with pytest.raises(ExtractError) as err:
         extract_docx(b"nope")
     assert err.value.code == "docx_unreadable"
+
+
+def test_content_hash_shared_vectors():
+    """docs/spec/vectors/content_hash.json: the phone runs the same cases (docs/api/items.md)."""
+    import json
+    from pathlib import Path
+
+    from assistant.records.textnorm import hash_basis
+
+    path = Path(__file__).resolve().parents[2] / "docs/spec/vectors/content_hash.json"
+    for case in json.loads(path.read_text(encoding="utf-8"))["cases"]:
+        assert (hash_basis(case["text"]) or None) == case["basis"]
+        assert content_hash(case["text"]) == case["content_hash"]

@@ -305,9 +305,17 @@ async def _finish(maker: async_sessionmaker[AsyncSession], item_id: int,
                 store.merge_into(item, canonical, now)
                 if file is not None:
                     store.trash_file(file, now)
+                from assistant import dedup  # dedup -> actions -> records
+
+                await s.flush()
+                await dedup.record_exact_merge(s, item, canonical, now)
         if item.hidden_reason is None:
             await enrich.enqueue_enrich(s, item)
             await enqueue_embed(s, item)
+            from assistant import dedup
+
+            item.simhash = dedup.similarity.simhash(text)
+            await dedup.schedule_scan(s, item.user_id)
         await s.flush()
         await place_item(s, item)  # the text is known now: rules by words can match
         status = str(item.status)

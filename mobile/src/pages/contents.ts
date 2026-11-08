@@ -2,8 +2,36 @@ import type { PageLink } from '@/db/pages';
 import type { LocalRecord } from '@/db/records';
 import type { Page } from '@/store/pages';
 
+import { usePages } from '@/store/pages';
+import { useTasks } from '@/tasks/store';
+
 import { compareRank } from './lexorank';
 import { getTemplate } from './templates';
+
+/** Kinds a note can be: typed or said text, a link. Photos, PDF, Word, Excel are documents or receipts. */
+const NOTE_KINDS = new Set(['note', 'voice', 'link']);
+/** Pages whose records are theirs, not notes (a row of «Покупки», a receipt on «Расходы»…). */
+const NOT_NOTES = new Set(['tasks', 'shopping', 'expenses', 'documents']);
+
+/**
+ * Whether the phone shows a record on this page with no server row for it yet. «Заметки» shows
+ * notes only (founder, 2026-11-09; the server's `auto_rule` changes the same way): a text, voice or
+ * link record that is not a task's own record and was not saved on «Дела», «Покупки», «Расходы» or
+ * «Документы». Any other page: what was saved on it.
+ */
+export function placesLocally(page: Page, record: LocalRecord, taskItems: ReadonlySet<string> = taskItemIds()): boolean {
+  if (record.pageId === page.id) return true;
+  if (!getTemplate(page.templateKey).placeAll) return false;
+  if (!NOTE_KINDS.has(record.kind)) return false;
+  const savedOn = record.pageId ? usePages.getState().pages.find((p) => p.id === record.pageId) : undefined;
+  if (savedOn && NOT_NOTES.has(savedOn.templateKey)) return false;
+  return !(record.serverId && taskItems.has(record.serverId));
+}
+
+/** Server ids of the records that are tasks («Дела», «Покупки»). */
+export function taskItemIds(): Set<string> {
+  return new Set(Object.values(useTasks.getState().tasks).flatMap((t) => (t.item_id ? [t.item_id] : [])));
+}
 
 export type PageEntry = { record: LocalRecord; link: PageLink | null };
 
@@ -49,14 +77,14 @@ export function pageEntries(page: Page, records: LocalRecord[], links: PageLink[
     const old = byItem.get(l.itemServerId);
     if (!old || ((l.pending ?? 0) > 0 && !(old.pending ?? 0))) byItem.set(l.itemServerId, l);
   }
-  const always = getTemplate(page.templateKey).placeAll;
+  const taskItems = taskItemIds();
   const linked: PageEntry[] = [];
   const loose: PageEntry[] = [];
   for (const record of records) {
     const link = linkOf(byItem, record);
     if (link) {
       if (!link.removedAt) linked.push({ record, link });
-    } else if (always || record.pageId === page.id) {
+    } else if (placesLocally(page, record, taskItems)) {
       loose.push({ record, link: null });
     }
   }

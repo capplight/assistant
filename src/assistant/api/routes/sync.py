@@ -39,7 +39,7 @@ from assistant.api.schemas import (
     TombstoneOut,
 )
 from assistant.chat import store as chat_store
-from assistant.db.models import Item, Reminder
+from assistant.db.models import Item, Reminder, User
 from assistant.db.models_actions import Action
 from assistant.db.models_chat import ConversationMessage, MessageRole
 from assistant.db.models_habits import HabitKind, UserHabit
@@ -63,7 +63,14 @@ async def sync(
     user: GatedUser, db: Db, ctx: Ctx,
     since: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=500)] = 200,
+    full: bool = False,
 ) -> SyncOut:  # fmt: skip
+    floor = await db.scalar(select(User.sync_floor_seq).where(User.id == user.id)) or 0
+    # Tombstones this phone never saw are gone (retention): unless it is paging through a sync
+    # that started at 0 (`full=true`), it must start again from scratch.
+    if 0 < since < floor and not full:
+        return SyncOut(items=[], screens=[], screen_items=[], screen_summaries=[], tombstones=[],
+                       next_since=0, has_more=True, full_resync=True)  # fmt: skip
     items = list(
         await db.scalars(
             select(Item)
@@ -175,6 +182,8 @@ async def sync(
     page_pending = [row for _, row in page if isinstance(row, PendingAction)]
     page_habits = [row for _, row in page if isinstance(row, UserHabit)]
     next_since = page[-1][0] if page else since
+    if not has_more:  # nothing older than the floor is left to see
+        next_since = max(next_since, floor)
 
     if user.device_id is not None and since > 0:  # what this phone confirms it already has
         await db.execute(

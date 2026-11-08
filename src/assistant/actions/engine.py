@@ -17,6 +17,8 @@ An op is a JSON object with ids as public uuids (strings), never database ids:
 - `habit_evidence` {id, item, add}: counts one record for a learned rule, or takes it back (the
   undo of the learning a manual move did). A later move of another record does not block it, and a
   rule the person turned off stays off.
+- Week 10 (`ops_dedup`): `hide_item`, `unhide_item`, `relink`, `set_status`,
+  `add_collection_item`, `remove_collection_item`, `restore_collection` (repeats and stacks).
 - Week 9: `delete_entity_soft` / `restore_entity` also take `entity: tasks` (the task and its own
   record go to the trash / come back together). `set_task` {id, values, expect?}: sets fields of a
   task (`title`, `qty`, `where_text`, `due_date`, `done_at`, `list_key`). `cancel_reminder` {id,
@@ -56,7 +58,10 @@ OPS = frozenset({"restore_positions", "restore_view_state", "add_screen_item",
                  "remove_screen_item", "delete_entity_soft", "restore_entity",
                  "restore_field", "restore_page_position", "restore_habit",
                  "habit_evidence", "set_task", "cancel_reminder", "restore_reminder",
-                 "restore_screen_config", "restore_fires"})  # fmt: skip
+                 "restore_screen_config", "restore_fires",
+                 # week 10 (actions/ops_dedup.py): repeats and stacks
+                 "hide_item", "unhide_item", "relink", "set_status", "add_collection_item",
+                 "remove_collection_item", "restore_collection"})  # fmt: skip
 HABIT_STATUSES = frozenset({"candidate", "active", "disabled"})
 ENTITIES = frozenset({"items", "screens", "tasks"})
 TASK_FIELDS = frozenset({"title", "qty", "where_text", "due_date", "done_at", "list_key"})
@@ -604,6 +609,15 @@ _HANDLERS = {
     "restore_screen_config": _restore_screen_config,
     "restore_fires": _restore_fires,
 }
+
+
+def _register_week10() -> None:
+    from assistant.actions import ops_dedup  # needs Outcome and the helpers above
+
+    _HANDLERS.update(ops_dedup.HANDLERS)
+
+
+_register_week10()
 
 
 def validate(ops: list[dict[str, Any]]) -> None:

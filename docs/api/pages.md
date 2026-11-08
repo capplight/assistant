@@ -20,7 +20,7 @@ order (`custom` first). Sends `ETag`; send `If-None-Match` and get `304` with no
   "templates": [
     {
       "key": "notes",
-      "version": 1,
+      "version": 2,
       "title": {"ru": "Заметки", "kk": "Жазбалар"},
       "description": {"ru": "Разложу и уберу повторы", "kk": null},
       "icon": "documents",
@@ -35,7 +35,9 @@ order (`custom` first). Sends `ETag`; send `If-None-Match` and get `304` with no
       "default_layout": "stacks",
       "default_view": {"sort": "position"},
       "aggregates": [],
-      "auto_rule": {"any": [{"always": true}]},
+      "auto_rule": {"any": [{"always": true}],
+                    "none": [{"task_record": true},
+                             {"envelope_types": ["task", "reminder_request", "shopping_list", "receipt"]}]},
       "min_app_version": null
     }
   ]
@@ -228,11 +230,21 @@ Errors: `403 page_system` («Сегодня») · `404 not_found` · `409 item_d
   hand (`manual_order`) are moved only after the person's «Да». The chat event `page_patch`
   carries the same rows at once.
 - A brand-new account has one row right away: «Сегодня» in `screens`.
+- **Tombstone retention (week 10, founder 2026-11-09).** Tombstones are kept **90 days**
+  (`SYNC_TOMBSTONE_DAYS`; the spec gives no number). A phone whose `since` is older than the oldest
+  kept one gets `{"full_resync": true, "next_since": 0, "has_more": true}` and empty arrays: drop
+  the local copy of synced data (keep the outbox), then sync from `since=0`. While paging through
+  that fresh sync, send `full=true` with every call (`/v1/sync?since=<next>&full=true`), so a
+  page in the middle is not refused again; stop sending it once `has_more` is false. The last
+  page's `next_since` is never below the retention floor. `full_resync` is `false` otherwise.
 
 ## Placement (`auto_rule`)
 
 Code decides, no model call. A rule is
 `{"any": [condition, ...]}`; it matches if any condition holds; `{"any": []}` never matches.
+Week 10 adds an optional `"none": [condition, ...]`: the record is left off this page when one of
+`none` holds **and another page of the person takes it** (by its rule, a learned placement, or a
+«Дела» / «Покупки» line). With no such page it stays here, so a record is never on no page.
 
 | Condition | Holds when |
 |---|---|
@@ -241,11 +253,24 @@ Code decides, no model call. A rule is
 | `{"envelope_types": ["receipt", ...]}` | `item.envelope.type` is listed |
 | `{"aspects": ["reminder", ...]}` | envelope has that part: `reminder`, `task`, `kp` (from `proposed`), `amount` (from `entities.amounts`) |
 | `{"words": ["ремонт", ...]}` | a word in title, summary or text starts with it, ignoring case |
+| `{"task_record": true}` | week 10: the record is a line of «Дела» / «Покупки» (`tasks.item_id`) |
+
+**«Заметки» is notes only (week 10, founder 2026-11-09; template `notes` v2).** Each template is
+its own screen and tool: «Заметки» shows notes, not task or shopping lines nor receipts — when the
+person has the page for those («Дела и напоминания», «Покупки», «Расходы» / «Документы»). Pages made
+from v1 follow v2 (migration 0015; their `template_version` becomes 2). Consequences:
+- A record placed on «Заметки» by the rule when it was saved (`added_by: "rule"`, never moved,
+  pinned or removed by the person) **leaves «Заметки»** once it is understood as a receipt / task /
+  shopping list and another page takes it, and when such a page is added later (a receipt goes
+  when «Расходы» is added). That row is deleted (a `screen_item` tombstone); the record stays on
+  the other page. Rows the person placed or moved are never touched (R-54).
+- A receipt the person moves to «Расходы» leaves «Заметки» as any move does.
+- The phone may place offline by `any` alone; the server's `none` result wins on sync.
 
 An item is placed when created and when its text is ready. Enrichment must call
 `assistant.pages.place_item` after writing the envelope; until it does, rules that read the envelope
-(`envelope_types`, `aspects`) match only on page creation and restore. Placing **only adds rows**: it never moves an existing row and never returns a row the person removed
-(R-54). A new row goes above the first auto-placed row that is not newer, so a head of rows placed
+(`envelope_types`, `aspects`) match only on page creation and restore. Placing **only adds rows** (the one exception: a rule-placed row a `none` takes off, above): it
+never moves an existing row and never returns a row the person removed (R-54). A new row goes above the first auto-placed row that is not newer, so a head of rows placed
 by hand or pinned stays on top.
 
 Learned placement (`placement_rule`, week 7): after the person moved 2 records of one kind to a page

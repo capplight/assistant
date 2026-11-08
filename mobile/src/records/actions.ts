@@ -10,7 +10,8 @@ export type VerifyPayload = {
   fields: Record<string, string | null>;
 };
 
-export type UnmergePayload = { recordId: string; serverId: string };
+/** `serverId` null: a repeat the phone found itself, its id is looked up when this is sent. */
+export type UnmergePayload = { recordId: string; serverId: string | null };
 
 export type CorrectPayload = {
   recordId: string;
@@ -111,7 +112,7 @@ export class RecordActions {
   /** «Отменить» on «Уже было — добавил к записи от …». */
   async unmerge(recordId: string): Promise<void> {
     const rec = await this.d.records.get(recordId);
-    if (!rec?.serverId || rec.pending.unmerge) return;
+    if (!rec || rec.pending.unmerge || rec.hiddenReason === null) return;
     await this.d.records.setPending(rec.id, { ...rec.pending, unmerge: true });
     const payload: UnmergePayload = { recordId: rec.id, serverId: rec.serverId };
     await this.d.outbox.enqueue('item.unmerge', payload);
