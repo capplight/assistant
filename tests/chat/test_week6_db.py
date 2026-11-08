@@ -28,6 +28,7 @@ from assistant.db.models import Item, Job, JobStatus
 from assistant.db.models_actions import Action
 from assistant.db.models_pages import Screen, ScreenItem
 from assistant.pages import lexorank
+from assistant.tasks import TasksReply
 from tests.api.conftest import client, make_settings
 from tests.chat.test_chat_db import (  # noqa: F401  (env is a fixture)
     PHONE,
@@ -71,6 +72,8 @@ class Script:
         if req.schema_name == "IntentReply":
             note = any(w in _all_text(req).lower() for w in ("купить", "позвонить"))
             return IntentReply(intent="note" if note else "question", confidence=0.9)
+        if req.schema_name == "TasksReply":  # week 9: not a list, unless a test says so
+            return TasksReply(list="none", items=[], day="none")
         if req.schema_name == "ChatSummary":
             return ChatSummary(summary="Человек спрашивал про плитку и ремонт.")
         if not self.chat:
@@ -184,7 +187,7 @@ async def test_arrange_by_topics_then_undo_and_redo(w6):
         assert msg["answer_kind"] == "action" and msg["action"]["id"] == action["id"]
         assert msg["text"] == "Разложил 12 записей в 3 группы." and msg["ai_label"] is None
         listed = (await c.get("/v1/actions", headers=h)).json()["actions"]
-        assert [a["id"] for a in listed] == [action["id"]]
+        assert [a["id"] for a in listed if a["initiated_by"] == "agent"] == [action["id"]]
 
         # «Отменить»: the order comes back completely.
         r = await c.post(f"/v1/actions/{action['id']}/undo", json={}, headers=h)
@@ -523,7 +526,8 @@ async def test_record_text_cannot_call_tools(w6):
         trashed = [(await c.get(f"/v1/items/{i}", headers=h)).json()["deleted_at"] for i in ids]
         assert trashed == [None, None]
         async with w6.maker() as s:
-            assert await s.scalar(select(Action.id)) is None
+            # the person's own page-making is in «Что я сделал» (week 9); nothing by the agent
+            assert await s.scalar(select(Action.id).where(Action.initiated_by == "agent")) is None
 
         # Shared text that reads like an order is data too.
         script.chat = [try_trash, ChatReply(answer="Сохраню.", citations=[], insufficient=False)]

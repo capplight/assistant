@@ -5,13 +5,14 @@ import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { dayText, timeText, wantsAlarm, whenWord } from '@/alarms/format';
 import { lateRisk } from '@/alarms/plan';
-import { dropPhrase, saveReminder } from '@/alarms/service';
+import { dropPhrase, moveReminder, saveReminder } from '@/alarms/service';
 import { useAlarms } from '@/alarms/store';
 import type { ReminderDraft } from '@/api/types';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
 import { useToast } from '@/store/toast';
+import { tasksState } from '@/tasks/store';
 import { MAX_FONT_SCALE, useTheme } from '@/theme';
 
 const MIN = 60_000;
@@ -37,12 +38,13 @@ function defaultDue(now: number): number {
  * S13 «Напоминание» (2-design S13): «как понял» after `POST /reminders/parse`, or the manual form
  * («Поставить вручную», «+ → Напоминание»). Saving works without the internet and in «Без ИИ»:
  * it rings from this phone at once, the server gets it through the outbox. New → no «Да».
+ * Week 9: «Перенести» on a missed row opens it with the text (`missedKey`): saved = the row goes.
  * Not here yet: repeats by days (RRULE), changing an existing reminder (S25).
  */
 export default function ReminderScreen() {
   const theme = useTheme();
   const { t } = useTranslation();
-  const p = useLocalSearchParams<{ text?: string; draft?: string; options?: string; message?: string; phraseId?: string }>();
+  const p = useLocalSearchParams<{ text?: string; draft?: string; options?: string; message?: string; phraseId?: string; missedKey?: string; editId?: string; messageId?: string; via?: string }>();
   const caps = useAlarms((s) => s.caps);
   const showToast = useToast((s) => s.show);
   const [now] = useState(() => Date.now());
@@ -53,7 +55,10 @@ export default function ReminderScreen() {
 
   const [title, setTitle] = useState(first?.title ?? p.text ?? '');
   const [due, setDue] = useState(() => (first?.due_at ? Date.parse(first.due_at) : defaultDue(now)));
-  const [level, setLevel] = useState<'alarm' | 'notification'>(first?.level ?? (wantsAlarm(p.text ?? '') ? 'alarm' : 'notification'));
+  const editing = useAlarms((s) => (p.editId ? s.reminders[p.editId] : undefined));
+  const [level, setLevel] = useState<'alarm' | 'notification'>(
+    first?.level ?? editing?.level ?? (wantsAlarm(p.text ?? '') ? 'alarm' : 'notification'),
+  );
   const [offset, setOffset] = useState<number>(first?.offsets[0] ?? 0);
   const [edited, setEdited] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,15 +81,28 @@ export default function ReminderScreen() {
     const text = title.trim();
     if (!text) return setError(t('rem.need_title'));
     if (due <= Date.now() + 30_000) return setError(t('rem.past'));
-    await saveReminder({
+    const input = {
       title: text,
       dueAt: due,
       level,
       offsets: offset ? [offset] : [],
-      createdVia: parsed ? 'typed' : 'manual_form',
-      parseSource: !parsed || edited ? 'user_edit' : null,
-    });
+    };
+    // «Перенести» a missed one: the same reminder moves (PATCH); a repeating one gets a new one-off.
+    const moved = p.editId ? await moveReminder(p.editId, input) : null;
+    if (!moved) {
+      await saveReminder({
+        ...input,
+        createdVia: p.via === 'agent_suggestion' || p.via === 'voice' ? p.via : parsed ? 'typed' : 'manual_form',
+        parseSource: !parsed || edited ? 'user_edit' : null,
+        messageId: p.messageId ?? null,
+      });
+    }
     if (p.phraseId) dropPhrase(p.phraseId);
+    // «Перенести» a missed one (week 9): the new time replaces the red row.
+    if (p.missedKey) {
+      const st = tasksState();
+      st.set({ handledMissed: [...st.handledMissed, p.missedKey].slice(-200) });
+    }
     showToast(t('rem.saved', { when: whenWord(due, Date.now()), time: timeText(due) }), 3000);
     // R-12 / 2-design 5.3: the first reminder asks for notifications (S04) if nobody asked yet.
     const s = useAlarms.getState();

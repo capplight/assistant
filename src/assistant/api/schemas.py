@@ -401,6 +401,7 @@ class PageCreateOut(BaseModel):
     page: PageOut
     created: bool
     revived: bool = False  # True: a removed singleton page came back, with its id and order
+    action: "ActionOut | None" = None  # week 9: «Отменить» removes the page again
 
 
 class PagePatchIn(BaseModel):
@@ -430,6 +431,7 @@ class PageEntryOut(BaseModel):
     link: PageItemOut
     item: ItemOut
     fields: dict[str, Any]
+    task: "TaskOut | None" = None  # week 9: on «Дела» / «Покупки»
 
 
 class PageItemsOut(BaseModel):
@@ -444,6 +446,13 @@ class PageItemAddIn(BaseModel):
 class PageItemAddOut(BaseModel):
     link: PageItemOut
     created: bool
+    action: "ActionOut | None" = None  # week 9
+
+
+class PageWithActionOut(PageOut):
+    """PATCH / DELETE / restore of a page: the page plus the action it wrote (week 9)."""
+
+    action: "ActionOut | None" = None
 
 
 class PageSummaryOut(BaseModel):
@@ -489,6 +498,10 @@ class SyncOut(BaseModel):
     screen_summaries: list[PageSummaryOut]  # gone with their page: no tombstones of their own
     reminders: list["ReminderOut"] = []  # app reminders, incl. deleted (reminders.md)
     reminder_fires: list["FireOut"] = []  # their fires: state changes, retargets, new snoozes
+    tasks: list["TaskOut"] = []  # week 9 (today.md), incl. deleted ones
+    suggestions: list["SuggestionOut"] = []  # week 9, status changes too
+    pending_actions: list["PendingActionOut"] = []  # week 9 (actions.md)
+    habits: list["HabitSyncOut"] = []  # week 9 (pages.md)
     tombstones: list[TombstoneOut]  # purged for good: drop locally
     next_since: int  # pass as `since` next time
     has_more: bool  # true: call again right away with next_since
@@ -592,6 +605,8 @@ class ActionChangeOut(BaseModel):
     text: str
     page_id: uuid.UUID | None
     reverted: bool
+    task_id: uuid.UUID | None = None  # week 9: a task row
+    reminder_id: uuid.UUID | None = None  # week 9: a reminder row (item_id null)
 
 
 class ActionSummaryOut(BaseModel):
@@ -742,6 +757,21 @@ class HabitOut(BaseModel):
     envelope_type: str | None
     evidence_count: int
     updated_at: datetime
+    item_id: uuid.UUID | None = None  # screen_exclusion: the record taken off the page
+
+
+class HabitSyncOut(BaseModel):
+    """A learned rule in /v1/sync (week 9), whatever its status."""
+
+    id: uuid.UUID
+    kind: str
+    status: str
+    text_ru: str
+    page: PageRefOut | None
+    envelope_type: str | None
+    evidence_count: int
+    updated_at: datetime
+    seq: int
 
 
 class HabitsOut(BaseModel):
@@ -787,6 +817,7 @@ class ReminderIn(BaseModel):
     created_via: Literal["voice", "typed", "agent_suggestion", "manual_form"] | None = None
     parse_source: Literal["rules", "llm", "user_edit"] | None = None
     sensitivity: Literal["health"] | None = None
+    message_id: uuid.UUID | None = None  # week 9: the chat reply the draft came from
     item_id: uuid.UUID | None = None
 
     @model_validator(mode="after")
@@ -864,6 +895,7 @@ class FireOut(BaseModel):
 class ReminderWithFiresOut(BaseModel):
     reminder: ReminderOut
     fires: list[FireOut]
+    action: "ActionOut | None" = None  # week 9: «Что я сделал» + «Отменить»
 
 
 class ReminderListOut(BaseModel):
@@ -928,6 +960,7 @@ class ReminderEventResult(BaseModel):
 class ReminderEventsOut(BaseModel):
     results: list[ReminderEventResult]
     fires: list[FireOut]
+    actions: list["ActionOut"] = []  # week 9: a late «Сделано» on a missed one, with «Отменить»
 
 
 class ReminderActiveOut(BaseModel):
@@ -956,4 +989,171 @@ class ReminderSettingsPatchIn(BaseModel):
     alarm_device_policy: Literal["last_active", "all"] | None = None
 
 
+# --- tasks, «Сегодня», suggestions, pending «Да» (docs/api/today.md, week 9) ---
+
+ListKeyStr = Literal["todo", "shopping"]
+DateStr = Annotated[str, Field(pattern=r"^\d{4}-\d{2}-\d{2}$")]
+
+
+class TaskOut(BaseModel):
+    id: uuid.UUID
+    client_id: uuid.UUID | None
+    item_id: uuid.UUID | None
+    list_key: str
+    title: str
+    qty: str | None
+    where: str | None
+    due_date: str | None
+    done: bool
+    done_at: datetime | None
+    version: int
+    seq: int
+    created_at: datetime
+    updated_at: datetime
+    deleted_at: datetime | None
+
+
+class TasksOut(BaseModel):
+    tasks: list[TaskOut]
+
+
+class TaskIn(BaseModel):
+    client_id: uuid.UUID
+    list_key: ListKeyStr
+    title: str = Field(min_length=1, max_length=200)
+    qty: str | None = Field(default=None, max_length=60)
+    where: str | None = Field(default=None, max_length=60)
+    due_date: DateStr | None = None
+
+
+class TaskPatchIn(BaseModel):
+    version: int
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    qty: str | None = Field(default=None, max_length=60)
+    where: str | None = Field(default=None, max_length=60)
+    due_date: DateStr | None = None
+    list_key: ListKeyStr | None = None
+
+
+class TaskDoneIn(BaseModel):
+    client_id: uuid.UUID
+    done: bool = True
+
+
+class TaskCreatedOut(BaseModel):
+    task: TaskOut
+    action: "ActionOut | None"
+    page_patches: list[dict[str, Any]] = []
+    repeated: bool = False
+
+
+class TaskChangedOut(BaseModel):
+    task: TaskOut
+    action: "ActionOut | None"
+    repeated: bool = False
+
+
+class SuggestionOut(BaseModel):
+    id: uuid.UUID
+    kind: str
+    key: str
+    text_ru: str
+    yes_label: str
+    no_label: str
+    do: dict[str, Any]
+    source_item_id: uuid.UUID | None
+    status: str
+    expires_at: datetime | None
+    seq: int
+    created_at: datetime
+
+
+class SuggestionsOut(BaseModel):
+    proposals: list[SuggestionOut]
+    tip: SuggestionOut | None
+
+
+class SuggestionAcceptIn(BaseModel):
+    client_id: uuid.UUID | None = None
+
+
+class SuggestionAcceptOut(BaseModel):
+    suggestion: SuggestionOut
+    action: "ActionOut | None" = None
+    task: TaskOut | None = None
+    reminder_draft: dict[str, Any] | None = None
+
+
+class SuggestionDismissOut(BaseModel):
+    suggestion: SuggestionOut
+
+
+class PendingActionOut(BaseModel):
+    id: uuid.UUID
+    kind: str
+    status: str
+    preview: dict[str, Any]
+    expires_at: datetime
+    message_id: uuid.UUID | None
+    action_id: uuid.UUID | None
+    seq: int
+    created_at: datetime
+    decided_at: datetime | None
+
+
+class TodayReminderOut(BaseModel):
+    reminder: ReminderOut
+    fire: FireOut
+    occurrence_at: datetime
+    local_time: str
+    state: str
+
+
+class TodayShoppingOut(BaseModel):
+    page_id: uuid.UUID | None
+    count: int
+    titles: list[str]
+
+
+class TodayDueOut(BaseModel):
+    reminders: list[TodayReminderOut]
+    tasks: list[TaskOut]
+    shopping: TodayShoppingOut | None
+
+
+class DoneForYouOut(BaseModel):
+    actions: list["ActionOut"]
+    count_today: int
+
+
+class TodayOut(BaseModel):
+    date: str
+    tz: str
+    greeting: str
+    sections: list[str]
+    today: TodayDueOut
+    missed: list[TodayReminderOut]
+    done_for_you: DoneForYouOut
+    banner: "ChatMessageOut | None"
+    proposals: list[SuggestionOut]
+    tip: SuggestionOut | None
+    empty: bool
+    example: str | None
+
+
+class HabitPatchIn(BaseModel):
+    page_id: uuid.UUID
+    client_id: uuid.UUID | None = None
+
+
+class HabitPatchOut(BaseModel):
+    habit: HabitOut
+    action: "ActionOut | None"
+    repeated: bool = False
+
+
+for _m in (ReminderEventsOut, HabitPatchOut, PageCreateOut, PageEntryOut, PageItemAddOut,
+           PageWithActionOut, ReminderWithFiresOut,
+           TaskCreatedOut, TaskChangedOut, SuggestionAcceptOut, DoneForYouOut, TodayOut):
+    _m.model_rebuild()
 SyncOut.model_rebuild()  # after the reminder shapes it refers to

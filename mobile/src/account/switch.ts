@@ -21,6 +21,7 @@ const OLD_ACCOUNT_ONLY: readonly OutboxKind[] = [
   'pages.reorder',
   'pages.remove',
   'pages.restore',
+  'task.update',
 ];
 
 /**

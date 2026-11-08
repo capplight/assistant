@@ -138,6 +138,17 @@ export const reminderSink: ReminderSink = {
     return real.startsWith(LOCAL_PREFIX) ? null : real;
   },
   localOnly,
+  /** PATCH /reminders/{id} answered («Перенести»): the phone's guess of the fires goes. */
+  updated: (id, out) => {
+    dropGuess(id);
+    merge(out.reminder ? [out.reminder] : [], out.fires);
+    void replan();
+  },
+  /** Refused (e.g. `409 conflict`): the guess goes, the server's copy comes with the next sync. */
+  updateFailed: (id) => {
+    dropGuess(id);
+    void replan();
+  },
   deviceRegistered: (device: DeviceOut) => {
     if (device.id && alarms().deviceId !== device.id) {
       alarms().set({ deviceId: device.id });
@@ -269,11 +280,12 @@ async function planOnce(): Promise<void> {
   await queueEvents(out);
 }
 
-async function queueEvents(events: QueuedReminderEvent[]): Promise<void> {
+async function queueEvents(events: QueuedReminderEvent[]): Promise<string | null> {
   const send = events.filter((e) => !localOnly(e.fire_key));
-  if (send.length === 0) return;
-  await (await getOutbox()).enqueue('reminder.events', { events: send });
+  if (send.length === 0) return null;
+  const row = await (await getOutbox()).enqueue('reminder.events', { events: send });
   d().kickSync();
+  return row.id;
 }
 
 // --- events from the port ---
@@ -436,6 +448,8 @@ export async function startTest(): Promise<void> {
 // --- S13: a reminder saved here ---
 
 export type ReminderInput = {
+  /** Week 9: the chat reply of the draft (`reminder_draft`), so «Что я сделал» links to the line. */
+  messageId?: string | null;
   title: string;
   /** The event moment (ms). */
   dueAt: number;
@@ -505,6 +519,55 @@ function localFires(r: ReminderOut): FireOut[] {
     }));
 }
 
+/** Fires the phone made up for a changed reminder (no server id yet). */
+function dropGuess(reminderId: string): void {
+  const s = alarms();
+  const fires = { ...s.fires };
+  for (const [k, f] of Object.entries(fires)) if (f.reminder_id === reminderId && f.id === '') delete fires[k];
+  s.set({ fires });
+}
+
+/** `reminder.update`: PATCH /reminders/{id} with the version the person saw. */
+export type ReminderUpdatePayload = { id: string; body: import('@/api/types').ReminderPatchIn };
+
+/**
+ * «Перенести» (S13 opened from a missed row, today.md): the same reminder at a new time, PATCH
+ * /reminders/{id}. Rings from the new time at once (offline too); the server re-plans its fires
+ * and its answer replaces the phone's guess. A repeating reminder is not moved (its whole series
+ * would move): the caller saves a new one-off instead.
+ */
+export async function moveReminder(id: string, i: Omit<ReminderInput, 'kind' | 'createdVia' | 'parseSource'>): Promise<ReminderOut | null> {
+  const s = alarms();
+  const r = s.reminders[id];
+  if (!r || r.rrule || id.startsWith(LOCAL_PREFIX)) return null;
+  const moved: ReminderOut = {
+    ...r,
+    title: i.title,
+    due_at: new Date(i.dueAt).toISOString(),
+    local: null,
+    when_text: null,
+    level: i.level,
+    offsets: i.offsets,
+    status: 'scheduled',
+    parse_source: 'user_edit',
+  };
+  const fires = { ...s.fires };
+  // The old future alerts of this reminder stop ringing here at once.
+  for (const [k, f] of Object.entries(fires)) {
+    if (f.reminder_id === id && f.state === 'planned' && Date.parse(f.fire_at) > now()) fires[k] = { ...f, state: 'cancelled' };
+  }
+  for (const f of localFires(moved)) fires[f.key] = f;
+  s.set({ reminders: { ...s.reminders, [id]: moved }, fires });
+  await replan();
+  const payload: ReminderUpdatePayload = {
+    id,
+    body: { version: r.version, title: i.title, due_at: moved.due_at, level: i.level, offsets: i.offsets },
+  };
+  await (await getOutbox()).enqueue('reminder.update', payload);
+  d().kickSync();
+  return moved;
+}
+
 /**
  * [Сохранить] on S13: rings at once from here (also offline and in «Без ИИ»), the server gets it
  * through the outbox (`client_id` makes the retry safe).
@@ -527,6 +590,7 @@ export async function saveReminder(i: ReminderInput): Promise<ReminderOut> {
     level: i.level,
     created_via: r.created_via ?? 'manual_form',
     parse_source: r.parse_source,
+    ...(i.messageId ? { message_id: i.messageId } : {}),
   };
   await (await getOutbox()).enqueue('reminder.create', { body });
   d().kickSync();
@@ -646,4 +710,133 @@ export function resetAlarmsForTests(): void {
   planAgain = false;
   draining = null;
   refreshing = null;
+}
+
+// --- week 9: «Пропущено» on «Сегодня» and «Дела» ---
+
+/** «Пропущено» shows at +30 min (reminders.md `missed_at`); the server's `missed` comes with sync. */
+export const MISSED_AFTER_MS = 30 * MIN;
+
+export type MissedRow = { key: string; reminderId: string; title: string; at: number; level: 'alarm' | 'notification' };
+
+/**
+ * Event moments nobody answered: the server's `missed`, or — when the phone has not heard from it
+ * (offline) — 30 min past with no «Сделано» / «Отложить» here. One row per occurrence; early alerts
+ * («за час») are not rows of their own. Rows the person moved («Перенести») are left out.
+ */
+export function missedRows(
+  s: Pick<ReturnType<typeof alarms>, 'fires' | 'reminders' | 'local'>,
+  handled: string[],
+  at: number = now(),
+): MissedRow[] {
+  const answered = new Set<string>();
+  for (const f of Object.values(s.fires)) {
+    if (f.state === 'acked' || s.local[f.key]?.ackedAt || s.local[f.key]?.snoozedUntil) answered.add(`${f.reminder_id}:${f.occurrence_at}`);
+  }
+  const out: MissedRow[] = [];
+  for (const f of Object.values(s.fires)) {
+    const r = s.reminders[f.reminder_id];
+    if (!r || r.kind !== 'normal' || r.deleted_at || r.status === 'cancelled' || r.status === 'done') continue;
+    if (f.offset_min !== 0 || f.snooze_n !== 0 || handled.includes(f.key)) continue;
+    if (answered.has(`${f.reminder_id}:${f.occurrence_at}`)) continue;
+    const late = f.state !== 'cancelled' && f.state !== 'snoozed' && Date.parse(f.fire_at) + MISSED_AFTER_MS <= at;
+    if (f.state === 'missed' || late) out.push({ key: f.key, reminderId: r.id, title: r.title, at: Date.parse(f.occurrence_at), level: r.level });
+  }
+  return out.sort((a, b) => b.at - a.at);
+}
+
+/**
+ * [Сделано] on a missed row: a late «Сделано» (the server turns `missed` into `acked`, reminders.md).
+ * Shown at once; the event goes through the outbox, offline too.
+ */
+export async function ackLate(fireKey: string): Promise<string | null> {
+  const s = alarms();
+  const f = s.fires[fireKey];
+  if (!f) return null;
+  const at = now();
+  const local = { ...s.local };
+  for (const g of Object.values(s.fires)) {
+    if (g.reminder_id === f.reminder_id && g.occurrence_at === f.occurrence_at) local[g.key] = { ...(local[g.key] ?? {}), ackedAt: at };
+  }
+  s.set({ local });
+  const row = await queueEvents([
+    { client_id: newId(), fire_key: fireKey, fire_id: fireId(fireKey), event: 'acked', at: new Date(at).toISOString(), meta: { surface: 'today' } },
+  ]);
+  await replan();
+  return row;
+}
+
+/**
+ * «Отменить» of [Сделано] on a missed row. reminders.md has no event that takes an `acked` back:
+ * only while the event still waits in the outbox can it be dropped. Returns false when it went.
+ */
+export async function undoAckLate(fireKey: string, outboxId: string | null): Promise<boolean> {
+  if (outboxId) {
+    const outbox = await getOutbox();
+    const row = await outbox.get(outboxId);
+    if (row && row.status !== 'pending') return false;
+    if (row) await outbox.markFailed(row.id, 'undone');
+  }
+  unackLocal(fireKey);
+  await replan();
+  return true;
+}
+
+/** «Отменить» of a late «Сделано» that has not gone yet: the row is missed again here. */
+export function unackLocal(fireKey: string): void {
+  const s = alarms();
+  const f = s.fires[fireKey];
+  if (!f) return;
+  const local = { ...s.local };
+  for (const g of Object.values(s.fires)) {
+    if (g.reminder_id === f.reminder_id && g.occurrence_at === f.occurrence_at && local[g.key]) {
+      const { ackedAt: _a, ...rest } = local[g.key]!;
+      local[g.key] = rest;
+    }
+  }
+  s.set({ local });
+}
+
+// --- week 9: «Удалить» a reminder (DELETE /reminders/{id}: 200 with its action) ---
+
+const deleted = new Map<string, { reminder: ReminderOut; fires: Record<string, FireOut> }>();
+
+/**
+ * Stops ringing here at once (offline too); `reminder.delete` goes through the outbox. Returns the
+ * outbox row id for «Отменить». Only reminders the server has (a local one has no id there yet).
+ */
+export async function deleteReminder(id: string): Promise<string | null> {
+  const s = alarms();
+  const r = s.reminders[id];
+  if (!r || id.startsWith(LOCAL_PREFIX)) return null;
+  const mine = Object.fromEntries(Object.entries(s.fires).filter(([, f]) => f.reminder_id === id));
+  deleted.set(id, { reminder: r, fires: mine });
+  const at = new Date(now()).toISOString();
+  const fires = { ...s.fires };
+  for (const [k, f] of Object.entries(mine)) if (f.state !== 'acked' && f.state !== 'missed') fires[k] = { ...f, state: 'cancelled' };
+  s.set({ reminders: { ...s.reminders, [id]: { ...r, status: 'cancelled', deleted_at: at } }, fires });
+  await replan();
+  const row = await (await getOutbox()).enqueue('reminder.delete', { id });
+  d().kickSync();
+  return row.id;
+}
+
+/**
+ * «Отменить» of «Удалить»: still in the outbox → it never goes and the reminder rings again here.
+ * Sent → returns the action id: the caller undoes it (the server brings it back with new fires).
+ */
+export async function takeBackDelete(id: string, outboxId: string): Promise<{ local: boolean; actionId: string | null }> {
+  const outbox = await getOutbox();
+  const row = await outbox.get(outboxId);
+  if (row?.status === 'pending') {
+    await outbox.markFailed(row.id, 'undone');
+    const was = deleted.get(id);
+    if (was) {
+      const s = alarms();
+      s.set({ reminders: { ...s.reminders, [id]: was.reminder }, fires: { ...s.fires, ...was.fires } });
+      await replan();
+    }
+    return { local: true, actionId: null };
+  }
+  return { local: false, actionId: ((row?.payload as { actionId?: string | null } | undefined)?.actionId ?? null) };
 }

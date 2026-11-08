@@ -103,7 +103,8 @@ export default function MoreScreen() {
       {row('my_pages', t('more.my_pages'), () => router.navigate('/my-pages'))}
       {row('all_records', t('more.all_records'), () => router.navigate('/records'))}
       {row('trash', t('trash.title'), () => router.navigate('/trash'), t('trash.hint'))}
-      {row('did', t('more.did'), undefined, t('more.later'))}
+      {row('did', t('more.did'), () => router.push('/did'))}
+      {row('habits', t('habits.title'), () => router.push('/habits'))}
       {row('chat', t('more.chat'), () => router.push('/chat'))}
       {row('alarms', t('more.alarms'), () => router.push('/alarm-setup'), alarmsOk ? t('more.alarms_ok') : t('more.alarms_fix'))}
       {row('import', t('more.import'), undefined, t('more.later'))}

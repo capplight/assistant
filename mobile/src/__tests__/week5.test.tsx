@@ -365,7 +365,7 @@ describe('offline, limits, «Без ИИ»', () => {
     expect(s.calls.some((c) => c.path.startsWith('/chat'))).toBe(false);
   });
 
-  it('week 6: a note goes to the conversation (the server decides); never reached it → saved on the phone', async () => {
+  it('week 6: a note goes to the conversation (the server decides); never reached it → saved on the phone (week 9: on «Покупки» as a row of the list)', async () => {
     const outbox = setup();
     s.on('POST /chat/messages', () => ({ status: 200, sse: reply() }));
     await askOnShopping('хлеб и молоко');
@@ -375,7 +375,8 @@ describe('offline, limits, «Без ИИ»', () => {
     s.offline = true;
     await fireEvent.changeText(screen.getByTestId('assistant-input'), 'сыр и масло');
     await fireEvent.press(screen.getByTestId('assistant-send'));
-    await settle(() => outbox.all().some((e) => e.kind === 'item.create'));
+    await settle(() => outbox.all().some((e) => e.kind === 'task.create'));
+    expect(outbox.all().filter((e) => e.kind === 'item.create')).toHaveLength(0);
     expect(within(screen.getByTestId('answer-banner')).getByText(/^Сохранил\./)).toBeTruthy();
   });
 });

@@ -425,6 +425,9 @@ async def tool_create(env: Any, args: CreateArgs, *, by_code: bool = False) -> R
     here = page is None or (m.page is not None and page.pk == m.page.pk)
     where = "" if here else f" в {_q(page.title)}"  # type: ignore[union-attr]
     made: dict[str, Any] = {}
+    list_key = LIST_OF_PAGE.get(page.template_key) if page is not None else None
+    if list_key is not None and not by_code:  # on «Покупки» / «Дела» a record is a task (5.10)
+        return await _create_task(env, list_key, title or body)
 
     async def prepare(s: AsyncSession) -> Prepared:
         h = content_hash(body)
@@ -476,6 +479,34 @@ async def tool_create(env: Any, args: CreateArgs, *, by_code: bool = False) -> R
     return Result(_json({"done": True, "record": src.ref, "page": page.ref if page else None,
                          "said": m.sentences[-1], "action": out["id"]}),
                   False, "Записываю…", str(page.id) if page else None)  # fmt: skip
+
+
+LIST_OF_PAGE = {"shopping": "shopping", "tasks": "todo"}
+
+
+async def _create_task(env: Any, list_key: str, title: str) -> Result:
+    """`create` on a list page: one task, in the same turn's action."""
+    from assistant.tasks import TaskSpec
+    from assistant.tasks import service as tasks_service
+
+    m: MutationState = env.mut
+    if len(title) > 200:
+        return _err("a list line is at most 200 characters")
+    made: dict[str, Any] = {}
+
+    async def prepare(s: AsyncSession) -> Prepared:
+        added = await tasks_service.add(s, m.user_id, [TaskSpec(list_key, title)],
+                                        by=Initiator.AGENT, now=m.clock())  # fmt: skip
+        made["added"] = added
+        return Prepared(inverse=added.inverse, pages=added.pages, items=added.items,
+                        changes=added.changes, sentence=added.sentence)  # fmt: skip
+
+    out = await _commit(env, kind=ActionKind.SAVE_ITEM, ops=[], sentence="Записал.", changes=[],
+                        screen_pk=m.page.pk if m.page else None, source_pks=[],
+                        prepare=prepare)  # fmt: skip
+    added = made["added"]
+    return Result(_json({"done": True, "said": added.sentence, "action": out["id"]}), False,
+                  "Записываю…", str(added.page.public_id) if added.page else None)  # fmt: skip
 
 
 # --- update ---

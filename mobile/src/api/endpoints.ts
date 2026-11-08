@@ -66,6 +66,19 @@ import type {
   ReminderPushData,
   ReminderSettingsOut,
   ReminderWithFiresOut,
+  ActionsPageOut,
+  HabitOut,
+  HabitRemoveOut,
+  HabitPatchOut,
+  ReminderPatchIn,
+  SuggestionAcceptOut,
+  SuggestionOut,
+  TaskCreateIn,
+  TaskDoneIn,
+  TaskOut,
+  TaskWriteOut,
+  TodayOut,
+  TodayReminderOut,
 } from './types';
 
 /** Reads a local file and PUTs it to a presigned URL. Injected so tests don't touch the filesystem. */
@@ -155,10 +168,14 @@ const strs = (v: unknown): string[] => arr(v).map(str).filter((x): x is string =
 
 function changeOut(v: unknown): ActionChangeOut | null {
   const o = obj(v);
-  const itemId = o && str(o.item_id);
-  if (!o || !itemId) return null;
+  if (!o) return null;
+  const itemId = str(o.item_id);
+  const text = str(o.text) ?? str(o.title);
+  if (!itemId && !text) return null;
   return {
     item_id: itemId,
+    task_id: str(o.task_id),
+    reminder_id: str(o.reminder_id),
     title: str(o.title),
     kind: str(o.kind),
     text: str(o.text) ?? str(o.title) ?? '',
@@ -186,6 +203,10 @@ export function actionOut(v: unknown): ActionOut | null {
     undone_at: str(o.undone_at),
     undo_of: str(o.undo_of),
     message_id: str(o.message_id),
+    initiated_by: o.initiated_by === 'user' || o.initiated_by === 'agent' ? o.initiated_by : null,
+    scope: o.scope === 'external' || o.scope === 'internal' ? o.scope : null,
+    created_at: str(o.created_at),
+    seq: typeof o.seq === 'number' ? o.seq : 0,
   };
 }
 
@@ -365,7 +386,14 @@ export function decodeChatEvent(m: SseMessage): ChatEvent | null {
         const action = actionOut(d.action);
         if (!action) return null;
         const ids = strs(d.changed_item_ids);
-        return { type: 'action', action, changedItemIds: ids.length > 0 ? ids : action.changed_item_ids };
+        // Week 9: the tasks it made, for instant display (today.md «From the assistant line»).
+        const tasks = tasksOf(d.tasks ?? obj(d.action)?.tasks);
+        return { type: 'action', action, changedItemIds: ids.length > 0 ? ids : action.changed_item_ids, tasks };
+      }
+      case 'reminder_draft': {
+        // Week 9 (reminders.md «From the assistant line»): S13, nothing is saved.
+        const via = d.created_via === 'voice' ? 'voice' : 'typed';
+        return { type: 'reminder_draft', replyId: str(d.reply_id), draft: parseOut(d), createdVia: via };
       }
       case 'page_patch': {
         const patch = pagePatchOut(d);
@@ -476,7 +504,7 @@ export const firesOf = (v: unknown) => arr(v).map(fireOut).filter((x): x is Fire
 
 function withFires(v: unknown): ReminderWithFiresOut {
   const o = obj(v) ?? {};
-  return { reminder: reminderOut(o.reminder), fires: firesOf(o.fires) };
+  return { reminder: reminderOut(o.reminder), fires: firesOf(o.fires), action: actionOut(o.action) };
 }
 
 function draftOut(v: unknown): ReminderDraft | null {
@@ -519,6 +547,131 @@ export function reminderPushFrom(data: unknown): ReminderPushData | null {
   const o = obj(data);
   if (!o || (o.type !== 'reminder_backup' && o.type !== 'reminder_missed')) return null;
   return { type: o.type, fire_id: str(o.fire_id), reminder_id: str(o.reminder_id) };
+}
+
+
+// --- week 9: tasks, «Сегодня», suggestions, actions list, habits (today.md, actions.md, pages.md) ---
+
+export function taskOut(v: unknown): TaskOut | null {
+  const o = obj(v);
+  const id = o && str(o.id);
+  if (!o || !id) return null;
+  const now = new Date().toISOString();
+  const doneAt = str(o.done_at);
+  return {
+    id,
+    client_id: str(o.client_id),
+    item_id: str(o.item_id),
+    list_key: o.list_key === 'shopping' ? 'shopping' : 'todo',
+    title: str(o.title) ?? '',
+    qty: str(o.qty),
+    where: str(o.where),
+    due_date: str(o.due_date),
+    done: typeof o.done === 'boolean' ? o.done : !!doneAt,
+    done_at: doneAt,
+    version: num(o.version, 1),
+    seq: num(o.seq),
+    created_at: str(o.created_at) ?? now,
+    updated_at: str(o.updated_at) ?? now,
+    deleted_at: str(o.deleted_at),
+  };
+}
+
+export const tasksOf = (v: unknown) => arr(v).map(taskOut).filter((x): x is TaskOut => x !== null);
+export const actionsOf = (v: unknown) => arr(v).map(actionOut).filter((x): x is ActionOut => x !== null);
+
+function taskWrite(v: unknown): TaskWriteOut {
+  const o = obj(v) ?? {};
+  return {
+    task: taskOut(o.task),
+    action: actionOut(o.action),
+    page_patches: arr(o.page_patches).map(pagePatchOut).filter((x): x is PagePatchOut => x !== null),
+    repeated: o.repeated === true,
+  };
+}
+
+export function suggestionOut(v: unknown): SuggestionOut | null {
+  const o = obj(v);
+  const id = o && str(o.id);
+  const text = o && str(o.text_ru);
+  if (!o || !id || !text) return null;
+  const d = obj(o.do);
+  const type = d ? str(d.type) : null;
+  return {
+    id,
+    kind: str(o.kind) ?? 'tip',
+    key: str(o.key) ?? '',
+    text_ru: text,
+    yes_label: str(o.yes_label),
+    no_label: str(o.no_label),
+    do: d && type ? { type, phrase: str(d.phrase), page_id: str(d.page_id) } : null,
+    status: str(o.status) ?? 'shown',
+    expires_at: str(o.expires_at),
+    seq: num(o.seq),
+  };
+}
+
+export const suggestionsOf = (v: unknown) => arr(v).map(suggestionOut).filter((x): x is SuggestionOut => x !== null);
+
+function todayReminderOut(v: unknown): TodayReminderOut | null {
+  const o = obj(v);
+  const reminder = o ? reminderOut(o.reminder) : null;
+  if (!o || !reminder) return null;
+  return {
+    reminder,
+    fire: fireOut(o.fire),
+    occurrence_at: str(o.occurrence_at) ?? reminder.due_at,
+    local_time: str(o.local_time),
+    state: str(o.state),
+  };
+}
+
+const todayReminders = (v: unknown) => arr(v).map(todayReminderOut).filter((x): x is TodayReminderOut => x !== null);
+
+export function todayOut(v: unknown): TodayOut {
+  const o = obj(v) ?? {};
+  const today = obj(o.today) ?? {};
+  const shop = obj(today.shopping);
+  const done = obj(o.done_for_you) ?? {};
+  return {
+    date: str(o.date),
+    tz: str(o.tz),
+    greeting: str(o.greeting),
+    sections: strs(o.sections),
+    today: {
+      reminders: todayReminders(today.reminders),
+      tasks: tasksOf(today.tasks),
+      shopping: shop ? { page_id: str(shop.page_id), count: num(shop.count), titles: strs(shop.titles) } : null,
+    },
+    missed: todayReminders(o.missed),
+    done_for_you: { actions: actionsOf(done.actions), count_today: num(done.count_today) },
+    banner: chatMessageOut(o.banner),
+    proposals: suggestionsOf(o.proposals).slice(0, 2),
+    tip: suggestionOut(o.tip),
+    empty: o.empty === true,
+    example: str(o.example),
+  };
+}
+
+export const habitsOf = (v: unknown) => arr(v).map(habitOut).filter((x): x is HabitOut => x !== null);
+
+export function habitOut(v: unknown): HabitOut | null {
+  const o = obj(v);
+  const id = o && str(o.id);
+  const text = o && str(o.text_ru);
+  if (!o || !id || !text) return null;
+  return {
+    id,
+    kind: str(o.kind) ?? 'habit',
+    text_ru: text,
+    text_kk: str(o.text_kk),
+    page: pageRef(o.page),
+    item_id: str(o.item_id),
+    status: str(o.status) ?? 'active',
+    evidence_count: num(o.evidence_count),
+    seq: num(o.seq),
+    updated_at: str(o.updated_at),
+  };
 }
 
 /** Typed /v1 endpoints. The ONLY place that knows paths and request bodies. */
@@ -656,9 +809,10 @@ export class Api {
     return manualOut(await this.client.request<unknown>('POST', '/pages/reorder', { body, idempotencyKey: body.client_id }));
   }
 
-  /** S34 «Убрать»: soft delete, the records stay. Repeatable. */
-  removePage(pageId: string): Promise<PageOut> {
-    return this.client.request('DELETE', `/pages/${encodeURIComponent(pageId)}`);
+  /** S34 «Убрать»: soft delete, the records stay. Repeatable. Week 9: `action` (null on a repeat). */
+  async removePage(pageId: string): Promise<{ page: PageOut | null; action: ActionOut | null }> {
+    const o = await this.client.request<unknown>('DELETE', `/pages/${encodeURIComponent(pageId)}`);
+    return { page: pageOutOf(o), action: actionOut(obj(o)?.action) };
   }
 
   /** «Отменить» of «Убрать»: the old rows and order are back. */
@@ -756,8 +910,14 @@ export class Api {
     return withFires(await this.client.request<unknown>('POST', '/reminders', { body, idempotencyKey: body.client_id }));
   }
 
-  deleteReminder(id: string): Promise<unknown> {
-    return this.client.request('DELETE', `/reminders/${encodeURIComponent(id)}`);
+  /** Week 9: 200 {reminder, fires, action} (was 204): any 2xx is success. */
+  async deleteReminder(id: string): Promise<ReminderWithFiresOut> {
+    return withFires((await this.client.request<unknown>('DELETE', `/reminders/${encodeURIComponent(id)}`)) ?? {});
+  }
+
+  /** «Перенести» (S13 on a missed one). `409 conflict` when `version` is stale. */
+  async patchReminder(id: string, body: ReminderPatchIn): Promise<ReminderWithFiresOut> {
+    return withFires(await this.client.request<unknown>('PATCH', `/reminders/${encodeURIComponent(id)}`, { body }));
   }
 
   /** The planning window (default now − 1 h … now + 14 days). */
@@ -787,7 +947,7 @@ export class Api {
         return id && st ? { client_id: id, status: st as Result['status'] } : null;
       })
       .filter((x): x is Result => x !== null);
-    return { results, fires: firesOf(o.fires) };
+    return { results, fires: firesOf(o.fires), actions: actionsOf(o.actions) };
   }
 
   /** On start and return to the foreground (≤ 1/min): this phone becomes the one that rings (R-13). */
@@ -808,6 +968,90 @@ export class Api {
       repeat_minutes: repeat.length > 0 ? repeat : [5, 10, 15],
       horizon_days: num(o.horizon_days, 14),
     };
+  }
+
+  // week 9 — «Сегодня», tasks, suggestions, actions, habits (today.md, actions.md, pages.md)
+
+  /** S06. Also runs the suggestion engine: call it when «Сегодня» is shown, not in the background. */
+  async today(): Promise<TodayOut> {
+    return todayOut(await this.client.request<unknown>('GET', '/today'));
+  }
+
+  async createTask(body: TaskCreateIn): Promise<TaskWriteOut> {
+    return taskWrite(await this.client.request<unknown>('POST', '/tasks', { body, idempotencyKey: body.client_id }));
+  }
+
+  /** One tap = one call; `done: false` = «Вернуть». */
+  async taskDone(id: string, body: TaskDoneIn): Promise<TaskWriteOut> {
+    return taskWrite(
+      await this.client.request<unknown>('POST', `/tasks/${encodeURIComponent(id)}/done`, { body, idempotencyKey: body.client_id }),
+    );
+  }
+
+  /** The task and its record go to the trash. */
+  async deleteTask(id: string, clientId: string): Promise<TaskWriteOut> {
+    return taskWrite(
+      await this.client.request<unknown>('DELETE', `/tasks/${encodeURIComponent(id)}`, {
+        query: { client_id: clientId },
+        idempotencyKey: clientId,
+      }),
+    );
+  }
+
+  async acceptSuggestion(id: string, clientId: string): Promise<SuggestionAcceptOut> {
+    const o =
+      obj(
+        await this.client.request<unknown>('POST', `/suggestions/${encodeURIComponent(id)}/accept`, {
+          body: { client_id: clientId },
+          idempotencyKey: clientId,
+        }),
+      ) ?? {};
+    return {
+      suggestion: suggestionOut(o.suggestion),
+      action: actionOut(o.action),
+      task: taskOut(o.task),
+      reminder_draft: obj(o.reminder_draft) ? parseOut(o.reminder_draft) : null,
+    };
+  }
+
+  /** «Не сейчас». */
+  dismissSuggestion(id: string): Promise<unknown> {
+    return this.client.request('POST', `/suggestions/${encodeURIComponent(id)}/dismiss`, { body: {} });
+  }
+
+  /** S20 «Что я сделал»: newest first; `before` = an action id. */
+  async actions(q: { before?: string; limit?: number } = {}): Promise<ActionsPageOut> {
+    const o = obj(await this.client.request<unknown>('GET', '/actions', { query: { limit: 50, ...q } })) ?? {};
+    return { actions: actionsOf(o.actions), has_more: o.has_more === true };
+  }
+
+  async habits(): Promise<HabitOut[]> {
+    const o = obj(await this.client.request<unknown>('GET', '/habits')) ?? {};
+    return arr(o.habits).map(habitOut).filter((x): x is HabitOut => x !== null);
+  }
+
+  /** S30 «Изменить»: the rule's records go to another page from now on. `409 conflict` (`habit_exists`). */
+  async moveHabit(id: string, pageId: string, clientId: string): Promise<HabitPatchOut> {
+    const o =
+      obj(
+        await this.client.request<unknown>('PATCH', `/habits/${encodeURIComponent(id)}`, {
+          body: { page_id: pageId, client_id: clientId },
+          idempotencyKey: clientId,
+        }),
+      ) ?? {};
+    return { habit: habitOut(o.habit), action: actionOut(o.action), repeated: o.repeated === true };
+  }
+
+  /** S30 «Убрать»: the rule stops (an exclusion: the record shows on that page again). */
+  async removeHabit(id: string, clientId: string): Promise<HabitRemoveOut> {
+    const o =
+      obj(
+        await this.client.request<unknown>('DELETE', `/habits/${encodeURIComponent(id)}`, {
+          query: { client_id: clientId },
+          idempotencyKey: clientId,
+        }),
+      ) ?? {};
+    return { removed: o.removed === true, repeated: o.repeated === true, action: actionOut(o.action) };
   }
 
   // feedback («Сообщить о проблеме», R-41)

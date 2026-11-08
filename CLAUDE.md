@@ -24,6 +24,8 @@ AI-generated content (e.g. a КП); never in marketing copy or ordinary UI.
 | `src/assistant/memory/`, `api/routes/memory.py`, `db/models_search.py`, `tests/memory/` | api | chunks + embeddings (worker `python -m assistant.memory`), hybrid search, storage policy and file purge, page summaries (contract: `docs/api/search.md`) |
 | `src/assistant/chat/`, `api/routes/chat.py`, `db/models_chat.py`, `tests/chat/` | api | the assistant line: one conversation, layered context, read tools, number/date check, SSE delivery + resume, feedback (contract: `docs/api/chat.md`) |
 | `src/assistant/actions/` | api | changes from the assistant line: intent rule, mutating tools, one action per phrase with `inverse`, undo/redo, manual-order protection (contract: `docs/api/actions.md`) |
+| `src/assistant/tasks/`, `api/routes/tasks.py`, `db/models_tasks.py` | api | «Дела» / «Покупки»: tasks with their own records, list phrases (model by default, code behind `tasks_rules_first`, Ф-1) (contract: `docs/api/today.md`) |
+| `src/assistant/suggestions/`, `api/routes/today.py` | api | «Сегодня», tips and data proposals with the R-35 limits (contract: `docs/api/today.md`) |
 | `mobile/` | mobile | Expo / React Native app (see `mobile/README.md`) |
 
 Modules talk only through the DB schema (`db/models.py`), the job queue (`db/queue.py`),

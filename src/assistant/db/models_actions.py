@@ -17,7 +17,7 @@ UNDO_DAYS = 30
 
 
 class ActionKind(enum.StrEnum):
-    """The kinds week 6 writes; the CHECK in 0011 holds the full list of the spec."""
+    """The kinds the app writes; the CHECK in 0011 holds the full list of the spec."""
 
     SAVE_ITEM = "save_item"
     DELETE_ITEM = "delete_item"
@@ -29,6 +29,11 @@ class ActionKind(enum.StrEnum):
     SCREEN_REMOVE_ITEM = "screen_remove_item"
     REORDER_SCREENS = "reorder_screens"  # week 7: tab order by hand
     HABIT_CHANGE = "habit_change"  # week 7: a learned placement rule turned off
+    CREATE_REMINDER = "create_reminder"  # week 9
+    EDIT_REMINDER = "edit_reminder"  # week 9: changed or deleted by the person
+    DELETE_SCREEN = "delete_screen"  # week 9: «Убрать страницу»
+    SCREEN_CUSTOMIZE = "screen_customize"  # week 9: name, icon, layout
+    FACET_EDIT = "facet_edit"  # week 9: a task changed or ticked
 
 
 class Initiator(enum.StrEnum):

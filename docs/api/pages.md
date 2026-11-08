@@ -47,7 +47,7 @@ order (`custom` first). Sends `ETag`; send `If-None-Match` and get `304` with no
 - `field.required` = ★, cannot be hidden. `field.type`: `text | long_text | number | money | date |
   datetime | enum | tags | bool | person | link`. Enum fields also have `options: ["kp", ...]`.
 - `field.source`: where the value comes from: `item.<column>`, `envelope.<key>`, `task.<x>`,
-  `expense.<x>`, `document.<x>`, `facet.<x>`. Only `item.*` and `envelope.*` have values today.
+  `expense.<x>`, `document.<x>`, `facet.<x>`. `item.*`, `envelope.*` and, on «Дела» / «Покупки», `task.*` / `facet.*` (from the task, `today.md`) have values.
 - `layouts`: `list | checklist | table | stacks | builtin:today | builtin:tasks | builtin:kp |
   builtin:expenses`.
 - `auto_rule`: see "Placement". Sent so the phone can place a note offline for display; the
@@ -103,8 +103,9 @@ Only `client_id` and `template_key` are required. `title` is 1-60 chars; default
 title (`custom`: «Моя страница»). `created_by`: `user` (default) | `onboarding_gallery` |
 `onboarding_blank` | `onboarding_phrase`.
 
-`201 {"page": PageOut, "created": true, "revived": false}`; repeating a `client_id` gives `200` and
-`created: false`. On creation the page is filled at once from the items already in memory that match
+`201 {"page": PageOut, "created": true, "revived": false, "action": Action}`; repeating a
+`client_id` gives `200` and `created: false` (`action: null`). `action` (week 9): `create_screen`,
+«Добавил страницу «Покупки»», «Отменить» removes the page again (records stay). On creation the page is filled at once from the items already in memory that match
 its rule.
 
 **Adding a removed topic again.** Every template except `custom` allows one page. If the account
@@ -132,11 +133,16 @@ instead) · `422 pages_limit` (20 pages including «Сегодня»; also when 
 ```
 All optional. `layout` raises `view_version`; `title` / `icon` do not. If `layout` is sent with a
 `base_view_version` that is not current: `409 conflict`, `details.view_version`. A stale base does
-not block a rename. Returns `PageOut`. «Сегодня»: `403 page_system`.
+not block a rename. Returns `PageOut` plus `"action": Action | null` (week 9: `screen_customize`,
+«Переименовал страницу в «Дача»», «Отменить» = the old name, icon and layout; null when nothing
+changed). «Сегодня»: `403 page_system`.
 
 ### `DELETE /v1/pages/{id}`
-«Убрать страницу»: soft delete, items stay. Repeatable. Returns `PageOut` with `deleted_at`.
-«Сегодня»: `403 page_system`.
+«Убрать страницу»: soft delete, items stay. Repeatable. Returns `PageOut` with `deleted_at`, plus
+`"action": Action | null` (week 9: `delete_screen`, «Страница «Покупки» убрана. Записи
+остались»; null on a repeat). **«Отменить» = `POST /v1/actions/{action.id}/undo`** (it brings the
+page back exactly like `/restore`); `/restore` stays for older builds. «Сегодня»: `403
+page_system`.
 
 ### `POST /v1/pages/{id}/restore`
 Undo of the removal: returns `PageOut`, the old links and order are back, and items saved in
@@ -188,8 +194,9 @@ string. Today `position` is always set; `null` is reserved for pages sorted by a
 {"item_id": "uuid"}
 ```
 Show an existing item on this page (saving from «Своя страница»: `POST /v1/items`, then this).
-Idempotent by page + item, no `client_id`. `201 {"link": PageItemOut, "created": true}`, or `200`
-with `created: false` if it is already there. It clears an earlier "removed from page". The item
+Idempotent by page + item, no `client_id`. `201 {"link": PageItemOut, "created": true, "action":
+Action}`, or `200` with `created: false` if it is already there (`action` set only when it lifted
+an earlier «убрано»). `action` (week 9): `screen_add_item`, «Отменить» takes the row off again. It clears an earlier "removed from page". The item
 goes where its date puts it; rows placed by hand keep their places.
 
 Errors: `403 page_system` («Сегодня») · `404 not_found` · `409 item_deleted`.
@@ -391,15 +398,40 @@ only.
 `422 validation_error`.
 
 ### `GET /v1/habits`, `DELETE /v1/habits/{id}?client_id=`
-«Что я для вас настроил» (F-29, US-27): the learned rules in use, whose page is live. Other kinds of
-habit and `PATCH` come in week 9.
+«Что я для вас настроил» (S30; F-29, US-27): the learned rules in use whose page is live, then
+(week 9) the records the person took off a page («Убрать с этой страницы», `screen_exclusion`),
+newest first, at most 100. An exclusion is not a habit row: it is the hidden page row itself, so
+its `id` is that row's `link.id`.
 ```json
 {"habits": [{"id": "uuid", "kind": "placement_rule", "text_ru": "Чеки кладу на страницу «Расходы»",
   "page": {"id": "uuid", "title": "Расходы", "icon": "money"}, "envelope_type": "receipt",
   "evidence_count": 2, "updated_at": "2026-11-08T10:00:00+00:00"}]}
 ```
+```json
+{"id": "uuid (link id)", "kind": "screen_exclusion",
+ "text_ru": "Не показываю «Хлеб» на странице «Заметки»",
+ "page": {"id": "uuid", "title": "Заметки", "icon": "documents"}, "envelope_type": null,
+ "item_id": "uuid", "evidence_count": 1, "updated_at": "..."}
+```
+`item_id` is null on `placement_rule`.
+
 `DELETE` = «Убрать»: new records are no longer placed by the rule, those already placed stay, and
-further moves do not switch it on again. `200 {"removed": true, "repeated": false, "action": Action}`
+further moves do not switch it on again. On a `screen_exclusion`: the record is shown on that page
+again (`action` `screen_add_item`, «Снова показываю «Хлеб» на странице «Заметки»», «Отменить» takes
+it off again).
+
+### `PATCH /v1/habits/{id}` (S30 «Изменить», week 9)
+`{"page_id": "uuid", "client_id": "uuid"}` on an active `placement_rule`: from now on such
+records go to that page; records already placed stay where they are. `200 {"habit": Habit,
+"action": Action, "repeated": false}` (`habit_change`, «Теперь: чеки кладу на страницу
+«Расходы»», «Отменить» moves the rule back; the same page again: `action: null`). Errors: `404
+not_found` (unknown, turned off, or a `screen_exclusion`: those have only «Убрать») · `403
+page_system` («Сегодня») · `409 conflict` (`details.reason: "habit_exists"`: that page already
+has such a rule).
+
+Sync (week 9): `GET /v1/sync` has `habits: [Habit]` — learned rules (the `placement_rule` shape
+above plus `status`: `candidate` | `active` | `disabled` and `seq`; show only `active` ones whose
+page is live). Exclusions travel as `screen_items` rows with `removed_at`. `200 {"removed": true, "repeated": false, "action": Action}`
 («Отменить» as usual; `removed: false`, `action: null` when already off). `404 not_found`.
 
 ### Conflicts, in short
@@ -419,6 +451,5 @@ further moves do not switch it on again. `200 {"removed": true, "repeated": fals
 |---|---|
 | `PUT /pages/{id}/fields`, `POST /pages/{id}/reset`, sorting and grouping by field | week 11 |
 | `POST /pages/batch` (use one `POST /pages` per page) | week 16 |
-| Other kinds of habit, `PATCH /habits/{id}`, habits in `/v1/sync` | week 9 |
-| `action` in responses of `POST /pages`, `PATCH /pages/{id}`, `DELETE /pages/{id}`, `POST /pages/{id}/items` | week 9 |
-| `item_facets` values (`facet.*`, `task.*`, `expense.*`, `document.*` fields stay empty) | weeks 9-14 |
+| Other kinds of habit (`alias`, `default_time`, `never_do`, ...) | later |
+| `expense.*`, `document.*` field values (`task.*` and the shopping `facet.*` fields are filled from tasks since week 9, see `today.md`) | weeks 10-14 |

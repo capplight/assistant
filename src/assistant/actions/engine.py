@@ -17,6 +17,16 @@ An op is a JSON object with ids as public uuids (strings), never database ids:
 - `habit_evidence` {id, item, add}: counts one record for a learned rule, or takes it back (the
   undo of the learning a manual move did). A later move of another record does not block it, and a
   rule the person turned off stays off.
+- Week 9: `delete_entity_soft` / `restore_entity` also take `entity: tasks` (the task and its own
+  record go to the trash / come back together). `set_task` {id, values, expect?}: sets fields of a
+  task (`title`, `qty`, `where_text`, `due_date`, `done_at`, `list_key`). `cancel_reminder` {id,
+  expect?}: deletes a reminder (fires `cancelled`); `restore_reminder` {id, state, expect?}: sets a
+  reminder's fields back (and brings a deleted one back), fires re-planned. `restore_screen_config`
+  {page, title?, title_kk?, icon?, layout?, expect?}: a page's name, icon and layout. Restoring a
+  removed page also places what was saved while it was gone (as `/restore`). `restore_fires`
+  {reminder, fires: [{id, state, acked_at, expect}], status?}: fires of one occurrence and the
+  reminder's status back (the undo of a late «Сделано»). `restore_habit` may carry `state.key`
+  (a rule moved to another page).
 
 `apply` runs a list of ops in one transaction (the caller commits) and returns the ops that undo
 what it did, newest first, so `apply(apply(x).inverse)` is a round trip. With `check=True` (an
@@ -28,24 +38,30 @@ outside the list ever runs.
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from assistant.db.models import Item
+from assistant.db.models import Item, Reminder
 from assistant.db.models_habits import UserHabit
 from assistant.db.models_pages import MAX_PAGES, AddedBy, Screen, ScreenItem, ScreenKind
-from assistant.pages import add_link, habits, lock_user, mark_rekeyed, rescue_moved
+from assistant.db.models_reminders import APP_KINDS, AppReminderStatus, ReminderFire
+from assistant.db.models_tasks import Task
+from assistant.pages import add_link, fill_page, habits, lock_user, mark_rekeyed, rescue_moved
 from assistant.records import restore_item, trash_item
 
 OPS = frozenset({"restore_positions", "restore_view_state", "add_screen_item",
                  "remove_screen_item", "delete_entity_soft", "restore_entity",
                  "restore_field", "restore_page_position", "restore_habit",
-                 "habit_evidence"})  # fmt: skip
+                 "habit_evidence", "set_task", "cancel_reminder", "restore_reminder",
+                 "restore_screen_config", "restore_fires"})  # fmt: skip
 HABIT_STATUSES = frozenset({"candidate", "active", "disabled"})
-ENTITIES = frozenset({"items", "screens"})
+ENTITIES = frozenset({"items", "screens", "tasks"})
+TASK_FIELDS = frozenset({"title", "qty", "where_text", "due_date", "done_at", "list_key"})
+REMINDER_FIELDS = ("title", "body", "due_at", "tz", "rrule", "offsets", "level", "sensitivity")
+SCREEN_FIELDS = ("title", "title_kk", "icon", "layout")
 ITEM_FIELDS = frozenset({"title"})
 ROW_FIELDS = ("position", "group_key", "manual_order")
 
@@ -217,10 +233,26 @@ async def _remove_screen_item(session: AsyncSession, user_id: int, op: dict, out
     out.pages.add(page.id)
 
 
+def _item_of(op: dict) -> dict[str, str]:
+    """A task op names its record too, so «Вернуть» on one row of «Что изменилось» finds it."""
+    return {"item": str(op["item"])} if op.get("item") else {}
+
+
 async def _soft(session: AsyncSession, user_id: int, op: dict, out: Outcome, *,
                 by: str, check: bool, now: datetime) -> None:  # fmt: skip
     entity, rid = op["entity"], str(op["id"])
-    if entity == "items":
+    if entity == "tasks":
+        task, item = await _task(session, user_id, rid)
+        if task is None or item is None:
+            out.skipped += 1
+            return
+        if task.deleted_at is not None and item.deleted_at is not None:
+            return
+        task.deleted_at = task.deleted_at or now
+        if item.deleted_at is None:
+            trash_item(item, now)
+        out.items.add(str(item.public_id))
+    elif entity == "items":
         item = (await _items(session, user_id, [rid])).get(rid)
         if item is None:
             out.skipped += 1
@@ -239,13 +271,24 @@ async def _soft(session: AsyncSession, user_id: int, op: dict, out: Outcome, *,
         page.deleted_at = now
         await session.flush()
         await rescue_moved(session, page)
-    out.inverse.append({"op": "restore_entity", "entity": entity, "id": rid})
+    out.inverse.append({"op": "restore_entity", "entity": entity, "id": rid, **_item_of(op)})
 
 
 async def _restore(session: AsyncSession, user_id: int, op: dict, out: Outcome, *,
                    by: str, check: bool, now: datetime) -> None:  # fmt: skip
     entity, rid = op["entity"], str(op["id"])
-    if entity == "items":
+    if entity == "tasks":
+        task, item = await _task(session, user_id, rid)
+        if task is None or item is None:  # purged after 30 days in the trash
+            out.skipped += 1
+            return
+        if task.deleted_at is None and item.deleted_at is None:
+            return
+        task.deleted_at = None
+        if item.deleted_at is not None:
+            restore_item(item)
+        out.items.add(str(item.public_id))
+    elif entity == "items":
         item = (await _items(session, user_id, [rid])).get(rid)
         if item is None:  # purged after 30 days in the trash
             out.skipped += 1
@@ -271,7 +314,9 @@ async def _restore(session: AsyncSession, user_id: int, op: dict, out: Outcome, 
             out.skipped += 1
             return  # fmt: skip
         page.deleted_at = None
-    out.inverse.append({"op": "delete_entity_soft", "entity": entity, "id": rid})
+        await session.flush()
+        await fill_page(session, page)  # what was saved while it was gone (as /restore)
+    out.inverse.append({"op": "delete_entity_soft", "entity": entity, "id": rid, **_item_of(op)})
 
 
 async def _restore_field(session: AsyncSession, user_id: int, op: dict, out: Outcome, *,
@@ -331,12 +376,16 @@ async def _restore_habit(session: AsyncSession, user_id: int, op: dict, out: Out
         return
     back = {"evidence_count": habit.evidence_count, "status": habit.status,
             "value": dict(habit.value or {})}  # fmt: skip
+    if "key" in state:
+        back["key"] = habit.key
     if back == state:
         return
     out.inverse.append({"op": "restore_habit", "id": str(habit.public_id), "state": back,
                         "expect": {"evidence_count": int(state.get("evidence_count") or 0),
                                    "status": state["status"]}})  # fmt: skip
     habit.evidence_count = int(state.get("evidence_count") or 0)
+    if state.get("key"):
+        habit.key = str(state["key"])
     habit.status = state["status"]
     habit.value = dict(state["value"])
     habit.updated_at = now
@@ -357,6 +406,187 @@ async def _habit_evidence(session: AsyncSession, user_id: int, op: dict, out: Ou
                             "add": not add})  # fmt: skip
 
 
+async def _task(session: AsyncSession, user_id: int, tid: Any) -> tuple[Task | None, Item | None]:
+    task = await session.scalar(
+        select(Task).where(Task.user_id == user_id, Task.public_id == _uuid(tid)).with_for_update()
+    )  # fmt: skip
+    if task is None:
+        return None, None
+    item = await session.scalar(select(Item).where(Item.id == task.item_id).with_for_update())
+    return task, item
+
+
+def task_value(task: Task, name: str) -> Any:
+    """A task field as JSON (dates as ISO text)."""
+    value = getattr(task, name)
+    return value.isoformat() if isinstance(value, date | datetime) else value
+
+
+def _task_set(task: Task, name: str, value: Any) -> None:
+    if name == "due_date":
+        value = date.fromisoformat(value) if value else None
+    elif name == "done_at":
+        value = datetime.fromisoformat(value) if value else None
+    setattr(task, name, value)
+
+
+async def _set_task(session: AsyncSession, user_id: int, op: dict, out: Outcome, *,
+                    by: str, check: bool, now: datetime) -> None:  # fmt: skip
+    values = dict(op.get("values") or {})
+    if not values or set(values) - TASK_FIELDS:
+        raise ValueError("set_task: fields not allowed")
+    task, item = await _task(session, user_id, op["id"])
+    if task is None or item is None:
+        out.skipped += 1
+        return
+    expect = op.get("expect")
+    if check and expect and any(task_value(task, k) != v for k, v in expect.items()):
+        out.skipped += 1  # the person changed the task since: theirs stays
+        return
+    changed = {k: v for k, v in values.items() if task_value(task, k) != v}
+    if not changed:
+        return
+    out.inverse.append({"op": "set_task", "id": str(task.public_id), "item": str(item.public_id),
+                        "values": {k: task_value(task, k) for k in changed},
+                        "expect": changed})  # fmt: skip
+    for k, v in changed.items():
+        _task_set(task, k, v)
+    task.version += 1
+    task.updated_at = now
+    out.items.add(str(item.public_id))
+
+
+async def _reminder(session: AsyncSession, user_id: int, rid: Any) -> Reminder | None:
+    return await session.scalar(
+        select(Reminder).where(Reminder.user_id == user_id, Reminder.public_id == _uuid(rid),
+                               Reminder.kind.in_(APP_KINDS)).with_for_update()
+    )  # fmt: skip
+
+
+def reminder_state(r: Reminder) -> dict[str, Any]:
+    """What `restore_reminder` sets back: the fields the person edits, and whether it is live."""
+    return {"title": r.title, "body": r.body, "due_at": r.due_at.isoformat(), "tz": r.tz,
+            "rrule": r.rrule, "offsets": list(r.offsets or []), "level": r.level,
+            "sensitivity": r.sensitivity, "deleted": r.deleted_at is not None}  # fmt: skip
+
+
+async def _cancel_reminder(session: AsyncSession, user_id: int, op: dict, out: Outcome, *,
+                           by: str, check: bool, now: datetime) -> None:  # fmt: skip
+    r = await _reminder(session, user_id, op["id"])
+    if r is None:
+        out.skipped += 1
+        return
+    if r.deleted_at is not None:
+        return
+    if check and "expect" in op and r.version != op["expect"]:
+        out.skipped += 1  # changed since: the newer version stays
+        return
+    back = reminder_state(r)
+    from assistant.reminders import service as reminders  # reminders -> chat -> actions
+
+    await reminders.delete(session, user_id, r.public_id, now)
+    out.inverse.append({"op": "restore_reminder", "id": str(r.public_id), "state": back,
+                        "expect": r.version})  # fmt: skip
+
+
+async def _restore_reminder(session: AsyncSession, user_id: int, op: dict, out: Outcome, *,
+                            by: str, check: bool, now: datetime) -> None:  # fmt: skip
+    state = dict(op.get("state") or {})
+    if set(state) - {*REMINDER_FIELDS, "deleted"}:
+        raise ValueError("restore_reminder: fields not allowed")
+    r = await _reminder(session, user_id, op["id"])
+    if r is None:
+        out.skipped += 1
+        return
+    if check and "expect" in op and r.version != op["expect"]:
+        out.skipped += 1
+        return
+    due = datetime.fromisoformat(state["due_at"]) if state.get("due_at") else r.due_at
+    rrule = state.get("rrule", r.rrule)
+    if not state.get("deleted") and not rrule and due <= now:
+        out.skipped += 1  # a one-off whose time has passed cannot ring again
+        return
+    back = reminder_state(r)
+    if back == state:
+        return
+    for name in REMINDER_FIELDS:
+        if name in state:
+            setattr(r, name, due if name == "due_at" else state[name])
+    if state.get("deleted"):
+        r.deleted_at, r.status = r.deleted_at or now, AppReminderStatus.CANCELLED
+    else:
+        r.deleted_at, r.snooze_until = None, None
+        r.status = AppReminderStatus.SCHEDULED
+    r.version += 1
+    await session.flush()
+    from assistant.reminders import service as reminders  # reminders -> chat -> actions
+
+    await reminders.plan_fires(session, r, now)
+    out.inverse.append({"op": "restore_reminder", "id": str(r.public_id), "state": back,
+                        "expect": r.version})  # fmt: skip
+
+
+async def _restore_fires(session: AsyncSession, user_id: int, op: dict, out: Outcome, *,
+                         by: str, check: bool, now: datetime) -> None:  # fmt: skip
+    r = await _reminder(session, user_id, op["reminder"])
+    if r is None:
+        out.skipped += 1
+        return
+    wanted = {str(f["id"]): f for f in op.get("fires") or []}
+    rows = list(await session.scalars(
+        select(ReminderFire).where(ReminderFire.reminder_id == r.id,
+                                   ReminderFire.public_id.in_([_uuid(i) for i in wanted]))
+        .with_for_update()))  # fmt: skip
+    back = []
+    for f in rows:
+        w = wanted[str(f.public_id)]
+        if check and w.get("expect") and f.state != w["expect"]:
+            out.skipped += 1  # the phone reported something newer for this fire
+            continue
+        if f.state == w["state"]:
+            continue
+        back.append({"id": str(f.public_id), "state": str(f.state),
+                     "acked_at": f.acked_at.isoformat() if f.acked_at else None,
+                     "expect": w["state"]})  # fmt: skip
+        f.state = w["state"]
+        f.acked_at = datetime.fromisoformat(w["acked_at"]) if w.get("acked_at") else None
+    inv: dict[str, Any] = {"op": "restore_fires", "reminder": str(r.public_id), "fires": back}
+    if op.get("status") and r.status != op["status"] and r.deleted_at is None:
+        inv["status"] = str(r.status)
+        r.status = op["status"]
+    if back or "status" in inv:
+        out.inverse.append(inv)
+        await session.flush()
+
+
+def screen_state(page: Screen) -> dict[str, Any]:
+    return {k: getattr(page, k) for k in SCREEN_FIELDS}
+
+
+async def _restore_screen_config(session: AsyncSession, user_id: int, op: dict, out: Outcome, *,
+                                 by: str, check: bool, now: datetime) -> None:  # fmt: skip
+    page = await _screen(session, user_id, op["page"])
+    if page is None or page.kind == ScreenKind.SYSTEM_TODAY:
+        out.skipped += 1
+        return
+    expect = op.get("expect")
+    cur = screen_state(page)
+    if check and expect and any(cur.get(k) != v for k, v in expect.items()):
+        out.skipped += 1  # renamed again since
+        return
+    new = {k: op[k] for k in SCREEN_FIELDS if k in op}
+    changed = {k: v for k, v in new.items() if cur[k] != v}
+    if not changed:
+        return
+    out.inverse.append({"op": "restore_screen_config", "page": str(page.public_id),
+                        **{k: cur[k] for k in changed}, "expect": changed})  # fmt: skip
+    for k, v in changed.items():
+        setattr(page, k, v)
+    if "layout" in changed:
+        page.view_version += 1
+    page.updated_at = now
+
+
 _HANDLERS = {
     "restore_positions": _restore_positions,
     "restore_view_state": _restore_view_state,
@@ -368,6 +598,11 @@ _HANDLERS = {
     "restore_page_position": _restore_page_position,
     "restore_habit": _restore_habit,
     "habit_evidence": _habit_evidence,
+    "set_task": _set_task,
+    "cancel_reminder": _cancel_reminder,
+    "restore_reminder": _restore_reminder,
+    "restore_screen_config": _restore_screen_config,
+    "restore_fires": _restore_fires,
 }
 
 
@@ -400,9 +635,7 @@ def op_items(op: dict[str, Any]) -> set[str]:
     """Item ids an op is about (empty: a page-level op)."""
     if op["op"] == "restore_positions":
         return {str(r["item"]) for r in op.get("rows") or []}
-    if op["op"] in ("add_screen_item", "remove_screen_item"):
-        return {str(op["item"])}
-    if op["op"] == "habit_evidence":
+    if op.get("item"):  # add/remove_screen_item, habit_evidence, task ops
         return {str(op["item"])}
     if op.get("entity") == "items":
         return {str(op["id"])}

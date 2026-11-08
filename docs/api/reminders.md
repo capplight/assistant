@@ -184,7 +184,27 @@ Setting `REMINDERS_RULES_FIRST` (server) → `parser`:
 
 ## Create, change, delete
 
-### `POST /v1/reminders` → `201 {reminder, fires}`
+### From the assistant line (week 9)
+
+The phone no longer needs to route reminder phrases to `/reminders/parse`: send every online
+phrase to `POST /v1/chat/messages` (`chat.md`). «Напомни завтра в 7 выпить таблетку», «разбуди в
+6:30», «не дай забыть оплатить свет в пятницу», «поставь будильник на 7» are read the same way as
+`/reminders/parse` (same `parser` setting, same consent rule), and the reply stream carries:
+
+- `reminder_draft`: `{"reply_id", "status", "source", "reason", "message", "draft", "options",
+  "parser", "created_via"}` — exactly the `/reminders/parse` result plus `created_via` (`voice` for
+  `input_kind: "voice"`, else `typed`). Show S13 («Понял так»), or S12 for `status: "form"`.
+  Nothing is saved: [Сохранить] → `POST /v1/reminders` with that draft, `created_via`, and
+  `message_id` = `reply_id` (so «Что я сделал» links the action to the line).
+- then `banner` with the text («Понял так: завтра, понедельник, 9 ноября · 7:00 — выпить
+  таблетку. Сохранить?», for `form` the `message`) and `done` with `answer_kind: "text"`.
+- A question («напомни, как зовут мастера?», «когда мне к врачу?») is a question as before.
+- After a resume from the database (`snapshot`) the draft is not repeated: show the banner text;
+  the person says it again.
+
+`/reminders/parse` stays for S13 «Изменить время» typed in the form and for older builds.
+
+### `POST /v1/reminders` → `201 {reminder, fires, action}`
 
 ```json
 {"client_id": "5f0c...", "title": "Выпить таблетку", "body": null,
@@ -198,17 +218,27 @@ Instead of `due_at` the manual form may send `"local": {"date": "2026-11-09", "t
 (offline outbox is safe). `title` 1–200 chars. Errors: `422 reminder_in_past` (a non-repeating
 event moment not in the future), `422 validation_error` (bad `rrule`/`offsets`/`tz`).
 Fires whose `fire_at` is already past are not created (e.g. «накануне» for an event in 3 hours).
+Optional `message_id` (the chat reply the draft came from). `action` (week 9): `create_reminder`,
+«Напомню завтра в 7:00: выпить таблетку», «Отменить» = the reminder is deleted and its fires
+`cancelled` (remove the local alarms from sync). A repeat with the same `client_id` returns the
+same `action`. `kind=test` reminders have no action (`action: null`).
 
-### `PATCH /v1/reminders/{id}` → `200 {reminder, fires}`
+### `PATCH /v1/reminders/{id}` → `200 {reminder, fires, action}`
 
 Body: `version` (required) + any of `title`, `body`, `due_at` | `local`, `tz`, `rrule`, `offsets`,
 `level`, `sensitivity`. A time change re-plans: future fires that no longer match become
 `cancelled`, new ones are added; fires that still match keep their id/key. `409 conflict` when
 `version` is stale. A change the agent proposes goes through a pending action (S25), not here.
+`action` (week 9): `edit_reminder` (the person's edit, R-33, «Вы перенесли напоминание на 8:00»),
+«Отменить» puts the old fields back and re-plans; if the reminder was changed again since, it
+keeps the newer version (`partial`). Null when nothing changed.
 
-### `DELETE /v1/reminders/{id}` → `204`
+### `DELETE /v1/reminders/{id}` → `200 {reminder, fires, action}` (was `204` until week 9)
 
 `status=cancelled`, `deleted_at` set, all `planned`/`fired`/`snoozed` fires → `cancelled`.
+`action` (week 9): `edit_reminder`, «Удалил напоминание «…»», «Отменить» brings it back with new
+fires (a one-off whose time has passed cannot come back: `partial`). Repeat on a deleted one:
+`action: null`. Treat any 2xx as success.
 
 ### `GET /v1/reminders?include_done=false` / `GET /v1/reminders/{id}`
 
@@ -264,6 +294,18 @@ Response:
 
 `status`: `applied`, `duplicate` (this `client_id` already came — safe retry), `not_found` (no
 such fire for this user: drop it), `invalid`. `fires`: every fire the batch changed or created.
+`actions` (week 9): one Action per `acked` that came for a fire in state `missed` (a late
+«Сделано»), with «Отменить» (`actions.md`); an `applied` repeat never makes a second one.
+
+### «Перенести» a missed occurrence (S06 red row)
+
+- Within 48 h: send `snoozed` for that missed fire with `meta.until` = the new moment. It moves
+  **only this occurrence** (also of a repeating reminder: the series stays as it is): a new fire
+  for the same occurrence rings at `until`, and the red row goes (the fire is `snoozed`).
+- Later than 48 h, or a new time for **every** occurrence: a one-off is `POST /v1/reminders` (new
+  `client_id`, same title, `created_via: "manual_form"`) and the whole series is `PATCH`. There is
+  no «this occurrence only» beyond 48 h (no exceptions in `rrule`); for a repeating reminder the
+  phone saves a one-off and the missed row leaves «Сегодня» after 24 h or with [Сделано].
 
 ## Settings: `GET /v1/reminders/settings`, `PATCH /v1/reminders/settings`
 

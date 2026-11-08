@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, Header, Query, Response
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from assistant.actions import actions_dicts, manual
+from assistant.actions import actions_dicts, engine, manual, record
 from assistant.actions.patch import page_patches
 from assistant.api.consent_gate import require_base_consent
 from assistant.api.deps import CurrentUser, Db
@@ -25,6 +25,8 @@ from assistant.api.schemas import (
     ActionOut,
     HabitOffOut,
     HabitOut,
+    HabitPatchIn,
+    HabitPatchOut,
     HabitsOut,
     ItemMoveIn,
     ItemMoveOut,
@@ -43,11 +45,14 @@ from assistant.api.schemas import (
     PageRefOut,
     PageReorderIn,
     PageReorderOut,
+    PageWithActionOut,
     RemoveFromPageOut,
+    TaskOut,
     TemplateListOut,
     TemplateOut,
 )
 from assistant.db.models import Item
+from assistant.db.models_actions import Action, ActionKind, Initiator
 from assistant.db.models_habits import HabitKind, HabitStatus, UserHabit
 from assistant.db.models_pages import (
     MAX_PAGES,
@@ -59,6 +64,7 @@ from assistant.db.models_pages import (
     ScreenTemplate,
     UpdatedBy,
 )
+from assistant.db.models_tasks import Task
 from assistant.pages import (
     add_link,
     create_page,
@@ -67,8 +73,8 @@ from assistant.pages import (
     latest_template,
     latest_templates,
     lock_user,
-    rescue_moved,
 )
+from assistant.tasks import service as tasks_service
 
 router = APIRouter(prefix="/pages", tags=["pages"])
 templates_router = APIRouter(prefix="/page-templates", tags=["pages"])
@@ -207,6 +213,34 @@ def _singleton_exists(existing: Screen) -> ApiError:
     return ApiError(409, "singleton_exists", details={"page_id": str(existing.public_id)})
 
 
+async def _record(db: AsyncSession, user_id: int, kind: str, sentence: str, page: Screen,
+                  inverse: list[dict[str, Any]], *, changes: list[dict[str, Any]] | None = None,
+                  extra: dict[str, Any] | None = None) -> ActionOut | None:  # fmt: skip
+    """The person's own change of a page, in «Что я сделал» with «Отменить» (R-33, week 9)."""
+    if not inverse:
+        return None
+    now = datetime.now(UTC)
+    action = await record(db, user_id=user_id, kind=kind, initiated_by=Initiator.USER,
+                          summary={"ru": sentence, "kk": None},
+                          changes=changes if changes is not None else [
+                              {"item_id": None, "title": page.title, "kind": "create_page",
+                               "page_id": str(page.public_id), "text": sentence}],
+                          inverse=inverse, now=now, screen_id=page.id, extra=extra)  # fmt: skip
+    await db.flush()
+    return ActionOut.model_validate((await actions_dicts(db, [action], now))[0])
+
+
+EXCLUSIONS_SHOWN = 100
+
+
+def _item_name(item: Item) -> str:
+    return " ".join((item.title or item.text or item.raw_text or "запись").split())[:60]
+
+
+def _with_action(page: Screen, action: ActionOut | None) -> PageWithActionOut:
+    return PageWithActionOut(**page_out(page).model_dump(), action=action)
+
+
 @router.get("", response_model=PageListOut)
 async def list_pages(user: GatedUser, db: Db) -> PageListOut:
     rows = await db.scalars(
@@ -248,14 +282,24 @@ async def add_page(body: PageCreateIn, user: GatedUser, db: Db,
             removed.client_id = body.client_id
             await _bring_back(db, removed)
             response.status_code = 200
-            return PageCreateOut(page=page_out(removed), created=False, revived=True)
+            action = await _record(db, user.id, ActionKind.CREATE_SCREEN,
+                                   f"Вернул страницу «{removed.title}»", removed,
+                                   [{"op": "delete_entity_soft", "entity": "screens",
+                                     "id": str(removed.public_id)}])  # fmt: skip
+            return PageCreateOut(page=page_out(removed), created=False, revived=True,
+                                 action=action)  # fmt: skip
     await _check_room(db, user.id)
 
     page = await create_page(db, user.id, template, client_id=body.client_id, title=title,
                              icon=body.icon, layout=body.layout,
                              created_by=ScreenCreatedBy(body.created_by))  # fmt: skip
     await fill_page(db, page)
-    return PageCreateOut(page=page_out(page), created=True)
+    action = await _record(db, user.id, ActionKind.CREATE_SCREEN,
+                           f"Добавил страницу «{page.title}»", page,
+                           [{"op": "delete_entity_soft", "entity": "screens",
+                             "id": str(page.public_id)}],
+                           extra={"created_page_id": str(page.public_id)})  # fmt: skip
+    return PageCreateOut(page=page_out(page), created=True, action=action)
 
 
 @router.get("/{page_id}", response_model=PageOut)
@@ -263,11 +307,13 @@ async def get_page(page_id: uuid.UUID, user: GatedUser, db: Db) -> PageOut:
     return page_out(await _get(db, user, page_id))
 
 
-@router.patch("/{page_id}", response_model=PageOut)
-async def patch_page(page_id: uuid.UUID, body: PagePatchIn, user: GatedUser, db: Db) -> PageOut:
+@router.patch("/{page_id}", response_model=PageWithActionOut)
+async def patch_page(page_id: uuid.UUID, body: PagePatchIn, user: GatedUser,
+                     db: Db) -> PageWithActionOut:  # fmt: skip
     await lock_user(db, user.id)  # all writers of a user's pages: this lock, then the rows
     page = await _get(db, user, page_id)
     _editable(page)
+    before = engine.screen_state(page)
     if body.title is not None:
         title = body.title.strip()
         if not title:
@@ -288,20 +334,35 @@ async def patch_page(page_id: uuid.UUID, body: PagePatchIn, user: GatedUser, db:
         page.customized = True
         page.view_version += 1
     await db.flush()
-    return page_out(page)
+    after = engine.screen_state(page)
+    changed = {k: v for k, v in after.items() if before[k] != v}
+    inverse = [{"op": "restore_screen_config", "page": str(page.public_id),
+                **{k: before[k] for k in changed}, "expect": changed}] if changed else []
+    if "title" in changed:
+        sentence = f"Переименовал страницу в «{page.title}»"
+    else:
+        sentence = f"Изменил вид страницы «{page.title}»"
+    return _with_action(page, await _record(db, user.id, ActionKind.SCREEN_CUSTOMIZE, sentence,
+                                            page, inverse))
 
 
-@router.delete("/{page_id}", response_model=PageOut)
-async def remove_page(page_id: uuid.UUID, user: GatedUser, db: Db) -> PageOut:
-    """«Убрать страницу»: soft, the items and this page's links stay (R-50)."""
+@router.delete("/{page_id}", response_model=PageWithActionOut)
+async def remove_page(page_id: uuid.UUID, user: GatedUser, db: Db) -> PageWithActionOut:
+    """«Убрать страницу»: soft, the items and this page's links stay (R-50). A record moved here
+    by hand is never left on no page (the engine's soft delete runs `rescue_moved`)."""
     await lock_user(db, user.id)
     page = await _get(db, user, page_id, include_removed=True)
     _editable(page)
+    action = None
     if page.deleted_at is None:
-        page.deleted_at = datetime.now(UTC)
-        await db.flush()
-        await rescue_moved(db, page)  # a record moved here by hand is never left on no page
-    return page_out(page)
+        out = await engine.apply(db, user.id, [{"op": "delete_entity_soft", "entity": "screens",
+                                                "id": str(page.public_id)}],
+                                 by=Initiator.USER, check=False, now=datetime.now(UTC))  # fmt: skip
+        await db.refresh(page)
+        action = await _record(db, user.id, ActionKind.DELETE_SCREEN,
+                               f"Страница «{page.title}» убрана. Записи остались", page,
+                               out.inverse)  # fmt: skip
+    return _with_action(page, action)
 
 
 @router.post("/{page_id}/restore", response_model=PageOut)
@@ -368,9 +429,20 @@ async def page_items(
                                             ScreenTemplate.version == page.template_version)
     ) or []  # fmt: skip
     items = await items_out(db, [item for _, item in shown])
+    task_of: dict[int, Task] = {}
+    task_out: dict[int, TaskOut] = {}
+    if page.template_key in tasks_service.LIST_OF_TEMPLATE and shown:
+        rows_t = list(await db.scalars(select(Task).where(
+            Task.user_id == user.id, Task.item_id.in_([item.id for _, item in shown]))))
+        task_of = {t.item_id: t for t in rows_t}
+        task_out = {t.item_id: TaskOut.model_validate(d) for t, d in
+                    zip(rows_t, await tasks_service.tasks_dicts(db, rows_t), strict=True)}
     entries = [
         PageEntryOut(link=page_item_out(link, page.public_id, item.public_id), item=out,
-                     fields=field_values(template_fields, item))
+                     fields={**field_values(template_fields, item),
+                             **(tasks_service.field_values(page.template_key, task_of[item.id])
+                                if item.id in task_of else {})},
+                     task=task_out.get(item.id))
         for (link, item), out in zip(shown, items, strict=True)
     ]  # fmt: skip
     return PageItemsOut(entries=entries,
@@ -400,10 +472,19 @@ async def add_page_item(page_id: uuid.UUID, body: PageItemAddIn, user: GatedUser
         .execution_options(populate_existing=True)
     )
     assert link is not None
+    name = _item_name(item)
+    sentence = f"Показал «{name}» на странице «{page.title}»"
+    row = {"item_id": str(item.public_id), "title": name, "kind": "show",
+           "page_id": str(page.public_id), "text": sentence}
     if created:
+        action = await _record(db, user.id, ActionKind.SCREEN_ADD_ITEM, sentence, page,
+                               [{"op": "remove_screen_item", "page": str(page.public_id),
+                                 "item": str(item.public_id), "exclude": False}],
+                               changes=[row])  # fmt: skip
         return PageItemAddOut(link=page_item_out(link, page.public_id, item.public_id),
-                              created=True)  # fmt: skip
+                              created=True, action=action)  # fmt: skip
     response.status_code = 200
+    action = None
     if link.removed_by_user_at is not None:
         link.removed_by_user_at = None
         link.added_by = AddedBy.USER
@@ -411,7 +492,12 @@ async def add_page_item(page_id: uuid.UUID, body: PageItemAddIn, user: GatedUser
         link.updated_at = func.now()
         await db.flush()
         await db.refresh(link)
-    return PageItemAddOut(link=page_item_out(link, page.public_id, item.public_id), created=False)
+        action = await _record(db, user.id, ActionKind.SCREEN_ADD_ITEM, sentence, page,
+                               [{"op": "remove_screen_item", "page": str(page.public_id),
+                                 "item": str(item.public_id), "exclude": True}],
+                               changes=[row])  # fmt: skip
+    return PageItemAddOut(link=page_item_out(link, page.public_id, item.public_id), created=False,
+                          action=action)  # fmt: skip
 
 
 # --- manual order (week 7) ---
@@ -567,14 +653,55 @@ async def list_habits(user: GatedUser, db: Db) -> HabitsOut:
                 page=PageRefOut(id=page.public_id, title=page.title, icon=page.icon),
                 envelope_type=kind, evidence_count=h.evidence_count, updated_at=h.updated_at,
             ))  # fmt: skip
+    # «Убрал со страницы — не возвращать» (screen_exclusion): the hidden row is the rule itself.
+    for link, item, page in await db.execute(
+            select(ScreenItem, Item, Screen)
+            .join(Item, Item.id == ScreenItem.item_id)
+            .join(Screen, Screen.id == ScreenItem.screen_id)
+            .where(ScreenItem.user_id == user.id, ScreenItem.removed_by_user_at.is_not(None),
+                   Screen.deleted_at.is_(None), Item.deleted_at.is_(None),
+                   Item.hidden_reason.is_(None))
+            .order_by(ScreenItem.removed_by_user_at.desc(), ScreenItem.public_id.desc())
+            .limit(EXCLUSIONS_SHOWN)):  # fmt: skip
+        name = _item_name(item)
+        out.append(HabitOut(
+            id=link.public_id, kind="screen_exclusion",
+            text_ru=f"Не показываю «{name}» на странице «{page.title}»",
+            page=PageRefOut(id=page.public_id, title=page.title, icon=page.icon),
+            envelope_type=None, evidence_count=1, updated_at=link.removed_by_user_at,
+            item_id=item.public_id,
+        ))  # fmt: skip
     return HabitsOut(habits=out)
 
 
 @habits_router.delete("/{habit_id}", response_model=HabitOffOut)
 async def turn_off_habit(habit_id: uuid.UUID, user: GatedUser, db: Db,
                          client_id: uuid.UUID | None = None) -> HabitOffOut:  # fmt: skip
-    """«Убрать»: records already placed stay; new ones are no longer placed by this rule."""
+    """«Убрать»: records already placed stay; new ones are no longer placed by this rule. On a
+    `screen_exclusion` (a page row's id): the record is shown on that page again."""
     now = datetime.now(UTC)
+    found = (await db.execute(
+        select(ScreenItem, Item, Screen)
+        .join(Item, Item.id == ScreenItem.item_id).join(Screen, Screen.id == ScreenItem.screen_id)
+        .where(ScreenItem.user_id == user.id, ScreenItem.public_id == habit_id)
+    )).first()  # fmt: skip
+    if found is not None:
+        link, item, page = found
+        if link.removed_by_user_at is None or page.deleted_at is not None:
+            return HabitOffOut(removed=False, repeated=True, action=None)
+        await lock_user(db, user.id)
+        res = await engine.apply(db, user.id, [{"op": "add_screen_item",
+                                                "page": str(page.public_id),
+                                                "item": str(item.public_id)}],
+                                 by=Initiator.USER, check=False, now=now)  # fmt: skip
+        name = _item_name(item)
+        sentence = f"Снова показываю «{name}» на странице «{page.title}»"
+        action = await _record(db, user.id, ActionKind.SCREEN_ADD_ITEM, sentence, page,
+                               res.inverse, changes=[{"item_id": str(item.public_id),
+                                                      "title": name, "kind": "show",
+                                                      "page_id": str(page.public_id),
+                                                      "text": sentence}])  # fmt: skip
+        return HabitOffOut(removed=True, repeated=False, action=action)
     try:
         res = await manual.turn_off_rule(db, user.id, habit_id=habit_id, client_id=client_id,
                                          now=now)  # fmt: skip
@@ -583,3 +710,53 @@ async def turn_off_habit(habit_id: uuid.UUID, user: GatedUser, db: Db,
     await db.flush()
     return HabitOffOut(removed=res.done, repeated=res.repeated,
                        action=await _action_out(db, res, now))  # fmt: skip
+
+
+@habits_router.patch("/{habit_id}", response_model=HabitPatchOut)
+async def change_habit(habit_id: uuid.UUID, body: HabitPatchIn, user: GatedUser,
+                       db: Db) -> HabitPatchOut:  # fmt: skip
+    """S30 «Изменить» (week 9): a learned placement rule puts such records on another page from
+    now on. Records already placed stay where they are; «Отменить» moves the rule back."""
+    now = datetime.now(UTC)
+    await lock_user(db, user.id)
+    habit = await db.scalar(select(UserHabit).where(
+        UserHabit.user_id == user.id, UserHabit.public_id == habit_id,
+        UserHabit.kind == HabitKind.PLACEMENT_RULE).with_for_update())  # fmt: skip
+    if habit is None or habit.status != HabitStatus.ACTIVE:
+        raise ApiError(404, "not_found")
+    page = await _get(db, user, body.page_id)
+    _editable(page)
+    kind = (habit.value or {}).get("envelope_type")
+    first = None
+    if body.client_id is not None:
+        first = await db.scalar(select(Action).where(Action.user_id == user.id,
+                                                     Action.client_id == body.client_id))
+    if first is None and str(page.public_id) != (habit.value or {}).get("page_id"):
+        key = f"{page.public_id}:envelope_type:{kind}"
+        rival = await db.scalar(select(UserHabit.id).where(
+            UserHabit.user_id == user.id, UserHabit.kind == HabitKind.PLACEMENT_RULE,
+            UserHabit.key == key, UserHabit.id != habit.id))  # fmt: skip
+        if rival is not None:
+            raise ApiError(409, "conflict", details={"reason": "habit_exists"})
+        state = {**habits.state_of(habit), "key": key,
+                 "value": {**(habit.value or {}), "page_id": str(page.public_id)}}
+        res = await engine.apply(db, user.id, [{"op": "restore_habit", "id": str(habit.public_id),
+                                                "state": state}],
+                                 by=Initiator.USER, check=False, now=now)  # fmt: skip
+        sentence = habits.describe(kind, page.title)
+        action = await record(db, user_id=user.id, kind=ActionKind.HABIT_CHANGE,
+                              initiated_by=Initiator.USER,
+                              summary={"ru": "Теперь: " + sentence[:1].lower() + sentence[1:],
+                                       "kk": None}, changes=[], inverse=res.inverse, now=now,
+                              screen_id=page.id, client_id=body.client_id)  # fmt: skip
+        await db.flush()
+    else:
+        action = first
+    out = HabitOut(id=habit.public_id, kind=habit.kind, text_ru=habits.describe(kind, page.title),
+                   page=PageRefOut(id=page.public_id, title=page.title, icon=page.icon),
+                   envelope_type=kind, evidence_count=habit.evidence_count,
+                   updated_at=habit.updated_at)  # fmt: skip
+    action_out = None
+    if action is not None:
+        action_out = ActionOut.model_validate((await actions_dicts(db, [action], now))[0])
+    return HabitPatchOut(habit=out, action=action_out, repeated=first is not None)

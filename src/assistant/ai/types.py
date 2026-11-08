@@ -34,6 +34,7 @@ class LLMTask(enum.StrEnum):
     CHAT_SUMMARIZE = "chat_summarize"
     PAGE_GROUP = "page_group"
     EXPENSE_EXTRACT = "expense_extract"
+    TASKS_PARSE = "tasks_parse"  # week 9: a phrase as to-dos / a shopping list
 
 
 class BudgetClass(enum.StrEnum):

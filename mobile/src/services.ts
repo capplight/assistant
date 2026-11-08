@@ -18,6 +18,8 @@ import { useSession } from '@/store/session';
 import { useToast } from '@/store/toast';
 import { useUndo } from '@/store/undo';
 import { SyncEngine, type DeviceInfo } from '@/sync/engine';
+import { rememberActions, taskSink } from '@/tasks/service';
+import { applySyncExtras } from '@/today/service';
 
 /**
  * Composition root: one API client, one sync engine, one capture service per app process.
@@ -163,6 +165,9 @@ export function getSyncEngine(): Promise<SyncEngine> {
         onAccountConsentRejected: () =>
           useOnboarding.getState().requireAccountConsent({ userId: '', switched: false }),
         reminders: reminderSink,
+        tasks: taskSink,
+        actions: rememberActions,
+        extras: applySyncExtras,
       }))();
   }
   return engine;

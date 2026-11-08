@@ -495,7 +495,11 @@ export type ChatDeliveryState = 'banner_shown' | 'opened' | 'dismissed';
 
 /** «Что изменилось»: one row per record, `text` ready (««Плитка, замер» → Ремонт»). */
 export type ActionChangeOut = {
-  item_id: string;
+  /** Null for a row about a page (`create_page`) or a reminder (`reminder`): no «Вернуть» of its own. */
+  item_id: string | null;
+  /** Week 9: the task / reminder the row is about. */
+  task_id?: string | null;
+  reminder_id?: string | null;
   title: string | null;
   kind: string | null;
   text: string;
@@ -517,6 +521,11 @@ export type ActionOut = {
   undone_at: string | null;
   undo_of: string | null;
   message_id: string | null;
+  /** Week 9 (S20): who did it (`user` = the person's own change, R-33), and when. */
+  initiated_by?: 'agent' | 'user' | null;
+  scope?: 'internal' | 'external' | null;
+  created_at?: string | null;
+  seq?: number;
 };
 
 /** `page_patch`, and `page_patches` of an undo. `group_key` = the group's title. */
@@ -584,7 +593,9 @@ export type ChatEvent = (
   /** Resume of a finished reply: replace what was shown. */
   | { type: 'snapshot'; message: ChatMessageOut }
   /** Several in one reply = the same action growing: replace by `action.id`. */
-  | { type: 'action'; action: ActionOut; changedItemIds: string[] }
+  | { type: 'action'; action: ActionOut; changedItemIds: string[]; tasks?: TaskOut[] }
+  /** Week 9: a reminder phrase read as `/reminders/parse` would (S13; nothing saved). */
+  | { type: 'reminder_draft'; replyId: string | null; draft: ReminderParseOut; createdVia: 'voice' | 'typed' }
   | { type: 'page_patch'; patch: PagePatchOut }
   /** `needs_choice`, `confirm`, `confirm_manual`. */
   | { type: 'proposal'; proposal: ProposalOut }
@@ -678,10 +689,21 @@ export type ReminderCreateIn = {
   parse_source?: ReminderParseSource | null;
   sensitivity?: 'health' | null;
   item_id?: string | null;
+  /** Week 9: the chat reply the draft came from (`reminder_draft`). */
+  message_id?: string | null;
 };
 
-/** POST /reminders, POST /reminders/test, PATCH /reminders/{id}. */
-export type ReminderWithFiresOut = { reminder: ReminderOut | null; fires: FireOut[] };
+/** PATCH /reminders/{id} («Перенести»). */
+export type ReminderPatchIn = {
+  version: number;
+  title?: string;
+  due_at?: string;
+  offsets?: number[];
+  level?: ReminderLevel;
+};
+
+/** POST /reminders, POST /reminders/test, PATCH and DELETE /reminders/{id}; `action` from week 9. */
+export type ReminderWithFiresOut = { reminder: ReminderOut | null; fires: FireOut[]; action?: ActionOut | null };
 
 /** GET /reminders/fires — the planning window, with this phone's device id. */
 export type FiresWindowOut = { device_id: string | null; fires: FireOut[]; reminders: ReminderOut[] };
@@ -736,7 +758,8 @@ export type ReminderEventIn = {
 
 export type ReminderEventResult = { client_id: string; status: 'applied' | 'duplicate' | 'not_found' | 'invalid' };
 
-export type ReminderEventsOut = { results: ReminderEventResult[]; fires: FireOut[] };
+/** `actions` (week 9): one per late «Сделано» on a missed fire, with «Отменить». */
+export type ReminderEventsOut = { results: ReminderEventResult[]; fires: FireOut[]; actions: ActionOut[] };
 
 export type ReminderSettingsOut = {
   parser: 'rules_first' | 'llm' | null;
@@ -752,3 +775,125 @@ export type ReminderActiveOut = { device_id: string | null; retargeted: number }
 
 /** Data of a server backup push (no text unless `push_content`). */
 export type ReminderPushData = { type: 'reminder_backup' | 'reminder_missed'; fire_id: string | null; reminder_id: string | null };
+
+// --- week 9: «Сегодня», «Дела», «Покупки», suggestions, S20, S30 — docs/api/today.md,
+// actions.md, reminders.md, pages.md (see the reconcile date in mobile/README.md) ---
+
+/** `todo` = «Дела», `shopping` = «Покупки». */
+export type TaskListKey = 'todo' | 'shopping';
+
+/** One line of a list. Each task has its own record (`item_id`): it is a page row like any record. */
+export type TaskOut = {
+  id: string;
+  client_id: string | null;
+  item_id: string | null;
+  list_key: TaskListKey;
+  title: string;
+  /** «Сколько», «Где купить» (shopping only): free text ≤60. */
+  qty: string | null;
+  where: string | null;
+  /** «Когда» of a to-do (`YYYY-MM-DD` on the person's clock), or null. */
+  due_date: string | null;
+  done: boolean;
+  done_at: string | null;
+  version: number;
+  seq: number;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+};
+
+/** POST /tasks (offline through the outbox: the same `client_id` → the same task). */
+export type TaskCreateIn = {
+  client_id: string;
+  list_key: TaskListKey;
+  title: string;
+  qty?: string | null;
+  where?: string | null;
+  due_date?: string | null;
+};
+
+/** POST /tasks/{id}/done: one tap = one call. `done: false` = «Вернуть». */
+export type TaskDoneIn = { client_id: string; done: boolean };
+
+/** POST, PATCH, DELETE /tasks…, /done: the task as it is now and its action (null: nothing changed). */
+export type TaskWriteOut = { task: TaskOut | null; action: ActionOut | null; page_patches: PagePatchOut[]; repeated: boolean };
+
+/** What [Да] of a suggestion does on the phone (today.md «Suggestions»). */
+export type SuggestionDo = { type: string; phrase: string | null; page_id: string | null };
+
+/** A tip (≤1) or a data proposal (≤2) on «Сегодня». */
+export type SuggestionOut = {
+  id: string;
+  kind: 'tip' | 'data_proposal' | string;
+  key: string;
+  text_ru: string;
+  yes_label: string | null;
+  no_label: string | null;
+  do: SuggestionDo | null;
+  status: string;
+  expires_at: string | null;
+  seq: number;
+};
+
+export type SuggestionAcceptOut = {
+  suggestion: SuggestionOut | null;
+  action: ActionOut | null;
+  task: TaskOut | null;
+  reminder_draft: ReminderParseOut | null;
+};
+
+/** An occurrence on «Сегодня»: the reminder, its own fire (`offset_min: 0`), its state. */
+export type TodayReminderOut = {
+  reminder: ReminderOut;
+  fire: FireOut | null;
+  occurrence_at: string;
+  local_time: string | null;
+  state: string | null;
+};
+
+export type TodaySection = 'banner' | 'missed' | 'today' | 'done_for_you' | 'proposals' | 'tip' | string;
+
+/** GET /today (S06). */
+export type TodayOut = {
+  date: string | null;
+  tz: string | null;
+  greeting: string | null;
+  sections: TodaySection[];
+  today: {
+    reminders: TodayReminderOut[];
+    tasks: TaskOut[];
+    shopping: { page_id: string | null; count: number; titles: string[] } | null;
+  };
+  missed: TodayReminderOut[];
+  done_for_you: { actions: ActionOut[]; count_today: number };
+  banner: ChatMessageOut | null;
+  proposals: SuggestionOut[];
+  tip: SuggestionOut | null;
+  empty: boolean;
+  example: string | null;
+};
+
+/** S30 «Что я для вас настроил» (pages.md `GET /habits`). */
+export type HabitOut = {
+  id: string;
+  kind: string;
+  text_ru: string;
+  text_kk: string | null;
+  page: ChatPageRef | null;
+  /** `screen_exclusion`: the record taken off the page (only «Убрать»). */
+  item_id: string | null;
+  /** In /sync: `candidate` | `active` | `disabled` (show only `active`); GET /habits lists active ones. */
+  status: string;
+  evidence_count: number;
+  seq: number;
+  updated_at: string | null;
+};
+
+export type HabitRemoveOut = { removed: boolean; repeated: boolean; action: ActionOut | null };
+
+/** PATCH /habits/{id} («Изменить»: the rule's page). */
+export type HabitPatchOut = { habit: HabitOut | null; action: ActionOut | null; repeated: boolean };
+
+/** GET /actions: newest first. */
+export type ActionsPageOut = { actions: ActionOut[]; has_more: boolean };

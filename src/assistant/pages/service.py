@@ -213,13 +213,19 @@ async def rescue_moved(session: AsyncSession, page: Screen) -> int:
     return back
 
 
+# «Дела» / «Покупки» are views over the tasks table (spec 3.10): their pages hold the records of
+# these lists' tasks besides what their rule matches.
+TASK_LISTS = {"tasks": ("todo",), "shopping": ("shopping",)}
+
+
 async def fill_page(session: AsyncSession, page: Screen) -> int:
     """Bring in what the memory already holds, so a new page isn't empty if something matches.
     Trashed and merged items are included (reads hide them): restoring one needs no extra work.
     Voice fragments are not: a fragment reaches pages through its recording."""
     await lock_user(session, page.user_id)
     rule = (await _rules(session, [page]))[page.id]
-    if not rule.get("any"):
+    lists = TASK_LISTS.get(page.template_key, ())
+    if not rule.get("any") and not lists:
         return 0
     when = func.coalesce(Item.occurred_at, Item.created_at)
     rows = await session.execute(
@@ -229,9 +235,14 @@ async def fill_page(session: AsyncSession, page: Screen) -> int:
                Item.hidden_reason.is_distinct_from(HiddenReason.VOICE_FRAGMENT))
         .order_by(when.desc(), Item.id.desc())
     )  # fmt: skip
-    found = [r for r in rows if matches(rule, ItemFacts(kind=str(r.kind), envelope=r.envelope,
-                                                        title=r.title, summary=r.summary,
-                                                        text=r.body))]  # fmt: skip
+    task_items: set[int] = set()
+    if lists:
+        task_items = set(await session.scalars(
+            text("SELECT item_id FROM tasks WHERE user_id = :u AND list_key = ANY(:l) "
+                 "AND deleted_at IS NULL"), {"u": page.user_id, "l": list(lists)}))  # fmt: skip
+    found = [r for r in rows if r.id in task_items
+             or matches(rule, ItemFacts(kind=str(r.kind), envelope=r.envelope, title=r.title,
+                                        summary=r.summary, text=r.body))]  # fmt: skip
     existing = set(await session.scalars(
         select(ScreenItem.item_id).where(ScreenItem.screen_id == page.id)
     ))  # fmt: skip

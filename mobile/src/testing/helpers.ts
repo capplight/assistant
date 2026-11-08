@@ -17,6 +17,8 @@ import { useView } from '@/store/view';
 import { FakePush } from '@/push';
 import { FakeAlarms } from '@/alarms/port';
 import { useAlarms } from '@/alarms/store';
+import { useTasks } from '@/tasks/store';
+import { useToday } from '@/today/service';
 
 export const APP_DIR = path.resolve(__dirname, '../app');
 
@@ -53,6 +55,8 @@ export let testAlarms = new FakeAlarms();
 export function resetApp(o: { fetch?: FetchLike; push?: FakePush; alarms?: FakeAlarms } = {}): InMemoryOutboxRepository {
   useOnboarding.getState().reset();
   useAlarms.getState().reset();
+  useTasks.getState().reset();
+  useToday.setState({ last: null, answered: [] });
   usePages.getState().reset();
   useAssistant.getState().reset();
   useSession.getState().reset();

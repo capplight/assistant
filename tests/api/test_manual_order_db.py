@@ -112,7 +112,7 @@ async def test_repeat_with_the_same_client_id_changes_nothing(db_app):
         assert again["repeated"] is True and again["action"]["id"] == first["action"]["id"]
         assert await _ids_on(c, h, page["id"]) == moved_again
         listed = (await c.get("/v1/actions", headers=h)).json()["actions"]
-        assert len(listed) == 2
+        assert len([a for a in listed if a["kind"] == "screen_reorder_items"]) == 2
 
 
 async def test_undo_after_the_person_moved_it_again_is_partial(db_app):
@@ -354,7 +354,8 @@ async def test_two_moves_of_one_kind_teach_placement_and_undo_unteaches(db_app):
         habit = await s.scalar(select(UserHabit).execution_options(populate_existing=True))
         assert habit is not None and habit.status == "active" and habit.evidence_count == 2
         assert habit.source == "learned_edit" and habit.kind == "placement_rule"
-        listed = (await c.get("/v1/habits", headers=h)).json()["habits"]
+        listed = [x for x in (await c.get("/v1/habits", headers=h)).json()["habits"]
+                  if x["kind"] == "placement_rule"]  # week 9 adds the screen exclusions
         assert [x["text_ru"] for x in listed] == ["Чеки кладу на страницу «Ремонт»"]
 
         # A new receipt goes where the person put the others too (once its type is known); a
@@ -374,7 +375,8 @@ async def test_two_moves_of_one_kind_teach_placement_and_undo_unteaches(db_app):
         assert r.status_code == 200 and r.json()["partial"] is False
         await s.refresh(habit)
         assert habit.status == "candidate" and habit.evidence_count == 1
-        assert (await c.get("/v1/habits", headers=h)).json()["habits"] == []
+        assert [x for x in (await c.get("/v1/habits", headers=h)).json()["habits"]
+                if x["kind"] == "placement_rule"] == []
         late = await _note(c, h, "Чек Леруа 4")
         await place_item(s, await _set_envelope(s, late, "receipt"))
         await s.commit()
@@ -714,7 +716,8 @@ async def test_turning_a_rule_off_stops_it_and_can_be_undone(db_app):
         rule = (await c.get("/v1/habits", headers=h)).json()["habits"][0]
         off = (await c.delete(f"/v1/habits/{rule['id']}", headers=h)).json()
         assert off["removed"] is True and off["action"]["kind"] == "habit_change"
-        assert (await c.get("/v1/habits", headers=h)).json()["habits"] == []
+        assert [x for x in (await c.get("/v1/habits", headers=h)).json()["habits"]
+                if x["kind"] == "placement_rule"] == []
         late = await _note(c, h, "Чек поздний")
         await place_item(s, await _set_envelope(s, late, "receipt"))
         await s.commit()
@@ -722,7 +725,8 @@ async def test_turning_a_rule_off_stops_it_and_can_be_undone(db_app):
         again = (await c.delete(f"/v1/habits/{rule['id']}", headers=h)).json()
         assert again["removed"] is False and again["action"] is None
         await c.post(f"/v1/actions/{off['action']['id']}/undo", headers=h)
-        assert len((await c.get("/v1/habits", headers=h)).json()["habits"]) == 1
+        assert len([x for x in (await c.get("/v1/habits", headers=h)).json()["habits"]
+                    if x["kind"] == "placement_rule"]) == 1
         assert (await c.delete(f"/v1/habits/{_cid()}", headers=h)).status_code == 404
 
 

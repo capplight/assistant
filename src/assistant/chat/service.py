@@ -12,6 +12,11 @@ Rules held here: no DB transaction is open during a model call or the embedder (
 its own short session); the final answer is committed before `citations` / `checked` /
 `banner` / `done` are sent; tokens are whole sentences that passed the number/date check;
 citations are only refs this turn issued; the provider is pinned after the first step.
+
+Week 9: a reminder phrase («напомни…», «разбуди…») gets a `reminder_draft` for S13 and nothing is
+saved (the same reader as /reminders/parse); a list phrase («купить хлеб и молоко», «добавь в
+покупки…», anything typed on «Покупки» / «Дела») becomes tasks on the list page in one action
+(assistant.tasks; the model reads it by default, code first only with `tasks_rules_first`, Ф-1).
 """
 
 import asyncio
@@ -80,7 +85,8 @@ from assistant.chat.stream import FieldStream
 from assistant.chat.tools import READ_TOOLS, TOOLS, ToolEnv, call_key, execute
 from assistant.chat.verify import Facts, check_sentence, split_sentences
 from assistant.config import Settings
-from assistant.db.models import Job, JobStatus
+from assistant.db.models import Job, JobStatus, User
+from assistant.db.models_actions import ActionKind, Initiator
 from assistant.db.models_chat import (
     AnswerKind,
     ConversationMessage,
@@ -89,8 +95,11 @@ from assistant.db.models_chat import (
     MessageRole,
     MessageState,
 )
+from assistant.db.models_pages import Screen
 from assistant.embeddings import ChunkEmbedder, NullChunkEmbedder
 from assistant.logs import error_text
+from assistant.tasks import parse as tasks_parse
+from assistant.tasks import service as tasks_service
 
 log = logging.getLogger(__name__)
 
@@ -117,6 +126,35 @@ TEXT_NOT_CHANGED = {"ru": "Не понял, что изменить. Скажи�
                     "kk": "Не понял, что изменить. Скажите, пожалуйста, ещё раз."}  # fmt: skip
 TEXT_NOTHING_HERE = {"ru": "Здесь пока нет записей.", "kk": "Здесь пока нет записей."}
 TEXT_WHICH = {"ru": "Какую?", "kk": "Какую?"}  # kk: until reviewed (R-39)
+# Week 9: «напомни …» from the line. Questions («напомни, как зовут мастера?») are not reminders.
+_REMIND = re.compile(
+    r"^(?:пожалуйста[,\s]+)?(?:напомн(?:и|ите)|разбуд(?:и|ите)|не\s+да(?:й|йте)\s+(?:мне\s+)?"
+    r"забыть|постав(?:ь|ьте)\s+(?:мне\s+)?(?:будильник|напоминание)|"
+    r"сдела(?:й|йте)\s+напоминание|еске\s+сал)(?=$|[\s,.:!])",
+    re.IGNORECASE)  # fmt: skip
+_REMIND_QUESTION = re.compile(
+    r"^(?:пожалуйста[,\s]+)?напомн(?:и|ите)(?:\s+мне)?[,\s]+(?:что|как|где|когда|кто|какой|"
+    r"какая|какое|какие|сколько|чей|чья|о\s+чем|про\s+что)\b", re.IGNORECASE)  # fmt: skip
+LIST_TEMPLATES = {"shopping": "shopping", "tasks": "todo"}
+
+
+def is_reminder_phrase(text: str) -> bool:
+    norm = " ".join(text.lower().replace("ё", "е").split())
+    if norm.endswith("?") or _REMIND_QUESTION.search(norm):
+        return False
+    return bool(_REMIND.search(norm))
+
+
+def _jsonable(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {k: _jsonable(v) for k, v in value.items()}
+    if isinstance(value, list | tuple):
+        return [_jsonable(v) for v in value]
+    if isinstance(value, uuid.UUID):
+        return str(value)
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return value
 INTENT_SYSTEM = (
     "You read one phrase a person said to the assistant of their notes app. intent: change "
     "(asks to delete, move, rename or arrange records or pages), question (asks something or "
@@ -448,16 +486,33 @@ class ChatService:
                 turn = await self._choice(run, turn, choice)  # type: ignore[assignment]
                 if turn is None:
                     return
+            if turn.input_kind != "share" and is_reminder_phrase(turn.text):
+                if background:  # nothing is set up later behind the person's back
+                    await self._fail(run, "not_done", text=TEXT_NOT_DONE[lang], retry=True)
+                else:
+                    await self._reminder_draft(run, turn)
+                return
             reading = rules_first(turn.text, input_kind=turn.input_kind)
+            list_page = await self._list_of_page(turn)
+            if reading.intent == Intent.UNCLEAR and list_page and not background:
+                if await self._save_tasks(run, turn, turn.text, list_page):
+                    return  # «хлеб» on «Покупки» is a thing to buy, not a search
             if reading.intent == Intent.UNCLEAR:
                 if background:
                     reading = note_by_code(turn.text, reading)
                 else:
                     reading = await self._ask_intent(turn, reading)
             save = save_text(turn.text) if reading.intent == Intent.CHANGE else None
-            if reading.intent == Intent.NOTE or save is not None:
-                await self._save_note(run, turn, save or turn.text)
-                return
+            listy = (reading.intent == Intent.CHANGE and save is None
+                     and tasks_parse.adds_to_list(turn.text))  # «добавь в покупки молоко»
+            if reading.intent == Intent.NOTE or save is not None or listy:
+                if not background and (list_page or listy
+                                       or tasks_parse.mentions_list(save or turn.text)):
+                    if await self._save_tasks(run, turn, save or turn.text, list_page):
+                        return
+                if not listy:
+                    await self._save_note(run, turn, save or turn.text)
+                    return
             change = reading.intent == Intent.CHANGE
             if background and change:  # never change things later behind the person's back
                 await self._fail(run, "not_done", text=TEXT_NOT_DONE[lang], retry=True)
@@ -595,6 +650,105 @@ class ChatService:
         await self._finish_change(run, turn, m, Decimal(0),
                                   [{"name": "create", "arguments": {}, "error": res.is_error,
                                     "by": "code"}])  # fmt: skip
+
+    async def _list_of_page(self, turn: TurnInput) -> str | None:
+        """`todo` / `shopping` when the line is on «Дела» / «Покупки»."""
+        if turn.page_pk is None:
+            return None
+        async with self.sessionmaker() as session:
+            key = await session.scalar(select(Screen.template_key).where(
+                Screen.id == turn.page_pk, Screen.user_id == turn.user_id))  # fmt: skip
+        return LIST_TEMPLATES.get(key or "")
+
+    async def _local_today(self, user_id: int) -> tuple[str, Any]:
+        from zoneinfo import ZoneInfo
+
+        async with self.sessionmaker() as session:
+            tz = await session.scalar(select(User.tz).where(User.id == user_id)) or "Asia/Almaty"
+        return tz, self.clock().astimezone(ZoneInfo(tz)).date()
+
+    async def _save_tasks(self, run: ReplyRun, turn: TurnInput, text_: str,
+                          default_list: str | None) -> bool:  # fmt: skip
+        """A list phrase → tasks on the list page, one action (US-10). False: not a list (the
+        caller saves a note or goes on). The reader sees the person's phrase only."""
+        from assistant.actions import actions_dicts, record
+        from assistant.actions.patch import page_patches
+
+        _, today = await self._local_today(turn.user_id)
+        reading = await tasks_parse.read_phrase(
+            text_, today=today, rules_first=self.s.tasks_rules_first, router=self.router,
+            user_id=turn.user_id, default_list=default_list)  # fmt: skip
+        if reading is None or not reading.specs:
+            return False
+        book = await book_for(self.sessionmaker, turn.user_id, turn.page_pk)
+        m = self._mutation(run, turn, book, True, False)
+        now = self.clock()
+        async with self.sessionmaker() as s:
+            added = await tasks_service.add(s, turn.user_id, reading.specs, by=Initiator.AGENT,
+                                            now=now, voice=turn.input_kind == "voice")
+            action = await record(
+                s, user_id=turn.user_id, kind=ActionKind.SAVE_ITEM, initiated_by=Initiator.AGENT,
+                summary={"ru": added.sentence, "kk": None}, changes=added.changes,
+                inverse=added.inverse, now=now, screen_id=added.page.id if added.page else None,
+                message_id=run.reply_pk, source_item_ids=added.item_pks,
+            )  # fmt: skip
+            await s.flush()
+            patches = await page_patches(s, turn.user_id, added.pages, added.items)
+            out_action = (await actions_dicts(s, [action], now))[0]
+            task_rows = _jsonable(await tasks_service.tasks_dicts(s, added.tasks))
+            await s.execute(text("UPDATE conversation_messages SET action_ids = :ids, "
+                                 "updated_at = now() WHERE id = :r"),
+                            {"ids": [action.id], "r": run.reply_pk})  # fmt: skip
+            await s.commit()
+        m.action_pk, m.action_public, m.action_out = action.id, str(action.public_id), out_action
+        m.sentences.append(added.sentence)
+        run.emit("tool_activity", {"tool": "create", "text": "Записываю…",
+                                   "page_id": str(added.page.public_id) if added.page else None})
+        m.emit("action", {"reply_id": None, "action": out_action,
+                          "changed_item_ids": out_action["changed_item_ids"],
+                          "page_id": str(book.current.id) if book.current else None,
+                          "tasks": task_rows})  # fmt: skip
+        for patch in patches:
+            m.emit("page_patch", patch)
+        await self._finish_change(run, turn, m, Decimal(str(reading.cost_usd)),
+                                  [{"name": "tasks", "arguments": {"list": reading.list_key},
+                                    "error": False, "by": reading.source}])  # fmt: skip
+        return True
+
+    async def _reminder_draft(self, run: ReplyRun, turn: TurnInput) -> None:
+        """«Напомни завтра в 7 …» (week 8 gap): «как понял» for S13, nothing saved. Same reader
+        and Ф-1 switch as /reminders/parse; the model only behind the consent gate (the line
+        already needs `ai_cross_border`, the router checks it again)."""
+        from assistant.reminders import parse_phrase
+        from assistant.reminders.parse import drafts_dicts
+
+        tz, _ = await self._local_today(turn.user_id)
+        now = self.clock().replace(microsecond=0)
+        created_via = "voice" if turn.input_kind == "voice" else "typed"
+        outcome = await parse_phrase(turn.text, now=now, tz=tz, created_via=created_via,
+                                     rules_first=self.s.reminders_rules_first,
+                                     ai_allowed=self.router is not None, router=self.router,
+                                     user_id=turn.user_id)  # fmt: skip
+        drafts = _jsonable(drafts_dicts(outcome.drafts, now, tz))
+        one = drafts[0] if drafts and outcome.status != "ambiguous" else None
+        run.emit("reminder_draft", {
+            "reply_id": str(run.reply_id), "status": outcome.status, "source": outcome.source,
+            "reason": outcome.reason, "message": outcome.message, "draft": one,
+            "options": drafts if outcome.status == "ambiguous" else [],
+            "parser": "rules_first" if self.s.reminders_rules_first else "llm",
+            "created_via": created_via,
+        })  # fmt: skip
+        if outcome.status == "ok" and one is not None:
+            note = f"Понял так: {one['when_text']} — {one['title']}. Сохранить?"
+        else:
+            note = outcome.message or "Укажите время вручную."
+        book = await book_for(self.sessionmaker, turn.user_id, turn.page_pk)
+        m = self._mutation(run, turn, book, False, False)
+        m.note = note
+        await self._finish_change(run, turn, m, Decimal(str(outcome.cost_usd)),
+                                  [{"name": "reminder_parse", "arguments": {},
+                                    "error": outcome.status == "form",
+                                    "by": outcome.source or "none"}])  # fmt: skip
 
     async def _candidates(self, turn: TurnInput, env: ToolEnv) -> list[Source]:
         """What «это» could be: the records on screen, else the newest on the page."""

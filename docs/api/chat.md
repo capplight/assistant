@@ -12,7 +12,8 @@ about **all** pages (sources may come from another page than the one the person 
 Week 5: questions and text answers with sources. Week 6: changes on the page («разложи по
 темам», «перенеси это в Расходы», «удали это», «запиши…», «сделай страницу Ремонт») with one
 «Отменить», questions back («Какую?»), «Да» with a number, «Оставить мои». `pending_action`
-(sending outside) and `general_answer_offer` are later weeks: ignore unknown events.
+(sending outside) and `general_answer_offer` are later weeks: ignore unknown events. `action` may
+carry `tasks: [Task]` (week 9, `today.md`).
 
 **Plain notes.** A phrase that only states something to keep («купить хлеб», a phone number,
 «Мастер Ерлан, плитка») is saved as a record in the person's words on the current page (on
@@ -22,6 +23,14 @@ Week 5: questions and text answers with sources. Week 6: changes on the page («
 model. A question («где ключи?»), one word («плитка») or an order goes the usual way. When the
 answering service is down, a phrase of 3+ words or with a long number is still saved; a shorter
 one gets `deferred`.
+
+**Tasks, shopping and reminders (week 9).** On any page: «купить хлеб, молоко и лекарства маме»,
+«добавь в покупки молоко», «позвонить маме завтра» become tasks on «Покупки» / «Дела и
+напоминания» (one `action`, `kind: "save_item"`, «Добавил в Покупки: хлеб, молоко, лекарства
+маме.», the `action` event also has `"tasks": [Task]`; details and who reads the phrase:
+`today.md`). Not a list → a plain note as above. «Напомни …», «разбуди …», «не дай забыть …»,
+«поставь будильник …» give a `reminder_draft` event for S13 (nothing saved until [Сохранить]:
+`reminders.md`). The phone should send these phrases here, not to `/reminders/parse`.
 
 **When the line changes something.** Only when the person's own phrase asks for a change (code
 checks the phrase first; a short model check only when the words are unclear). Text inside
@@ -97,6 +106,7 @@ data: {"text":"Плитка стоила 48 000 ₸. "}
 | `citations` | once | `{"citations": [Citation]}` — the chips under the answer. Only records the answer is based on. May be empty. |
 | `checked` | once | `{"ok": bool, "removed": int}` — `removed` sentences had a number or a date not found in the sources and were not sent (R-36). `ok=false` means the text ends with the note «Часть чисел не нашёл в записях — не стал их писать.» Nothing to do beyond showing the text. |
 | `action` | 0...n, a change was made (already saved) | `{"reply_id", "action": Action, "changed_item_ids": [uuid], "page_id": uuid \| null}` — Action as in `actions.md`. Several in one reply = the same action growing: replace by `action.id`. Show `action.summary.ru` in the line with [Что изменилось] (`action.changes`) and [Отменить] (`POST /v1/actions/{id}/undo`). Highlight `changed_item_ids` 600 ms. |
+| `reminder_draft` | 0...1, a reminder phrase (week 9) | The `/v1/reminders/parse` result + `reply_id`, `created_via` (`reminders.md`): open S13 (or S12 for `status: "form"`). Followed by `banner` + `done` (`answer_kind: "text"`). Nothing was saved. |
 | `page_patch` | after each `action` that touched page rows | PagePatch (below): apply at once (move the cards); hold it while the person is dragging a card. |
 | `needs_choice` | instead of a change, when «это» is unclear | Proposal (below), `kind: "choice"`: «Какую?» with 2-3 options. Nothing was changed. |
 | `confirm` | instead of a big change | Proposal, `kind: "count"`: «Переставить 212 записей?» / «Удалить 8 записей?» [Да] [Не сейчас]. Nothing was changed yet. |

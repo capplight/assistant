@@ -490,7 +490,7 @@ async def test_patch_replans_and_delete_cancels(env: Env) -> None:
         r = await c.patch(f"/v1/reminders/{rid}", headers=h, json={"version": 1, "title": "x"})
         assert r.status_code == 409 and r.json()["code"] == "conflict"
 
-        assert (await c.delete(f"/v1/reminders/{rid}", headers=h)).status_code == 204
+        assert (await c.delete(f"/v1/reminders/{rid}", headers=h)).status_code == 200  # week 9
         got = (await c.get(f"/v1/reminders/{rid}", headers=h)).json()
         assert got["reminder"]["status"] == "cancelled" and got["reminder"]["deleted_at"]
         assert {f["state"] for f in got["fires"]} == {"cancelled"}

@@ -24,6 +24,9 @@ type ViewState = {
   highlight: { ids: string[]; until: number } | null;
   /** «Какую? → выбрать»: the next tap on a record answers the assistant. */
   picking: { messageId: string; pageId: string } | null;
+  /** Week 9, a tip's [Да]: put a phrase in the line (the person sends it) or open the mic. */
+  lineRequest: { id: number; kind: 'text'; text: string } | { id: number; kind: 'mic' } | null;
+  requestLine: (r: { kind: 'text'; text: string } | { kind: 'mic' } | null) => void;
   setVisible: (pageId: string, ids: string[]) => void;
   setSelected: (id: string | null) => void;
   setTouching: (v: boolean) => void;
@@ -33,7 +36,8 @@ type ViewState = {
   reset: () => void;
 };
 
-const empty = { visible: {}, selected: null, touching: false, highlight: null, picking: null };
+const empty = { visible: {}, selected: null, touching: false, highlight: null, picking: null, lineRequest: null };
+let lineSeq = 0;
 
 export const useView = create<ViewState>()((set) => ({
   ...empty,
@@ -49,5 +53,6 @@ export const useView = create<ViewState>()((set) => ({
   showHighlight: (ids, now = Date.now()) => set({ highlight: ids.length > 0 ? { ids, until: now + HIGHLIGHT_MS } : null }),
   clearHighlight: () => set({ highlight: null }),
   setPicking: (picking) => set({ picking }),
+  requestLine: (r) => set({ lineRequest: r ? { ...r, id: ++lineSeq } : null }),
   reset: () => set(empty),
 }));

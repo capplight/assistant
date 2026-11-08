@@ -54,7 +54,7 @@ export type ChatAction = {
   pageTitle: string | null;
   changedItemIds: string[];
   /** «Что изменилось»: ready `text` per record; `reverted` after «Вернуть». */
-  changes: { itemId: string; title: string | null; text: string; reverted: boolean }[];
+  changes: { itemId: string | null; title: string | null; text: string; reverted: boolean }[];
   createdPageId: string | null;
   undoable: boolean;
   undone?: boolean;

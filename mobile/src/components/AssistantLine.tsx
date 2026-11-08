@@ -11,6 +11,7 @@ import { useAssistant } from '@/store/assistant';
 import { selectNoAi, useOnboarding } from '@/store/onboarding';
 import { useToast } from '@/store/toast';
 import { useUndo } from '@/store/undo';
+import { useView } from '@/store/view';
 import type { Fragment } from '@/voice/session';
 import { useVoiceRecorder } from '@/voice/useVoiceRecorder';
 
@@ -67,6 +68,32 @@ export function AssistantLine({ scope }: { scope?: 'all' } = {}) {
   };
   const voice = useVoiceRecorder(onVoiceFinished);
   const listening = voice.status === 'listening';
+
+  // A tip's [Да] on «Сегодня» (today.md `put_phrase`, `open_mic`): the person still sends it.
+  const start = useRef(() => undefined as void);
+  useEffect(() => {
+    start.current = () => {
+      if (consentGiven && !noAi) {
+        setListening(true);
+        void voice.start();
+      } else inputRef.current?.focus();
+    };
+  });
+  useEffect(() => {
+    if (scope === 'all') return;
+    const take = (r: ReturnType<typeof useView.getState>['lineRequest']) => {
+      if (!r) return;
+      useView.getState().requestLine(null);
+      if (r.kind === 'text') {
+        setText(r.text);
+        inputRef.current?.focus();
+      } else start.current();
+    };
+    take(useView.getState().lineRequest);
+    return useView.subscribe((st, prev) => {
+      if (st.lineRequest && st.lineRequest.id !== prev.lineRequest?.id) take(st.lineRequest);
+    });
+  }, [scope]);
 
   const startVoice = async () => {
     // Consent gate: no recording before S05; never in «Без ИИ» (voice needs AI, R-05).

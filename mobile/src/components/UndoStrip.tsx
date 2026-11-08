@@ -43,7 +43,9 @@ export function UndoStrip() {
   );
   const { title } = usePageLabels();
   const openTarget = usePages((s) =>
-    strip?.kind === 'manual' && strip.openPageId ? s.pages.find((p) => p.id === strip.openPageId) : undefined,
+    (strip?.kind === 'manual' || strip?.kind === 'custom') && strip.openPageId
+      ? s.pages.find((p) => p.id === strip.openPageId)
+      : undefined,
   );
   const [screenReader, setScreenReader] = useState(false);
   const [changesOpen, setChangesOpen] = useState(false);
@@ -85,6 +87,10 @@ export function UndoStrip() {
       void undoManual(strip.outboxIds);
       return;
     }
+    if (strip.kind === 'custom') {
+      strip.onUndo();
+      return;
+    }
     void getRecordActions().then((a) =>
       strip.kind === 'merged' ? a.unmerge(strip.recordId) : a.restore(strip.recordId),
     );
@@ -105,11 +111,13 @@ export function UndoStrip() {
         ? t('record.deleted')
         : strip.kind === 'manual'
           ? manualText(strip.text)
+          : strip.kind === 'custom'
+            ? strip.text
           : action
             ? actionText(action, i18n.language)
             : '';
-  const target = strip.kind === 'manual' ? openTarget : otherPage;
-  const showOpen = (strip.kind === 'action' || strip.kind === 'manual') && !!target && target.id !== current.id;
+  const target = strip.kind === 'manual' || strip.kind === 'custom' ? openTarget : otherPage;
+  const showOpen = strip.kind !== 'merged' && strip.kind !== 'deleted' && !!target && target.id !== current.id;
   const canUndo = strip.kind !== 'action' || (!!action?.undoable && !action.undone);
   const hasChanges = strip.kind === 'action' && (action?.changes.length ?? 0) > 0;
 

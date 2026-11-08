@@ -497,9 +497,14 @@ async function takeBack(outboxId: string): Promise<void> {
         bringBack(p.pageId);
         return;
       }
-      // `DELETE /pages/{id}` has no action until week 9: its undo is `POST /pages/{id}/restore`.
       if (inDb) await repo.setRemoved(p.pageId, null);
       bringBack(p.pageId);
+      // Week 9 (pages.md): the removal is an action; «Отменить» = its undo, which brings the page
+      // back as `/restore` did. No action known (an older server, or no answer kept): `/restore`.
+      if (p.actionId) {
+        await outbox.enqueue('action.undo', { actionId: p.actionId, clientId: newId(), restoredPageId: p.pageId });
+        return;
+      }
       const back: PageRemovePayload = { clientId: newId(), at: nowIso(), pageId: p.pageId };
       await outbox.enqueue('pages.restore', back);
       return;

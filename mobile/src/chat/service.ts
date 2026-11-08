@@ -17,6 +17,7 @@ import type {
   FeedbackReason,
   PagePatchOut,
   ProposalOut,
+  ReminderParseOut,
 } from '@/api/types';
 import { getOutbox, getPagesRepo, getRecords, isTrashed, titlesToGroups, type PageLink } from '@/db';
 import i18n from '@/i18n';
@@ -40,6 +41,7 @@ import { useToast } from '@/store/toast';
 import { useUndo } from '@/store/undo';
 import { useView } from '@/store/view';
 import type { ActionUndoPayload } from '@/sync/engine';
+import { addTask, listForPage, rememberActions, taskSink } from '@/tasks/service';
 import { newId } from '@/utils/id';
 
 /**
@@ -189,7 +191,13 @@ function apply(answerId: string, e: ChatEvent): void {
       });
       return;
     }
+    case 'reminder_draft':
+      openDraft(e.draft, e.replyId, undefined, e.createdVia);
+      return;
     case 'action': {
+      // Week 9: tasks it made show on «Покупки» / «Дела» at once, before /sync brings their records.
+      if (e.tasks && e.tasks.length > 0) taskSink.applyServer(e.tasks);
+      rememberActions([e.action]);
       // Several `action` events in one reply are the same action growing: replace it.
       const action = { ...fromAction(e.action), changedItemIds: e.changedItemIds };
       updateMessage(answerId, { action, answerKind: 'action', activity: null });
@@ -390,7 +398,16 @@ async function runTurn(answerId: string): Promise<void> {
         if (e instanceof NetworkError || e instanceof SignInRequiredError) {
           // Never reached the server: what the phone can do alone (3-engineering 5.10 «Без интернета»).
           const guess = question.ask?.guess ?? 'question';
-          if (guess === 'note') await saveInstead(answerId, question);
+          const list = listForPage(usePages.getState().pages.find((p) => p.id === question.pageId));
+          if (looksLikeReminder(question.text) && !question.ask?.choice) {
+            // Week 9: a reminder phrase is read when there is a connection → «Проверьте напоминание».
+            keepPhrase(question.text);
+            finish('failed', { notice: 'offline_reminder' });
+          } else if (guess === 'note' && list) {
+            // «Покупки» / «Дела» offline: a row of this list, as typed (with «Отменить» on the strip).
+            await addTask({ list, title: question.text });
+            finish('done', { saved: true, text: i18n.t('line.saved') });
+          } else if (guess === 'note') await saveInstead(answerId, question);
           else if (guess === 'action') finish('failed', { notice: 'offline_action' });
           else finish('queued', { localHits: await localHits(question.text) });
         } else if (e instanceof ApiError && e.code === 'consent_required') {
@@ -506,6 +523,22 @@ function addLocalTurn(text: string, page: AskPage, reply: Partial<ChatMessage>):
   return answer.id;
 }
 
+/**
+ * S13 «Понял так» from a reading of the server (chat `reminder_draft` or `/reminders/parse`).
+ * Nothing is saved until [Сохранить]; `messageId` links the saved reminder to the line's answer.
+ */
+function openDraft(out: ReminderParseOut, messageId: string | null, text?: string, via?: 'voice' | 'typed'): void {
+  const params: Record<string, string> = {};
+  if (via === 'voice') params.via = via;
+  if (text) params.text = text;
+  const draft = out.draft ?? out.options[0] ?? null;
+  if (draft) params.draft = JSON.stringify(draft);
+  if (out.options.length > 1) params.options = JSON.stringify(out.options);
+  if (out.message) params.message = out.message;
+  if (messageId) params.messageId = messageId;
+  router.push({ pathname: '/reminder-new', params });
+}
+
 /** What the line did with a phrase: the caller opens search for `search`, and S04b after `saved`. */
 export type LineResult = 'search' | 'saved' | 'asked' | 'notice' | 'reminder';
 
@@ -521,13 +554,7 @@ async function reminderFromLine(text: string, page: AskPage): Promise<LineResult
   const o = useOnboarding.getState();
   if (o.consent !== null && !syncBlocked()) {
     try {
-      const out = await parsePhrase(text);
-      const params: Record<string, string> = { text };
-      const draft = out.draft ?? out.options[0] ?? null;
-      if (draft) params.draft = JSON.stringify(draft);
-      if (out.options.length > 1) params.options = JSON.stringify(out.options);
-      if (out.message) params.message = out.message;
-      router.push({ pathname: '/reminder-new', params });
+      openDraft(await parsePhrase(text), null, text);
       return 'reminder';
     } catch (e) {
       if (!(e instanceof NetworkError) && !(e instanceof SignInRequiredError)) {
@@ -547,7 +574,10 @@ async function reminderFromLine(text: string, page: AskPage): Promise<LineResult
  * connection, a note is saved on this page, a change says it needs the assistant (2-design 6.9).
  */
 export async function sendFromLine(text: string, page: AskPage): Promise<LineResult> {
-  if (looksLikeReminder(text)) return reminderFromLine(text, page);
+  // Week 9 (reminders.md, chat.md): online the server reads reminder phrases in the one
+  // conversation (`reminder_draft`); `/reminders/parse` only without it («Без ИИ», offline).
+  const askable = chatAllowed() && lineRouting.serverDecides;
+  if (looksLikeReminder(text) && !askable) return reminderFromLine(text, page);
   const guess = guessLine(text);
   const o = useOnboarding.getState();
   const noAi = o.consent !== null && selectNoAi(o);
@@ -558,6 +588,14 @@ export async function sendFromLine(text: string, page: AskPage): Promise<LineRes
   if (noAi) {
     if (guess === 'question') return 'search';
     if (guess === 'action') return local('no_ai_action');
+  }
+  // «Покупки» / «Дела» without the assistant (offline, «Без ИИ», before consent): the phrase is a
+  // row of this list, as typed (no splitting: that is the assistant's reading, or Ф-1 code).
+  const list = listForPage(usePages.getState().pages.find((p) => p.id === page.id));
+  if (list && guess === 'note' && (noAi || !askable)) {
+    // The strip «Добавил в Покупки: … [Отменить]» is the result (no banner: R-52 п. 2).
+    await addTask({ list, title: text });
+    return 'saved';
   }
   if (guess === 'note' && (noAi || !lineRouting.serverDecides || !chatAllowed())) {
     await saveNote(text, page.id);

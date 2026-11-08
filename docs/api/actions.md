@@ -15,8 +15,41 @@ Week 6 writes actions for the assistant line (`initiated_by: "agent"`) and for u
 `screen_move_items` («Перенёс «…» в «…»», «Теперь ещё на странице «…»»), `screen_remove_item`
 («Убрал «…» со страницы «…»»), `reorder_screens` («Переставил страницу «…»», no `changes` rows), `habit_change` (a learned rule turned off, no
 `changes` rows).
-Week 9 adds the other kinds (reminders, merges, edits) on the same objects; the shapes below do
-not change.
+Week 9 adds, on the same objects (the shapes below do not change):
+
+| Where | `kind` | `summary.ru` (examples) | «Отменить» |
+|---|---|---|---|
+| `POST /v1/reminders` (S13 [Сохранить]) | `create_reminder` | «Напомню завтра в 7:00: выпить таблетку» | cancels it (fires `cancelled`) |
+| `PATCH /v1/reminders/{id}` | `edit_reminder` | «Изменил напоминание «Выпить таблетку»» | old title/time/level back, fires re-planned |
+| `DELETE /v1/reminders/{id}` | `edit_reminder` | «Удалил напоминание «Выпить таблетку»» | back, fires re-planned (a one-off whose time has passed stays deleted: `partial`) |
+| tasks (`today.md`), the line | `save_item`, `facet_edit`, `delete_item` | «Добавил в Покупки: хлеб, молоко.», «Купил: хлеб» | trash / old values / back |
+| `POST /v1/pages` | `create_screen` | «Добавил страницу «Покупки»» | the page is removed (records stay) |
+| `DELETE /v1/pages/{id}` | `delete_screen` | «Страница «Покупки» убрана. Записи остались» | the page is back with its rows (as `/restore`) |
+| `PATCH /v1/pages/{id}` | `screen_customize` | «Переименовал страницу в «Дача»» | old name / icon / layout |
+| `POST /v1/pages/{id}/items` | `screen_add_item` | «Показал «…» на странице «…»» | the row goes again |
+| `DELETE /v1/habits/{id}` on a `screen_exclusion` | `screen_add_item` | «Снова показываю «…» на странице «…»» | taken off again |
+| `POST /v1/suggestions/{id}/accept` (`task_from_item`) | `save_item` | «Добавил в дела: оплатить свет.» | trash |
+| `POST /v1/tasks/{id}/done` (a tick) | `facet_edit` | «Купил: хлеб» / «Сделал: …» / «Вернул: хлеб» | the tick goes back |
+| `POST /v1/reminders/events` `acked` on a **missed** fire (late «Сделано» from «Сегодня») | `edit_reminder` | «Сделано: свет» | the occurrence is `missed` again (its fires and the reminder's status) |
+| `PATCH /v1/habits/{id}` (S30 «Изменить») | `habit_change` | «Теперь: чеки кладу на страницу «Расходы»» | the rule goes back to its page |
+
+**Ticks.** Every tick writes an action. Intended use: the 10-second «Отменить» strip after a tick
+= `POST /v1/actions/{id}/undo` of that action (it also works after the tick left the outbox).
+Tapping the box again is a new, separate change (`done: false`, «Вернул: …», its own action);
+both are fine, neither breaks the other. Ticks are `initiated_by: "user"`: they are in «Что я
+сделал», not in «Сегодня» → «Я сделал за вас».
+
+**«Сделано» on reminders.** An on-time «Сделано» from the alarm screen writes no action (nothing to
+take back: the moment has passed). A late one on a `missed` fire (the red row on «Сегодня») does:
+`POST /v1/reminders/events` returns it in `actions` (matched to the event by `client_id`, which is
+also the action's `client_id`); «Отменить» on it = `POST /v1/actions/{id}/undo`. While the event is
+still in the outbox, drop it from the outbox instead.
+
+`changes[].kind` adds `edit` (a reminder or a task changed), `done` (ticked / «Вернул»),
+`reminder` (a reminder made, changed or removed: `item_id` null, `reminder_id` set; tap opens the
+reminder; like `create_page` it has no «Вернуть» of its own, only «Отменить» of the action).
+Task rows have `item_id` (the task's record) and `task_id`. Show `text` as before; unknown kinds:
+just the text.
 
 ## Action
 
@@ -114,3 +147,17 @@ Errors: `404 not_found` · `410 undo_expired` (older than 30 days, or nothing to
 rows returned) since `since`, in the same `seq` stream as the other arrays, counted in `limit`.
 Upsert by `id`. Tombstones may have `entity: "action"` (only when the account is deleted). The
 first sync (`since=0`) brings all of them: keep what «Что я сделал» shows (30 days).
+
+## Pending «Да» (`pending_actions`, S25) — table and sync only in week 9
+
+Everything external (send, delete for good, change an existing reminder on the assistant's
+proposal, import) waits for «Да» as a pending action (spec 3.7). Week 9 adds the table and the
+`pending_actions` array in `/v1/sync` with this shape; nothing creates one yet, so the array is
+empty and there are no endpoints. The confirm/reject calls come with the first producer.
+
+```json
+{"id": "0194...", "kind": "change_reminder", "status": "proposed",
+ "preview": {"title_ru": "Перенести «Выпить таблетку» с 7:00 на 8:00?"},
+ "expires_at": "...", "message_id": null, "action_id": null, "seq": 1, "created_at": "...",
+ "decided_at": null}
+```

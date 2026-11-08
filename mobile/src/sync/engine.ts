@@ -1,4 +1,4 @@
-import { firesOf, remindersOf, type Api } from '@/api/endpoints';
+import { actionsOf, firesOf, habitsOf, remindersOf, suggestionsOf, tasksOf, type Api } from '@/api/endpoints';
 import { ApiError, isOfflineError, isRetryable, SignInRequiredError } from '@/api/errors';
 import type {
   ConsentsIn,
@@ -9,6 +9,11 @@ import type {
   ReminderEventIn,
   ReminderOut,
   ReminderWithFiresOut,
+  ActionOut,
+  HabitOut,
+  SuggestionOut,
+  TaskOut,
+  TaskWriteOut,
   FeedbackIn,
   ItemCreateIn,
   ItemKind,
@@ -31,6 +36,8 @@ import type {
 } from '@/pages/manual';
 import type { RenamePayload } from '@/pages/service';
 import type { CorrectPayload, TrashPayload, UnmergePayload, VerifyPayload } from '@/records/actions';
+import type { TaskCreatePayload, TaskUpdatePayload } from '@/tasks/service';
+import type { ReminderUpdatePayload } from '@/alarms/service';
 import { TEMPLATE_DEFAULT_TITLE } from '@/pages/templates';
 import { newId } from '@/utils/id';
 import type { Page } from '@/store/pages';
@@ -88,7 +95,15 @@ export function backoffMs(
  * An undo of a change by hand also has what the phone shows meanwhile: `keys` (rows shown as they
  * were) or `pageId` (a tab back in its place). They settle when the server answers.
  */
-export type ActionUndoPayload = { actionId: string; itemIds?: string[]; clientId?: string; keys?: LinkKey[]; pageId?: string };
+export type ActionUndoPayload = {
+  actionId: string;
+  itemIds?: string[];
+  clientId?: string;
+  keys?: LinkKey[];
+  pageId?: string;
+  /** Week 9: «Отменить» of «Убрать страницу» — the page shown again here settles when it answers. */
+  restoredPageId?: string;
+};
 
 const NOTHING: ManualOut = {
   moved: false,
@@ -128,6 +143,19 @@ export type ReminderSink = {
   /** The fire will never reach the server (offline test alarm, refused reminder): drop its events. */
   localOnly(key: string): boolean;
   deviceRegistered(device: DeviceOut): void;
+  /** Week 9: PATCH /reminders/{id} answered / refused for good. */
+  updated(id: string, out: ReminderWithFiresOut): void;
+  updateFailed(id: string): void;
+};
+
+/** Where tasks and actions from the server go (src/tasks/service.ts). */
+export type TaskSink = {
+  applyServer(tasks: TaskOut[]): void;
+  created(clientId: string, out: TaskWriteOut): void;
+  createFailed(clientId: string): void;
+  serverId(key: string): string | null;
+  updated(key: string, out: TaskWriteOut, clientId: string): void;
+  updateFailed(key: string, clientId: string): void;
 };
 
 export type SyncDeps = {
@@ -153,6 +181,11 @@ export type SyncDeps = {
   onNotice?: (text: string) => void;
   /** Week 8: reminders and fires (sync arrays, POST /reminders, events). */
   reminders?: ReminderSink;
+  /** Week 9: tasks («Дела», «Покупки») and actions («Что я сделал»). */
+  tasks?: TaskSink;
+  actions?: (list: ActionOut[]) => void;
+  /** Week 9: suggestions (status changes) and learned rules of /sync. `pending_actions` is empty until a producer exists. */
+  extras?: (x: { suggestions: SuggestionOut[]; habits: HabitOut[]; pendingActions: number }) => void;
 };
 
 export type PushResult = { sent: number; retried: number; failed: number; offline: boolean };
@@ -172,6 +205,8 @@ const IN_TAP_ORDER = new Set<string>([
   'pages.remove',
   'pages.restore',
   'action.undo',
+  'task.create',
+  'task.update',
 ]);
 
 /**
@@ -336,6 +371,26 @@ export class SyncEngine {
         this.d.reminders?.applyServer(rems, fs);
         applied += rems.length + fs.length;
       }
+      // Week 9: tasks (no tombstones: `deleted_at`) and actions («Что я сделал», actions.md «Sync»).
+      const ts = Array.isArray(out.tasks) ? tasksOf(out.tasks) : [];
+      if (ts.length > 0) {
+        this.d.tasks?.applyServer(ts);
+        applied += ts.length;
+      }
+      const extra = {
+        suggestions: Array.isArray(out.suggestions) ? suggestionsOf(out.suggestions) : [],
+        habits: Array.isArray(out.habits) ? habitsOf(out.habits) : [],
+        pendingActions: Array.isArray(out.pending_actions) ? out.pending_actions.length : 0,
+      };
+      if (extra.suggestions.length > 0 || extra.habits.length > 0) {
+        this.d.extras?.(extra);
+        applied += extra.suggestions.length + extra.habits.length;
+      }
+      const acts = Array.isArray(out.actions) ? actionsOf(out.actions) : [];
+      if (acts.length > 0) {
+        this.d.actions?.(acts);
+        applied += acts.length;
+      }
       for (const t of out.tombstones ?? []) {
         if (t.entity === 'item' || t.entity === 'items') await this.d.records.applyTombstone(t.id);
         else if (t.entity === 'screen') await this.d.pages.applyTombstone(t.id);
@@ -397,6 +452,14 @@ export class SyncEngine {
         return (e) => this.sendReminder(e);
       case 'reminder.events':
         return (e) => this.sendReminderEvents(e);
+      case 'reminder.update':
+        return (e) => this.sendReminderUpdate(e);
+      case 'reminder.delete':
+        return (e) => this.sendReminderDelete(e);
+      case 'task.create':
+        return (e) => this.sendTaskCreate(e);
+      case 'task.update':
+        return (e) => this.sendTaskUpdate(e);
       default:
         return null;
     }
@@ -413,6 +476,8 @@ export class SyncEngine {
       });
       // The tab's place comes back in /sync (`page_patches` carry rows only, pages.md).
       if (p.pageId) await this.d.pages.settlePage(p.pageId, 'position');
+      if (p.restoredPageId) await this.d.pages.settlePage(p.restoredPageId, 'removed');
+      if (out.action || out.undo) this.d.actions?.([...(out.action ? [out.action] : []), ...(out.undo ? [out.undo] : [])]);
       if (out.partial && out.message_ru) this.d.onNotice?.(out.message_ru);
       if (!p.keys) return;
       const rows = out.page_patches.flatMap((x) => x.rows);
@@ -424,6 +489,7 @@ export class SyncEngine {
         // Too late or refused: the server's rows (and the page's place) are shown again.
         for (const k of p.keys ?? []) await this.d.pages.settleLink(k.page, k.item);
         if (p.pageId) await this.d.pages.settlePage(p.pageId, 'position');
+        if (p.restoredPageId) await this.d.pages.settlePage(p.restoredPageId, 'removed');
       }
       throw err;
     }
@@ -630,9 +696,18 @@ export class SyncEngine {
       return;
     }
     try {
-      const out = what === 'remove' ? await this.d.api.removePage(id) : await this.d.api.restorePage(id);
-      await this.d.pages.settlePage(p.pageId, 'removed');
-      await this.d.pages.applyRemote(out);
+      if (what === 'remove') {
+        // Week 9: the removal is an action (pages.md): its «Отменить» is POST /actions/{id}/undo.
+        const out = await this.d.api.removePage(id);
+        await this.d.outbox.updatePayload(e.id, { ...p, actionId: out.action?.id ?? null });
+        if (out.action) this.d.actions?.([out.action]);
+        await this.d.pages.settlePage(p.pageId, 'removed');
+        if (out.page) await this.d.pages.applyRemote(out.page);
+      } else {
+        const out = await this.d.api.restorePage(id);
+        await this.d.pages.settlePage(p.pageId, 'removed');
+        await this.d.pages.applyRemote(out);
+      }
     } catch (err) {
       if (!isRetryable(err)) await this.d.pages.settlePage(p.pageId, 'removed');
       throw err;
@@ -658,7 +733,9 @@ export class SyncEngine {
   private async sendReminder(e: OutboxEntry): Promise<void> {
     const { body } = e.payload as ReminderCreatePayload;
     try {
-      this.d.reminders?.created(body.client_id, await this.d.api.createReminder(body));
+      const out = await this.d.api.createReminder(body);
+      this.d.reminders?.created(body.client_id, out);
+      if (out.action) this.d.actions?.([out.action]);
     } catch (err) {
       if (!isRetryable(err)) this.d.reminders?.createFailed(body.client_id, err instanceof ApiError ? err.code : 'failed');
       throw err;
@@ -693,6 +770,8 @@ export class SyncEngine {
     for (let i = 0; i < events.length; i += 200) {
       const out = await this.d.api.reminderEvents(events.slice(i, i + 200));
       if (out.fires.length > 0) sink?.applyServer([], out.fires);
+      // Week 9: a late «Сделано» on a missed one is an action («Отменить» in S20 / on the strip).
+      if (out.actions.length > 0) this.d.actions?.(out.actions);
       const fixed = out.results
         .filter((r) => r.status === 'invalid')
         .map((r) => fixInvalid(byClient.get(r.client_id)))
@@ -963,5 +1042,69 @@ export class SyncEngine {
       text: p.text,
       occurred_at: new Date(e.createdAt).toISOString(),
     });
+  }
+
+  /** «Перенести»: PATCH with the version the person saw; a stale one is refused (`409`), sync then shows the server's. */
+  private async sendReminderUpdate(e: OutboxEntry): Promise<void> {
+    const p = e.payload as ReminderUpdatePayload;
+    try {
+      const out = await this.d.api.patchReminder(p.id, p.body);
+      this.d.reminders?.updated(p.id, out);
+      if (out.action) this.d.actions?.([out.action]);
+    } catch (err) {
+      if (!isRetryable(err)) this.d.reminders?.updateFailed(p.id);
+      throw err;
+    }
+  }
+
+  /** «Удалить» a reminder: 200 with its action since week 9 («Отменить» = its undo); 204 from an older server is fine too. */
+  private async sendReminderDelete(e: OutboxEntry): Promise<void> {
+    const p = e.payload as { id: string };
+    try {
+      const out = await this.d.api.deleteReminder(p.id);
+      await this.d.outbox.updatePayload(e.id, { ...p, actionId: out.action?.id ?? null });
+      if (out.reminder || out.fires.length > 0) this.d.reminders?.applyServer(out.reminder ? [out.reminder] : [], out.fires);
+      if (out.action) this.d.actions?.([out.action]);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) return; // gone already
+      throw err;
+    }
+  }
+
+  // --- week 9: «Дела», «Покупки» (src/tasks) ---
+
+  private async sendTaskCreate(e: OutboxEntry): Promise<void> {
+    const { body } = e.payload as TaskCreatePayload;
+    try {
+      this.d.tasks?.created(body.client_id, await this.d.api.createTask(body));
+    } catch (err) {
+      if (!isRetryable(err)) this.d.tasks?.createFailed(body.client_id);
+      throw err;
+    }
+  }
+
+  /** A tick, or «Отменить» of an added row. Waits for its `task.create` ahead in the outbox. */
+  private async sendTaskUpdate(e: OutboxEntry): Promise<void> {
+    const p = e.payload as TaskUpdatePayload;
+    const id = this.d.tasks?.serverId(p.key) ?? null;
+    if (!id) {
+      const clientId = p.key.replace(/^local:/, '');
+      const waiting = (await this.d.outbox.listPending(500)).some(
+        (row) => row.kind === 'task.create' && (row.payload as TaskCreatePayload).body.client_id === clientId,
+      );
+      if (waiting) throw new Error('task_not_synced');
+      return; // lives on this phone only
+    }
+    try {
+      const out = p.deleted
+        ? await this.d.api.deleteTask(id, p.clientId)
+        : await this.d.api.taskDone(id, { client_id: p.clientId, done: !!p.done });
+      // The tick's action: «Отменить» on the strip after it went (today.md, actions.md).
+      await this.d.outbox.updatePayload(e.id, { ...p, actionId: out.action?.id ?? null });
+      this.d.tasks?.updated(p.key, out, p.clientId);
+    } catch (err) {
+      if (!isRetryable(err)) this.d.tasks?.updateFailed(p.key, p.clientId);
+      throw err;
+    }
   }
 }

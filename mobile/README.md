@@ -1,4 +1,4 @@
-# Mobile app — week 8 (reminders that ring like an alarm: S13, S14, S15, S04)
+# Mobile app — week 9 («Сегодня», «Дела» and «Покупки» as checklists, S20, S30)
 
 Expo SDK 58 (React Native 0.88, New Architecture), TypeScript strict, expo-router.
 Spec: `../docs/spec/SPEC.md`, `../docs/spec/final/2-design.md`, `../docs/spec/final/3-engineering.md` §2.1, §11.2 (week 1, Mobile).
@@ -92,6 +92,42 @@ src/
   alarms/                    week 8: port (FakeAlarms), native + notification adapters, planner, S15 steps, service
 modules/alarms/              native Expo module: Android (Kotlin) AlarmManager + S14 + battery-guide, iOS (Swift) AlarmKit
 ```
+
+## Week 9: what works
+
+Contract: `../docs/api/today.md`, `actions.md` (week 9 kinds), `reminders.md` «From the assistant line», `chat.md`
+(`reminder_draft`, `action.tasks`), `pages.md` (`DELETE /pages` action, habits). Shapes only in `src/api/types.ts` +
+`src/api/endpoints.ts`, reconciled with `schemas.py`, `routes/tasks.py`, `routes/today.py`, `chat/service.py` on
+2026-11-08. **Checked by Jest with a fake server only: not against the real server, not on a device.**
+
+- **«Покупки» / «Дела и напоминания»** (`page/[id].tsx`, `tasks/`): a record that is a task shows with a 32 pt box
+  (the whole row is the ≥56 pt `checkbox`); done rows go to the bottom, grey, «Куплено» / «Выполненное», «Вернуть» on
+  «Покупки». Page order (and «⋯» Выше / Ниже / Переместить) stays the person's. «Дела»: Сегодня · Скоро · Пропущено,
+  reminders from the phone's own copy (each with «Удалить» → `DELETE /reminders/{id}`, 200 + action, «Отменить»), red missed rows. A shopping task shows on «Дела» when there is no «Покупки».
+- **Ticks offline, at once**: `tasks` store (kv) + outbox `task.update` → `POST /tasks/{id}/done` (one tap = one call,
+  `client_id`). A tick the server has not seen wins over `/sync`. Strip «Купил: хлеб [Отменить]»: still in the outbox → dropped;
+  sent → the undo of the tick's action (tapping the box again is a separate change).
+- **From the line**: online every phrase goes to chat on any page (reminder phrases too, no more `/reminders/parse`
+  there); `action.tasks` show at once, strip «Добавил в Покупки: … [Открыть] [Отменить]»; `reminder_draft` → S13,
+  [Сохранить] sends `message_id`. Offline or «Без ИИ» on «Покупки» / «Дела»: the phrase is one row, as typed
+  (`task.create` → `POST /tasks`); «Отменить» drops it from the outbox, or undoes its action once sent. Offline
+  reminder phrase: as week 8 («Поставлю, когда появится интернет»).
+- **S06 «Сегодня»**: built from local data (offline, «Без ИИ»), `GET /today` when the tab is shown adds the section order,
+  ≤2 proposals and ≤1 tip ([Да] / [Не сейчас] → `accept` / `dismiss`; `open_mic`, `put_phrase`, `link_phone`,
+  `task_from_item`, `reminder_from_item`; other keys get [Не сейчас] only). Missed: red row [Сделано] (late `acked`
+  event, offline too; «Отменить» drops it from the outbox, or undoes the action the events answer returned) [Перенести] (S13 → `PATCH /reminders/{id}` via outbox `reminder.update`; a repeating reminder gets a
+  new one-off instead). «Покупки: хлеб, молоко (3)», today's to-dos, «Я сделал за вас» (≤3, «Отменить»), «Что я сделал ›».
+- **S20 `/did`**: actions from `/sync` + `GET /actions`, «Отменить» (`POST /actions/{id}/undo`, offline through the outbox),
+  undone ones crossed out with «Вернуть» (undo of the undo), reminders' `create_reminder` / `edit_reminder` included.
+- **S30 `/habits`**: `GET /habits` (learned rules also from `/sync` `habits`, so they show offline). Learned rule:
+  [Изменить] (another page, `PATCH /habits/{id}` `{page_id}`) and [Убрать]; exclusion: [Убрать] only. Both with «Отменить».
+- **`/sync` week 9 arrays**: `tasks`, `actions`, `suggestions` (answered / expired ones leave «Сегодня»), `habits`;
+  `pending_actions` is read but empty (no producer and no endpoints yet).
+- **«Убрать страницу»**: «Отменить» after it was sent = `POST /actions/{id}/undo` of the removal's action; `/restore` only
+  when the server gave no action.
+
+Not yet: «Только важное» in S20, S25 for `pending_actions`, editing a task (title, qty, day: `PATCH /tasks`), «Вручную» form for
+a task, `open_camera` / `show_share_help` tips. KK strings of this week are drafts for native review.
 
 ## Week 8: what works
 

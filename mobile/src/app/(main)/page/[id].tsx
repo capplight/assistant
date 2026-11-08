@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { FlatList, Pressable, View } from 'react-native';
 
 import { pickRecord } from '@/chat/service';
+import type { TaskOut } from '@/api/types';
 import type { PageEntry } from '@/pages/contents';
 import { entryIndexAfterDrop } from '@/pages/drag';
 import { dropRecord, moveToPages, removeFromPage, stepRecord } from '@/pages/manual';
@@ -30,7 +31,13 @@ import { searchRecords, snippetFor } from '@/records/search';
 import { usePageEntries } from '@/records/useRecords';
 import { useServerSearch } from '@/records/useServerSearch';
 import { usePages } from '@/store/pages';
+import { listRows, localDate, type ListRow, type Segment } from '@/tasks/rows';
+import '@/tasks/actions'; // the undo of a tick (registers `tickUndo`)
+import { listsForPage, setDone } from '@/tasks/service';
+import { useTasks } from '@/tasks/store';
 import { useTheme } from '@/theme';
+import { MissedList, ReminderRows, Segments, useMinuteClock, useMissed } from '@/components/ReminderLists';
+import { TaskRow } from '@/components/TaskRow';
 
 /**
  * S37: the universal page, the same frame for every template. A view on the shared memory (R-46):
@@ -44,6 +51,10 @@ import { useTheme } from '@/theme';
  * Week 7, by hand (F-41, 2-design 4.7): «⋯» on every card (Выше / Ниже / Переместить… / Показать
  * ещё на… / Убрать), «Порядок» in the header puts ↑ ↓ on every card, long press 400 ms → drag (the
  * double of the buttons). Offline and in «Без ИИ» alike. Not here yet: «Настроить» (week 11).
+ * Week 9 (today.md): «Покупки» and «Дела и напоминания» are checklists. A record that is a task
+ * shows with a 32 pt box; done ones go to the bottom, grey, with «Вернуть» (the server keeps the
+ * page order, the person's moves included). «Дела» also has Сегодня · Скоро · Пропущено with the
+ * reminders (they are not page rows) and the red missed rows. Ticks work offline at once.
  */
 export default function PageScreen() {
   const theme = useTheme();
@@ -67,6 +78,15 @@ export default function PageScreen() {
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [moveSheet, setMoveSheet] = useState<{ recordId: string; mode: MoveMode } | null>(null);
   const drag = useDrag();
+  const hasShoppingPage = usePages((st) => st.pages.some((p) => p.templateKey === 'shopping'));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- the lists follow the template and «Покупки» existing
+  const lists = useMemo(() => listsForPage(page), [page?.templateKey, hasShoppingPage]);
+  const listMode = lists.length > 0;
+  const tasksMap = useTasks((st) => st.tasks);
+  const ticks = useTasks((st) => st.ticks);
+  const [segment, setSegment] = useState<Segment>('today');
+  const now = useMinuteClock();
+  const missed = useMissed(now);
 
   // The marker goes after 600 ms (Reduce Motion: the same, it is a colour, not a move).
   useEffect(() => {
@@ -97,7 +117,19 @@ export default function PageScreen() {
   });
 
   // Group headings after «Разложи»: a heading where the group changes (rows are in group order).
-  const rows = useMemo(() => withGroups(entries ?? [], page?.groups ?? []), [entries, page?.groups]);
+  // List pages: open rows first, then «Куплено» / «Выполненное».
+  const tasksSegment = page?.templateKey === 'tasks' ? segment : null;
+  const today = localDate(now);
+  const rows = useMemo(() => {
+    if (!listMode) return withGroups(entries ?? [], page?.groups ?? []);
+    const lr = listRows(entries ?? [], Object.values(tasksMap), ticks, { lists, segment: tasksSegment, today });
+    const out: Row[] = lr.open.map(fromList);
+    if (lr.done.length > 0) {
+      out.push({ type: 'group', key: 'done', title: '' });
+      out.push(...lr.done.map(fromList));
+    }
+    return out;
+  }, [entries, page?.groups, listMode, tasksMap, ticks, tasksSegment, today, lists]);
 
   if (!page) {
     return (
@@ -107,7 +139,8 @@ export default function PageScreen() {
     );
   }
 
-  const shown = entries ?? [];
+  // In the order on screen (list pages: done rows are below).
+  const shown = listMode ? rows.flatMap((r) => (r.type === 'entry' ? [r.entry] : [])) : (entries ?? []);
   const canMove = !searching && shown.length > 0;
   const menuIndex = menuFor ? shown.findIndex((e) => e.record.id === menuFor) : -1;
   const menuEntry = menuIndex >= 0 ? shown[menuIndex] : undefined;
@@ -168,7 +201,29 @@ export default function PageScreen() {
           {t('page.order_hint')}
         </AppText>
       ) : null}
-      {!searching && entries && entries.length > 0 ? (
+      {page.templateKey === 'tasks' && !searching ? (
+        <View style={{ gap: theme.space[3] }}>
+          <Segments value={segment} onChange={setSegment} missedCount={missed.length} />
+          {segment === 'missed' ? (
+            missed.length > 0 ? (
+              <MissedList rows={missed} now={now} />
+            ) : (
+              <AppText testID="missed-none">{t('tasks.missed_none')}</AppText>
+            )
+          ) : (
+            <>
+              <ReminderRows segment={segment} now={now} canDelete />
+              <Button
+                testID="tasks-new-reminder"
+                label={t('today.new_reminder')}
+                variant="outline"
+                onPress={() => router.push('/reminder-new')}
+              />
+            </>
+          )}
+        </View>
+      ) : null}
+      {!searching && !listMode && entries && entries.length > 0 ? (
         <AppText variant="section" accessibilityRole="header">
           {t('page.recent')}
         </AppText>
@@ -187,9 +242,11 @@ export default function PageScreen() {
         <FlatList
           testID="page-records"
           data={
-            foundRecords ? foundRecords.map((record): Row => ({ type: 'entry', entry: { record, link: null } })) : rows
+            foundRecords
+              ? foundRecords.map((record): Row => ({ type: 'entry', entry: { record, link: null }, task: null, done: false }))
+              : rows
           }
-          keyExtractor={(r) => (r.type === 'entry' ? r.entry.record.id : `group-${r.key}`)}
+          keyExtractor={(r) => (r.type === 'entry' ? r.entry.record.id : r.type === 'task' ? `task-${r.task.id}` : `group-${r.key}`)}
           onViewableItemsChanged={onViewable}
           scrollEnabled={!drag.active}
           onTouchStart={() => setTouching(true)}
@@ -219,7 +276,7 @@ export default function PageScreen() {
             ) : undefined
           }
           ListEmptyComponent={
-            entries && !searching ? (
+            entries && !searching && !(listMode && segment !== 'today') ? (
               <View
                 testID="page-empty"
                 style={{
@@ -242,6 +299,7 @@ export default function PageScreen() {
               ? { transform: [{ translateY: shift }], zIndex: drag.isDragged(index) ? 10 : 0 }
               : undefined;
             if (item.type === 'group') {
+              const heading = listMode && item.key === 'done' ? t(page.templateKey === 'shopping' ? 'tasks.bought_section' : 'tasks.done_section') : item.title;
               return (
                 <View style={style} onLayout={(e) => drag.measure(index, e.nativeEvent.layout.height)}>
                   <AppText
@@ -250,13 +308,43 @@ export default function PageScreen() {
                     accessibilityRole="header"
                     style={{ paddingTop: theme.space[3], paddingBottom: theme.space[2] }}
                   >
-                    {item.title}
+                    {heading}
                   </AppText>
+                </View>
+              );
+            }
+            if (item.type === 'task') {
+              // Added on this phone, its page row not here yet: a box, no moves until the server has it.
+              return (
+                <View style={style} onLayout={(e) => drag.measure(index, e.nativeEvent.layout.height)}>
+                  <TaskRow
+                    task={item.task}
+                    done={item.done}
+                    showReturn={item.task.list_key === 'shopping'}
+                    meta={t('queue')}
+                    onToggle={() => void setDone(item.task.id, !item.done)}
+                  />
                 </View>
               );
             }
             const rec = item.entry.record;
             const at = shown.findIndex((e) => e.record.id === rec.id);
+            if (item.task) {
+              const task = item.task;
+              return (
+                <View style={style} onLayout={(e) => drag.measure(index, e.nativeEvent.layout.height)}>
+                  <TaskRow
+                    task={task}
+                    done={item.done}
+                    showReturn={task.list_key === 'shopping'}
+                    meta={task.due_date && task.list_key === 'todo' ? dueText(task.due_date, today, t) : null}
+                    highlighted={!!rec.serverId && !!hl?.has(rec.serverId)}
+                    onToggle={() => void setDone(task.id, !item.done)}
+                    onMenu={canMove ? () => setMenuFor(rec.id) : undefined}
+                  />
+                </View>
+              );
+            }
             return (
               <View style={style}>
                 <RecordRow
@@ -357,7 +445,24 @@ export default function PageScreen() {
   );
 }
 
-type Row = { type: 'entry'; entry: PageEntry } | { type: 'group'; key: string; title: string };
+type Row =
+  | { type: 'entry'; entry: PageEntry; task: TaskOut | null; done: boolean }
+  | { type: 'task'; task: TaskOut; done: boolean }
+  | { type: 'group'; key: string; title: string };
+
+const fromList = (r: ListRow): Row =>
+  r.kind === 'entry' ? { type: 'entry', entry: r.entry, task: r.task, done: r.done } : { type: 'task', task: r.task, done: r.done };
+
+/** «Когда» of a to-do: «Сегодня», «Завтра», «Просрочено · 5 нояб.», or the date. */
+function dueText(due: string, today: string, t: (k: string, o?: Record<string, unknown>) => string): string {
+  const d = new Date(`${due}T12:00:00`);
+  const t0 = new Date(`${today}T12:00:00`);
+  const days = Math.round((d.getTime() - t0.getTime()) / 86_400_000);
+  if (days === 0) return t('rem.today');
+  if (days === 1) return t('rem.tomorrow');
+  const date = `${d.getDate()}.${String(d.getMonth() + 1).padStart(2, '0')}`;
+  return days < 0 ? t('tasks.overdue', { date }) : date;
+}
 
 /** Rows with a heading wherever the group changes. Without group titles: just the rows. */
 function withGroups(entries: PageEntry[], groups: { key: string; title: string }[]): Row[] {
@@ -368,7 +473,7 @@ function withGroups(entries: PageEntry[], groups: { key: string; title: string }
     const key = entry.link?.groupKey ?? null;
     if (titles.size > 0 && key && key !== last) out.push({ type: 'group', key, title: titles.get(key) ?? key });
     last = key;
-    out.push({ type: 'entry', entry });
+    out.push({ type: 'entry', entry, task: null, done: false });
   }
   return out;
 }

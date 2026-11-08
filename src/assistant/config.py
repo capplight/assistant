@@ -165,6 +165,18 @@ class Settings(BaseSettings):
     # the model only gets what code did not understand. Env REMINDERS_RULES_FIRST=true.
     reminders_rules_first: bool = False
     reminders_tick_seconds: float = 30.0  # backup push / missed / top-up loop
+    # Tasks and shopping from the line (week 9). Ф-1 is open, so off: the light model reads the
+    # phrase (`tasks_parse`, behind the consent gate). On = code reads simple lists first
+    # («купить хлеб, молоко и сыр», «добавь в покупки …»). Env TASKS_RULES_FIRST=true.
+    tasks_rules_first: bool = False
+    # Suggestions (spec 3.4, R-35, R-08): tips per day, pause after «Не сейчас», data proposals.
+    suggestions_tips_per_day_new: int = 2  # the first `suggestions_new_days` days of the account
+    suggestions_tips_per_day: int = 1
+    suggestions_new_days: int = 14
+    suggestions_dismiss_pause_days: int = 30
+    suggestions_dismiss_limit: int = 2
+    suggestions_proposals_max: int = 2
+    suggestions_proposal_hours: int = 24
     # The single label on generated content (R-06, spec 5.9), until the lawyer's opinion.
     label_ai_generated: str = "Подготовил помощник (ИИ) по вашим записям — проверьте"
 

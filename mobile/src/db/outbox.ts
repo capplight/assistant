@@ -39,7 +39,15 @@ export type OutboxKind =
   /** Week 8: a reminder from S13 (also offline): POST /reminders, idempotent by `client_id`. */
   | 'reminder.create'
   /** Rings and buttons on this phone → POST /reminders/events (docs/api/reminders.md). */
-  | 'reminder.events';
+  | 'reminder.events'
+  /** Week 9: «Перенести» a missed reminder (PATCH /reminders/{id}). */
+  | 'reminder.update'
+  /** «Удалить» a reminder (DELETE /reminders/{id}, 200 + action since week 9). */
+  | 'reminder.delete'
+  /** Week 9: a row added on «Дела» / «Покупки» by hand or offline (POST /tasks). */
+  | 'task.create'
+  /** A box ticked / unticked, or a row taken back (PATCH / DELETE /tasks/{id}). */
+  | 'task.update';
 
 export type OutboxStatus = 'pending' | 'sent' | 'failed';
 

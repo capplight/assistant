@@ -46,20 +46,20 @@ export function ChangesSheet({
             <AppText variant="title2" accessibilityRole="header">
               {t('line.changed')}
             </AppText>
-            {action?.changes.map((c) => {
+            {action?.changes.map((c, i) => {
               const what = c.title ?? t('answer.source');
               const line = c.text || what;
               const off = !!c.reverted || !!action.undone || !action.undoable;
               return (
                 <View
-                  key={c.itemId}
-                  testID={`change-${c.itemId}`}
+                  key={c.itemId ?? `row-${i}`}
+                  testID={`change-${c.itemId ?? i}`}
                   style={[styles.row, { gap: theme.space[2], borderBottomColor: theme.colors.line, paddingBottom: theme.space[2] }]}
                 >
                   <AppText style={styles.flex}>{line}</AppText>
                   {c.reverted ? (
                     <AppText variant="meta">{t('changes.reverted')}</AppText>
-                  ) : (
+                  ) : !c.itemId ? null : (
                     <Button
                       testID={`change-revert-${c.itemId}`}
                       label={t('changes.revert')}
@@ -67,7 +67,7 @@ export function ChangesSheet({
                       variant="text"
                       disabled={off}
                       minHeight={theme.size.minTouch}
-                      onPress={() => message && void revertChange(message.id, c.itemId)}
+                      onPress={() => message && c.itemId && void revertChange(message.id, c.itemId)}
                     />
                   )}
                 </View>
