@@ -1,4 +1,5 @@
-import { Camera, FileText, Image as ImageIcon, PencilLine } from 'lucide-react-native';
+import { router } from 'expo-router';
+import { AlarmClock, Camera, FileText, Image as ImageIcon, PencilLine } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,7 +10,8 @@ import { AppText } from './AppText';
 import { Button } from './Button';
 
 /**
- * «+» sheet: Фото / Камера / Файл / Вручную (2-design §4.3). UI only — all options are stubs in week 1.
+ * «+» sheet: Фото / Камера / Файл / Вручную (2-design §4.3). Week 8: «Напоминание» opens the manual
+ * form S13 (works offline and in «Без ИИ»); the other options are still stubs.
  * Closes with a visible «Закрыть» button, not only by swipe.
  */
 export function AddSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
@@ -20,6 +22,7 @@ export function AddSheet({ visible, onClose }: { visible: boolean; onClose: () =
     { key: 'camera', label: t('add.camera'), Icon: Camera },
     { key: 'file', label: t('add.file'), Icon: FileText },
     { key: 'manual', label: t('add.manual'), Icon: PencilLine },
+    { key: 'reminder', label: t('add.reminder'), Icon: AlarmClock },
   ];
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -45,10 +48,14 @@ export function AddSheet({ visible, onClose }: { visible: boolean; onClose: () =
           {items.map(({ key, label, Icon }) => (
             <Pressable
               key={key}
+              testID={`add-${key}`}
               accessibilityRole="button"
               accessibilityLabel={label}
-              accessibilityHint={t('more.later')}
-              onPress={onClose}
+              accessibilityHint={key === 'reminder' ? undefined : t('more.later')}
+              onPress={() => {
+                onClose();
+                if (key === 'reminder') router.push('/reminder-new');
+              }}
               style={[styles.item, { minHeight: theme.size.primaryTouch, gap: theme.space[3] }]}
             >
               <Icon size={theme.size.cardIcon} color={theme.colors.ink} strokeWidth={2} />

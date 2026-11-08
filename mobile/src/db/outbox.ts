@@ -35,7 +35,11 @@ export type OutboxKind =
   | 'pages.reorder'
   /** S34 «Убрать» and its «Отменить». */
   | 'pages.remove'
-  | 'pages.restore';
+  | 'pages.restore'
+  /** Week 8: a reminder from S13 (also offline): POST /reminders, idempotent by `client_id`. */
+  | 'reminder.create'
+  /** Rings and buttons on this phone → POST /reminders/events (docs/api/reminders.md). */
+  | 'reminder.events';
 
 export type OutboxStatus = 'pending' | 'sent' | 'failed';
 

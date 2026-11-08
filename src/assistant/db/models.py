@@ -371,8 +371,20 @@ class Booking(Base):
 
 
 class Reminder(Base):
+    """Bot reminders (trip/booking, sent to Telegram) and, since 0013, app reminders.
+
+    App rows have `kind` in assistant.db.models_reminders.APP_KINDS (`normal|test`) and use the
+    0013 columns (title, tz, rrule, offsets, level, ...); their fires are `reminder_fires`. Bot
+    rows keep their own kinds and `text`; only they are sent by assistant.scheduler. `status` is
+    `text + CHECK` since 0013: ReminderStatus (bot) or models_reminders.AppReminderStatus (app).
+    """
+
     __tablename__ = "reminders"
-    __table_args__ = (Index("ix_reminders_due", "status", "due_at"),)
+    __table_args__ = (
+        Index("ix_reminders_due", "status", "due_at"),
+        UniqueConstraint("user_id", "client_id", name="uq_reminders_user_client"),
+    )
+    __mapper_args__ = {"eager_defaults": True}  # fetch trigger-set seq after INSERT/UPDATE
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
@@ -382,14 +394,40 @@ class Reminder(Base):
     )
     kind: Mapped[str] = mapped_column(String(64))  # e.g. booking_day_before, trip_daily_plan
     due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    text: Mapped[str] = mapped_column(Text)
+    text: Mapped[str | None] = mapped_column(Text)  # bot rows; app rows use title/body
     payload: Mapped[dict | None] = mapped_column(JSONB)
-    status: Mapped[ReminderStatus] = mapped_column(
-        _enum(ReminderStatus), default=ReminderStatus.SCHEDULED
-    )
+    status: Mapped[str] = mapped_column(TextEnum(ReminderStatus), default=ReminderStatus.SCHEDULED)
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    # --- 0013: app reminders (spec 3-engineering 3.x) ---
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, unique=True, default=uuid7, server_default=sa.text("gen_random_uuid()")
+    )
+    client_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    item_id: Mapped[int | None] = mapped_column(ForeignKey("items.id", ondelete="SET NULL"))
+    title: Mapped[str | None] = mapped_column(Text)
+    body: Mapped[str | None] = mapped_column(Text)
+    tz: Mapped[str | None] = mapped_column(Text)
+    rrule: Mapped[str | None] = mapped_column(Text)
+    offsets: Mapped[list[int]] = mapped_column(
+        sa.ARRAY(Integer), default=list, server_default="{}"
+    )
+    level: Mapped[str] = mapped_column(Text, default="notification", server_default="notification")
+    created_via: Mapped[str | None] = mapped_column(Text)
+    parse_source: Mapped[str | None] = mapped_column(Text)
+    sensitivity: Mapped[str | None] = mapped_column(Text)
+    snooze_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    expanded_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    seq: Mapped[int] = mapped_column(
+        BigInteger, server_default=FetchedValue(), server_onupdate=FetchedValue()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Job(Base):

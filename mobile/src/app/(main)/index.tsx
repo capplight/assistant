@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { PendingAnswerCard } from '@/components/PendingAnswerCard';
+import { AlarmRiskBanner, UpcomingReminders } from '@/components/ReminderCards';
 import { Screen } from '@/components/Screen';
 import { useOnboarding } from '@/store/onboarding';
 import { useTheme } from '@/theme';
@@ -12,7 +13,8 @@ import { useTheme } from '@/theme';
 /**
  * S06 «Сегодня» — system page, always first, cannot be removed (R-49).
  * Week 6: «Ответ готов» — an answer that waits here (the person left before it was ready).
- * TODO(week 9): alarms, missed, «Я сделал за вас», suggestions.
+ * Week 8: the alarm risk banner (S15 not done) and the next reminders.
+ * TODO(week 9): missed (red row), «Я сделал за вас», suggestions.
  */
 export default function TodayScreen() {
   const theme = useTheme();
@@ -26,6 +28,7 @@ export default function TodayScreen() {
   }
   return (
     <Screen testID="page-today" edges={['top']}>
+      <AlarmRiskBanner />
       <View style={styles.header}>
         <AppText variant="meta" style={styles.flex}>
           {date}
@@ -52,6 +55,7 @@ export default function TodayScreen() {
         {name ? t('today.hello_name', { name }) : t('today.hello')}
       </AppText>
       <PendingAnswerCard />
+      <UpcomingReminders />
       <AppText variant="section" accessibilityRole="header" style={{ marginBottom: theme.space[3] }}>
         {t('today.today')}
       </AppText>

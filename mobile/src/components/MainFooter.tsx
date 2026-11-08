@@ -6,6 +6,7 @@ import { useTheme } from '@/theme';
 import { AnswerBanner } from './AnswerBanner';
 import { AssistantLine } from './AssistantLine';
 import { BottomTabs } from './BottomTabs';
+import { ReminderDraftStrip } from './ReminderCards';
 import { UndoStrip } from './UndoStrip';
 
 /** Bottom stack, bottom-up: tabs → assistant line → (temporarily) answer banner (2-design §4.3). */
@@ -17,6 +18,7 @@ export function MainFooter() {
       <View style={{ backgroundColor: theme.colors.bg }}>
         <AnswerBanner />
       </View>
+      <ReminderDraftStrip />
       <UndoStrip />
       <AssistantLine />
       <BottomTabs />

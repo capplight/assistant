@@ -282,6 +282,9 @@ describe('S04b', () => {
     expect(screen.getByText('Сохранить записи, чтобы не потерять при смене телефона')).toBeTruthy();
     expect(screen.getByText('Без номера записи пропадут при удалении приложения')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('phone-later'));
+    // Week 8: Android 14+ (the fake phone) → S15 first (R-12); «Позже» → back to the page.
+    expect(r.getPathname()).toBe('/alarm-setup');
+    await fireEvent.press(screen.getByTestId('setup-later'));
     expect(r.getPathname()).toBe(`/page/${notes().id}`);
     await fireEvent.changeText(screen.getByTestId('assistant-input'), 'Вторая запись');
     await fireEvent.press(screen.getByTestId('assistant-send'));
@@ -315,6 +318,8 @@ describe('S04b', () => {
 
     await fireEvent.changeText(screen.getByTestId('phone-name'), 'Али');
     await fireEvent.press(screen.getByTestId('phone-name-done'));
+    expect(r.getPathname()).toBe('/alarm-setup'); // Android 14+: S15 (week 8)
+    await fireEvent.press(screen.getByTestId('setup-later'));
     expect(r.getPathname()).toBe('/');
     expect(screen.getByText('Добрый день, Али')).toBeTruthy();
   });

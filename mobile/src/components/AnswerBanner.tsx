@@ -3,6 +3,7 @@ import React, { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AccessibilityInfo, findNodeHandle, StyleSheet, View } from 'react-native';
 
+import { useAlarms } from '@/alarms/store';
 import { answerProposal, cancelPick, markDelivery, retry } from '@/chat/service';
 import { useSavedLine } from '@/store/connectivity';
 import { useAssistant, type ChatMessage } from '@/store/assistant';
@@ -79,7 +80,15 @@ export function AnswerBanner() {
   const notice = message.saved ? null : answerNotice(message, t);
   const hits = localOnly ? (message.localHits ?? []) : [];
   // «Разложить смогу, когда появится интернет» [Хорошо]: nothing to open.
-  const onlyNotice = message.notice === 'offline_action' || message.notice === 'no_ai_action';
+  const onlyNotice =
+    message.notice === 'offline_action' || message.notice === 'no_ai_action' || message.notice === 'offline_reminder';
+  const setByHand = () => {
+    const q = useAssistant.getState().messages.find((m) => m.id === message.replyTo);
+    const text = q?.text ?? '';
+    const phrase = useAlarms.getState().pendingPhrases.find((p) => p.text === text);
+    close();
+    router.push({ pathname: '/reminder-new', params: { text, ...(phrase ? { phraseId: phrase.id } : {}) } });
+  };
 
   return (
     <View testID="answer-banner" accessibilityLiveRegion="polite" style={box}>
@@ -112,7 +121,12 @@ export function AnswerBanner() {
       {message.status === 'interrupted' ? (
         <Button testID="answer-retry" label={t('answer.retry')} variant="text" onPress={() => void retry(message.id)} />
       ) : null}
-      {onlyNotice ? (
+      {message.notice === 'offline_reminder' ? (
+        <View style={buttonsRow}>
+          <Button testID="answer-set-by-hand" label={t('rem.set_by_hand')} variant="outline" style={theme.largeFont ? undefined : styles.flex} onPress={setByHand} />
+          <Button testID="answer-ok" label={t('common.ok')} variant="text" style={theme.largeFont ? undefined : styles.flex} onPress={close} />
+        </View>
+      ) : onlyNotice ? (
         <Button testID="answer-ok" label={t('common.ok')} variant="outline" onPress={close} />
       ) : (
         <View style={buttonsRow}>

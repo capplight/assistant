@@ -22,6 +22,7 @@ from assistant.db.models_v2 import AuthSession, Consent, UserStatus
 from assistant.embeddings import ChunkEmbedder, NullChunkEmbedder
 
 if TYPE_CHECKING:
+    from assistant.ai import Router
     from assistant.chat import ChatService
 
 
@@ -35,6 +36,7 @@ class ApiContext:
     hash_key: bytes
     embedder: ChunkEmbedder = field(default_factory=NullChunkEmbedder)
     chat: "ChatService | None" = None  # the assistant line (assistant.chat)
+    ai_router: "Router | None" = None  # the same router chat uses (reminder_parse, week 8)
 
     def hash(self, value: str, *, purpose: str) -> str:
         return keyed_hash(self.hash_key, value, purpose=purpose)

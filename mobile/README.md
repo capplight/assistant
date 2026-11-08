@@ -1,4 +1,4 @@
-# Mobile app — week 7 (by hand: order, moves between pages, «Мои страницы»)
+# Mobile app — week 8 (reminders that ring like an alarm: S13, S14, S15, S04)
 
 Expo SDK 58 (React Native 0.88, New Architecture), TypeScript strict, expo-router.
 Spec: `../docs/spec/SPEC.md`, `../docs/spec/final/2-design.md`, `../docs/spec/final/3-engineering.md` §2.1, §11.2 (week 1, Mobile).
@@ -89,7 +89,88 @@ src/
   chat/                      the one conversation: ask, stream, resume, queue, history, feedback,
                              actions (page_patch, undo), questions back, pending answer, push tap
   push/                      expo-notifications behind a port (FakePush in tests)
+  alarms/                    week 8: port (FakeAlarms), native + notification adapters, planner, S15 steps, service
+modules/alarms/              native Expo module: Android (Kotlin) AlarmManager + S14 + battery-guide, iOS (Swift) AlarmKit
 ```
+
+## Week 8: what works
+
+Contract: `../docs/api/reminders.md`; shapes only in `src/api/types.ts` + `src/api/endpoints.ts` (reconciled with
+`schemas.py` and `routes/reminders.py` on 2026-11-08). **Checked by Jest with the native module replaced by
+`FakeAlarms` and a fake server. Nothing ran on a phone. The finish criterion («the alarm fires on Xiaomi / Samsung /
+iPhone») is NOT met until the checklist below passes on real phones.** No JVM, Gradle, Xcode or Swift compiler on the
+dev machine: the Kotlin and Swift files were only parsed (tree-sitter, no syntax errors) — not compiled or type-checked.
+
+- **Native module `modules/alarms`** (Expo module, autolinked from `./modules`; needs a development build).
+  Android: `setAlarmClock` for «Будильник», `setExactAndAllowWhileIdle` for «Уведомление», `setWindow` ±10 min without
+  SCHEDULE_EXACT_ALARM; full-screen S14 over the lock screen (`AlarmActivity`, #B4361E, «Сделано» 72 dp, «Отложить на
+  10 минут» 64 dp, «Позвонить» when the text has a number, «Другое время» 5/30/60 min/tomorrow, back button ignored);
+  heads-up with the same buttons when full-screen is not allowed; ring service on the alarm stream, 40→100% over 20 s,
+  60 s per ring, vibration 800/400 ms, own 3-tone sound (`res/raw/alarm_tones.wav`); if Android refuses the
+  foreground service, the notification channel rings instead (no ramp). Re-plan on `BOOT_COMPLETED`, `TIME_SET`,
+  `TIMEZONE_CHANGED`, app update, exact-alarm permission change; a ring missed while the phone was off rings once after
+  boot if ≤30 min late. `battery-guide`: maker, «Без ограничений» state, Xiaomi/HyperOS, Tecno/Infinix, Huawei, Oppo, Vivo
+  screens with fallbacks to the app's settings page.
+  iOS 26+: AlarmKit (`AlarmKitScheduler.swift`), title = the text, «Сделано» / «Отложить» (+10 min via an App Intent);
+  repeats are separate AlarmKit alarms. iOS < 26 and **Expo Go**: `expo-notifications` fallback (time-sensitive on iOS,
+  `delivery: 'alarmClock'` on Android) — a notification, not an alarm screen; S15 says so.
+- **Planning** (`src/alarms/plan.ts`, pure): the server's fires (`/sync` `reminders` + `reminder_fires`,
+  `GET /reminders/fires`) → local rings keyed by the fire `key`; repeats +5/+10/+15 made by the phone; «Будильник» only on
+  the target phone (R-13), else a notification; iOS ≤48, Android ≤200. `POST /reminders/active` on start/foreground
+  (≤1/min). Re-planned on start, foreground, every sync, every change, after a reboot.
+- **Events** → outbox `reminder.events` → `POST /reminders/events`: `scheduled_local` / `schedule_failed` (once per fire
+  and scheduler), `fired_local` (meta `surface`, `fsi`, `repeat_n`, `scheduler`, `delay_ms`), `shown`, `acked`,
+  `snoozed` (meta `until`: ISO with offset, within `at` + 1 min … `snooze_max_hours` from /reminders/settings, default
+  48 h; «Другое время» is capped there too), `dismissed`. A refused (`invalid`) snooze keeps the local alarm and goes once
+  more without `until` under a new `client_id` (the server then uses +10 min); a second refusal is dropped. Fires saved offline go by `fire_key` once their reminder exists.
+- **S13** (`app/reminder-new.tsx`): from the line (`POST /reminders/parse` → «как понял»; the server's setting decides
+  code vs model) or by hand («+ → Напоминание», «Сегодня» → «Новое напоминание», «Поставить вручную»). Day of week always,
+  big steppers, «Будильник» / «Уведомление», «Напомнить ещё» (15 min / 1 h / накануне), «Может опоздать до 10 минут»
+  without exact alarms. [Сохранить] rings from the phone at once (offline too), `reminder.create` via the outbox.
+- **S14 in the app** (`app/alarm.tsx`): after AlarmKit / a notification tap; same buttons, no alarm background.
+- **S15** (`app/alarm-setup.tsx`): steps per phone, ✓ «Готово» on return from the system screen, «Я включил» for
+  autostart (no API can check it), «Проверить будильник» (`POST /reminders/test`; offline a local-only test), result
+  «Будильник работает ✓» / «Тестовый будильник не сработал…». Shown right after S04b on Android 14+, from «Ещё →
+  Будильники», and from the «Сегодня» banner «Будильники могут не сработать на этом телефоне [Исправить]».
+- **S04** (`app/notify.tsx`): the notification window after the first phrase (path 3) and after the first reminder.
+
+**Offline and «Без ИИ» (Ф-1 is not decided; the server's `REMINDERS_RULES_FIRST` is off):**
+
+| | Online | Offline |
+|---|---|---|
+| «Согласен» | phrase → server parses (model) → S13 → [Сохранить] | «Поставлю, когда появится интернет» [Поставить вручную]; the phrase is parsed when online → «Проверьте напоминание» → S13 |
+| «Без ИИ» | phrase → server answers «Укажите время вручную» → S13 by hand (if Ф-1 is taken on the server, code reads it and S13 is prefilled) | same as above |
+| S13 by hand | rings at once, sent now | rings at once, sent later |
+| Ringing | always local, needs no internet | always local |
+
+Not yet: repeats by days (RRULE) on S13, editing/deleting a reminder (S25, week 9), «Пропущено» red row and the
+«Дела» page (week 9), the phone's own parser (only if Ф-1 is taken), voice reminders, «Вибрация» switch (S23),
+WhatsApp support button (shown only if `EXPO_PUBLIC_SUPPORT_WHATSAPP` is set; Ф-13). KK strings are drafts.
+
+### Manual test on the founder's phones (development build: `npx expo run:android` / `run:ios`, or EAS `development`)
+
+Do each on **Xiaomi/Redmi (HyperOS)**, **Samsung Galaxy A (One UI 6/7)**, **iPhone iOS 26+** (and an iPhone < 26 if
+there is one). Write down phone, OS, time set, time it rang. Expo Go is not enough (no alarm module).
+
+1. Fresh install → path 3 → S04 «Разрешить уведомления» → allow. Android 14+: S04b «Позже» → S15 opens.
+2. S15: open each step, allow, come back → ✓. Xiaomi: «Автозапуск» on → «Я включил»; «Контроль активности» → «Нет
+   ограничений» → «Я включил». Samsung: Батарея → «Без ограничений» → ✓ by itself. iPhone 26: «Разрешить будильники».
+3. «Проверить будильник», lock the screen, wait 1 min → full-screen S14 (Android) / system alarm (iPhone 26) → back in
+   the app: «Будильник работает ✓».
+4. Line: «Напомни через 5 минут позвонить +7 701 000 00 00» → S13 → «Будильник» → Сохранить. **Swipe the app away**,
+   lock the screen. Rings on time; volume grows; stops after 60 s; rings again at +5, +10, +15 min. «Позвонить» opens the
+   dialer.
+5. Same, press «Сделано» at the first ring → no repeats. Another one → «Отложить на 10 минут» → rings 10 min later.
+   «Другое время → Через 30 минут» → rings 30 min later; no backup push before +33 min.
+6. Set one for +10 min, **restart the phone**, do not open the app → rings on time.
+7. Set one for +10 min, change the time zone in system settings → rings at the same moment.
+8. Silent mode / Do Not Disturb: Android alarm and iPhone 26 should still ring; iPhone < 26 only vibrates.
+9. Without exact alarms (Android: revoke «Будильники и напоминания») → S13 shows «Может опоздать до 10 минут»; note the
+   delay.
+10. Without full-screen permission (Android 14+) → heads-up with «Сделано» / «Отложить» instead of S14.
+11. Airplane mode: S13 by hand → rings; turn the network on → the server has the reminder and the events.
+12. Two phones on one account: the one used last rings as an alarm, the other shows a notification.
+13. Leave 24–48 h with a reminder set (Doze) → rings on time.
 
 ## Week 7: what works
 
@@ -143,7 +224,7 @@ Contract: `../docs/api/chat.md`, `../docs/api/actions.md`; shapes only in `src/a
 - **Push** (`src/push/`): native token (`getDevicePushTokenAsync`) sent with `POST /devices` once notifications are
   allowed; tap `{type: "chat_reply", reply_id}` → «Переписка» on the answer; quiet in the foreground. **Not verified**: needs
   a development build and FCM/APNs credentials (none in the repo; the server has none either). The permission is not
-  asked yet (S04, week 8).
+  asked yet (S04, week 8 — now done, see above).
 
 Not yet: «Отменено · Вернуть» 5 s (undo of the undo), «Пока вас не было, я разложил…», stacks animation
 (`motion.stack`), `actions` / `conversation_messages` arrays of `/sync`, progress «Раскладываю… 12 из 40» [Остановить].

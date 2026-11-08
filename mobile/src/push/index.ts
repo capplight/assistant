@@ -93,12 +93,12 @@ export function nativePush(): PushPort {
     quietInForeground: () => {
       try {
         N.setNotificationHandler({
-          handleNotification: async () => ({
-            shouldPlaySound: false,
-            shouldSetBadge: false,
-            shouldShowBanner: false,
-            shouldShowList: true,
-          }),
+          handleNotification: async (n) => {
+            // Reminders ring in the foreground too (src/alarms/notifications.ts); answers stay quiet.
+            const d = n.request.content.data as { assistantAlarm?: boolean; type?: string } | undefined;
+            const ring = d?.assistantAlarm === true || d?.type === 'reminder_backup' || d?.type === 'reminder_missed';
+            return { shouldPlaySound: ring, shouldSetBadge: false, shouldShowBanner: ring, shouldShowList: true };
+          },
         });
       } catch {
         // no native module

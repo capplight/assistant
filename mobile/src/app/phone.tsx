@@ -1,10 +1,12 @@
 import { getLocales } from 'expo-localization';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, TextInput, View } from 'react-native';
 
 import { confirmPhone, saveDisplayName, sendPhoneCode } from '@/account/phone';
+import { s15AfterPhone } from '@/alarms/setup';
+import { useAlarms } from '@/alarms/store';
 import { errorMessage, NetworkError } from '@/api/errors';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
@@ -55,12 +57,21 @@ export default function PhoneScreen() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  /** S04b opened by itself for the first time (not from «Ещё», not a sign-in again). */
+  const firstTime = useRef(useOnboarding.getState().phoneAskedAt === null);
+
   useEffect(() => {
     markPhoneAsked();
   }, [markPhoneAsked]);
 
   const leave = () => {
     if (useSession.getState().needsSignIn) useSession.getState().postponeSignIn();
+    const a = useAlarms.getState();
+    if (!expired && firstTime.current && !a.offeredAt && s15AfterPhone(a.caps)) {
+      // Back to where S04b was opened from (the page), or «Сегодня» at the end of the first launch.
+      router.replace({ pathname: '/alarm-setup', params: next === 'home' || !router.canGoBack() ? { next: 'home' } : {} });
+      return;
+    }
     if (expired || next === 'home' || !router.canGoBack()) router.replace('/');
     else router.back();
   };

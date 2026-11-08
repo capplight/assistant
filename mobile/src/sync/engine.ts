@@ -1,8 +1,14 @@
-import type { Api } from '@/api/endpoints';
+import { firesOf, remindersOf, type Api } from '@/api/endpoints';
 import { ApiError, isOfflineError, isRetryable, SignInRequiredError } from '@/api/errors';
 import type {
   ConsentsIn,
   DeviceIn,
+  DeviceOut,
+  FireOut,
+  ReminderCreateIn,
+  ReminderEventIn,
+  ReminderOut,
+  ReminderWithFiresOut,
   FeedbackIn,
   ItemCreateIn,
   ItemKind,
@@ -26,6 +32,7 @@ import type {
 import type { RenamePayload } from '@/pages/service';
 import type { CorrectPayload, TrashPayload, UnmergePayload, VerifyPayload } from '@/records/actions';
 import { TEMPLATE_DEFAULT_TITLE } from '@/pages/templates';
+import { newId } from '@/utils/id';
 import type { Page } from '@/store/pages';
 
 /** Payload of `item.create`. `uploadIds` is filled in as files get uploaded (progress survives restarts). */
@@ -52,6 +59,17 @@ export type ProfilePayload = { displayName: string | null };
 
 /** `pages.create`. Rows queued in weeks 1-2 have the same shape, with integer positions. */
 export type PagesCreatePayload = { pages: (Omit<Page, 'position'> & { position: string | number })[] };
+
+/**
+ * An event the server refused (`invalid`). The phone keeps its own alarm either way. A snooze whose
+ * `until` was refused goes once more without it (the server then uses `at + 10 min`); anything else,
+ * or a resend refused again, is dropped — never the same bad value in a loop.
+ */
+export function fixInvalid(ev: QueuedReminderEvent | undefined): QueuedReminderEvent | null {
+  if (!ev || ev.retry_of || ev.event !== 'snoozed' || !ev.meta || !('until' in ev.meta)) return null;
+  const { until, ...meta } = ev.meta;
+  return { ...ev, client_id: newId(), retry_of: ev.client_id, meta: { ...meta, until_refused: until } };
+}
 
 const SERVER_CREATED_BY = new Set(['user', 'onboarding_gallery', 'onboarding_blank', 'onboarding_phrase']);
 
@@ -85,6 +103,33 @@ const NOTHING: ManualOut = {
 
 export type DeviceInfo = () => Omit<DeviceIn, 'client_id'>;
 
+/** `reminder.create`: the S13 body, sent as it was saved. */
+export type ReminderCreatePayload = { body: ReminderCreateIn };
+
+/** One event of `reminder.events`; `fire_id` is looked up at send time when the fire was local. */
+export type QueuedReminderEvent = Omit<ReminderEventIn, 'fire_id' | 'fire_key'> & {
+  fire_id: string | null;
+  fire_key: string;
+  /** The `client_id` of the event the server called `invalid`: this is its one fixed resend. */
+  retry_of?: string;
+};
+export type ReminderEventsPayload = { events: QueuedReminderEvent[] };
+
+/** Where reminders from the server go (src/alarms/service.ts). */
+export type ReminderSink = {
+  applyServer(reminders: ReminderOut[], fires: FireOut[], deviceId?: string | null): void;
+  created(clientId: string, out: ReminderWithFiresOut): void;
+  /** POST /reminders refused it for good (e.g. `reminder_in_past`): the local rings go. */
+  createFailed(clientId: string, code: string): void;
+  /** The server id of a fire, or null while its reminder is not on the server yet. */
+  fireId(key: string): string | null;
+  /** The server's key for a fire (a local key saved offline maps to it once POST /reminders answered). */
+  serverKey(key: string): string | null;
+  /** The fire will never reach the server (offline test alarm, refused reminder): drop its events. */
+  localOnly(key: string): boolean;
+  deviceRegistered(device: DeviceOut): void;
+};
+
 export type SyncDeps = {
   api: Api;
   outbox: OutboxRepository;
@@ -106,6 +151,8 @@ export type SyncDeps = {
   onLearned?: (outboxId: string, text: string) => void;
   /** A line from the server for the person («Часть уже изменена вами — вернул остальное»). */
   onNotice?: (text: string) => void;
+  /** Week 8: reminders and fires (sync arrays, POST /reminders, events). */
+  reminders?: ReminderSink;
 };
 
 export type PushResult = { sent: number; retried: number; failed: number; offline: boolean };
@@ -282,6 +329,13 @@ export class SyncEngine {
         await this.d.pages.applyLink(link);
         applied++;
       }
+      // Week 8 (docs/api/reminders.md «Sync»): no tombstones — `deleted_at` / fire state `cancelled`.
+      const rems = Array.isArray(out.reminders) ? remindersOf(out.reminders) : [];
+      const fs = Array.isArray(out.reminder_fires) ? firesOf(out.reminder_fires) : [];
+      if (rems.length > 0 || fs.length > 0) {
+        this.d.reminders?.applyServer(rems, fs);
+        applied += rems.length + fs.length;
+      }
       for (const t of out.tombstones ?? []) {
         if (t.entity === 'item' || t.entity === 'items') await this.d.records.applyTombstone(t.id);
         else if (t.entity === 'screen') await this.d.pages.applyTombstone(t.id);
@@ -339,6 +393,10 @@ export class SyncEngine {
         return (e) => this.sendPageRemove(e, 'remove');
       case 'pages.restore':
         return (e) => this.sendPageRemove(e, 'restore');
+      case 'reminder.create':
+        return (e) => this.sendReminder(e);
+      case 'reminder.events':
+        return (e) => this.sendReminderEvents(e);
       default:
         return null;
     }
@@ -593,7 +651,55 @@ export class SyncEngine {
   }
 
   private async sendDevice(): Promise<void> {
-    await this.d.api.upsertDevice({ client_id: await this.d.installId(), ...this.d.deviceInfo() });
+    const out = await this.d.api.upsertDevice({ client_id: await this.d.installId(), ...this.d.deviceInfo() });
+    if (out && typeof out.id === 'string') this.d.reminders?.deviceRegistered(out);
+  }
+
+  private async sendReminder(e: OutboxEntry): Promise<void> {
+    const { body } = e.payload as ReminderCreatePayload;
+    try {
+      this.d.reminders?.created(body.client_id, await this.d.api.createReminder(body));
+    } catch (err) {
+      if (!isRetryable(err)) this.d.reminders?.createFailed(body.client_id, err instanceof ApiError ? err.code : 'failed');
+      throw err;
+    }
+  }
+
+  /**
+   * One batch of rings / buttons, in the order they happened. An event of a fire whose reminder is
+   * still in the outbox waits (its `reminder.create` row goes first); one that can never be sent
+   * (offline test alarm) is dropped. `not_found` / `invalid` from the server are not retried.
+   */
+  private async sendReminderEvents(e: OutboxEntry): Promise<void> {
+    const p = e.payload as ReminderEventsPayload;
+    const sink = this.d.reminders;
+    const events: ReminderEventIn[] = [];
+    const byClient = new Map(p.events.map((ev) => [ev.client_id, ev]));
+    for (const ev of p.events) {
+      if (sink?.localOnly(ev.fire_key)) continue;
+      const fireId = ev.fire_id ?? sink?.fireId(ev.fire_key) ?? null;
+      const key = sink ? sink.serverKey(ev.fire_key) : ev.fire_key;
+      // A fire saved offline is unknown to the server until its reminder.create row went through.
+      if (!fireId && !key) throw new Error('fire_pending');
+      events.push({
+        client_id: ev.client_id,
+        ...(fireId ? { fire_id: fireId } : { fire_key: key! }),
+        event: ev.event,
+        at: ev.at,
+        ...(ev.meta ? { meta: ev.meta } : {}),
+      });
+    }
+    events.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+    for (let i = 0; i < events.length; i += 200) {
+      const out = await this.d.api.reminderEvents(events.slice(i, i + 200));
+      if (out.fires.length > 0) sink?.applyServer([], out.fires);
+      const fixed = out.results
+        .filter((r) => r.status === 'invalid')
+        .map((r) => fixInvalid(byClient.get(r.client_id)))
+        .filter((x): x is QueuedReminderEvent => x !== null);
+      // Not the same row again: a new outbox row with new client_ids (reminders.md «fix and resend»).
+      if (fixed.length > 0) await this.d.outbox.enqueue('reminder.events', { events: fixed } satisfies ReminderEventsPayload);
+    }
   }
 
   private async sendItem(e: OutboxEntry): Promise<void> {

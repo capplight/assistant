@@ -13,6 +13,8 @@ import { LANGUAGES } from '@/i18n';
 import { addCustomPage } from '@/pages/service';
 import { MAX_TAB_PAGES, MAX_TAB_PAGES_LARGE_FONT } from '@/pages/templates';
 import { usePageLabels } from '@/pages/usePageLabels';
+import { allDone } from '@/alarms/setup';
+import { useAlarms } from '@/alarms/store';
 import { useOnboarding } from '@/store/onboarding';
 import { useSession } from '@/store/session';
 import { useToast } from '@/store/toast';
@@ -32,6 +34,7 @@ export default function MoreScreen() {
   const needsSignIn = useSession((s) => s.needsSignIn);
   const showToast = useToast((s) => s.show);
   const [naming, setNaming] = useState(false);
+  const alarmsOk = useAlarms((s) => (s.caps ? allDone(s.caps, s) && s.test.state === 'ok' : false));
   const overflow = pages.slice(theme.largeFont ? MAX_TAB_PAGES_LARGE_FONT : MAX_TAB_PAGES);
 
   const row = (key: string, label: string, onPress?: () => void, meta?: string) => (
@@ -102,6 +105,7 @@ export default function MoreScreen() {
       {row('trash', t('trash.title'), () => router.navigate('/trash'), t('trash.hint'))}
       {row('did', t('more.did'), undefined, t('more.later'))}
       {row('chat', t('more.chat'), () => router.push('/chat'))}
+      {row('alarms', t('more.alarms'), () => router.push('/alarm-setup'), alarmsOk ? t('more.alarms_ok') : t('more.alarms_fix'))}
       {row('import', t('more.import'), undefined, t('more.later'))}
       {row('lang', `${t('lang.choose')}: ${t(`lang.${language}`)}`, () => setLanguage(nextLang), t(`lang.${nextLang}`))}
       {needsSignIn

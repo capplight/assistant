@@ -159,6 +159,12 @@ class Settings(BaseSettings):
     # Big semantic reorders (>150 records, PAGE_GROUP) per person per day (spec 5.10 rule 8,
     # `limits.ai_reorder_per_day`, counter `ai_reorders`).
     chat_big_reorders_per_day: int = 3
+    # Reminders (week 8, spec 6.6). Founder decision Ф-1 («сначала код») is open: off = every
+    # phrase goes to the model (`reminder_parse`, needs ai_cross_border consent; «Без ИИ» and
+    # offline get the manual form). On = code reads simple phrases first (reminders.rules),
+    # the model only gets what code did not understand. Env REMINDERS_RULES_FIRST=true.
+    reminders_rules_first: bool = False
+    reminders_tick_seconds: float = 30.0  # backup push / missed / top-up loop
     # The single label on generated content (R-06, spec 5.9), until the lawyer's opinion.
     label_ai_generated: str = "Подготовил помощник (ИИ) по вашим записям — проверьте"
 

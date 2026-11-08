@@ -1,0 +1,44 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- 3-engineering 6.6 / §9: SCHEDULE_EXACT_ALARM (not USE_EXACT_ALARM), USE_FULL_SCREEN_INTENT (Play declaration). -->
+  <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+  <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
+  <uses-permission android:name="android.permission.VIBRATE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+
+  <application>
+    <receiver android:name=".AlarmReceiver" android:exported="false" />
+
+    <receiver android:name=".BootReceiver" android:enabled="true" android:exported="false">
+      <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED" />
+        <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+        <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+        <action android:name="android.intent.action.TIME_SET" />
+        <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+        <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+        <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+      </intent-filter>
+    </receiver>
+
+    <!-- S14 variant A: over the lock screen, its own task so «Сделано» does not reveal the app. -->
+    <activity
+      android:name=".AlarmActivity"
+      android:exported="false"
+      android:showWhenLocked="true"
+      android:turnScreenOn="true"
+      android:excludeFromRecents="true"
+      android:launchMode="singleTask"
+      android:taskAffinity="expo.modules.alarms.ring"
+      android:configChanges="orientation|screenSize|keyboardHidden|fontScale|uiMode"
+      android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+
+    <service
+      android:name=".AlarmRingService"
+      android:exported="false"
+      android:foregroundServiceType="mediaPlayback" />
+  </application>
+</manifest>

@@ -1,0 +1,1106 @@
+{
+ "version": 1,
+ "about": "Shared vectors of the rules-first reminder parser (Ф-1). Server: assistant.reminders.rules; phone: the same rules. `expect: null` = not sure, hand over to the model / manual form. `readings`: 1, or 2 for an ambiguous bare hour, likelier first. Dates and times are on the local clock of `tz`.",
+ "now": "2026-11-08T10:00:00+05:00",
+ "tz": "Asia/Almaty",
+ "vectors": [
+  {
+   "text": "Напомни завтра в 7 выпить таблетку",
+   "expect": {
+    "readings": [
+     {
+      "title": "Выпить таблетку",
+      "date": "2026-11-09",
+      "time": "07:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     },
+     {
+      "title": "Выпить таблетку",
+      "date": "2026-11-09",
+      "time": "19:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "завтра в 10:30 позвонить Ерлану",
+   "expect": {
+    "readings": [
+     {
+      "title": "Позвонить Ерлану",
+      "date": "2026-11-09",
+      "time": "10:30",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "Напомни сегодня в 18:00 забрать посылку",
+   "expect": {
+    "readings": [
+     {
+      "title": "Забрать посылку",
+      "date": "2026-11-08",
+      "time": "18:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "сегодня в 7 забрать сына",
+   "expect": {
+    "readings": [
+     {
+      "title": "Забрать сына",
+      "date": "2026-11-08",
+      "time": "19:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "послезавтра в 9 утра врач",
+   "expect": {
+    "readings": [
+     {
+      "title": "Врач",
+      "date": "2026-11-10",
+      "time": "09:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "завтра в 3 часа дня совещание",
+   "expect": {
+    "readings": [
+     {
+      "title": "Совещание",
+      "date": "2026-11-09",
+      "time": "15:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "завтра в 11 вечера выключить воду",
+   "expect": {
+    "readings": [
+     {
+      "title": "Выключить воду",
+      "date": "2026-11-09",
+      "time": "23:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "Напомни завтра в 2 ночи принять лекарство",
+   "expect": {
+    "readings": [
+     {
+      "title": "Принять лекарство",
+      "date": "2026-11-09",
+      "time": "02:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "завтра к 10 часам отвезти документы",
+   "expect": {
+    "readings": [
+     {
+      "title": "Отвезти документы",
+      "date": "2026-11-09",
+      "time": "10:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     },
+     {
+      "title": "Отвезти документы",
+      "date": "2026-11-09",
+      "time": "22:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "завтра в полдень обед с Айгерим",
+   "expect": {
+    "readings": [
+     {
+      "title": "Обед с Айгерим",
+      "date": "2026-11-09",
+      "time": "12:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "завтра в 07:15 автобус",
+   "expect": {
+    "readings": [
+     {
+      "title": "Автобус",
+      "date": "2026-11-09",
+      "time": "07:15",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "напомни завтра в восемь утра позвонить в банк",
+   "expect": {
+    "readings": [
+     {
+      "title": "Позвонить в банк",
+      "date": "2026-11-09",
+      "time": "08:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "завтра в семь вечера ужин",
+   "expect": {
+    "readings": [
+     {
+      "title": "Ужин",
+      "date": "2026-11-09",
+      "time": "19:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "завтра утром полить цветы",
+   "expect": {
+    "readings": [
+     {
+      "title": "Полить цветы",
+      "date": "2026-11-09",
+      "time": "09:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "сегодня вечером позвонить маме",
+   "expect": {
+    "readings": [
+     {
+      "title": "Позвонить маме",
+      "date": "2026-11-08",
+      "time": "19:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "завтра днём забрать костюм",
+   "expect": {
+    "readings": [
+     {
+      "title": "Забрать костюм",
+      "date": "2026-11-09",
+      "time": "13:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "через 2 часа позвонить Ерлану",
+   "expect": {
+    "readings": [
+     {
+      "title": "Позвонить Ерлану",
+      "date": "2026-11-08",
+      "time": "12:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "через полчаса выключить духовку",
+   "expect": {
+    "readings": [
+     {
+      "title": "Выключить духовку",
+      "date": "2026-11-08",
+      "time": "10:30",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "через 15 минут проверить пирог",
+   "expect": {
+    "readings": [
+     {
+      "title": "Проверить пирог",
+      "date": "2026-11-08",
+      "time": "10:15",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "через час встреча",
+   "expect": {
+    "readings": [
+     {
+      "title": "Встреча",
+      "date": "2026-11-08",
+      "time": "11:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "через пять минут перезвонить",
+   "expect": {
+    "readings": [
+     {
+      "title": "Перезвонить",
+      "date": "2026-11-08",
+      "time": "10:05",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "через полтора часа забрать машину",
+   "expect": {
+    "readings": [
+     {
+      "title": "Забрать машину",
+      "date": "2026-11-08",
+      "time": "11:30",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "через 3 дня оплатить кредит в 10",
+   "expect": {
+    "readings": [
+     {
+      "title": "Оплатить кредит",
+      "date": "2026-11-11",
+      "time": "10:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     },
+     {
+      "title": "Оплатить кредит",
+      "date": "2026-11-11",
+      "time": "22:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "через неделю продлить страховку",
+   "expect": {
+    "readings": [
+     {
+      "title": "Продлить страховку",
+      "date": "2026-11-15",
+      "time": "09:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": true
+     }
+    ]
+   }
+  },
+  {
+   "text": "напомни через 10 минут",
+   "expect": {
+    "readings": [
+     {
+      "title": "Напоминание",
+      "date": "2026-11-08",
+      "time": "10:10",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "в пятницу в 7 вечера ужин у мамы",
+   "expect": {
+    "readings": [
+     {
+      "title": "Ужин у мамы",
+      "date": "2026-11-13",
+      "time": "19:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "во вторник в 9:00 планёрка",
+   "expect": {
+    "readings": [
+     {
+      "title": "Планёрка",
+      "date": "2026-11-10",
+      "time": "09:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "в среду в 14:30 стоматолог",
+   "expect": {
+    "readings": [
+     {
+      "title": "Стоматолог",
+      "date": "2026-11-11",
+      "time": "14:30",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "в понедельник оплатить свет",
+   "expect": {
+    "readings": [
+     {
+      "title": "Оплатить свет",
+      "date": "2026-11-09",
+      "time": "09:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": true
+     }
+    ]
+   }
+  },
+  {
+   "text": "в воскресенье в 12 позвонить бабушке",
+   "expect": {
+    "readings": [
+     {
+      "title": "Позвонить бабушке",
+      "date": "2026-11-08",
+      "time": "12:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "15-го оплатить свет",
+   "expect": {
+    "readings": [
+     {
+      "title": "Оплатить свет",
+      "date": "2026-11-15",
+      "time": "09:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": true
+     }
+    ]
+   }
+  },
+  {
+   "text": "15 числа в 10 оплатить интернет",
+   "expect": {
+    "readings": [
+     {
+      "title": "Оплатить интернет",
+      "date": "2026-11-15",
+      "time": "10:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     },
+     {
+      "title": "Оплатить интернет",
+      "date": "2026-11-15",
+      "time": "22:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "20 ноября в 10 день рождения Айгерим",
+   "expect": {
+    "readings": [
+     {
+      "title": "День рождения Айгерим",
+      "date": "2026-11-20",
+      "time": "10:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     },
+     {
+      "title": "День рождения Айгерим",
+      "date": "2026-11-20",
+      "time": "22:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "1 декабря в 9:00 сдать отчёт",
+   "expect": {
+    "readings": [
+     {
+      "title": "Сдать отчёт",
+      "date": "2026-12-01",
+      "time": "09:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "3 января 2027 в 12:00 поздравить",
+   "expect": {
+    "readings": [
+     {
+      "title": "Поздравить",
+      "date": "2027-01-03",
+      "time": "12:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "25.11 в 18:00 родительское собрание",
+   "expect": {
+    "readings": [
+     {
+      "title": "Родительское собрание",
+      "date": "2026-11-25",
+      "time": "18:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "8 ноября в 9 что-то",
+   "expect": {
+    "readings": [
+     {
+      "title": "Что-то",
+      "date": "2026-11-08",
+      "time": "21:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "каждый понедельник в 9 планёрка",
+   "expect": {
+    "readings": [
+     {
+      "title": "Планёрка",
+      "date": "2026-11-09",
+      "time": "09:00",
+      "rrule": "FREQ=WEEKLY;BYDAY=MO",
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     },
+     {
+      "title": "Планёрка",
+      "date": "2026-11-09",
+      "time": "21:00",
+      "rrule": "FREQ=WEEKLY;BYDAY=MO",
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "каждый день в 8:00 витамины",
+   "expect": {
+    "readings": [
+     {
+      "title": "Витамины",
+      "date": "2026-11-09",
+      "time": "08:00",
+      "rrule": "FREQ=DAILY",
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "по будням в 8:30 зарядка",
+   "expect": {
+    "readings": [
+     {
+      "title": "Зарядка",
+      "date": "2026-11-09",
+      "time": "08:30",
+      "rrule": "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "каждое утро пить воду",
+   "expect": {
+    "readings": [
+     {
+      "title": "Пить воду",
+      "date": "2026-11-09",
+      "time": "09:00",
+      "rrule": "FREQ=DAILY",
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "каждый вечер в 21:00 таблетка",
+   "expect": {
+    "readings": [
+     {
+      "title": "Таблетка",
+      "date": "2026-11-08",
+      "time": "21:00",
+      "rrule": "FREQ=DAILY",
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "каждую среду и пятницу в 19:00 тренировка",
+   "expect": {
+    "readings": [
+     {
+      "title": "Тренировка",
+      "date": "2026-11-11",
+      "time": "19:00",
+      "rrule": "FREQ=WEEKLY;BYDAY=WE,FR",
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "по субботам в 10:00 уборка",
+   "expect": {
+    "readings": [
+     {
+      "title": "Уборка",
+      "date": "2026-11-14",
+      "time": "10:00",
+      "rrule": "FREQ=WEEKLY;BYDAY=SA",
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "каждое 25 число платить за интернет",
+   "expect": {
+    "readings": [
+     {
+      "title": "Платить за интернет",
+      "date": "2026-11-25",
+      "time": "09:00",
+      "rrule": "FREQ=MONTHLY;BYMONTHDAY=25",
+      "offsets": [],
+      "loud": false,
+      "time_assumed": true
+     }
+    ]
+   }
+  },
+  {
+   "text": "каждый месяц 5-го в 9:00 платить аренду",
+   "expect": {
+    "readings": [
+     {
+      "title": "Платить аренду",
+      "date": "2026-12-05",
+      "time": "09:00",
+      "rrule": "FREQ=MONTHLY;BYMONTHDAY=5",
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "ежедневно в 22:00 выключить свет",
+   "expect": {
+    "readings": [
+     {
+      "title": "Выключить свет",
+      "date": "2026-11-08",
+      "time": "22:00",
+      "rrule": "FREQ=DAILY",
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "по выходным в 11:00 звонить родителям",
+   "expect": {
+    "readings": [
+     {
+      "title": "Звонить родителям",
+      "date": "2026-11-08",
+      "time": "11:00",
+      "rrule": "FREQ=WEEKLY;BYDAY=SA,SU",
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "каждую неделю в 18:00 отчёт",
+   "expect": {
+    "readings": [
+     {
+      "title": "Отчёт",
+      "date": "2026-11-08",
+      "time": "18:00",
+      "rrule": "FREQ=WEEKLY;BYDAY=SU",
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "напомни за час до встречи завтра в 15:00",
+   "expect": {
+    "readings": [
+     {
+      "title": "До встречи",
+      "date": "2026-11-09",
+      "time": "15:00",
+      "rrule": null,
+      "offsets": [
+       60
+      ],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "накануне 20 ноября в 10 день рождения",
+   "expect": {
+    "readings": [
+     {
+      "title": "День рождения",
+      "date": "2026-11-20",
+      "time": "10:00",
+      "rrule": null,
+      "offsets": [
+       1440
+      ],
+      "loud": false,
+      "time_assumed": false
+     },
+     {
+      "title": "День рождения",
+      "date": "2026-11-20",
+      "time": "22:00",
+      "rrule": null,
+      "offsets": [
+       1440
+      ],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "завтра в 9:00 врач, за 15 минут",
+   "expect": {
+    "readings": [
+     {
+      "title": "Врач",
+      "date": "2026-11-09",
+      "time": "09:00",
+      "rrule": null,
+      "offsets": [
+       15
+      ],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "в пятницу в 18:00 концерт, напомни накануне и за час",
+   "expect": {
+    "readings": [
+     {
+      "title": "Концерт",
+      "date": "2026-11-13",
+      "time": "18:00",
+      "rrule": null,
+      "offsets": [
+       60,
+       1440
+      ],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "разбуди меня в 6:30",
+   "expect": {
+    "readings": [
+     {
+      "title": "Подъём",
+      "date": "2026-11-09",
+      "time": "06:30",
+      "rrule": null,
+      "offsets": [],
+      "loud": true,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "разбуди завтра в 7:00",
+   "expect": {
+    "readings": [
+     {
+      "title": "Подъём",
+      "date": "2026-11-09",
+      "time": "07:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": true,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "обязательно завтра в 10:00 позвонить нотариусу",
+   "expect": {
+    "readings": [
+     {
+      "title": "Позвонить нотариусу",
+      "date": "2026-11-09",
+      "time": "10:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": true,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "не дай забыть завтра в 9:00 взять паспорт",
+   "expect": {
+    "readings": [
+     {
+      "title": "Взять паспорт",
+      "date": "2026-11-09",
+      "time": "09:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": true,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "будильник на 7 утра",
+   "expect": {
+    "readings": [
+     {
+      "title": "Подъём",
+      "date": "2026-11-09",
+      "time": "07:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": true,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "купить билеты на 2 человека завтра в 10:00",
+   "expect": {
+    "readings": [
+     {
+      "title": "Купить билеты на 2 человека",
+      "date": "2026-11-09",
+      "time": "10:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "завтра в 10:00 выпить 2 таблетки",
+   "expect": {
+    "readings": [
+     {
+      "title": "Выпить 2 таблетки",
+      "date": "2026-11-09",
+      "time": "10:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "после обеда позвонить",
+   "expect": null
+  },
+  {
+   "text": "на выходных съездить на дачу",
+   "expect": null
+  },
+  {
+   "text": "в конце месяца сдать показания",
+   "expect": null
+  },
+  {
+   "text": "напомни про маму",
+   "expect": null
+  },
+  {
+   "text": "в следующий вторник в 10 врач",
+   "expect": null
+  },
+  {
+   "text": "через 2 часа завтра",
+   "expect": null
+  },
+  {
+   "text": "завтра в 25:00 что-то",
+   "expect": null
+  },
+  {
+   "text": "за 30 минут до встречи в 15:00",
+   "expect": null
+  },
+  {
+   "text": "завтра в 10 и в 15 позвонить",
+   "expect": null
+  },
+  {
+   "text": "Ертең сағат 10-да дәрігер",
+   "expect": null
+  },
+  {
+   "text": "напомни купить часы завтра в 10:00",
+   "expect": {
+    "readings": [
+     {
+      "title": "Купить часы",
+      "date": "2026-11-09",
+      "time": "10:00",
+      "rrule": null,
+      "offsets": [],
+      "loud": false,
+      "time_assumed": false
+     }
+    ]
+   }
+  },
+  {
+   "text": "каждый понедельник завтра в 9",
+   "expect": null
+  },
+  {
+   "text": "за час позвонить",
+   "expect": null
+  }
+ ]
+}

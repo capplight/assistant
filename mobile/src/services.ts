@@ -1,5 +1,7 @@
 import { Platform } from 'react-native';
 
+import type { AlarmPort } from '@/alarms/port';
+import { configureAlarms, currentDeviceCapabilities, reminderSink, resetAlarmsForTests } from '@/alarms/service';
 import { ApiClient, type FetchLike } from '@/api/client';
 import { getAppVersion } from '@/api/config';
 import { Api, type PutFile } from '@/api/endpoints';
@@ -28,6 +30,7 @@ type Overrides = {
   putFile?: PutFile;
   baseUrl?: () => string;
   push?: PushPort;
+  alarms?: AlarmPort;
 };
 
 let overrides: Overrides = {};
@@ -36,6 +39,7 @@ let engine: Promise<SyncEngine> | null = null;
 let capture: Promise<Capture> | null = null;
 let actions: Promise<RecordActions> | null = null;
 let push: PushPort | null = null;
+let alarmPort: AlarmPort | null = null;
 /** Sent with POST /devices once notifications are allowed (src/push). */
 let pushToken: DeviceToken | null = null;
 
@@ -44,7 +48,41 @@ const deviceInfo: DeviceInfo = () => ({
   os_version: String(Platform.Version ?? ''),
   app_version: getAppVersion(),
   ...(pushToken ? { push_provider: pushToken.provider, push_token: pushToken.token } : {}),
-  capabilities: {},
+  // S15 steps done on this phone, maker and model (3-engineering 3.x `devices.capabilities`).
+  ...currentDeviceCapabilities(),
+});
+
+/**
+ * What rings: the `alarms` module in a development build, expo-notifications without it (Expo Go,
+ * iOS < 26 for «Будильник»). Loaded lazily: tests pass `FakeAlarms`.
+ */
+export function getAlarmPort(): AlarmPort {
+  if (!alarmPort) {
+    if (overrides.alarms) alarmPort = overrides.alarms;
+    else {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { nativeAlarms } = require('@/alarms/native') as typeof import('@/alarms/native');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { notificationAlarms } = require('@/alarms/notifications') as typeof import('@/alarms/notifications');
+      alarmPort = nativeAlarms() ?? notificationAlarms();
+    }
+  }
+  return alarmPort;
+}
+
+/** Device row again: push token, S15 steps. Devices need consent (S05). */
+export async function registerDevice(): Promise<void> {
+  if (useOnboarding.getState().consent === null) return;
+  await (await getOutbox()).enqueue('device.register', {});
+  kickSync();
+}
+
+configureAlarms({
+  port: getAlarmPort,
+  api: getApi,
+  canTalk: () => useOnboarding.getState().consent !== null && !syncBlocked(),
+  kickSync: () => kickSync(),
+  deviceChanged: () => void registerDevice().catch(() => undefined),
 });
 
 export function getPush(): PushPort {
@@ -124,6 +162,7 @@ export function getSyncEngine(): Promise<SyncEngine> {
         onNotice: (text) => useToast.getState().show(text, 5000),
         onAccountConsentRejected: () =>
           useOnboarding.getState().requireAccountConsent({ userId: '', switched: false }),
+        reminders: reminderSink,
       }))();
   }
   return engine;
@@ -205,4 +244,13 @@ export function setServicesForTests(o: Overrides): void {
   actions = null;
   push = null;
   pushToken = null;
+  alarmPort = null;
+  resetAlarmsForTests();
+  configureAlarms({
+    port: getAlarmPort,
+    api: getApi,
+    canTalk: () => useOnboarding.getState().consent !== null && !syncBlocked(),
+    kickSync: () => kickSync(),
+    deviceChanged: () => void registerDevice().catch(() => undefined),
+  });
 }

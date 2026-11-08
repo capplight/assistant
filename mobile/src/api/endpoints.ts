@@ -53,6 +53,19 @@ import type {
   UploadIn,
   UploadOut,
   UserOut,
+  FireOut,
+  FiresWindowOut,
+  ReminderActiveOut,
+  ReminderCreateIn,
+  ReminderDraft,
+  ReminderEventsOut,
+  ReminderEventIn,
+  ReminderOut,
+  ReminderParseIn,
+  ReminderParseOut,
+  ReminderPushData,
+  ReminderSettingsOut,
+  ReminderWithFiresOut,
 } from './types';
 
 /** Reads a local file and PUTs it to a presigned URL. Injected so tests don't touch the filesystem. */
@@ -386,6 +399,128 @@ export function decodeChatEvent(m: SseMessage): ChatEvent | null {
   return e ? { ...e, eventId: m.id } : null;
 }
 
+// --- week 8: reminders (docs/api/reminders.md) ---
+
+const num = (v: unknown, d = 0): number => (typeof v === 'number' && Number.isFinite(v) ? v : d);
+const nums = (v: unknown): number[] => arr(v).filter((x): x is number => typeof x === 'number');
+
+function localOut(v: unknown): { date: string; time: string } | null {
+  const o = obj(v);
+  const date = o && str(o.date);
+  const time = o && str(o.time);
+  return date && time ? { date, time } : null;
+}
+
+export function reminderOut(v: unknown): ReminderOut | null {
+  const o = obj(v);
+  const id = o && str(o.id);
+  const dueAt = o && str(o.due_at);
+  if (!o || !id || !dueAt) return null;
+  const now = new Date().toISOString();
+  return {
+    id,
+    client_id: str(o.client_id),
+    title: str(o.title) ?? '',
+    body: str(o.body),
+    due_at: dueAt,
+    tz: str(o.tz) ?? 'Asia/Almaty',
+    local: localOut(o.local),
+    rrule: str(o.rrule),
+    offsets: nums(o.offsets),
+    level: o.level === 'notification' ? 'notification' : 'alarm',
+    kind: o.kind === 'test' ? 'test' : 'normal',
+    created_via: (str(o.created_via) as ReminderOut['created_via']) ?? null,
+    parse_source: (str(o.parse_source) as ReminderOut['parse_source']) ?? null,
+    sensitivity: o.sensitivity === 'health' ? 'health' : null,
+    status: (str(o.status) as ReminderOut['status']) ?? 'scheduled',
+    snooze_until: str(o.snooze_until),
+    item_id: str(o.item_id),
+    when_text: str(o.when_text),
+    version: num(o.version, 1),
+    seq: num(o.seq),
+    created_at: str(o.created_at) ?? now,
+    updated_at: str(o.updated_at) ?? now,
+    deleted_at: str(o.deleted_at),
+  };
+}
+
+const FIRE_STATES = new Set(['planned', 'fired', 'acked', 'snoozed', 'missed', 'cancelled']);
+
+export function fireOut(v: unknown): FireOut | null {
+  const o = obj(v);
+  const id = o && str(o.id);
+  const reminderId = o && str(o.reminder_id);
+  const fireAt = o && str(o.fire_at);
+  if (!o || !id || !reminderId || !fireAt) return null;
+  const occurrence = str(o.occurrence_at) ?? fireAt;
+  const offset = num(o.offset_min);
+  const snooze = num(o.snooze_n);
+  return {
+    id,
+    reminder_id: reminderId,
+    key: str(o.key) ?? `${reminderId}:${occurrence}:${offset}:${snooze}`,
+    occurrence_at: occurrence,
+    fire_at: fireAt,
+    offset_min: offset,
+    snooze_n: snooze,
+    repeat_n: num(o.repeat_n),
+    state: (FIRE_STATES.has(String(o.state)) ? o.state : 'planned') as FireOut['state'],
+    target_device_id: str(o.target_device_id),
+    seq: num(o.seq),
+    updated_at: str(o.updated_at) ?? new Date().toISOString(),
+  };
+}
+
+export const remindersOf = (v: unknown) => arr(v).map(reminderOut).filter((x): x is ReminderOut => x !== null);
+export const firesOf = (v: unknown) => arr(v).map(fireOut).filter((x): x is FireOut => x !== null);
+
+function withFires(v: unknown): ReminderWithFiresOut {
+  const o = obj(v) ?? {};
+  return { reminder: reminderOut(o.reminder), fires: firesOf(o.fires) };
+}
+
+function draftOut(v: unknown): ReminderDraft | null {
+  const o = obj(v);
+  const title = o && str(o.title);
+  if (!o || title === null) return null;
+  return {
+    title,
+    due_at: str(o.due_at),
+    tz: str(o.tz) ?? 'Asia/Almaty',
+    local: localOut(o.local),
+    rrule: str(o.rrule),
+    offsets: nums(o.offsets),
+    level: o.level === 'alarm' ? 'alarm' : 'notification',
+    time_assumed: o.time_assumed === true,
+    when_text: str(o.when_text),
+    saved_text: str(o.saved_text),
+  };
+}
+
+const PARSE_REASONS = new Set(['not_understood', 'no_ai', 'ai_unavailable', 'check_failed', 'past']);
+
+export function parseOut(v: unknown): ReminderParseOut {
+  const o = obj(v) ?? {};
+  const status = o.status === 'ok' || o.status === 'ambiguous' ? o.status : 'form';
+  const reason = str(o.reason);
+  return {
+    status,
+    source: o.source === 'rules' || o.source === 'llm' ? o.source : null,
+    reason: reason && PARSE_REASONS.has(reason) ? (reason as ReminderParseOut['reason']) : null,
+    message: str(o.message),
+    draft: draftOut(o.draft),
+    options: arr(o.options).map(draftOut).filter((x): x is ReminderDraft => x !== null),
+    parser: o.parser === 'rules_first' || o.parser === 'llm' ? o.parser : null,
+  };
+}
+
+/** Data of a reminder push → what to refresh / open; null for any other push. */
+export function reminderPushFrom(data: unknown): ReminderPushData | null {
+  const o = obj(data);
+  if (!o || (o.type !== 'reminder_backup' && o.type !== 'reminder_missed')) return null;
+  return { type: o.type, fire_id: str(o.fire_id), reminder_id: str(o.reminder_id) };
+}
+
 /** Typed /v1 endpoints. The ONLY place that knows paths and request bodies. */
 export class Api {
   constructor(
@@ -613,6 +748,66 @@ export class Api {
 
   chatDelivery(messageId: string, delivery: ChatDeliveryState): Promise<unknown> {
     return this.client.request('POST', `/chat/messages/${encodeURIComponent(messageId)}/delivery`, { body: { delivery } });
+  }
+
+  // reminders — docs/api/reminders.md
+
+  async createReminder(body: ReminderCreateIn): Promise<ReminderWithFiresOut> {
+    return withFires(await this.client.request<unknown>('POST', '/reminders', { body, idempotencyKey: body.client_id }));
+  }
+
+  deleteReminder(id: string): Promise<unknown> {
+    return this.client.request('DELETE', `/reminders/${encodeURIComponent(id)}`);
+  }
+
+  /** The planning window (default now − 1 h … now + 14 days). */
+  async reminderFires(q: { from?: string; to?: string } = {}): Promise<FiresWindowOut> {
+    const o = obj(await this.client.request<unknown>('GET', '/reminders/fires', { query: q })) ?? {};
+    return { device_id: str(o.device_id), fires: firesOf(o.fires), reminders: remindersOf(o.reminders) };
+  }
+
+  /** Nothing is saved: the result goes to S13, the reminder exists only after [Сохранить]. */
+  async parseReminder(body: ReminderParseIn): Promise<ReminderParseOut> {
+    return parseOut(await this.client.request<unknown>('POST', '/reminders/parse', { body }));
+  }
+
+  /** S15 «Проверить будильник»: `kind=test`, due in 1 minute, rings on this phone. */
+  async reminderTest(): Promise<ReminderWithFiresOut> {
+    return withFires(await this.client.request<unknown>('POST', '/reminders/test', { body: {} }));
+  }
+
+  async reminderEvents(events: ReminderEventIn[]): Promise<ReminderEventsOut> {
+    const o = obj(await this.client.request<unknown>('POST', '/reminders/events', { body: { events } })) ?? {};
+    type Result = ReminderEventsOut['results'][number];
+    const results = arr(o.results)
+      .map((x): Result | null => {
+        const r = obj(x);
+        const id = r && str(r.client_id);
+        const st = r && str(r.status);
+        return id && st ? { client_id: id, status: st as Result['status'] } : null;
+      })
+      .filter((x): x is Result => x !== null);
+    return { results, fires: firesOf(o.fires) };
+  }
+
+  /** On start and return to the foreground (≤ 1/min): this phone becomes the one that rings (R-13). */
+  async reminderActive(): Promise<ReminderActiveOut> {
+    const o = obj(await this.client.request<unknown>('POST', '/reminders/active', { body: {} })) ?? {};
+    return { device_id: str(o.device_id), retargeted: num(o.retargeted) };
+  }
+
+  async reminderSettings(): Promise<ReminderSettingsOut> {
+    const o = obj(await this.client.request<unknown>('GET', '/reminders/settings')) ?? {};
+    const repeat = nums(o.repeat_minutes);
+    const policy = o.alarm_device_policy;
+    return {
+      parser: o.parser === 'rules_first' || o.parser === 'llm' ? o.parser : null,
+      alarm_device_policy: policy === 'all' || policy === 'last_active' ? policy : null,
+      snooze_minutes: num(o.snooze_minutes, 10),
+      snooze_max_hours: num(o.snooze_max_hours, 48),
+      repeat_minutes: repeat.length > 0 ? repeat : [5, 10, 15],
+      horizon_days: num(o.horizon_days, 14),
+    };
   }
 
   // feedback («Сообщить о проблеме», R-41)

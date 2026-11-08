@@ -5,8 +5,8 @@ of one user's rows take a per-user advisory lock before taking a seq, so seq ord
 order per user and a client that stores `next_since` never misses a change.
 
 Soft-deleted records come back as items with `deleted_at` (trash); records purged after 30 days
-come back as tombstones. Pages (`screens`, `screen_items`) are in the same stream; other synced
-entities join the same response.
+come back as tombstones. Pages (`screens`, `screen_items`) and app reminders (`reminders`,
+`reminder_fires`, week 8) are in the same stream; other synced entities join the same response.
 """
 
 from datetime import UTC, datetime
@@ -24,18 +24,22 @@ from assistant.api.routes.pages import page_item_out, page_out
 from assistant.api.schemas import (
     ActionOut,
     ChatMessageOut,
+    FireOut,
     PageItemOut,
     PageSummaryOut,
+    ReminderOut,
     SyncOut,
     TombstoneOut,
 )
 from assistant.chat import store as chat_store
-from assistant.db.models import Item
+from assistant.db.models import Item, Reminder
 from assistant.db.models_actions import Action
 from assistant.db.models_chat import ConversationMessage, MessageRole
 from assistant.db.models_pages import Screen, ScreenItem
+from assistant.db.models_reminders import APP_KINDS, ReminderFire
 from assistant.db.models_search import ScreenSummary
 from assistant.db.models_v2 import Device, HiddenReason, SyncTombstone
+from assistant.reminders import service as reminder_service
 
 router = APIRouter(prefix="/sync", tags=["sync"])
 CHAT_KEEP = 50  # the phone keeps the newest 50 messages for offline «Переписка» (spec 6.11)
@@ -118,8 +122,25 @@ async def sync(
             .limit(limit + 1)
         )
     )
+    reminders = list(
+        await db.scalars(
+            select(Reminder)
+            .where(Reminder.user_id == user.id, Reminder.seq > since,
+                   Reminder.kind.in_(APP_KINDS))  # bot rows are not the phone's
+            .order_by(Reminder.seq)
+            .limit(limit + 1)
+        )
+    )  # fmt: skip
+    fires = list(
+        await db.scalars(
+            select(ReminderFire)
+            .where(ReminderFire.user_id == user.id, ReminderFire.seq > since)
+            .order_by(ReminderFire.seq)
+            .limit(limit + 1)
+        )
+    )
     merged = sorted([(row.seq, row) for row in (*items, *tombs, *screens, *links, *summaries,
-                                                *actions, *messages)],
+                                                *actions, *messages, *reminders, *fires)],
                     key=lambda pair: pair[0])  # fmt: skip
     page = merged[:limit]
     has_more = len(merged) > limit
@@ -130,6 +151,8 @@ async def sync(
     page_summaries = [row for _, row in page if isinstance(row, PageSummaryOut)]
     page_actions = [row for _, row in page if isinstance(row, Action)]
     page_messages = [row for _, row in page if isinstance(row, ConversationMessage)]
+    page_reminders = [row for _, row in page if isinstance(row, Reminder)]
+    page_fires = [row for _, row in page if isinstance(row, ReminderFire)]
     next_since = page[-1][0] if page else since
 
     if user.device_id is not None and since > 0:  # what this phone confirms it already has
@@ -148,6 +171,10 @@ async def sync(
         screens=[page_out(row) for row in page_screens],
         screen_items=page_links,
         screen_summaries=page_summaries,
+        reminders=[ReminderOut.model_validate(d)
+                   for d in await reminder_service.reminders_dicts(db, page_reminders)],
+        reminder_fires=[FireOut.model_validate(d)
+                        for d in await reminder_service.fires_dicts(db, page_fires)],
         tombstones=[
             TombstoneOut(entity=t.entity, id=t.public_id, seq=t.seq, deleted_at=t.deleted_at)
             for t in page_tombs

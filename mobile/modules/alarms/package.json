@@ -1,0 +1,9 @@
+{
+  "name": "alarms",
+  "version": "0.1.0",
+  "description": "Alarm-level reminders: Android AlarmManager.setAlarmClock + full-screen S14, iOS AlarmKit. Local Expo module.",
+  "license": "UNLICENSED",
+  "author": "assistant",
+  "homepage": "https://example.invalid/assistant",
+  "private": true
+}

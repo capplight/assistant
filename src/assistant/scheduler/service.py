@@ -30,6 +30,7 @@ from assistant.db.models import (
     Trip,
     User,
 )
+from assistant.db.models_reminders import APP_KINDS
 from assistant.logs import error_text
 from assistant.notify import Notifier, OutMessage
 from assistant.scheduler.rules import (
@@ -50,6 +51,8 @@ from assistant.scheduler.tz import get_tz
 log = logging.getLogger(__name__)
 
 BATCH_SIZE = 100
+# App reminders (kind normal|test, migration 0013) ring on the phone, never through Telegram.
+_BOT_ROWS = tuple(Reminder.kind != kind for kind in APP_KINDS)
 TRIP_ITEMS_LIMIT = 200
 
 
@@ -105,7 +108,8 @@ def due_ids_stmt(now: datetime, limit: int = BATCH_SIZE) -> Select[tuple[int]]:
     """Candidates only (no lock); each one is then claimed on its own with claim_stmt."""
     return (
         select(Reminder.id)
-        .where(Reminder.status == ReminderStatus.SCHEDULED, Reminder.due_at <= now)
+        .where(Reminder.status == ReminderStatus.SCHEDULED, Reminder.due_at <= now,
+               *_BOT_ROWS)
         .order_by(Reminder.due_at)
         .limit(limit)
     )
@@ -120,6 +124,7 @@ def claim_stmt(reminder_id: int, now: datetime) -> Select:
             Reminder.id == reminder_id,
             Reminder.status == ReminderStatus.SCHEDULED,
             Reminder.due_at <= now,
+            *_BOT_ROWS,
         )
         .with_for_update(of=Reminder, skip_locked=True)
         .execution_options(populate_existing=True)

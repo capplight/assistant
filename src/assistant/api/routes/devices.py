@@ -12,6 +12,7 @@ from assistant.api.deps import CurrentUser, Db
 from assistant.api.errors import ApiError
 from assistant.api.schemas import DeviceIn, DeviceOut
 from assistant.db.models_v2 import AuthSession, Device
+from assistant.reminders import service as reminder_service
 
 router = APIRouter(prefix="/devices", tags=["devices"])
 GatedUser = Annotated[CurrentUser, Depends(require_base_consent)]
@@ -53,6 +54,7 @@ async def upsert_device(body: DeviceIn, user: GatedUser, db: Db) -> DeviceOut:
     session = await db.get(AuthSession, user.session_id)
     if session is not None:
         session.device_id = device.id
+    await reminder_service.retarget(db, user.id, now)  # this phone is now the last active (R-13)
     return _out(device)
 
 
@@ -65,4 +67,6 @@ async def revoke_device(device_id: uuid.UUID, user: GatedUser, db: Db) -> Respon
         raise ApiError(404, "not_found")
     device.revoked_at = datetime.now(UTC)
     device.push_token = None
+    await db.flush()
+    await reminder_service.retarget(db, user.id, device.revoked_at)  # alarms move off it
     return Response(status_code=204)

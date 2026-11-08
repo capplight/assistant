@@ -28,7 +28,16 @@ export type ChatSource = {
 export type ChatStatus = 'streaming' | 'done' | 'queued' | 'interrupted' | 'deferred' | 'failed';
 
 /** `offline_action` / `no_ai_action`: «Разложи» and the like need the assistant (2-design 6.9). */
-export type ChatNotice = 'limit' | 'error' | 'not_found' | 'no_ai' | 'offline_action' | 'no_ai_action' | null;
+/** `offline_reminder`: «Поставлю, когда появится интернет» [Поставить вручную] (US-9, Ф-1 not taken). */
+export type ChatNotice =
+  | 'limit'
+  | 'error'
+  | 'not_found'
+  | 'no_ai'
+  | 'offline_action'
+  | 'no_ai_action'
+  | 'offline_reminder'
+  | null;
 
 /** What the line thought the phrase is, for when the server can't be asked (offline, no consent yet). */
 export type LineGuess = 'question' | 'action' | 'note';

@@ -1,5 +1,6 @@
 """Request/response models of /v1. Public ids are UUIDs; internal bigint ids never leave the API."""
 
+import json
 import uuid
 from datetime import datetime
 from typing import Annotated, Any, Literal
@@ -486,6 +487,8 @@ class SyncOut(BaseModel):
     screens: list[PageOut]  # pages, incl. removed ones (deleted_at)
     screen_items: list[PageItemOut]  # item-on-page links, incl. removed ones (removed_at)
     screen_summaries: list[PageSummaryOut]  # gone with their page: no tombstones of their own
+    reminders: list["ReminderOut"] = []  # app reminders, incl. deleted (reminders.md)
+    reminder_fires: list["FireOut"] = []  # their fires: state changes, retargets, new snoozes
     tombstones: list[TombstoneOut]  # purged for good: drop locally
     next_since: int  # pass as `since` next time
     has_more: bool  # true: call again right away with next_since
@@ -753,9 +756,204 @@ class HabitOffOut(BaseModel):
 
 ChatMessageIn.model_rebuild()
 ChatMessageOut.model_rebuild()
-SyncOut.model_rebuild()
 ItemMoveOut.model_rebuild()
 MoveToPageOut.model_rebuild()
 RemoveFromPageOut.model_rebuild()
 PageReorderOut.model_rebuild()
 HabitOffOut.model_rebuild()
+
+
+# --- reminders (docs/api/reminders.md) ---
+
+HHMM = Annotated[str, Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")]
+ReminderLevelStr = Literal["alarm", "notification"]
+
+
+class ReminderLocal(BaseModel):
+    date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    time: HHMM
+
+
+class ReminderIn(BaseModel):
+    client_id: uuid.UUID
+    title: str = Field(min_length=1, max_length=200)
+    body: str | None = Field(default=None, max_length=2000)
+    due_at: AwareDatetime | None = None
+    local: ReminderLocal | None = None  # the manual form: read on `tz`'s clock
+    tz: str | None = Field(default=None, max_length=64)  # default: the user's
+    rrule: str | None = Field(default=None, max_length=200)
+    offsets: list[int] = Field(default_factory=list, max_length=3)
+    level: ReminderLevelStr = "notification"
+    created_via: Literal["voice", "typed", "agent_suggestion", "manual_form"] | None = None
+    parse_source: Literal["rules", "llm", "user_edit"] | None = None
+    sensitivity: Literal["health"] | None = None
+    item_id: uuid.UUID | None = None
+
+    @model_validator(mode="after")
+    def _when(self) -> "ReminderIn":
+        if (self.due_at is None) == (self.local is None):
+            raise ValueError("exactly one of due_at, local")
+        return self
+
+
+class ReminderPatchIn(BaseModel):
+    version: int = Field(ge=1)
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    body: str | None = Field(default=None, max_length=2000)
+    due_at: AwareDatetime | None = None
+    local: ReminderLocal | None = None
+    tz: str | None = Field(default=None, max_length=64)
+    rrule: str | None = Field(default=None, max_length=200)
+    offsets: list[int] | None = Field(default=None, max_length=3)
+    level: ReminderLevelStr | None = None
+    sensitivity: Literal["health"] | None = None
+
+
+class ReminderParseIn(BaseModel):
+    text: str = Field(min_length=1, max_length=500)
+    created_via: Literal["typed", "voice"] = "typed"
+    tz: str | None = Field(default=None, max_length=64)
+
+
+class ReminderOut(BaseModel):
+    id: uuid.UUID
+    client_id: uuid.UUID | None
+    title: str
+    body: str | None
+    due_at: datetime
+    tz: str
+    local: ReminderLocal
+    rrule: str | None
+    offsets: list[int]
+    level: str
+    kind: str
+    created_via: str | None
+    parse_source: str | None
+    sensitivity: str | None
+    status: str
+    snooze_until: datetime | None
+    item_id: uuid.UUID | None
+    when_text: str
+    version: int
+    seq: int
+    created_at: datetime
+    updated_at: datetime
+    deleted_at: datetime | None
+
+
+class FireOut(BaseModel):
+    id: uuid.UUID
+    reminder_id: uuid.UUID
+    key: str
+    occurrence_at: datetime
+    fire_at: datetime
+    offset_min: int
+    snooze_n: int
+    repeat_n: int
+    state: str
+    target_device_id: uuid.UUID | None
+    push_fallback_at: datetime
+    missed_at: datetime
+    push_sent_at: datetime | None
+    fired_at: datetime | None
+    acked_at: datetime | None
+    seq: int
+    updated_at: datetime
+
+
+class ReminderWithFiresOut(BaseModel):
+    reminder: ReminderOut
+    fires: list[FireOut]
+
+
+class ReminderListOut(BaseModel):
+    reminders: list[ReminderOut]
+
+
+class FiresWindowOut(BaseModel):
+    device_id: uuid.UUID | None
+    fires: list[FireOut]
+    reminders: list[ReminderOut]
+
+
+class ReminderDraftOut(BaseModel):
+    title: str
+    due_at: datetime
+    tz: str
+    local: ReminderLocal
+    rrule: str | None
+    offsets: list[int]
+    level: str
+    time_assumed: bool
+    when_text: str
+    saved_text: str
+
+
+class ReminderParseResultOut(BaseModel):
+    status: Literal["ok", "ambiguous", "form"]
+    source: Literal["rules", "llm"] | None
+    reason: str | None
+    message: str | None
+    draft: ReminderDraftOut | None
+    options: list[ReminderDraftOut]
+    parser: Literal["rules_first", "llm"]
+
+
+class ReminderEventIn(BaseModel):
+    client_id: uuid.UUID
+    fire_id: uuid.UUID | None = None
+    fire_key: str | None = Field(default=None, max_length=200)
+    event: str = Field(max_length=32)
+    at: AwareDatetime
+    meta: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _ref(self) -> "ReminderEventIn":
+        if self.fire_id is None and not self.fire_key:
+            raise ValueError("fire_id or fire_key")
+        if len(json.dumps(self.meta, ensure_ascii=False)) > 2048:
+            raise ValueError("meta too large")
+        return self
+
+
+class ReminderEventsIn(BaseModel):
+    events: list[ReminderEventIn] = Field(min_length=1, max_length=200)
+
+
+class ReminderEventResult(BaseModel):
+    client_id: uuid.UUID
+    status: Literal["applied", "duplicate", "not_found", "invalid"]
+
+
+class ReminderEventsOut(BaseModel):
+    results: list[ReminderEventResult]
+    fires: list[FireOut]
+
+
+class ReminderActiveOut(BaseModel):
+    device_id: uuid.UUID
+    retargeted: int
+
+
+class ReminderSettingsOut(BaseModel):
+    parser: Literal["rules_first", "llm"]
+    quiet_from: str
+    quiet_to: str
+    alarm_device_policy: Literal["last_active", "all"]
+    push_content: bool
+    snooze_minutes: int
+    snooze_max_hours: int  # «Другое время»: meta.until at most this far after the event
+    repeat_minutes: list[int]
+    push_fallback_minutes: int
+    missed_minutes: int
+    offsets_allowed: list[int]
+    horizon_days: int
+
+
+class ReminderSettingsPatchIn(BaseModel):
+    quiet_from: HHMM | None = None
+    quiet_to: HHMM | None = None
+    alarm_device_policy: Literal["last_active", "all"] | None = None
+
+
+SyncOut.model_rebuild()  # after the reminder shapes it refers to

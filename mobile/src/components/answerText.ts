@@ -20,6 +20,7 @@ export function answerNotice(m: ChatMessage, t: TFunction): string | null {
     case 'failed':
       if (m.notice === 'offline_action') return t('line.offline_action');
       if (m.notice === 'no_ai_action') return t('line.no_ai_action');
+      if (m.notice === 'offline_reminder') return t('rem.offline_line');
       return m.notice === 'limit' ? t('answer.limit') : m.notice === 'no_ai' ? t('answer.no_ai') : t('errors.generic');
     case 'done':
       // A change is shown on the page; a question back is shown as buttons.

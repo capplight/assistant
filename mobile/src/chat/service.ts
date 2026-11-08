@@ -1,3 +1,7 @@
+import { router } from 'expo-router';
+
+import { looksLikeReminder } from '@/alarms/format';
+import { keepPhrase, parsePhrase } from '@/alarms/service';
 import { answerReadyFrom } from '@/api/endpoints';
 import { ApiError, NetworkError, SignInRequiredError } from '@/api/errors';
 import { StreamDroppedError } from '@/api/sse';
@@ -503,7 +507,39 @@ function addLocalTurn(text: string, page: AskPage, reply: Partial<ChatMessage>):
 }
 
 /** What the line did with a phrase: the caller opens search for `search`, and S04b after `saved`. */
-export type LineResult = 'search' | 'saved' | 'asked' | 'notice';
+export type LineResult = 'search' | 'saved' | 'asked' | 'notice' | 'reminder';
+
+/**
+ * A phrase that asks for a reminder (week 8; chat does not set reminders yet): the server reads it
+ * (`POST /reminders/parse` — its Ф-1 setting decides whether code or the model reads it, and in
+ * «Без ИИ» it answers «Укажите время вручную»), then S13 «как понял»: nothing is set without
+ * [Сохранить]. Without the internet the phone has no parser (Ф-1 not taken): «Поставлю, когда
+ * появится интернет» [Поставить вручную]; the phrase is parsed once there is a connection and
+ * comes back as «Проверьте напоминание».
+ */
+async function reminderFromLine(text: string, page: AskPage): Promise<LineResult> {
+  const o = useOnboarding.getState();
+  if (o.consent !== null && !syncBlocked()) {
+    try {
+      const out = await parsePhrase(text);
+      const params: Record<string, string> = { text };
+      const draft = out.draft ?? out.options[0] ?? null;
+      if (draft) params.draft = JSON.stringify(draft);
+      if (out.options.length > 1) params.options = JSON.stringify(out.options);
+      if (out.message) params.message = out.message;
+      router.push({ pathname: '/reminder-new', params });
+      return 'reminder';
+    } catch (e) {
+      if (!(e instanceof NetworkError) && !(e instanceof SignInRequiredError)) {
+        router.push({ pathname: '/reminder-new', params: { text } });
+        return 'reminder';
+      }
+    }
+  }
+  keepPhrase(text);
+  addLocalTurn(text, page, { status: 'failed', notice: 'offline_reminder' });
+  return 'notice';
+}
 
 /**
  * Everything typed in the line comes here (R-53). Online with consent the server decides what it
@@ -511,6 +547,7 @@ export type LineResult = 'search' | 'saved' | 'asked' | 'notice';
  * connection, a note is saved on this page, a change says it needs the assistant (2-design 6.9).
  */
 export async function sendFromLine(text: string, page: AskPage): Promise<LineResult> {
+  if (looksLikeReminder(text)) return reminderFromLine(text, page);
   const guess = guessLine(text);
   const o = useOnboarding.getState();
   const noAi = o.consent !== null && selectNoAi(o);

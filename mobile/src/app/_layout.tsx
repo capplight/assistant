@@ -11,6 +11,7 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { useAlarmsLifecycle } from '@/alarms/useAlarms';
 import { ToastHost } from '@/components/Toast';
 import { usePushAnswers } from '@/push/usePushAnswers';
 import { ShareIntentRoot } from '@/share/ShareIntentBridge';
@@ -24,6 +25,7 @@ export default function RootLayout() {
   const theme = useTheme();
   useBackgroundSync();
   usePushAnswers();
+  useAlarmsLifecycle();
 
   // Fall back to the system font if Onest fails to load — never block the app on a font.
   if (!loaded && !error) return null;
@@ -52,6 +54,10 @@ export default function RootLayout() {
             <Stack.Screen name="chat" options={{ presentation: 'fullScreenModal' }} />
             <Stack.Screen name="phone" options={{ gestureEnabled: false }} />
             <Stack.Screen name="account-consent" options={{ gestureEnabled: false }} />
+            <Stack.Screen name="alarm" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
+            <Stack.Screen name="alarm-setup" />
+            <Stack.Screen name="reminder-new" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="notify" options={{ gestureEnabled: false }} />
           </Stack>
           <ToastHost />
         </ThemeProvider>

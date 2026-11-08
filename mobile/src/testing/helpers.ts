@@ -15,6 +15,8 @@ import { useToast } from '@/store/toast';
 import { useUndo } from '@/store/undo';
 import { useView } from '@/store/view';
 import { FakePush } from '@/push';
+import { FakeAlarms } from '@/alarms/port';
+import { useAlarms } from '@/alarms/store';
 
 export const APP_DIR = path.resolve(__dirname, '../app');
 
@@ -44,10 +46,13 @@ export let testRecords = new InMemoryRecordsRepository();
 /** The push port of the current test (no native module is loaded in tests). */
 export let testPush = new FakePush();
 export let testPages = new InMemoryPagesRepository();
+/** The alarm port of the current test (no native module in Jest). */
+export let testAlarms = new FakeAlarms();
 
 /** Reset all local state between tests; returns the in-memory outbox for assertions. Network: offline. */
-export function resetApp(o: { fetch?: FetchLike; push?: FakePush } = {}): InMemoryOutboxRepository {
+export function resetApp(o: { fetch?: FetchLike; push?: FakePush; alarms?: FakeAlarms } = {}): InMemoryOutboxRepository {
   useOnboarding.getState().reset();
+  useAlarms.getState().reset();
   usePages.getState().reset();
   useAssistant.getState().reset();
   useSession.getState().reset();
@@ -67,6 +72,7 @@ export function resetApp(o: { fetch?: FetchLike; push?: FakePush } = {}): InMemo
     putFile: async () => undefined,
     baseUrl: () => 'http://api.test',
     push: (testPush = o.push ?? new FakePush()),
+    alarms: (testAlarms = o.alarms ?? new FakeAlarms()),
   });
   return outbox;
 }

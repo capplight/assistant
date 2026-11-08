@@ -101,6 +101,10 @@ describe('first launch flow', () => {
     expect(r.getPathname()).toBe('/phrase');
     await fireEvent.changeText(screen.getByTestId('phrase-input'), 'Потратил 5000 на бензин');
     await fireEvent.press(screen.getByTestId('phrase-send'));
+    // S04 (week 8): the saved phrase and «Напомню громко…» [Разрешить уведомления], then S35.
+    expect(r.getPathname()).toBe('/notify');
+    expect(screen.getByTestId('notify-saved')).toHaveTextContent('Потратил 5000 на бензин');
+    await fireEvent.press(screen.getByTestId('notify-next'));
     expect(r.getPathname()).toBe('/gallery');
     expect(screen.getByTestId('gallery-notes')).toBeChecked();
     expect(screen.getByTestId('gallery-tasks')).toBeChecked();
@@ -111,6 +115,9 @@ describe('first launch flow', () => {
     // The first result exists: S04b, then «Сегодня». «Позже» always works.
     expect(r.getPathname()).toBe('/phone');
     await fireEvent.press(screen.getByTestId('phone-later'));
+    // Android 14+ (the fake phone): S15 right after S04b (R-12); «Позже» → «Сегодня».
+    expect(r.getPathname()).toBe('/alarm-setup');
+    await fireEvent.press(screen.getByTestId('setup-later'));
     expect(r.getPathname()).toBe('/');
     expect(useOnboarding.getState().path).toBe('phrase_first');
   });

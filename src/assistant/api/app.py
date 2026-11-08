@@ -22,6 +22,7 @@ from assistant.api.routes import (
     memory,
     misc,
     pages,
+    reminders,
     sync,
     uploads,
 )
@@ -84,9 +85,8 @@ def create_app(
                          settings.chunk_embedder, url=settings.tei_url,
                          model=settings.chunk_embedding_model, dim=settings.embeddings_dim,
                          timeout=settings.search_embed_timeout_seconds))  # fmt: skip
-    ctx.chat = ChatService(settings, sessionmaker,
-                           ai_router if ai_router is not None
-                           else build_router(settings, sessionmaker), ctx.embedder,
+    ctx.ai_router = ai_router if ai_router is not None else build_router(settings, sessionmaker)
+    ctx.chat = ChatService(settings, sessionmaker, ctx.ai_router, ctx.embedder,
                            push=push)  # fmt: skip
 
     app = FastAPI(title="Assistant API", version=API_VERSION)
@@ -108,7 +108,7 @@ def create_app(
     for router in (auth.router, consents.router, devices.router, uploads.router, items.router,
                    pages.items_router, pages.habits_router, pages.router, pages.templates_router,
                    sync.router, me.router, misc.ai, chat.router, chat.feedback_router,
-                   actions.router):
+                   actions.router, reminders.router):
         v1.include_router(router)
     if isinstance(storage, LocalObjectStorage):
         v1.include_router(misc.dev_storage)

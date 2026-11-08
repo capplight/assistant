@@ -9,7 +9,13 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "kz.assistant.mobile"
+      "bundleIdentifier": "kz.assistant.mobile",
+      "infoPlist": {
+        "NSAlarmKitUsageDescription": "Чтобы важные напоминания звенели как будильник, даже на беззвучном."
+      },
+      "entitlements": {
+        "com.apple.developer.usernotifications.time-sensitive": true
+      }
     },
     "android": {
       "adaptiveIcon": {

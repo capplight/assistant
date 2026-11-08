@@ -605,3 +605,150 @@ export type FeedbackIn = {
 };
 
 export type FeedbackOut = { id: string; created_at: string };
+
+// --- week 8: reminders, fires, phone events — docs/api/reminders.md (2026-11-08) ---
+// Every reminder shape is here and the decoding in endpoints.ts.
+
+export type ReminderLevel = 'alarm' | 'notification';
+export type ReminderKind = 'normal' | 'test';
+export type ReminderCreatedVia = 'voice' | 'typed' | 'agent_suggestion' | 'manual_form';
+export type ReminderParseSource = 'rules' | 'llm' | 'user_edit';
+export type ReminderStatus = 'scheduled' | 'fired' | 'snoozed' | 'done' | 'missed' | 'cancelled';
+/** The same moment on the clock of the reminder's zone: show it, do not recompute. */
+export type LocalDateTime = { date: string; time: string };
+
+export type ReminderOut = {
+  id: string;
+  client_id: string | null;
+  title: string;
+  body: string | null;
+  due_at: string;
+  tz: string;
+  local: LocalDateTime | null;
+  rrule: string | null;
+  offsets: number[];
+  level: ReminderLevel;
+  kind: ReminderKind;
+  created_via: ReminderCreatedVia | null;
+  parse_source: ReminderParseSource | null;
+  sensitivity: 'health' | null;
+  status: ReminderStatus;
+  snooze_until: string | null;
+  item_id: string | null;
+  when_text: string | null;
+  version: number;
+  seq: number;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+};
+
+export type FireState = 'planned' | 'fired' | 'acked' | 'snoozed' | 'missed' | 'cancelled';
+
+export type FireOut = {
+  id: string;
+  reminder_id: string;
+  /** `reminder_id:occurrence(UTC, Z):offset_min:snooze_n` — the local alarm id. */
+  key: string;
+  occurrence_at: string;
+  fire_at: string;
+  offset_min: number;
+  snooze_n: number;
+  /** Always 0 from the server: the phone makes repeats 1–3 itself. */
+  repeat_n: number;
+  state: FireState;
+  target_device_id: string | null;
+  seq: number;
+  updated_at: string;
+};
+
+/** POST /reminders (also offline, through the outbox: the same `client_id` → the same reminder). */
+export type ReminderCreateIn = {
+  client_id: string;
+  title: string;
+  body?: string | null;
+  /** Either `due_at` or `local` (read on `tz`'s clock). */
+  due_at?: string;
+  local?: LocalDateTime;
+  tz: string;
+  rrule?: string | null;
+  offsets?: number[];
+  level: ReminderLevel;
+  created_via: ReminderCreatedVia;
+  parse_source?: ReminderParseSource | null;
+  sensitivity?: 'health' | null;
+  item_id?: string | null;
+};
+
+/** POST /reminders, POST /reminders/test, PATCH /reminders/{id}. */
+export type ReminderWithFiresOut = { reminder: ReminderOut | null; fires: FireOut[] };
+
+/** GET /reminders/fires — the planning window, with this phone's device id. */
+export type FiresWindowOut = { device_id: string | null; fires: FireOut[]; reminders: ReminderOut[] };
+
+export type ReminderParseIn = { text: string; created_via: ReminderCreatedVia; tz?: string };
+
+export type ReminderDraft = {
+  title: string;
+  due_at: string | null;
+  tz: string;
+  local: LocalDateTime | null;
+  rrule: string | null;
+  offsets: number[];
+  level: ReminderLevel;
+  /** No time was said: 9:00 was put in — the time is highlighted on S13. */
+  time_assumed: boolean;
+  when_text: string | null;
+  saved_text: string | null;
+};
+
+export type ReminderParseReason = 'not_understood' | 'no_ai' | 'ai_unavailable' | 'check_failed' | 'past';
+
+export type ReminderParseOut = {
+  status: 'ok' | 'ambiguous' | 'form';
+  source: 'rules' | 'llm' | null;
+  reason: ReminderParseReason | null;
+  message: string | null;
+  draft: ReminderDraft | null;
+  options: ReminderDraft[];
+  /** The server's Ф-1 setting: `rules_first` (code first) or `llm` (default, Ф-1 not taken). */
+  parser: 'rules_first' | 'llm' | null;
+};
+
+export type ReminderEventKind =
+  | 'scheduled_local'
+  | 'schedule_failed'
+  | 'fired_local'
+  | 'shown'
+  | 'dismissed'
+  | 'acked'
+  | 'snoozed';
+
+/** `fire_id` or `fire_key` (the server accepts either; schemas.py `ReminderEventIn`). */
+export type ReminderEventIn = {
+  client_id: string;
+  fire_id?: string;
+  fire_key?: string;
+  event: ReminderEventKind;
+  at: string;
+  meta?: Record<string, unknown>;
+};
+
+export type ReminderEventResult = { client_id: string; status: 'applied' | 'duplicate' | 'not_found' | 'invalid' };
+
+export type ReminderEventsOut = { results: ReminderEventResult[]; fires: FireOut[] };
+
+export type ReminderSettingsOut = {
+  parser: 'rules_first' | 'llm' | null;
+  alarm_device_policy: 'last_active' | 'all' | null;
+  snooze_minutes: number;
+  /** «Другое время» may go at most this far (`meta.until` ≤ event `at` + this). */
+  snooze_max_hours: number;
+  repeat_minutes: number[];
+  horizon_days: number;
+};
+
+export type ReminderActiveOut = { device_id: string | null; retargeted: number };
+
+/** Data of a server backup push (no text unless `push_content`). */
+export type ReminderPushData = { type: 'reminder_backup' | 'reminder_missed'; fire_id: string | null; reminder_id: string | null };
