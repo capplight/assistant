@@ -47,6 +47,8 @@ class ActionKind(enum.StrEnum):
     SCREEN_RESET = "screen_reset"  # week 11: «Вернуть как было»
     CREATE_EXPENSE = "create_expense"  # week 12: «Расходы» (already in the 0011 CHECK)
     EDIT_EXPENSE = "edit_expense"
+    BULK_CREATE_EXPENSES = "bulk_create_expenses"  # week 13: a bank statement after «Да»
+    MERGE_EXPENSES = "merge_expenses"  # week 13: «Объединить?» of two expenses (0019)
 
 
 class Initiator(enum.StrEnum):

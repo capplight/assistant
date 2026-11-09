@@ -7,6 +7,9 @@
 - `set_expense_category` {id, values, expect?}: `title`, `title_kk`, `icon`, `pinned`,
   `hidden_at`, `position`, `manual_at` of one of the person's categories (S38, «Отменить» of a
   new one = hidden again, of a reorder = the old positions and `manual_at`).
+- `set_expense_live` {id, item, live} (week 13): the expense alone leaves (or comes back), its
+  record stays: a receipt photo is the person's record, «Отменить» of «Записал по чеку» must not
+  trash the photo.
 Each returns its own reverse with `expect` = what it left, so an undo skips what the person
 changed since («Часть уже изменена вами»).
 """
@@ -176,7 +179,25 @@ async def _set_expense_category(session: AsyncSession, user_id: int, op: dict, o
                         "expect": {k: category_value(cat, k) for k in changed}})  # fmt: skip
 
 
+async def _set_expense_live(session: AsyncSession, user_id: int, op: dict, out: Outcome, *,
+                            by: str, check: bool, now: datetime) -> None:  # fmt: skip
+    entry, item = await _owned(session, user_id, "expenses", op["id"])
+    if entry is None or item is None:
+        out.skipped += 1
+        return
+    live = bool(op.get("live"))
+    if (entry.deleted_at is None) == live:
+        return
+    entry.deleted_at = None if live else now
+    entry.version += 1
+    entry.updated_at = now
+    out.inverse.append({"op": "set_expense_live", "id": str(entry.public_id),
+                        "item": str(item.public_id), "live": not live})  # fmt: skip
+    out.items.add(str(item.public_id))
+
+
 HANDLERS = {
+    "set_expense_live": _set_expense_live,
     "set_expense": _set_expense,
     "set_expense_category": _set_expense_category,
 }

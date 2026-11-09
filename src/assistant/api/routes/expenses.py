@@ -291,6 +291,7 @@ async def patch_expense(expense_id: uuid.UUID, body: ExpensePatchIn, user: Gated
             values["currency"] = body.currency
         if "spent_on" in sent and body.spent_on:
             values["spent_on"] = date.fromisoformat(body.spent_on).isoformat()
+            review = [f for f in review if f != "spent_on"]  # the person set the day
         if "category_id" in sent:
             cat = await _category(db, user.id, body.category_id)
             values["category_id"] = str(cat.public_id) if cat else None
@@ -298,6 +299,7 @@ async def patch_expense(expense_id: uuid.UUID, body: ExpensePatchIn, user: Gated
             values["note"] = service.clean_note(body.note)
         if "payee" in sent:
             values["payee"] = service.clean_payee(body.payee)
+            review = [f for f in review if f != "payee"]
         if "method" in sent:
             values["method"] = body.method
         if "direction" in sent and body.direction:

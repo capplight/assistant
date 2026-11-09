@@ -13,6 +13,20 @@ import type {
   ExpenseOut,
   ExpensePatchIn,
   ExpenseWriteOut,
+  ExpenseDuplicateOut,
+  ExpenseMergeIn,
+  ExpenseMergeOut,
+  ReceiptDraftOut,
+  ReceiptFromItemIn,
+  ReceiptFromQrIn,
+  ReceiptOut,
+  StatementConfirmOut,
+  StatementIn,
+  StatementOut,
+  StatementPlanOut,
+  StatementRowOut,
+  StatementStatus,
+  StatementWithRowsOut,
   ActionOut,
   ActionUndoIn,
   ActionUndoOut,
@@ -1065,6 +1079,8 @@ export function expenseOut(v: unknown): ExpenseOut | null {
     source: str(o.source) ?? 'form',
     parse_source: ps && PARSE_SOURCES.has(ps) ? (ps as ExpenseOut['parse_source']) : null,
     review_fields: strs(o.review_fields),
+    line_items: lineItems(o.line_items),
+    statement_id: str(o.statement_id),
     ai_generated: o.ai_generated === true,
     version: num(o.version, 1),
     seq: num(o.seq),
@@ -1139,6 +1155,151 @@ export function expenseAggregateOut(v: unknown): ExpenseAggregateOut {
     groups,
     review_count: num(o.review_count),
     basis_ids: strs(o.basis_ids),
+  };
+}
+
+// week 13 — receipts, statements, repeats of spendings (expenses.md «Week 13»). Lenient: unknown values fall back, money stays text.
+
+function lineItems(v: unknown): ExpenseOut['line_items'] {
+  if (!Array.isArray(v)) return null;
+  return v
+    .map((x) => {
+      const o = obj(x);
+      const name = o && str(o.name);
+      return o && name ? { name, qty: str(o.qty), total: money(o.total) } : null;
+    })
+    .filter((x): x is NonNullable<ExpenseOut['line_items']>[number] => x !== null);
+}
+
+const DUP_STATES = new Set<string>(['suggested', 'merged', 'dismissed', 'undone']);
+
+export function expenseDuplicateOut(v: unknown): ExpenseDuplicateOut | null {
+  const o = obj(v);
+  const id = o && str(o.id);
+  const keep = o && expenseOut(o.keep);
+  const other = o && expenseOut(o.other);
+  if (!o || !id || !keep || !other) return null;
+  const status = str(o.status);
+  return {
+    id,
+    status: (status && DUP_STATES.has(status) ? status : 'suggested') as ExpenseDuplicateOut['status'],
+    keep,
+    other,
+    text_ru: str(o.text_ru),
+    action_id: str(o.action_id),
+    created_at: str(o.created_at),
+    decided_at: str(o.decided_at),
+  };
+}
+
+export const expenseDuplicatesOf = (v: unknown) => arr(v).map(expenseDuplicateOut).filter((x): x is ExpenseDuplicateOut => x !== null);
+
+function receiptDraftOut(v: unknown): ReceiptDraftOut | null {
+  const o = obj(v);
+  if (!o) return null;
+  return {
+    amount: money(o.amount),
+    currency: (str(o.currency) ?? 'KZT').toUpperCase(),
+    spent_on: str(o.spent_on)?.slice(0, 10) ?? null,
+    category_key: str(o.category_key),
+    note: str(o.note),
+    payee: str(o.payee),
+    review_fields: strs(o.review_fields),
+  };
+}
+
+const RECEIPT_STATES = new Set<string>(['ok', 'waiting', 'form', 'exists']);
+
+export function receiptOut(v: unknown): ReceiptOut {
+  const o = obj(v) ?? {};
+  const status = str(o.status);
+  const expense = expenseOut(o.expense);
+  const retry = typeof o.retry_after === 'number' && o.retry_after > 0 ? o.retry_after : null;
+  return {
+    status: (status && RECEIPT_STATES.has(status) ? status : expense ? 'ok' : 'form') as ReceiptOut['status'],
+    expense,
+    action: actionOut(o.action),
+    page_patches: arr(o.page_patches).map(pagePatchOut).filter((x): x is PagePatchOut => x !== null),
+    draft: receiptDraftOut(o.draft),
+    duplicate: expenseDuplicateOut(o.duplicate),
+    message: str(o.message) ?? str(o.message_ru),
+    retry_after: retry,
+    repeated: o.repeated === true,
+  };
+}
+
+const STATEMENT_STATES = new Set<string>(['proposed', 'confirmed', 'undone', 'rejected', 'expired']);
+
+export function statementOut(v: unknown): StatementOut | null {
+  const o = obj(v);
+  const id = o && str(o.id);
+  if (!o || !id) return null;
+  const status = str(o.status);
+  const period = obj(o.period);
+  const check = obj(o.check);
+  const adds = obj(o.adds);
+  const m = (x: unknown) => money(x) ?? '0.00';
+  return {
+    id,
+    client_id: str(o.client_id),
+    item_id: str(o.item_id),
+    status: (status && STATEMENT_STATES.has(status) ? status : 'proposed') as StatementStatus,
+    bank: str(o.bank),
+    parser: o.parser === 'template' || o.parser === 'model' ? o.parser : null,
+    currency: (str(o.currency) ?? 'KZT').toUpperCase(),
+    period_from: period ? str(period.from) : null,
+    period_to: period ? str(period.to) : null,
+    rows_found: num(o.rows_found),
+    rows_new: num(o.rows_new),
+    rows_existing: num(o.rows_existing),
+    rows_similar: num(o.rows_similar),
+    check: check
+      ? {
+          ok: check.ok === true,
+          lines: arr(check.lines)
+            .map((x) => {
+              const l = obj(x);
+              const key = l && str(l.key);
+              return l && key ? { key, title: str(l.title) ?? key, bank: money(l.bank), ours: money(l.ours), ok: l.ok === true } : null;
+            })
+            .filter((x): x is NonNullable<StatementOut['check']>['lines'][number] => x !== null),
+        }
+      : null,
+    adds: adds ? { expense: m(adds.expense), refund: m(adds.refund), income: m(adds.income), transfers: m(adds.transfers), transfer_own: m(adds.transfer_own) } : null,
+    summary_ru: str(o.summary_ru),
+    error: str(o.error),
+    pending_action_id: str(o.pending_action_id),
+    action_id: str(o.action_id),
+    created_at: str(o.created_at),
+    decided_at: str(o.decided_at),
+  };
+}
+
+export const statementsOf = (v: unknown) => arr(v).map(statementOut).filter((x): x is StatementOut => x !== null);
+
+const ROW_STATES = new Set<string>(['new', 'existing', 'similar']);
+
+export function statementRowOut(v: unknown): StatementRowOut | null {
+  const r = obj(v);
+  const amount = r && money(r.amount);
+  const date = r && str(r.date);
+  if (!r || !amount || !date) return null;
+  const method = str(r.method);
+  const state = str(r.state);
+  return {
+    n: num(r.n),
+    date: date.slice(0, 10),
+    amount,
+    currency: (str(r.currency) ?? 'KZT').toUpperCase(),
+    kind: str(r.kind) ?? 'other',
+    direction: typeof r.direction === 'string' && DIRECTIONS.has(r.direction) ? (r.direction as StatementRowOut['direction']) : 'expense',
+    description: str(r.description),
+    method: method && METHODS.has(method) ? (method as StatementRowOut['method']) : null,
+    category_key: str(r.category_key),
+    note: str(r.note),
+    state: (state && ROW_STATES.has(state) ? state : 'new') as StatementRowOut['state'],
+    existing_expense_id: str(r.existing_expense_id),
+    review_fields: strs(r.review_fields),
   };
 }
 
@@ -1748,6 +1909,87 @@ export class Api {
   async expenseAggregate(q: ExpenseAggregateQuery): Promise<ExpenseAggregateOut> {
     const query = Object.fromEntries(Object.entries(q).filter(([, v]) => typeof v === 'string')) as Record<string, string>;
     return expenseAggregateOut(await this.client.request<unknown>('GET', '/expenses/aggregate', { query }));
+  }
+
+  // week 13 — «Расходы 2» (expenses.md «Week 13»): receipts, fiscal QR, statements, repeats of spendings.
+
+  /** A receipt record → its spending (amount «Проверьте»), `waiting` (OCR still running), or `form`. */
+  async expenseFromItem(body: ReceiptFromItemIn): Promise<ReceiptOut> {
+    return receiptOut(await this.client.request<unknown>('POST', '/expenses/from-item', { body, idempotencyKey: body.client_id }));
+  }
+
+  /** The QR link of a fiscal receipt; only official OFD domains (`422 qr_not_fiscal` otherwise). */
+  async expenseFromQr(body: ReceiptFromQrIn): Promise<ReceiptOut> {
+    return receiptOut(await this.client.request<unknown>('POST', '/expenses/from-qr', { body, idempotencyKey: body.client_id }));
+  }
+
+  /** A statement PDF (already a record) → the plan; nothing is saved before «Да». */
+  async createStatement(body: StatementIn): Promise<StatementPlanOut> {
+    const o = obj(await this.client.request<unknown>('POST', '/expenses/statements', { body, idempotencyKey: body.client_id })) ?? {};
+    return { statement: statementOut(o.statement), pending_action: pendingActionOut(o.pending_action), repeated: o.repeated === true };
+  }
+
+  /** The plan with its rows (rows only while `proposed`). */
+  async getStatement(id: string): Promise<StatementWithRowsOut> {
+    const o = obj(await this.client.request<unknown>('GET', `/expenses/statements/${encodeURIComponent(id)}`)) ?? {};
+    return { statement: statementOut(o.statement), rows: arr(o.rows).map(statementRowOut).filter((x): x is StatementRowOut => x !== null) };
+  }
+
+  /** The latest plans, newest first. */
+  async statements(limit = 10): Promise<StatementOut[]> {
+    const o = obj(await this.client.request<unknown>('GET', '/expenses/statements', { query: { limit: String(limit) } })) ?? {};
+    return statementsOf(o.statements);
+  }
+
+  /** The one «Да» of the plan. */
+  async confirmStatement(id: string, clientId: string): Promise<StatementConfirmOut> {
+    const o =
+      obj(
+        await this.client.request<unknown>('POST', `/expenses/statements/${encodeURIComponent(id)}/confirm`, {
+          body: { client_id: clientId },
+          idempotencyKey: clientId,
+        }),
+      ) ?? {};
+    return {
+      statement: statementOut(o.statement),
+      action: actionOut(o.action),
+      created: num(o.created),
+      duplicates: expenseDuplicatesOf(o.duplicates),
+      repeated: o.repeated === true,
+    };
+  }
+
+  /** «Не сейчас»: nothing is saved. */
+  async rejectStatement(id: string): Promise<StatementOut | null> {
+    const o = obj(await this.client.request<unknown>('POST', `/expenses/statements/${encodeURIComponent(id)}/reject`, { body: {} })) ?? {};
+    return statementOut(o.statement);
+  }
+
+  /** «Похоже, эта трата уже есть» pairs (`suggested`). */
+  async expenseDuplicates(): Promise<ExpenseDuplicateOut[]> {
+    const o = obj(await this.client.request<unknown>('GET', '/expenses/duplicates', { query: { status: 'suggested', limit: '50' } })) ?? {};
+    return expenseDuplicatesOf(o.duplicates);
+  }
+
+  /** [Объединить]: `keep` stays and takes what it lacks; `other` goes to the trash with its record; one «Отменить». */
+  async mergeExpenseDuplicate(id: string, body: ExpenseMergeIn): Promise<ExpenseMergeOut> {
+    const o =
+      obj(
+        await this.client.request<unknown>('POST', `/expenses/duplicates/${encodeURIComponent(id)}/merge`, { body, idempotencyKey: body.client_id }),
+      ) ?? {};
+    return { duplicate: expenseDuplicateOut(o.duplicate), expense: expenseOut(o.expense), action: actionOut(o.action), repeated: o.repeated === true };
+  }
+
+  /** [Это разные]: never suggested together again (no action: nothing changed). */
+  async dismissExpenseDuplicate(id: string, clientId: string): Promise<ExpenseDuplicateOut | null> {
+    const o =
+      obj(
+        await this.client.request<unknown>('POST', `/expenses/duplicates/${encodeURIComponent(id)}/dismiss`, {
+          body: { client_id: clientId },
+          idempotencyKey: clientId,
+        }),
+      ) ?? {};
+    return expenseDuplicateOut(o.duplicate);
   }
 
   // feedback («Сообщить о проблеме», R-41)

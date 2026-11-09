@@ -225,6 +225,18 @@ async def confirm(pending_id: uuid.UUID, user: BaseUser, db: Db,
         p.status, p.decided_at = PendingStatus.EXPIRED, now
         await db.commit()
         raise ApiError(410, "pending_expired")
+    if p.kind == "import_statement":  # week 13: a bank statement plan (expenses.md)
+        from assistant.api.routes.expense_docs import confirm_statement
+        from assistant.db.models_expenses import StatementImport
+
+        st = await db.scalar(select(StatementImport).where(
+            StatementImport.user_id == user.id,
+            StatementImport.pending_action_id == p.id).with_for_update())  # fmt: skip
+        if st is None:
+            raise ApiError(404, "not_found")
+        out = await confirm_statement(db, user.id, st, now)
+        return {"pending_action": out["pending_action"], "action": out["action"],
+                "repeated": out["repeated"]}  # fmt: skip
     if p.kind != "cleanup_batch":
         raise ApiError(422, "pending_kind_unknown")
     action = await run_cleanup(db, user.id, p, now)
@@ -245,6 +257,14 @@ async def confirm(pending_id: uuid.UUID, user: BaseUser, db: Db,
 @pending_router.post("/{pending_id}/reject")
 async def reject(pending_id: uuid.UUID, user: BaseUser, db: Db) -> dict[str, Any]:
     p = await _pending(db, user, pending_id)
+    if p.status == PendingStatus.PROPOSED and p.kind == "import_statement":
+        from assistant.db.models_expenses import StatementImport
+        from assistant.expenses import imports as statement_imports
+
+        st = await db.scalar(select(StatementImport).where(
+            StatementImport.user_id == user.id, StatementImport.pending_action_id == p.id))
+        if st is not None:
+            await statement_imports.reject(db, st, _now())  # rows cleared, nothing saved
     if p.status == PendingStatus.PROPOSED:
         p.status, p.decided_at = PendingStatus.REJECTED, _now()
         await db.flush()

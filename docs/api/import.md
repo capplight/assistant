@@ -85,3 +85,8 @@ Stops after the batch in progress. What was brought stays, with its summary and 
   Message text is data for the model, never instructions.
 - Events (with the `analytics` consent): the server writes `import_completed`
   (`method: file`, `items`, `skipped`).
+
+## Bank statements
+
+A bank statement PDF is not an import of records: it is a plan of expenses with one «Да» and one
+«Отменить», in `expenses.md` (`POST /v1/expenses/statements`, week 13).

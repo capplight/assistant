@@ -1,4 +1,4 @@
-# «Расходы»: траты, категории, итоги (week 12, «Расходы 1»)
+# «Расходы»: траты, категории, итоги, чеки, выписки (weeks 12–13, «Расходы 1–2»)
 
 Spec: `docs/spec/final/3-engineering.md` 3.12, 4.11, 6.13; `docs/spec/proposals/template-screens.md`
 §2.2 (калькулятор трат), §4; product F-40, US-31, R-36, R-59; founder decisions (8 categories).
@@ -30,6 +30,7 @@ write takes a `client_id` (outbox-safe): a repeat returns the first result with 
   "note": "Магнум",
   "source": "form", "parse_source": null,
   "review_fields": [],
+  "line_items": null, "statement_id": null,
   "ai_generated": false,
   "version": 1, "seq": 1201,
   "created_at": "...", "updated_at": "...", "deleted_at": null
@@ -47,9 +48,11 @@ write takes a `client_id` (outbox-safe): a repeat returns the first result with 
 | `method` | `cash` · `card` · `kaspi` · `transfer` · `other` · null. |
 | `direction` | `expense` (default) · `refund` (subtracted from the total) · `income` (own line, not in the spend) · `transfer_own` (between own accounts: not in any total). |
 | `note` | What it was on, in the person's words («бензин»), ≤200, or null. Line title in the feed: `note` → `payee` → category title. |
-| `source` | `form` (keys / form) · `typed` (a typed phrase) · `voice` · later `receipt_ocr`, `receipt_qr`, `shared_receipt`, `statement_pdf`, `pasted_text`. |
+| `source` | `form` (keys / form) · `typed` (a typed phrase) · `voice` · `receipt_ocr` (photo / screenshot of a receipt) · `receipt_qr` (fiscal QR) · `shared_receipt` (a Kaspi / bank receipt shared as PDF or picture) · `statement_pdf` (a row of a bank statement) · later `pasted_text`. |
 | `parse_source` | Who read a phrase: `rules` (code, only with Ф-1 on) · `llm` (the model, amount checked by code) · `user_edit` (the person changed the amount) · null (keys / form). |
-| `review_fields` | Fields to show with «Проверьте» (R-36). `["amount"]` whenever `source` is not `form` / `typed`; cleared only by «Верно» (`PATCH {confirm: ["amount"]}`) or by the person editing the amount. |
+| `review_fields` | Fields to show with «Проверьте» (R-36): `amount`, `spent_on`, `payee`, `line_items`. `["amount"]` whenever `source` is not `form` / `typed`, with one exception (week 13): a row of a bank statement read by its bank's template **and** whose totals matched the bank's own summary to the tiyn has `[]`. A field is cleared only by «Верно» (`PATCH {confirm: ["amount", "spent_on", …]}`) or by the person editing it. |
+| `line_items` | Receipt lines `[{"name": "Молоко 2,5%", "qty": "2", "total": "1100.00"}]` (receipts only), or null. Each `total` was found by code in the receipt text; when the lines do not add up to `amount`, `line_items` is in `review_fields`. |
+| `statement_id` | The statement import this row came from, or null. |
 | `deleted_at` | Set when the expense went to the trash (its record too). Hide it; it is in no total. |
 | `version` | Pass back in PATCH (`409 conflict` when stale). |
 
@@ -156,7 +159,7 @@ frequency order if that was in force. `action.kind` `user_edit`.
 ### `PATCH /v1/expenses/{id}` → `200 {expense, action, repeated}`
 
 `{"client_id": "...", "version": 1, ...any of amount | expression, currency, spent_on, category_id,
-note, payee, method, direction, "confirm": ["amount"]}`. `confirm: ["amount"]` = «Верно» (clears
+note, payee, method, direction, "confirm": ["amount"]}`. `confirm` takes any of `amount`, `spent_on`, `payee`, `line_items` (week 13). `confirm: ["amount"]` = «Верно» (clears
 «Проверьте» without changing the value). Changing the amount by hand clears «Проверьте» too and sets
 `parse_source: user_edit`. `action.kind` `edit_expense`; «Отменить» puts the old values back (a
 field changed again since keeps the person's version: `partial`). `client_id` optional but the
@@ -263,3 +266,254 @@ Categories are hidden, never deleted (no tombstone). `tombstones[].entity` can n
   or the form). The vectors are synthetic (written by the team, not real people's phrases).
 - `docs/spec/vectors/calc.json`: keypad expressions and aggregate cases for `calc.py` and its TS
   port.
+
+---
+
+# Week 13 («Расходы 2»): чек, QR, квитанция, выписка, повторы трат
+
+Spec: 3-engineering 3.12 (`statement_imports`), 4.11, 5.7 п. 7, 6.13; §11.2 week 13. All test data
+is synthetic: no real bank data anywhere in the repo.
+
+**Who reads what.**
+
+| Input | Read by | Without the model (`ai_cross_border` missing, or provider down) |
+|---|---|---|
+| Photo / screenshot of a receipt | OCR (ingest, on our server) → the light model (`expense_extract`) → **code checks every number against the OCR text** | `status: "form"` (the empty form); with Ф-1 on, code reads «ИТОГО … 12 400,00» itself |
+| Kaspi / bank receipt shared as PDF or picture | the same as a receipt (the PDF's own text, OCR for a picture) | the same; with Ф-1 on, code reads Kaspi's receipt labels |
+| Fiscal QR (ОФД) | code: the sum `s` and the time `t` are in the link itself; the OFD page (allowlisted) only adds the shop and lines, read by the model, checked by code | works: amount and day from the link |
+| Bank statement PDF (Kaspi Gold, Halyk) | code: the bank's table by its template (`pdfplumber` words by column), checked against the bank's own summary | works fully |
+| Statement of an unknown bank | the light model by lines, each amount and day checked against its line | `422 statement_unknown_format` |
+
+Ф-1 (`expenses_rules_first`) stays **off** by default: code does not read receipt text («ИТОГО»,
+Kaspi receipt labels) unless it is on. Reading a bank statement's table by its template is not
+phrase reading and is always on. The text of a receipt, a page and a statement is **data**, never
+instructions; ИИН/БИН, IBAN and card numbers are masked (`⟨IBAN_1⟩`…) before any model call.
+Originals follow the usual rule (`search.md`): kept 7 days after the text is read, pinned ones
+stay. Nothing here keeps a copy.
+
+## ExpenseDuplicate («Похоже, эта трата уже есть»)
+
+```json
+{
+  "id": "0194...", "status": "suggested",
+  "keep": {"...": "Expense"}, "other": {"...": "Expense"},
+  "text_ru": "Похоже, эта трата уже есть (из выписки)",
+  "action_id": null, "created_at": "...", "decided_at": null
+}
+```
+
+- Made by code when two live expenses have the same amount and currency, days at most 1 apart,
+  the same direction, and payees that do not contradict (one empty, or a word in common). One
+  payment often comes as a receipt and as a statement row.
+- `keep`: the one kept on «Объединить» by default: the person's own entry or the receipt over a
+  statement row (the receipt has the lines and the person's category); between equals, the older.
+  `other`: the one that goes to the trash.
+- `status`: `suggested` · `merged` · `dismissed` («Это разные») · `undone` (a merge taken back; not
+  suggested again).
+
+### `GET /v1/expenses/duplicates?status=suggested&limit=50` → `200 {"duplicates": [ExpenseDuplicate]}`
+
+Newest first. A `suggested` pair where either expense is no longer live is not listed.
+
+### `POST /v1/expenses/duplicates/{id}/merge` → `200 {duplicate, expense, action, repeated}`
+
+`{"client_id": "...", "keep_id": "<expense id>"}` (`keep_id` optional: one of the two, to keep the
+other way round). The kept expense takes what it lacks from the other (payee, note, category,
+method); the other goes to the trash with its record. `action.kind` `merge_expenses`,
+`summary.ru` «Объединил траты: 2 500 ₸ · Магнум»; «Отменить» brings the other back and the kept
+one's fields. Errors: `404`, `409 duplicate_closed`, `409 duplicate_stale` (one of them is gone),
+`422 validation_error` (`keep_id` not in the pair).
+
+### `POST /v1/expenses/duplicates/{id}/dismiss` → `200 {duplicate}`
+
+«Это разные». `{"client_id": "..."}` optional. These two are never suggested together again.
+`409 duplicate_closed` when not `suggested`.
+
+## Receipt photo, screenshot, shared Kaspi receipt
+
+The phone sends the file as a record first (the usual flow: `POST /v1/uploads` → PUT → complete →
+`POST /v1/items {upload_id, source: "camera" | "share"}`), then:
+
+### `POST /v1/expenses/from-item`
+
+```json
+{"client_id": "0194...", "item_id": "<the record>", "kind": "receipt", "save": true}
+```
+
+`kind`: `receipt` (photo / screenshot → `source: receipt_ocr`) · `shared_receipt` (a PDF or picture
+shared from Kaspi or a bank → `source: shared_receipt`). The record must be `image`, `screenshot`
+or `pdf` (`422 item_kind`). `save` defaults to `true`.
+
+`201` when an expense was saved, else `200`:
+
+```json
+{
+  "status": "ok",
+  "expense": {"...": "Expense"}, "action": {"...": "Action"}, "page_patches": [],
+  "draft": null, "duplicate": null,
+  "reader": "llm", "message": null, "retry_after": null, "repeated": false
+}
+```
+
+| `status` | Meaning / what the phone shows |
+|---|---|
+| `ok` | `save: true`: saved at once. The receipt record **is** the expense's record (`expense.item_id` = `item_id`); it shows on «Расходы»; strip «Записал 12 400 ₸ · Продукты [Отменить]». `review_fields` has `amount` always (R-36), `spent_on` when the day was not found in the text, `line_items` when the lines do not add up. `save: false`: nothing saved, `draft` = the fields for the form. |
+| `waiting` | The record's text is not read yet (OCR still running): ask again after `retry_after` seconds (2). Show «Читаю чек…». |
+| `form` | No amount code could confirm in the text (no `ai_cross_border`, provider down, not a receipt, the model's number is not on the receipt). `message` «Не разобрал сумму на чеке — наберите её на клавишах.»; `draft` may still carry a day or a shop that code found. |
+| `exists` | This record already has an expense: `expense` = that one, `repeated: true`. |
+
+`draft`: `{"amount": "12400.00" | null, "currency", "spent_on", "category_id", "category_key",
+"method", "direction", "note", "payee", "line_items", "review_fields"}`.
+
+`duplicate`: an `ExpenseDuplicate` when the new expense looks like one already there (e.g. the same
+payment from a statement): show «Похоже, эта трата уже есть (из выписки) [Объединить?]».
+`reader`: `llm` (the model, checked by code) · `rules` (code, Ф-1 on) · null.
+
+Same `client_id` again → the first result, `repeated: true`. Errors: `404 not_found`,
+`422 item_kind`.
+
+## Fiscal QR
+
+The phone scans the QR on a receipt and sends the link (it does not open it itself).
+
+### `POST /v1/expenses/from-qr`
+
+```json
+{"client_id": "0194...",
+ "url": "https://consumer.oofd.kz/?i=1234567890&f=010101012345&s=3400.50&t=20261104T191520",
+ "item_id": null}
+```
+
+`item_id` (optional): the photo record of the same receipt, if the person also took one; it becomes
+the expense's record. Otherwise a record is made («Чек ОФД — 3 400,50 ₸»).
+
+`201`/`200` like `from-item`: `{status: "ok" | "exists" | "form", expense, action, page_patches,
+duplicate, fiscal, message, repeated}`.
+
+```json
+"fiscal": {"domain": "consumer.oofd.kz", "sign": "1234567890", "register": "010101012345",
+           "amount": "3400.50", "at": "2026-11-04T14:15:20+00:00", "page": "read"}
+```
+
+- Only links to **official OFD domains** are accepted (allowlist `settings.expenses_ofd_domains`,
+  default `oofd.kz`, `ofd1.kz`, `kofd.kz`, `wofd.kz` and their subdomains [проверить список ОФД,
+  нед. 0]); anything else → `422 qr_not_fiscal`. `http`/`https` only, ports 80/443, no
+  user/password in the link.
+- `amount` and `at` come from the link itself (`s`, `t`, the time is on Almaty's clock) by code: no
+  model. The expense's day is `t`.
+- The OFD page is fetched by the server only for an allowlisted host whose every address is public
+  (no private, loopback, link-local, reserved IPs); a redirect only to an allowlisted host (≤3 hops,
+  each re-checked); 10 s; 1 MB. `page`: `read` · `failed` · `skipped`. From the page, with
+  `ai_cross_border`, the model may add the shop and lines; the page's total must equal `s`.
+- No `s` in the link and no amount code could check on the page → `status: "form"`.
+- The same fiscal receipt (`register` + `sign`) again while its expense is live → `status:
+  "exists"`, that expense.
+- `review_fields`: `["amount"]` (R-36: not typed by the person).
+
+## Bank statement → plan → one «Да» → one «Отменить»
+
+The person shares the PDF from the bank app (Kaspi: «Выписка» → «Поделиться» → our app; Halyk the
+same). The phone sends it as a record (`POST /v1/items {upload_id, source: "share"}`), then:
+
+### `POST /v1/expenses/statements` → `201 {statement, pending_action, repeated}`
+
+```json
+{"client_id": "0194...", "item_id": "<the PDF record>"}
+```
+
+Code reads the PDF (from the original, within its 7 days), finds the bank by its template, reads
+every operation, checks the sums against the bank's own summary, and compares each row with the
+person's expenses. **Nothing is saved as an expense** until «Да».
+
+```json
+"statement": {
+  "id": "0194...", "client_id": "0194...", "item_id": "0194...",
+  "status": "proposed", "bank": "kaspi_gold", "parser": "template", "currency": "KZT",
+  "period": {"from": "2026-10-01", "to": "2026-10-31"},
+  "rows_found": 86, "rows_new": 82, "rows_existing": 4, "rows_similar": 2,
+  "check": {"ok": true, "lines": [
+    {"key": "purchases", "title": "Покупки", "bank": "-80000.00", "ours": "-80000.00", "ok": true},
+    {"key": "closing", "title": "Остаток на конец", "bank": "90000.00", "ours": "90000.00", "ok": true}
+  ]},
+  "adds": {"expense": "80000.00", "refund": "0.00", "income": "150000.00",
+           "transfers": "20000.00", "transfer_own": "10000.00"},
+  "summary_ru": "Нашёл 86 операций за октябрь, 4 уже есть",
+  "error": null, "pending_action_id": "0194...", "action_id": null,
+  "created_at": "...", "decided_at": null
+}
+```
+
+| Field | Notes |
+|---|---|
+| `status` | `proposed` (waits for «Да») · `confirmed` · `undone` (its action was undone) · `rejected` («Не сейчас») · `expired` (24 h, or replaced by a newer plan of the same record). |
+| `bank` | `kaspi_gold` · `halyk` · `freedom` (not read by template yet) · `other`. `parser`: `template` (code) · `model` (unknown bank, by lines). |
+| `rows_existing` | Rows already there, **not created**: a row of an earlier import of the same statement, or an expense with the same amount, day and payee. |
+| `rows_similar` | New rows that look like an expense already there (receipt + statement): created, and each pair comes as an `ExpenseDuplicate` after «Да». |
+| `check` | Code's sums per kind of operation against the lines of the bank's summary, to the tiyn (`ok` per line, and for all). `ok: false` → `summary_ru` adds «Суммы не сошлись с выпиской — проверьте», and every row gets «Проверьте» on its amount. `null` for `parser: model` (no summary to check against). |
+| `adds` | What «Да» adds, by kind (code, `calc.py`). `expense` − `refund` goes into «Потрачено»; `transfers` (to other people, category «Переводы») and `transfer_own` (cash withdrawals, own accounts) are in no total; `income` is its own line. |
+
+How rows become expenses. Kaspi Gold: «Покупка» → `expense`, method `kaspi` (a «Покупка» with `+`
+→ `refund`); «Перевод» `−` → `expense` in category «Переводы» (service: no total), method
+`transfer`; «Снятие» → `transfer_own`, method `cash`; «Пополнение» and any other `+` → `income`;
+«Разное» `−` → `expense`. Halyk: «Покупка…» / «Оплата…» → `expense`, method `card`; «Перевод…» →
+«Переводы»; «Снятие…» → `transfer_own`; credits → `income` (a «Возврат…» credit → `refund`); the
+bank's fee column → its own `expense` row «Комиссия банка». An operation in another currency is
+recorded in the account currency (what left the account), with the original in `note`
+(«10.00 USD»). Category: the one the person used last for the same payee, else none («без
+категории»); with Ф-1 on also the payee dictionary. `payee` = the bank's description.
+`source: statement_pdf`, `spent_on` = the operation day.
+
+`pending_action`: the usual PendingAction (`duplicates.md`), `kind: "import_statement"`,
+`preview: {"title_ru": "Записать 82 операции из выписки?", "text_ru": "Нашёл 86 операций за
+октябрь, 4 уже есть. Отменить можно одной кнопкой.", "statement_id": "...", "rows_found": 86,
+"rows_new": 82, "rows_existing": 4}`. It also comes in `/v1/sync` and `/v1/pending-actions`.
+
+Errors: `404 not_found` · `422 item_kind` (not a PDF) · `422 statement_unreadable` (broken or
+encrypted PDF) · `422 statement_original_gone` (the original was already purged) ·
+`422 statement_unknown_format` (no known bank template, and no `ai_cross_border` or the model could
+not read it) · `422 statement_empty` (no operations) · `422 statement_too_long` (over 2 000 rows).
+Same `client_id` again → the first plan, `repeated: true`. A new plan for the same record replaces
+an open one (that one becomes `expired`).
+
+### `GET /v1/expenses/statements/{id}` → `200 {statement, rows}`
+
+`rows` only while `proposed` (cleared after the decision; the expenses hold the data then):
+
+```json
+{"n": 1, "date": "2026-10-01", "amount": "2500.00", "currency": "KZT", "sign": "-",
+ "kind": "purchase", "direction": "expense", "description": "MAGNUM CASH&CARRY",
+ "method": "kaspi", "category_key": null, "note": null,
+ "state": "new", "existing_expense_id": null, "review_fields": []}
+```
+
+`kind`: `purchase` · `transfer` · `withdrawal` · `topup` · `refund` · `fee` · `other`.
+`state`: `new` · `existing` (not created, `existing_expense_id`) · `similar` (created, and suggested
+as a repeat of `existing_expense_id`).
+
+### `GET /v1/expenses/statements?limit=10` → `200 {statements: [Statement]}`
+
+### «Да»: `POST /v1/expenses/statements/{id}/confirm` (= `POST /v1/pending-actions/{pending_id}/confirm`)
+
+`{"client_id": "..."}` optional. `200`:
+
+```json
+{"statement": {"...": "status confirmed, action_id set"},
+ "pending_action": {"...": "status executed"},
+ "action": {"...": "Action"}, "created": 82, "duplicates": [], "repeated": false}
+```
+
+Every `new` and `similar` row becomes an expense (each with its own record on «Расходы») in **one**
+action `bulk_create_expenses`, `summary.ru` «Записал 82 операции из выписки», one «Отменить».
+Rows that meanwhile became `existing` (the same expense typed since) are skipped. A repeat returns
+the first result with `repeated: true` (via `/v1/pending-actions/…/confirm` the response has the
+generic shape `{pending_action, action, repeated}`). Errors: `404` · `409 pending_closed` ·
+`410 pending_expired`.
+
+### «Не сейчас»: `POST /v1/expenses/statements/{id}/reject` (= `/v1/pending-actions/{id}/reject`)
+
+`200 {statement, pending_action}`; nothing is saved, the rows are cleared.
+
+### «Отменить»: `POST /v1/actions/{action_id}/undo`
+
+Every expense of that import goes to the trash with its record (30 days, as usual); the statement
+shows `status: "undone"`. Importing the same PDF again later makes a fresh plan.

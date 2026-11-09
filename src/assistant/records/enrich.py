@@ -168,6 +168,8 @@ def build_inputs(item: Item) -> TaskInputs:
 def enrichable(item: Item) -> bool:
     if item.deleted_at is not None or item.hidden_reason is not None:
         return False
+    if (item.source_meta or {}).get("statement_row"):
+        return False  # a bank statement row (week 13): its fields came from the bank's table
     return sum(c.isalpha() for c in item.text or "") >= MIN_LETTERS
 
 

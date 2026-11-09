@@ -241,7 +241,7 @@ export type SyncDeps = {
   /** Week 12: «Расходы» — changes by hand (`expense.*`), /sync `expense_entries` / `expense_categories` (src/expenses/service.ts). */
   expenses?: {
     send(e: OutboxEntry): Promise<void>;
-    apply(x: { entries: ExpenseOut[]; categories: ExpenseCategoryOut[] }): void;
+    apply(x: { entries: ExpenseOut[]; categories: ExpenseCategoryOut[]; pending?: PendingActionOut[] }): void;
     tombstone?(id: string): void;
   };
 };
@@ -474,10 +474,13 @@ export class SyncEngine {
         applied += facets.length;
       }
       // Week 12 (docs/api/expenses.md «Sync»): `expenses` (`deleted_at` while in the trash) and `expense_categories`.
-      const spent = { entries: expensesOf(out.expenses), categories: expenseCategoriesOf(out.expense_categories) };
-      if (spent.entries.length + spent.categories.length > 0) {
+      // Week 13: a statement plan made on another phone comes as a pending action `import_statement`.
+      const plans = pendingActionsOf(out.pending_actions).filter((x) => x.kind === 'import_statement');
+      const spent = { entries: expensesOf(out.expenses), categories: expenseCategoriesOf(out.expense_categories), pending: plans };
+      const nSpent = spent.entries.length + spent.categories.length + plans.length;
+      if (nSpent > 0) {
         this.d.expenses?.apply(spent);
-        applied += spent.entries.length + spent.categories.length;
+        applied += nSpent;
       }
       const acts = Array.isArray(out.actions) ? actionsOf(out.actions) : [];
       if (acts.length > 0) {
@@ -565,7 +568,9 @@ export class SyncEngine {
       case 'expense.create':
       case 'expense.patch':
       case 'expense.delete':
-      case 'expense.categories': {
+      case 'expense.categories':
+      case 'expense.receipt':
+      case 'expense.statement': {
         const expenses = this.d.expenses;
         return expenses ? (e) => expenses.send(e) : null;
       }

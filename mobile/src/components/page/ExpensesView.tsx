@@ -10,8 +10,10 @@ import { formatMinor, inPeriod, minorToDecimal, periodOf, shiftPeriod, toMinor, 
 import { categoryByKey, categoryTitle, chipCategories, orderedCategories, type Category } from '@/expenses/categories';
 import { storedExpression } from '@/expenses/expression';
 import { bars, board, dayLabel, feed, lineTitle, liveEntries, periodTitle, spokenAmount, type FeedDay } from '@/expenses/feed';
+import { proposedStatements, refreshDuplicates, refreshStatements, visibleDuplicates, visibleJobs } from '@/expenses/receipts';
 import { addExpense, changeExpense, deleteExpense, reorderCategories } from '@/expenses/service';
 import { useExpenses } from '@/expenses/store';
+import { kickSync, syncBlocked } from '@/services';
 import { localDate } from '@/tasks/rows';
 import { useTheme } from '@/theme';
 
@@ -19,12 +21,15 @@ import { AppText } from '../AppText';
 import { Button } from '../Button';
 import { RecordRow } from '../RecordRow';
 import { useMinuteClock } from '../ReminderLists';
+import { BringButton, CheckCards, DuplicateCards, JobLines, PlanCards, sourceWord } from './ExpenseInbox';
 import { CategoryChips, DayChip, EntryPanel, Sheet, SumDisplay, useSum } from './ExpenseParts';
 import { ExpenseKeypad } from './ExpenseKeypad';
 import type { ViewProps } from './registry';
 
 /** The keys fold to one button when there are more spendings than this (template-screens 2.2). */
 export const FOLD_AFTER = 10;
+/** How often «Читаю чек…» wakes the outbox while the page is open. */
+const READ_POLL_MS = 3000;
 /** The new line is marked this long. */
 const MARK_MS = 600;
 
@@ -57,6 +62,17 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
   const [menu, setMenu] = useState<string | null>(null);
   const [marked, setMarked] = useState<string | null>(null);
   const [kaspi, setKaspi] = useState(false);
+  const [editFirst, setEditFirst] = useState(false);
+  const jobs = useExpenses((s) => s.jobs);
+  const statements = useExpenses((s) => s.statements);
+  const duplicates = useExpenses((s) => s.duplicates);
+  const decided = useExpenses((s) => s.decided);
+
+  // Week 13: «Объединить?» pairs and plans the server has now (online; offline the phone's copies stay).
+  useEffect(() => {
+    void refreshDuplicates();
+    void refreshStatements();
+  }, [page.id]);
 
   // An expense shows only while its record is live: a record trashed on the page hides it.
   const deadItems = useMemo(
@@ -88,6 +104,26 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
     return () => clearTimeout(timer);
   }, [marked]);
 
+  const shownJobs = useMemo(() => visibleJobs(jobs), [jobs]);
+  const plans = useMemo(() => proposedStatements(statements), [statements]);
+  const pairs = useMemo(() => visibleDuplicates(duplicates, decided, live), [duplicates, decided, live]);
+  const toCheck = useMemo(
+    () => live.filter((e) => e.review_fields.includes('amount') && !e.id.startsWith('local:')).sort((a, b) => (a.created_at < b.created_at ? 1 : -1)),
+    [live],
+  );
+  const openEntry = () => (theme.largeFont ? setFullEntry(true) : setEntryOpen(true));
+  const reading = shownJobs.some((j) => j.state === 'reading');
+
+  // «Читаю чек…»: while the page is open the server is asked again soon (the outbox keeps its own
+  // backoff; this only wakes it instead of waiting for the 30 s foreground sync).
+  useEffect(() => {
+    if (!reading) return;
+    const timer = setInterval(() => {
+      if (!syncBlocked()) kickSync();
+    }, READ_POLL_MS);
+    return () => clearInterval(timer);
+  }, [reading]);
+
   const empty = live.length === 0;
   // Open on the first visit and on an empty page; folded when there are more than 10 spendings.
   const open = !theme.largeFont && (entryOpen ?? (empty || live.length <= FOLD_AFTER));
@@ -118,6 +154,25 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
         onlyToCheck={onlyToCheck}
         onToCheck={() => setOnlyToCheck((v) => !v)}
       />
+      <PlanCards plans={plans} />
+      <JobLines jobs={shownJobs} today={today} onType={openEntry} />
+      <DuplicateCards pairs={pairs} today={today} />
+      <CheckCards
+        entries={toCheck}
+        today={today}
+        onVerify={(e) =>
+          void changeExpense(
+            e.id,
+            { review_fields: e.review_fields.filter((f) => f !== 'amount' && f !== 'spent_on') },
+            t('exp.verified', { amount: formatMinor(toMinor(e.amount) ?? 0n, e.currency) }),
+          )
+        }
+        onEdit={(e) => {
+          setEditFirst(true);
+          setMenu(e.id);
+        }}
+        onShowAll={() => setOnlyToCheck(true)}
+      />
       {ordering ? <CategoryOrder chips={chips} pending={orderEdit?.keys ?? null} /> : null}
       {open ? (
         <InlineEntry today={today} chips={chips} onSave={save} onFold={live.length > 0 ? () => setEntryOpen(false) : null} />
@@ -134,6 +189,7 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
           {empty ? t('exp.empty_hint') : t('exp.or_say')}
         </AppText>
       ) : null}
+      <BringButton pageId={page.id} />
       {empty ? <Button testID="exp-kaspi" label={t('exp.kaspi_link')} variant="text" minHeight={theme.size.minTouch} onPress={() => setKaspi(true)} style={styles.start} /> : null}
       {catBars.length > 0 ? (
         <View testID="exp-bars" style={{ gap: theme.space[3] }}>
@@ -245,12 +301,16 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
           today={today}
           chips={chips}
           hasRecord={!!recordOf(menuEntry)}
+          startEditing={editFirst}
           onOpenRecord={() => {
             const rec = recordOf(menuEntry);
             setMenu(null);
             if (rec) router.navigate({ pathname: '/record/[id]', params: { id: rec.id, from: page.id } });
           }}
-          onClose={() => setMenu(null)}
+          onClose={() => {
+            setMenu(null);
+            setEditFirst(false);
+          }}
         />
       ) : null}
       {kaspi ? (
@@ -495,6 +555,8 @@ function FeedLine({ e, today, marked, onMenu }: { e: ExpenseOut; today: string; 
   const spoken = spokenAmount(e.amount, e.currency);
   const label = t(toCheck ? 'exp.row_check_a11y' : 'exp.row_a11y', { amount: spoken, title, category: catTitle, day: dayLabel(e.spent_on, today, lang, t) });
   const waits = e.id.startsWith('local:');
+  const from = sourceWord(e.source, t);
+  const meta = [catTitle, from, waits ? t('exp.waits') : null].filter(Boolean).join(' · ');
   return (
     <View
       testID={`exp-row-${e.id}`}
@@ -514,7 +576,7 @@ function FeedLine({ e, today, marked, onMenu }: { e: ExpenseOut; today: string; 
     >
       <View testID={`exp-row-label-${e.id}`} accessible accessibilityLabel={label} style={[styles.flex, { minWidth: theme.largeFont ? '60%' : undefined }]}>
         <AppText variant="bodyStrong">{title}</AppText>
-        <AppText variant="meta">{waits ? `${catTitle} · ${t('exp.waits')}` : catTitle}</AppText>
+        <AppText variant="meta">{meta}</AppText>
       </View>
       <View style={{ alignItems: 'flex-end' }}>
         <AppText
@@ -549,6 +611,7 @@ function ExpenseSheet({
   today,
   chips,
   hasRecord,
+  startEditing = false,
   onOpenRecord,
   onClose,
 }: {
@@ -556,6 +619,7 @@ function ExpenseSheet({
   today: string;
   chips: Category[];
   hasRecord: boolean;
+  startEditing?: boolean;
   onOpenRecord: () => void;
   onClose: () => void;
 }) {
@@ -563,13 +627,29 @@ function ExpenseSheet({
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
   const server = useExpenses((s) => s.categories);
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(startEditing);
   const sum = useSum();
   const title = lineTitle(e, server, lang, t('exp.no_category'));
   const amount = formatMinor(toMinor(e.amount) ?? 0n, e.currency);
-  const toCheck = e.review_fields.includes('amount');
+  const toCheck = e.review_fields.length > 0;
   return (
     <Sheet testID="exp-sheet" title={`${title} · ${amount}`} onClose={onClose}>
+      {e.line_items && e.line_items.length > 0 ? (
+        <View testID="exp-sheet-lines" style={{ gap: theme.space[1] }}>
+          <AppText variant="section">{t('exp.sheet_lines')}</AppText>
+          {e.line_items.map((l, i) => (
+            <View key={`${i}:${l.name}`} style={[styles.row, { gap: theme.space[2] }]}>
+              <AppText style={styles.flex}>{l.qty ? `${l.name} × ${l.qty}` : l.name}</AppText>
+              {l.total ? <AppText variant="number">{formatMinor(toMinor(l.total) ?? 0n, e.currency)}</AppText> : null}
+            </View>
+          ))}
+          {e.review_fields.includes('line_items') ? (
+            <AppText color="warnText" variant="meta">
+              {t('exp.sheet_lines_check')}
+            </AppText>
+          ) : null}
+        </View>
+      ) : null}
       {e.expression ? <AppText variant="meta">{t('exp.sheet_from', { expression: e.expression.replace(/-/g, '−') })}</AppText> : null}
       <AppText variant="section">{t('exp.sheet_category')}</AppText>
       <CategoryChips
@@ -596,7 +676,7 @@ function ExpenseSheet({
           variant="outline"
           onPress={() => {
             onClose();
-            void changeExpense(e.id, { review_fields: e.review_fields.filter((f) => f !== 'amount') }, t('exp.verified', { amount }));
+            void changeExpense(e.id, { review_fields: [] }, t('exp.verified', { amount }));
           }}
         />
       ) : null}

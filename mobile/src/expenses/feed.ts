@@ -148,3 +148,33 @@ export function spokenAmount(amount: string, currency: string): string {
   const unit = currency === 'KZT' ? 'тенге' : currency;
   return `${minor < 0n ? '−' : ''}${abs / 100n}${frac ? `,${String(frac).padStart(2, '0')}` : ''} ${unit}`;
 }
+
+// Week 13: the plan's period, in the accusative («за октябрь»).
+const MONTHS_RU = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
+// KK: drafts.
+const MONTHS_KK = ['қаңтар', 'ақпан', 'наурыз', 'сәуір', 'мамыр', 'маусым', 'шілде', 'тамыз', 'қыркүйек', 'қазан', 'қараша', 'желтоқсан'];
+
+/** «за октябрь» for a whole month, else «с 3 октября по 2 ноября». */
+export function planPeriod(st: { period_from: string | null; period_to: string | null }, lang: string, t: (k: string, o?: Record<string, unknown>) => string): string {
+  const from = st.period_from;
+  const to = st.period_to;
+  if (!from || !to) return '';
+  const [fy, fm, fd] = from.split('-').map(Number) as [number, number, number];
+  const [ty, tm, td] = to.split('-').map(Number) as [number, number, number];
+  const last = new Date(Date.UTC(ty, tm, 0)).getUTCDate();
+  if (fy === ty && fm === tm && fd === 1 && td === last) return t('exp.plan_month', { month: (lang === 'kk' ? MONTHS_KK : MONTHS_RU)[fm - 1] });
+  return t('exp.plan_range', { from: dayName(from, lang), to: dayName(to, lang) });
+}
+
+/** «Нашёл 86 операций за октябрь, 4 уже есть» (the plan's title; the period may be unknown yet). */
+export function planTitle(
+  st: { period_from: string | null; period_to: string | null },
+  found: number,
+  already: number,
+  lang: string,
+  t: (k: string, o?: Record<string, unknown>) => string,
+): string {
+  const head = t('exp.plan_found', { count: found, period: planPeriod(st, lang, t) });
+  const text = `${head}${already > 0 ? t('exp.plan_already', { count: already }) : ''}`;
+  return text.replace(/\s{2,}/g, ' ').replace(/\s+,/g, ',').trim();
+}

@@ -11,16 +11,19 @@ import { Button } from './Button';
 
 /**
  * «+» sheet: Фото / Камера / Файл / Вручную (2-design §4.3). Week 8: «Напоминание» opens the manual
- * form S13 (works offline and in «Без ИИ»); the other options are still stubs.
+ * form S13 (works offline and in «Без ИИ»). Week 13: on «Расходы» Фото / Камера / Файл bring a
+ * receipt photo or a statement PDF (the receipt screen); elsewhere they are still stubs.
  * Closes with a visible «Закрыть» button, not only by swipe.
  */
-export function AddSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+export function AddSheet({ visible, onClose, expensesPageId = null }: { visible: boolean; onClose: () => void; expensesPageId?: string | null }) {
   const theme = useTheme();
   const { t } = useTranslation();
+  const receipt: Record<string, string> = { photo: 'photo', camera: 'camera', file: 'statement' };
+  const works = (key: string) => key === 'reminder' || (expensesPageId !== null && key in receipt);
   const items = [
     { key: 'photo', label: t('add.photo'), Icon: ImageIcon },
     { key: 'camera', label: t('add.camera'), Icon: Camera },
-    { key: 'file', label: t('add.file'), Icon: FileText },
+    { key: 'file', label: expensesPageId ? t('exp.bring_statement') : t('add.file'), Icon: FileText },
     { key: 'manual', label: t('add.manual'), Icon: PencilLine },
     { key: 'reminder', label: t('add.reminder'), Icon: AlarmClock },
   ];
@@ -51,10 +54,11 @@ export function AddSheet({ visible, onClose }: { visible: boolean; onClose: () =
               testID={`add-${key}`}
               accessibilityRole="button"
               accessibilityLabel={label}
-              accessibilityHint={key === 'reminder' ? undefined : t('more.later')}
+              accessibilityHint={works(key) ? undefined : t('more.later')}
               onPress={() => {
                 onClose();
                 if (key === 'reminder') router.push('/reminder-new');
+                else if (expensesPageId && receipt[key]) router.push({ pathname: '/receipt', params: { kind: receipt[key]!, page: expensesPageId } });
               }}
               style={[styles.item, { minHeight: theme.size.primaryTouch, gap: theme.space[3] }]}
             >

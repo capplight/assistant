@@ -20,6 +20,7 @@ from assistant.api.routes import (
     devices,
     duplicates,
     events,
+    expense_docs,
     expenses,
     imports,
     items,
@@ -94,6 +95,9 @@ def create_app(
                          model=settings.chunk_embedding_model, dim=settings.embeddings_dim,
                          timeout=settings.search_embed_timeout_seconds))  # fmt: skip
     ctx.ai_router = ai_router if ai_router is not None else build_router(settings, sessionmaker)
+    from assistant.expenses.ofd import HttpOfdReader
+
+    ctx.ofd = HttpOfdReader(settings.expenses_ofd_domains)  # tests replace it with a fake
     ctx.chat = ChatService(settings, sessionmaker, ctx.ai_router, ctx.embedder,
                            push=push)  # fmt: skip
 
@@ -119,8 +123,8 @@ def create_app(
                    chat.feedback_router,
                    actions.router, reminders.router, tasks.router, today.router,
                    today.suggestions_router, duplicates.router, duplicates.pending_router,
-                   imports.router, collections.router, events.router, expenses.router,
-                   expenses.categories_router):
+                   imports.router, collections.router, events.router, expense_docs.router,
+                   expenses.router, expenses.categories_router):
         v1.include_router(router)
     if isinstance(storage, LocalObjectStorage):
         v1.include_router(misc.dev_storage)

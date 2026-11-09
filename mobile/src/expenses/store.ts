@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-import type { ExpenseCategoryOut, ExpenseOut } from '@/api/types';
+import type { ExpenseCategoryOut, ExpenseDuplicateOut, ExpenseOut, ReceiptDraftOut, StatementOut } from '@/api/types';
 import { persistStorage } from '@/store/storage';
 
 /**
@@ -14,6 +14,36 @@ import { persistStorage } from '@/store/storage';
 
 /** A change by hand not confirmed yet: the fields it sets (a deletion sets `deleted_at`). */
 export type ExpenseEdit = { fields: Partial<ExpenseOut>; clientId: string };
+
+/**
+ * Week 13: a receipt photo, a fiscal QR or a statement on its way to the server (and back): what
+ * the «Расходы» page shows until the spending is there («Читаю чек…», «Ждёт связи»).
+ */
+export type ReceiptJob = {
+  /** The `client_id` of its outbox row and of the server call. */
+  id: string;
+  kind: 'photo' | 'shared' | 'qr' | 'statement';
+  /** The local record of the photo / PDF (null for a QR: the server makes the record). */
+  recordId: string | null;
+  /** Its server id, once the record is there: a spending with this `item_id` is the answer. */
+  itemId: string | null;
+  /** The text of a fiscal QR, decoded on the phone. */
+  qr: string | null;
+  /**
+   * `waiting`: not sent yet (offline, or its record goes first) · `reading`: the server reads it ·
+   * `done`: the spending (or the plan) is here · `form`: no amount code could confirm, the keys ·
+   * `failed`: refused for good (not a fiscal QR, not a PDF, an unknown bank…), with the server's words.
+   */
+  state: 'waiting' | 'reading' | 'done' | 'form' | 'failed';
+  /** What code found for the form (`form`): the day, the shop. */
+  draft: ReceiptDraftOut | null;
+  /** What the server made of it. */
+  expenseIds: string[];
+  statementId: string | null;
+  /** The server's words when it could not read it. */
+  message: string | null;
+  createdAt: string;
+};
 
 /** The person's order of the chips, not confirmed yet. */
 export type OrderEdit = { keys: string[]; clientId: string };
@@ -29,11 +59,19 @@ type State = {
   orderEdit: OrderEdit | null;
   /** Entry id → the action that made it (its «Отменить» once sent). */
   createdBy: Record<string, string>;
+  /** Week 13: receipts and statements on their way, by job id. */
+  jobs: Record<string, ReceiptJob>;
+  /** Statements the server read (the plan «Нашёл 86 операций, 4 уже есть»), by id. */
+  statements: Record<string, StatementOut>;
+  /** «Похоже, эта трата уже есть» pairs the server found (`suggested`), by id. */
+  duplicates: Record<string, ExpenseDuplicateOut>;
+  /** Pairs decided here and not answered yet («Объединить» / «Это разные»): hidden at once. */
+  decided: string[];
   set: (p: Partial<Omit<State, 'set' | 'reset'>>) => void;
   reset: () => void;
 };
 
-const initial = { entries: {}, aliases: {}, edits: {}, categories: {}, orderEdit: null, createdBy: {} };
+const initial = { entries: {}, aliases: {}, edits: {}, categories: {}, orderEdit: null, createdBy: {}, jobs: {}, statements: {}, duplicates: {}, decided: [] };
 
 export const useExpenses = create<State>()(
   persist(

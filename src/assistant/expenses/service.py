@@ -27,6 +27,7 @@ from assistant.db.models_expenses import (
     Direction,
     ExpenseCategory,
     ExpenseEntry,
+    StatementImport,
 )
 from assistant.db.models_pages import Screen
 from assistant.db.models_v2 import RecordKind, RecordSource, RecordStatus
@@ -228,6 +229,14 @@ class NewExpense:
     parse_source: str | None = None
     expression: str | None = None
     phrase: str | None = None  # the person's words (the line): the record's text
+    # week 13
+    item: Item | None = None  # an existing record is the expense's record (a receipt photo)
+    review: list[str] | None = None  # None: R-36 by source (`review_for`)
+    line_items: list[dict] | None = None
+    source_ref: str | None = None  # statement row key / fiscal receipt key
+    statement_import_id: int | None = None
+    spent_at: datetime | None = None
+    record_meta: dict | None = None  # extra source_meta of a record made here
 
 
 @dataclass
@@ -267,46 +276,68 @@ def review_for(source: str) -> list[str]:
     return [] if source in TRUSTED_SOURCES else ["amount"]
 
 
+LOOKUP = object()  # `create(page=LOOKUP)`: find the «Расходы» page
+
+
 async def create(session: AsyncSession, user_id: int, spec: NewExpense, *, by: str,
-                 now: datetime, today: date,
-                 client_id: uuid.UUID | None = None) -> Created:  # fmt: skip
+                 now: datetime, today: date, client_id: uuid.UUID | None = None,
+                 page: Any = LOOKUP) -> Created:  # fmt: skip
+    """`spec.item` (week 13): the person's record (a receipt photo, a shared PDF) becomes the
+    expense's record; «Отменить» then takes the expense away and leaves the record. Else a note
+    record is made for the expense. `page`: the «Расходы» page (or None) when the caller already
+    looked it up (a statement's 80 rows)."""
     await lock_user(session, user_id)
-    await ensure_categories(session, user_id)
+    if page is LOOKUP:
+        await ensure_categories(session, user_id)
     spent_on = spec.spent_on or today
-    body_text = spec.phrase or (f"{label(spec.note, spec.payee, spec.category)} — "
-                                f"{calc.format_money(spec.amount, spec.currency)}")  # fmt: skip
-    body = normalize_text(body_text)
-    item = Item(user_id=user_id, client_id=uuid.uuid4(), kind=RecordKind.NOTE,
-                source=RecordSource.MIC if spec.source == "voice" else RecordSource.TYPED,
-                status=RecordStatus.PENDING, title=None, text=body,
-                text_lang=detect_lang(body), content_hash=content_hash(body),
-                source_meta={"expense": True}, ai_generated=by == Initiator.AGENT)  # fmt: skip
-    session.add(item)
-    await session.flush()
-    item.occurred_at = item.created_at
+    own_item = spec.item is not None
+    if spec.item is not None:
+        item = spec.item
+    else:
+        body_text = spec.phrase or (f"{label(spec.note, spec.payee, spec.category)} — "
+                                    f"{calc.format_money(spec.amount, spec.currency)}")  # fmt: skip
+        body = normalize_text(body_text)
+        item = Item(user_id=user_id, client_id=uuid.uuid4(), kind=RecordKind.NOTE,
+                    source=RecordSource.MIC if spec.source == "voice" else RecordSource.TYPED,
+                    status=RecordStatus.PENDING, title=None, text=body,
+                    text_lang=detect_lang(body), content_hash=content_hash(body),
+                    source_meta={"expense": True, **(spec.record_meta or {})},
+                    ai_generated=by == Initiator.AGENT)  # fmt: skip
+        session.add(item)
+        await session.flush()
+        item.occurred_at = item.created_at
     entry = ExpenseEntry(
         user_id=user_id, item_id=item.id, client_id=client_id, amount=spec.amount,
         currency=spec.currency, expression=spec.expression, spent_on=spent_on,
+        spent_at=spec.spent_at,
         category_id=spec.category.id if spec.category else None, payee=spec.payee,
         payee_norm=payee_norm(spec.payee), method=spec.method, direction=spec.direction,
         note=spec.note, source=spec.source, parse_source=spec.parse_source,
-        review_fields=review_for(spec.source),
-        dedup_key=dedup_key(spec.amount, spent_on, spec.payee),
+        review_fields=list(spec.review) if spec.review is not None else review_for(spec.source),
+        dedup_key=dedup_key(spec.amount, spent_on, spec.payee), line_items=spec.line_items,
+        source_ref=spec.source_ref, statement_import_id=spec.statement_import_id,
         ai_generated=by == Initiator.AGENT,
     )  # fmt: skip
     session.add(entry)
     await session.flush()
-    await enqueue_ingest(session, item)
-    await place_item(session, item)  # «Расходы» takes it; «Заметки» leaves it then (rules.py)
+    if not own_item:
+        await enqueue_ingest(session, item)
+        await place_item(session, item)  # «Расходы» takes it; «Заметки» leaves it then (rules.py)
     out = Created(entry=entry, item=item)
-    out.page = await expenses_page(session, user_id)
-    out.inverse = [{"op": "delete_entity_soft", "entity": "expenses", "id": str(entry.public_id),
-                    "item": str(item.public_id)}]  # fmt: skip
+    out.page = await expenses_page(session, user_id) if page is LOOKUP else page
+    if own_item:
+        out.inverse = [{"op": "set_expense_live", "id": str(entry.public_id),
+                        "item": str(item.public_id), "live": False}]  # fmt: skip
+    else:
+        out.inverse = [{"op": "delete_entity_soft", "entity": "expenses",
+                        "id": str(entry.public_id), "item": str(item.public_id)}]  # fmt: skip
     if out.page is not None:
         res = await engine.apply(session, user_id, [
             {"op": "add_screen_item", "page": str(out.page.public_id),
              "item": str(item.public_id)}], by=by, check=False, now=now)  # fmt: skip
         out.pages |= res.pages | {out.page.id}
+        if own_item:  # the photo was not on «Расходы» before: «Отменить» takes it off again
+            out.inverse = [*res.inverse, *out.inverse]
     out.items.add(str(item.public_id))
     out.sentence = sentence(spec.amount, spec.currency, spec.category, spec.direction)
     out.changes = [{"item_id": str(item.public_id), "expense_id": str(entry.public_id),
@@ -336,6 +367,7 @@ async def expenses_dicts(session: AsyncSession,
                          rows: Sequence[ExpenseEntry]) -> list[dict[str, Any]]:  # fmt: skip
     items: dict[int, uuid.UUID] = {}
     cats: dict[int, ExpenseCategory] = {}
+    statements: dict[int, uuid.UUID] = {}
     if rows:
         items = dict((await session.execute(select(Item.id, Item.public_id).where(
             Item.id.in_({r.item_id for r in rows})))).tuples().all())  # fmt: skip
@@ -343,11 +375,17 @@ async def expenses_dicts(session: AsyncSession,
         if ids:
             cats = {c.id: c for c in await session.scalars(
                 select(ExpenseCategory).where(ExpenseCategory.id.in_(ids)))}  # fmt: skip
-    return [expense_dict(r, items.get(r.item_id), cats.get(r.category_id or 0)) for r in rows]
+        sids = {r.statement_import_id for r in rows if r.statement_import_id}
+        if sids:
+            statements = dict((await session.execute(
+                select(StatementImport.id, StatementImport.public_id)
+                .where(StatementImport.id.in_(sids)))).tuples().all())  # fmt: skip
+    return [expense_dict(r, items.get(r.item_id), cats.get(r.category_id or 0),
+                         statements.get(r.statement_import_id or 0)) for r in rows]
 
 
-def expense_dict(e: ExpenseEntry, item_id: uuid.UUID | None,
-                 cat: ExpenseCategory | None) -> dict[str, Any]:  # fmt: skip
+def expense_dict(e: ExpenseEntry, item_id: uuid.UUID | None, cat: ExpenseCategory | None,
+                 statement_id: uuid.UUID | None = None) -> dict[str, Any]:  # fmt: skip
     return {
         "id": e.public_id, "client_id": e.client_id, "item_id": item_id,
         "amount": f"{calc.money(e.amount):.2f}", "currency": e.currency,
@@ -355,7 +393,8 @@ def expense_dict(e: ExpenseEntry, item_id: uuid.UUID | None,
         "category_id": cat.public_id if cat else None, "category_key": category_key(cat),
         "payee": e.payee, "method": e.method, "direction": e.direction, "note": e.note,
         "source": e.source, "parse_source": e.parse_source,
-        "review_fields": list(e.review_fields or []), "ai_generated": e.ai_generated,
+        "review_fields": list(e.review_fields or []), "line_items": e.line_items,
+        "statement_id": statement_id, "ai_generated": e.ai_generated,
         "version": e.version, "seq": e.seq, "created_at": e.created_at,
         "updated_at": e.updated_at, "deleted_at": e.deleted_at,
     }  # fmt: skip

@@ -175,6 +175,11 @@ class Settings(BaseSettings):
     # shared vectors docs/spec/vectors/amounts.json). The keypad sum is code always (arithmetic).
     # Env EXPENSES_RULES_FIRST=true.
     expenses_rules_first: bool = False
+    # «Расходы 2» (week 13): fiscal receipt QR links are accepted only for these OFD hosts and
+    # their subdomains (spec 5.7 rule 7) [проверить список ОФД на нед. 0]; the server fetches the
+    # OFD page (SSRF-guarded) only when `expenses_ofd_fetch`. Env EXPENSES_OFD_DOMAINS='["..."]'.
+    expenses_ofd_domains: list[str] = ["oofd.kz", "ofd1.kz", "kofd.kz", "wofd.kz"]
+    expenses_ofd_fetch: bool = True
     # Suggestions (spec 3.4, R-35, R-08): tips per day, pause after «Не сейчас», data proposals.
     suggestions_tips_per_day_new: int = 2  # the first `suggestions_new_days` days of the account
     suggestions_tips_per_day: int = 1

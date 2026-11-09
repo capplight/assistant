@@ -317,7 +317,11 @@ export function AssistantLine({ scope, compact = false }: { scope?: 'all'; compa
           {right}
         </View>
       )}
-      <AddSheet visible={addOpen} onClose={() => setAddOpen(false)} />
+      <AddSheet
+        visible={addOpen}
+        onClose={() => setAddOpen(false)}
+        expensesPageId={current.kind === 'page' && current.page.templateKey === 'expenses' ? current.page.id : null}
+      />
     </View>
   );
 }

@@ -1,4 +1,4 @@
-# Mobile app — week 12 («Расходы» — the expense calculator) on week 11's PageFrame + view registry
+# Mobile app — week 13 («Расходы 2»: receipts, QR, statements) on week 12 («Расходы» — the expense calculator) on week 11's PageFrame + view registry
 
 Expo SDK 58 (React Native 0.88, New Architecture), TypeScript strict, expo-router.
 Spec: `../docs/spec/SPEC.md`, `../docs/spec/final/2-design.md`, `../docs/spec/final/3-engineering.md` §2.1, §11.2 (week 1, Mobile).
@@ -92,6 +92,24 @@ src/
   alarms/                    week 8: port (FakeAlarms), native + notification adapters, planner, S15 steps, service
 modules/alarms/              native Expo module: Android (Kotlin) AlarmManager + S14 + battery-guide, iOS (Swift) AlarmKit
 ```
+
+## Week 13: what works
+
+Contract: `../docs/api/expenses.md` «Week 13», `routes/expense_docs.py`, `duplicates.md` (`import_statement`) as of 2026-11-10.
+Shapes only in `src/api/types.ts` + `src/api/endpoints.ts`. **Checked by Jest with a fake server and synthetic data only: not
+against the real server, not on a device (camera, QR scanner, picker untested on a phone).** KK strings of this week are drafts.
+New dependencies: `expo-camera`, `expo-image-picker`, `expo-image-manipulator` (need a development build).
+
+- **«Чек или выписка»** on «Расходы» (and «+» Фото / Камера / Файл there) → `app/receipt.tsx`: the camera explained in plain words
+  before the system asks; off in settings → «Открыть настройки» + gallery. Photo ≤2048 px JPEG q0.8, no EXIF. Saved as a record at
+  once (offline too), outbox `expense.receipt` → `POST /expenses/from-item` (`waiting` → asked again, «Читаю чек…»; `form` →
+  «Набрать сумму»). QR decoded on the phone (`QrCamera`), offline the line shows the link's `s`/`t`; `POST /expenses/from-qr`.
+- **«Поделиться»** of one PDF / picture asks «Что это?» (чек · выписка · просто сохранить).
+- **Statement plan** (`app/statement/[id].tsx`): «Нашёл 86 операций за октябрь, 4 уже есть», «Потрачено» from `adds`, the rows
+  re-counted on the phone in tiyn and compared, the bank check; one «Да», «Не сейчас»; after «Да» one «Отменить» (action undo).
+  Nothing is written before «Да»; offline «Да» says so.
+- **«Проверьте сумму»** cards with «Верно» (`confirm` of the reviewed fields) and «Изменить» (the keys of that spending).
+- **«Объединить?»** (`GET/POST /expenses/duplicates…`): merge with «Отменить»; «Это разные» (no server undo: the strip only shows the pair again here).
 
 ## Week 12: what works
 

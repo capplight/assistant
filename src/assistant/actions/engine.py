@@ -69,7 +69,9 @@ OPS = frozenset({"restore_positions", "restore_view_state", "add_screen_item",
                  # week 11 (actions/ops_view.py): page views
                  "set_view_key", "set_appearance", "set_facet",
                  # week 12 (actions/ops_expenses.py): «Расходы»
-                 "set_expense", "set_expense_category"})  # fmt: skip
+                 "set_expense", "set_expense_category",
+                 # week 13: an expense leaves while its record (a receipt photo) stays
+                 "set_expense_live"})  # fmt: skip
 HABIT_STATUSES = frozenset({"candidate", "active", "disabled"})
 ENTITIES = frozenset({"items", "screens", "tasks", "expenses"})
 OWNED = frozenset({"tasks", "expenses"})  # a row with its own record: trash / back together

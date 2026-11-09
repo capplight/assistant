@@ -1234,6 +1234,10 @@ export type ExpenseOut = {
   parse_source: 'rules' | 'llm' | 'user_edit' | null;
   /** «Проверьте» (R-36): `["amount"]` until «Верно». */
   review_fields: string[];
+  /** Week 13: the lines of a receipt (`total` found by code in its text), or null. */
+  line_items: { name: string; qty: string | null; total: string | null }[] | null;
+  /** Week 13: the statement import this row came from, or null. */
+  statement_id: string | null;
   ai_generated: boolean;
   version: number;
   seq: number;
@@ -1322,3 +1326,116 @@ export type ExpenseAggregateOut = {
   review_count: number;
   basis_ids: string[];
 };
+
+// --- week 13: «Расходы 2» — receipts, fiscal QR, bank statements, repeats of spendings ---
+// (docs/api/expenses.md «Week 13», 3-engineering 4.11, 6.13). The phone reads nothing in a picture
+// or a PDF: the server reads them and code checks every number. Money is text, as in week 12.
+
+/** POST /expenses/from-item: `receipt` = a photo / screenshot, `shared_receipt` = a Kaspi / bank receipt shared in. */
+export type ReceiptFromItemIn = { client_id: string; item_id: string; kind: 'receipt' | 'shared_receipt'; save?: boolean };
+
+/** POST /expenses/from-qr: the link of a fiscal receipt's QR, decoded on the phone (the phone never opens it). */
+export type ReceiptFromQrIn = { client_id: string; url: string; item_id?: string | null };
+
+/** What code found for the form when it could not confirm an amount (`status: "form"`). */
+export type ReceiptDraftOut = {
+  amount: string | null;
+  currency: string;
+  spent_on: string | null;
+  category_key: string | null;
+  note: string | null;
+  payee: string | null;
+  review_fields: string[];
+};
+
+/** «Похоже, эта трата уже есть»: `keep` stays on «Объединить», `other` goes to the trash with its record. */
+export type ExpenseDuplicateOut = {
+  id: string;
+  status: 'suggested' | 'merged' | 'dismissed' | 'undone';
+  keep: ExpenseOut;
+  other: ExpenseOut;
+  text_ru: string | null;
+  action_id: string | null;
+  created_at: string | null;
+  decided_at: string | null;
+};
+
+/**
+ * The answer of from-item / from-qr. `ok` saved (strip with «Отменить»); `waiting` = the text is not
+ * read yet, ask again after `retry_after` s; `form` = no amount code could confirm (the keys, with
+ * `draft`); `exists` = this record / fiscal receipt already has its spending.
+ */
+export type ReceiptOut = {
+  status: 'ok' | 'waiting' | 'form' | 'exists';
+  expense: ExpenseOut | null;
+  action: ActionOut | null;
+  page_patches: PagePatchOut[];
+  draft: ReceiptDraftOut | null;
+  duplicate: ExpenseDuplicateOut | null;
+  message: string | null;
+  retry_after: number | null;
+  repeated: boolean;
+};
+
+export type StatementStatus = 'proposed' | 'confirmed' | 'undone' | 'rejected' | 'expired';
+
+/** One line of the check of code's sums against the bank's own summary, to the tiyn. */
+export type StatementCheckLineOut = { key: string; title: string; bank: string | null; ours: string | null; ok: boolean };
+
+/** What «Да» adds, by kind (code, `calc.py`). `transfers` and `transfer_own` are in no total. */
+export type StatementAddsOut = { expense: string; refund: string; income: string; transfers: string; transfer_own: string };
+
+/** A bank statement PDF read by code: the plan («Нашёл 86 операций за октябрь, 4 уже есть»), then one «Да». */
+export type StatementOut = {
+  id: string;
+  client_id: string | null;
+  item_id: string | null;
+  status: StatementStatus;
+  bank: string | null;
+  parser: 'template' | 'model' | null;
+  currency: string;
+  period_from: string | null;
+  period_to: string | null;
+  rows_found: number;
+  rows_new: number;
+  rows_existing: number;
+  rows_similar: number;
+  /** null for `parser: model` (no bank summary to check against). */
+  check: { ok: boolean; lines: StatementCheckLineOut[] } | null;
+  adds: StatementAddsOut | null;
+  summary_ru: string | null;
+  error: string | null;
+  pending_action_id: string | null;
+  action_id: string | null;
+  created_at: string | null;
+  decided_at: string | null;
+};
+
+/** One operation of the plan (GET /expenses/statements/{id}, only while `proposed`). */
+export type StatementRowOut = {
+  n: number;
+  date: string;
+  amount: string;
+  currency: string;
+  kind: string;
+  direction: ExpenseDirection;
+  description: string | null;
+  method: ExpenseMethod | null;
+  category_key: string | null;
+  note: string | null;
+  /** `existing`: not created («уже есть»); `similar`: created and offered for «Объединить?». */
+  state: 'new' | 'existing' | 'similar';
+  existing_expense_id: string | null;
+  review_fields: string[];
+};
+
+/** POST /expenses/statements. */
+export type StatementIn = { client_id: string; item_id: string };
+export type StatementPlanOut = { statement: StatementOut | null; pending_action: PendingActionOut | null; repeated: boolean };
+export type StatementWithRowsOut = { statement: StatementOut | null; rows: StatementRowOut[] };
+/** «Да»: every new and similar row is a spending in one `bulk_create_expenses` action (one «Отменить»). */
+export type StatementConfirmOut = { statement: StatementOut | null; action: ActionOut | null; created: number; duplicates: ExpenseDuplicateOut[]; repeated: boolean };
+
+/** POST /expenses/duplicates/{id}/merge: `keep_id` only to keep the other one. */
+export type ExpenseMergeIn = { client_id: string; keep_id?: string };
+export type ExpenseMergeOut = { duplicate: ExpenseDuplicateOut | null; expense: ExpenseOut | null; action: ActionOut | null; repeated: boolean };

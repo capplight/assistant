@@ -102,6 +102,8 @@ export async function addExpense(x: NewExpense, stripText: string): Promise<stri
     source: 'form',
     parse_source: null,
     review_fields: [],
+    line_items: null,
+    statement_id: null,
     ai_generated: false,
     version: 0,
     seq: 0,
@@ -393,7 +395,7 @@ function serverIdOf(key: string): string | null {
   return null;
 }
 
-async function patchBody(clientId: string, f: Partial<ExpenseOut>, entry: ExpenseOut | undefined): Promise<ExpensePatchIn> {
+async function patchBody(clientId: string, f: Partial<ExpenseOut>, entry: ExpenseOut | undefined, before: Partial<ExpenseOut> = {}): Promise<ExpensePatchIn> {
   const body: ExpensePatchIn = { client_id: clientId };
   if (entry && entry.version > 0) body.version = entry.version;
   if ('amount' in f && f.amount) body.amount = f.amount;
@@ -401,8 +403,14 @@ async function patchBody(clientId: string, f: Partial<ExpenseOut>, entry: Expens
   if ('category_key' in f) body.category_id = f.category_id ?? (await categoryIdOf(f.category_key ?? null));
   if ('expression' in f) body.expression = f.expression ?? null;
   if ('payee' in f) body.payee = f.payee ?? null;
-  // «Верно» (expenses.md): `confirm: ["amount"]`; a changed amount clears «Проверьте» by itself.
-  if ('review_fields' in f && !('amount' in f) && !(f.review_fields ?? []).includes('amount')) body.confirm = ['amount'];
+  // «Верно» (expenses.md): `confirm: [...]` = the fields no longer «Проверьте» (week 13: also `spent_on`,
+  // `payee`, `line_items`); a field changed by hand clears its «Проверьте» by itself, so it is not sent.
+  if ('review_fields' in f) {
+    const now = f.review_fields ?? [];
+    const was = before.review_fields ?? entry?.review_fields ?? ['amount'];
+    const confirm = was.filter((k) => !now.includes(k) && !(k in f));
+    if (confirm.length > 0) body.confirm = confirm;
+  }
   return body;
 }
 
@@ -412,14 +420,14 @@ async function sendPatch(e: OutboxEntry): Promise<void> {
   if (!id) return settleEdit(p.key, p.clientId);
   let out: ExpenseWriteOut;
   try {
-    out = await getApi().patchExpense(id, await patchBody(p.clientId, p.fields, expensesState().entries[id]));
+    out = await getApi().patchExpense(id, await patchBody(p.clientId, p.fields, expensesState().entries[id], p.before));
   } catch (err) {
     if (err instanceof ApiError && err.status === 409) {
       // Changed on another phone meanwhile: the person's tap still wins, once, on the server's version.
       const version = (err.details as { version?: unknown } | undefined)?.version;
       const base = expensesState().entries[id];
       const fresh = base && typeof version === 'number' ? { ...base, version } : undefined;
-      out = await getApi().patchExpense(id, await patchBody(p.clientId, p.fields, fresh));
+      out = await getApi().patchExpense(id, await patchBody(p.clientId, p.fields, fresh, p.before));
     } else {
       if (!isRetryable(err)) refused(p.key, err, false, p.clientId);
       throw err;

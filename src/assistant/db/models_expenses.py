@@ -1,4 +1,5 @@
-"""«Расходы» (migration 0018, frozen SQL; spec 3.12): expenses and categories. Allowed values are
+"""«Расходы» (migrations 0018, 0019, frozen SQL; spec 3.12): expenses, categories, statement
+imports and expense repeats (week 13). Allowed values are
 the StrEnums below and must match the CHECKs in the migration. `seq` is set by the `sync_seq_bump`
 trigger."""
 
@@ -129,7 +130,10 @@ class ExpenseEntry(Base):
     source: Mapped[str] = mapped_column(Text)
     parse_source: Mapped[str | None] = mapped_column(Text)
     review_fields: Mapped[list] = mapped_column(JSONB, default=list)
-    statement_import_id: Mapped[int | None] = mapped_column(BigInteger)
+    statement_import_id: Mapped[int | None] = mapped_column(
+        ForeignKey("statement_imports.id", ondelete="SET NULL")
+    )
+    source_ref: Mapped[str | None] = mapped_column(Text)  # statement row / fiscal receipt key
     dedup_key: Mapped[str | None] = mapped_column(Text)
     line_items: Mapped[list | None] = mapped_column(JSONB)
     ai_generated: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -140,3 +144,73 @@ class ExpenseEntry(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class StatementStatus(enum.StrEnum):
+    PARSED = "parsed"
+    PROPOSED = "proposed"
+    CONFIRMED = "confirmed"
+    UNDONE = "undone"
+    REJECTED = "rejected"
+    EXPIRED = "expired"
+    FAILED = "failed"
+
+
+class StatementImport(Base):
+    """A bank statement read into a plan (week 13). `rows` wait here until «Да»."""
+
+    __tablename__ = "statement_imports"
+    __mapper_args__ = {"eager_defaults": True}
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(Uuid, default=uuid7, unique=True)
+    client_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    item_id: Mapped[int | None] = mapped_column(ForeignKey("items.id", ondelete="SET NULL"))
+    bank_hint: Mapped[str] = mapped_column(Text)
+    parser: Mapped[str] = mapped_column(Text)
+    currency: Mapped[str] = mapped_column(String(3), default="KZT")
+    period_from: Mapped[date | None] = mapped_column(Date)
+    period_to: Mapped[date | None] = mapped_column(Date)
+    rows_found: Mapped[int] = mapped_column(Integer, default=0)
+    rows_new: Mapped[int] = mapped_column(Integer, default=0)
+    rows_duplicate: Mapped[int] = mapped_column(Integer, default=0)
+    rows_similar: Mapped[int] = mapped_column(Integer, default=0)
+    rows: Mapped[list] = mapped_column(JSONB, default=list)
+    check: Mapped[dict | None] = mapped_column("check", JSONB)
+    adds: Mapped[dict] = mapped_column(JSONB, default=dict)
+    status: Mapped[str] = mapped_column(Text)
+    error: Mapped[str | None] = mapped_column(Text)
+    pending_action_id: Mapped[int | None] = mapped_column(
+        ForeignKey("pending_actions.id", ondelete="SET NULL")
+    )
+    action_id: Mapped[int | None] = mapped_column(ForeignKey("actions.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class DuplicateStatus(enum.StrEnum):
+    SUGGESTED = "suggested"
+    MERGED = "merged"
+    DISMISSED = "dismissed"
+
+
+class ExpenseDuplicate(Base):
+    """«Похоже, эта трата уже есть [Объединить?]»: a pair found by code (week 13)."""
+
+    __tablename__ = "expense_duplicates"
+    __mapper_args__ = {"eager_defaults": True}
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(Uuid, default=uuid7, unique=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    keep_id: Mapped[int] = mapped_column(ForeignKey("expense_entries.id", ondelete="CASCADE"))
+    other_id: Mapped[int] = mapped_column(ForeignKey("expense_entries.id", ondelete="CASCADE"))
+    status: Mapped[str] = mapped_column(Text, default=DuplicateStatus.SUGGESTED)
+    reason: Mapped[str] = mapped_column(Text)  # statement | receipt | same_day
+    action_id: Mapped[int | None] = mapped_column(ForeignKey("actions.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

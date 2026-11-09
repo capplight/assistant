@@ -14,6 +14,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAlarmsLifecycle } from '@/alarms/useAlarms';
 import { ToastHost } from '@/components/Toast';
 import { usePushAnswers } from '@/push/usePushAnswers';
+import { ShareAskHost } from '@/share/ShareAskHost';
 import { ShareIntentRoot } from '@/share/ShareIntentBridge';
 import { useBackgroundSync } from '@/sync/useBackgroundSync';
 import { useTheme } from '@/theme';
@@ -59,7 +60,10 @@ export default function RootLayout() {
             <Stack.Screen name="reminder-new" options={{ presentation: 'modal' }} />
             <Stack.Screen name="notify" options={{ gestureEnabled: false }} />
             <Stack.Screen name="page-settings/[id]" />
+            <Stack.Screen name="receipt" options={{ presentation: 'fullScreenModal' }} />
+            <Stack.Screen name="statement/[id]" />
           </Stack>
+          <ShareAskHost />
           <ToastHost />
         </ThemeProvider>
       </SafeAreaProvider>

@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { getCapture } from '@/services';
 import { useToast } from '@/store/toast';
 
+import { askFor, useShareAsk } from './ask';
 import { saveSharedContent } from './handler';
 
 /** Expo Go has no share extension — the native module is off there (needs a dev build). */
@@ -26,6 +27,9 @@ function ShareIntentSaver() {
         const capture = await getCapture();
         const saved = await saveSharedContent(capture, shareIntent);
         if (saved.length > 0) show(t('saved'));
+        // Week 13: one PDF or picture — a receipt, a statement or just a file? The person says.
+        const ask = askFor(saved);
+        if (ask) useShareAsk.getState().set(ask);
       } catch (e) {
         console.warn('share save failed', e);
         show(t('share.failed'), 3000);

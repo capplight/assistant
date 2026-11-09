@@ -67,7 +67,11 @@ export type OutboxKind =
   /** «Удалить» a spending (DELETE /expenses/{id}). */
   | 'expense.delete'
   /** The person's order of the category chips (PATCH /expense-categories/reorder). */
-  | 'expense.categories';
+  | 'expense.categories'
+  /** Week 13: a receipt photo / shared receipt (POST /expenses/from-item) or a fiscal QR (POST /expenses/from-qr). */
+  | 'expense.receipt'
+  /** Week 13: a statement PDF → its plan (POST /expenses/statements); nothing is added before «Да». */
+  | 'expense.statement';
 
 export type OutboxStatus = 'pending' | 'sent' | 'failed';
 

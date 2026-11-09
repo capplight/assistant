@@ -1343,6 +1343,8 @@ class ExpenseOut(BaseModel):
     source: str
     parse_source: str | None
     review_fields: list[str]
+    line_items: list[dict[str, Any]] | None = None  # week 13: receipt lines
+    statement_id: uuid.UUID | None = None  # week 13: the statement import of this row
     ai_generated: bool
     version: int
     seq: int
@@ -1396,7 +1398,8 @@ class ExpensePatchIn(BaseModel):
     payee: str | None = Field(default=None, max_length=120)
     method: MethodStr | None = None
     direction: DirectionStr | None = None
-    confirm: list[Literal["amount"]] = Field(default_factory=list, max_length=5)
+    confirm: list[Literal["amount", "spent_on", "payee", "line_items"]] = Field(
+        default_factory=list, max_length=5)
 
 
 class ExpenseCreatedOut(BaseModel):

@@ -134,7 +134,7 @@ there now and also starts a fresh scan for similar ones. `200`:
 Open ones only (`proposed`, not expired), newest first. Same shape as in `/v1/sync`.
 
 ### `POST /v1/pending-actions/{id}/confirm`
-`{"client_id": "..."}` optional. Today only `cleanup_batch`. Runs it: every group of the plan,
+`{"client_id": "..."}` optional. Kinds: `cleanup_batch`, and `import_statement` (week 13, a bank statement plan: `expenses.md`; its own route `POST /v1/expenses/statements/{id}/confirm` returns more). Runs it: every group of the plan,
 copies still exactly the same; a copy changed or removed since is left alone. `200`:
 `{"pending_action": PendingAction (status "executed"), "action": Action | null, "repeated": false}`.
 `action.kind` = `cleanup_batch`, «Убрал 38 повторов», one «Отменить» for the whole batch.

@@ -6,7 +6,7 @@ Tests override `get_current_user` / `get_active_consent_kinds` / `get_db` to run
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import Depends, Request
 from sqlalchemy import select
@@ -37,6 +37,7 @@ class ApiContext:
     embedder: ChunkEmbedder = field(default_factory=NullChunkEmbedder)
     chat: "ChatService | None" = None  # the assistant line (assistant.chat)
     ai_router: "Router | None" = None  # the same router chat uses (reminder_parse, week 8)
+    ofd: Any = None  # week 13: the OFD page reader (expenses.ofd.OfdReader); tests set a fake
 
     def hash(self, value: str, *, purpose: str) -> str:
         return keyed_hash(self.hash_key, value, purpose=purpose)

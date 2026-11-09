@@ -44,6 +44,8 @@ USER_TABLES: dict[str, Mode] = {
     # «Расходы» (week 12): user rows cascade; catalogue rows (user_id NULL) hold no personal data
     "public.expense_entries": "cascade",
     "public.expense_categories": "cascade",
+    "public.statement_imports": "cascade",  # week 13: a statement plan (rows wait until «Да»)
+    "public.expense_duplicates": "cascade",  # week 13: «Похоже, эта трата уже есть»
     "public.user_habits": "cascade",
     # chat and actions
     "public.conversations": "cascade",
