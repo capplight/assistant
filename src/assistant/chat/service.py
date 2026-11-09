@@ -17,6 +17,11 @@ Week 9: a reminder phrase («напомни…», «разбуди…») gets a 
 saved (the same reader as /reminders/parse); a list phrase («купить хлеб и молоко», «добавь в
 покупки…», anything typed on «Покупки» / «Дела») becomes tasks on the list page in one action
 (assistant.tasks; the model reads it by default, code first only with `tasks_rules_first`, Ф-1).
+
+Week 12: an expense phrase («потратил 5000 на бензин» anywhere, a bare «5000 бензин» on «Расходы»)
+becomes an expense in one action (assistant.expenses; the model reads it by default and code
+checks the amount is in the person's words, code first only with `expenses_rules_first`, Ф-1). A
+question about spending is answered with the `aggregate` tool: the totals are code.
 """
 
 import asyncio
@@ -99,6 +104,8 @@ from assistant.db.models_chat import (
 )
 from assistant.db.models_pages import Screen
 from assistant.embeddings import ChunkEmbedder, NullChunkEmbedder
+from assistant.expenses import parse as expenses_parse
+from assistant.expenses import service as expenses_service
 from assistant.logs import error_text
 from assistant.tasks import parse as tasks_parse
 from assistant.tasks import service as tasks_service
@@ -497,6 +504,8 @@ class ChatService:
                 else:
                     await self._reminder_draft(run, turn)
                 return
+            if turn.input_kind != "share" and await self._save_expense(run, turn):
+                return  # «потратил 5000 на бензин» → «Расходы», one action (US-31)
             reading = rules_first(turn.text, input_kind=turn.input_kind)
             list_page = await self._list_of_page(turn)
             if reading.intent == Intent.UNCLEAR and list_page:
@@ -669,6 +678,75 @@ class ChatService:
             key = await session.scalar(select(Screen.template_key).where(
                 Screen.id == turn.page_pk, Screen.user_id == turn.user_id))  # fmt: skip
         return LIST_TEMPLATES.get(key or "")
+
+    async def _page_template(self, turn: TurnInput) -> str | None:
+        if turn.page_pk is None:
+            return None
+        async with self.sessionmaker() as session:
+            return await session.scalar(select(Screen.template_key).where(
+                Screen.id == turn.page_pk, Screen.user_id == turn.user_id))  # fmt: skip
+
+    async def _save_expense(self, run: ReplyRun, turn: TurnInput) -> bool:
+        """An expense phrase → an expense on «Расходы», one action (US-31). False: not one (the
+        caller goes on). The reader sees the person's phrase (and their category names) only;
+        the amount is checked by code against the words; totals are code (`expenses.calc`)."""
+        from assistant.actions import actions_dicts, record
+        from assistant.actions.patch import page_patches
+
+        on_page = await self._page_template(turn) == expenses_service.PAGE_TEMPLATE
+        if not expenses_parse.mentions_expense(turn.text, on_page=on_page):
+            return False
+        _, today = await self._local_today(turn.user_id)
+        async with self.sessionmaker() as s:
+            cats = await expenses_service.reader_categories(s, turn.user_id)
+            await s.commit()
+        draft = await expenses_parse.read_phrase(
+            turn.text, today=today, rules_first=self.s.expenses_rules_first, router=self.router,
+            user_id=turn.user_id, categories=cats, on_page=on_page)  # fmt: skip
+        if draft is None:
+            return False
+        book = await book_for(self.sessionmaker, turn.user_id, turn.page_pk)
+        m = self._mutation(run, turn, book, True, False)
+        now = self.clock()
+        voice = turn.input_kind == "voice"
+        async with self.sessionmaker() as s:
+            cat = await expenses_service.category_by_key(s, turn.user_id, draft.category_key)
+            spec = expenses_service.NewExpense(
+                amount=draft.amount, currency=draft.currency, spent_on=draft.spent_on,
+                category=cat, note=draft.note, payee=draft.payee, method=draft.method,
+                direction=draft.direction, source="voice" if voice else "typed",
+                parse_source=draft.source, phrase=turn.text)  # fmt: skip
+            created = await expenses_service.create(s, turn.user_id, spec, by=Initiator.AGENT,
+                                                    now=now, today=today)  # fmt: skip
+            action = await record(
+                s, user_id=turn.user_id, kind=ActionKind.CREATE_EXPENSE,
+                initiated_by=Initiator.AGENT, summary={"ru": created.sentence, "kk": None},
+                changes=created.changes, inverse=created.inverse, now=now,
+                screen_id=created.page.id if created.page else None, message_id=run.reply_pk,
+                source_item_ids=[created.item.id],
+            )  # fmt: skip
+            await s.flush()
+            patches = await page_patches(s, turn.user_id, created.pages, created.items)
+            out_action = (await actions_dicts(s, [action], now))[0]
+            rows = _jsonable(await expenses_service.expenses_dicts(s, [created.entry]))
+            await s.execute(text("UPDATE conversation_messages SET action_ids = :ids, "
+                                 "updated_at = now() WHERE id = :r"),
+                            {"ids": [action.id], "r": run.reply_pk})  # fmt: skip
+            await s.commit()
+        m.action_pk, m.action_public, m.action_out = action.id, str(action.public_id), out_action
+        m.sentences.append(created.sentence)
+        page_id = str(created.page.public_id) if created.page else None
+        run.emit("tool_activity", {"tool": "create", "text": "Записываю…", "page_id": page_id})
+        m.emit("action", {"reply_id": None, "action": out_action,
+                          "changed_item_ids": out_action["changed_item_ids"],
+                          "page_id": str(book.current.id) if book.current else None,
+                          "expenses": rows})  # fmt: skip
+        for patch in patches:
+            m.emit("page_patch", patch)
+        await self._finish_change(run, turn, m, Decimal(str(draft.cost_usd)),
+                                  [{"name": "expense", "arguments": {}, "error": False,
+                                    "by": draft.source}])  # fmt: skip
+        return True
 
     async def _local_today(self, user_id: int) -> tuple[str, Any]:
         from zoneinfo import ZoneInfo

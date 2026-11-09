@@ -454,7 +454,7 @@ describe('«Покупки» — the fridge list and «Я в магазине»'
       await sync(outbox);
     });
     await settle(() => s.callsTo('PATCH /tasks/m').length === 1);
-    expect(s.callsTo('PATCH /tasks/m')[0]!.body).toEqual({ version: 3, qty: '3' });
+    expect(s.callsTo('PATCH /tasks/m')[0]!.body).toEqual({ version: 3, qty: '3', client_id: expect.any(String) });
 
     expect(screen.getByTestId('group-done')).toHaveTextContent('Куплено (1)');
     await fireEvent.press(screen.getByTestId('shop-clear-bought'));

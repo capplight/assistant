@@ -1,4 +1,5 @@
-"""Tools of the chat step (spec 5.10): read tools `search` and `list_page` here; the mutating
+"""Tools of the chat step (spec 5.10): read tools `search`, `list_page` and (week 12) `aggregate`
+(expense totals computed by `expenses.calc`) here; the mutating
 ones (create, update, move, reorder, create_page_from_template) live in mutate.py and run only
 when the turn's intent rule allowed changes (`ToolEnv.mut.allowed`), checked again in `execute`.
 
@@ -71,7 +72,31 @@ LIST_PAGE = ToolSpec(
     ),
     parameters=strict_json_schema(ListPageArgs),
 )
-READ_TOOLS: tuple[ToolSpec, ...] = (SEARCH, LIST_PAGE)
+
+
+class AggregateArgs(BaseModel):
+    period: Literal["week", "month", "year", "all", "custom"]
+    date_from: str | None
+    date_to: str | None
+    category: str | None
+    group_by: Literal["category", "month", "payee", "method"] | None
+    currency: str | None
+
+
+AGGREGATE = ToolSpec(
+    name="aggregate",
+    description=(
+        "Totals of the person's expenses («Расходы»), computed by the program: use it for any "
+        "question about how much was spent, and copy its numbers exactly. period: week, month or "
+        "year (the current one, or the one containing date_from), all, or custom (date_from and "
+        "date_to as YYYY-MM-DD; date_to null = today). category: the category the person named "
+        "(«лекарства» → its name), else null. group_by: category, month, payee or method to split "
+        "the total, else null. currency: a 3-letter code if the person named one, else null. "
+        "Returns totals per currency, groups, and the expenses counted (refs you can cite)."
+    ),
+    parameters=strict_json_schema(AggregateArgs),
+)
+READ_TOOLS: tuple[ToolSpec, ...] = (SEARCH, LIST_PAGE, AGGREGATE)
 
 
 @dataclass
@@ -260,6 +285,104 @@ async def _list_page(env: ToolEnv, args: ListPageArgs) -> ToolOutcome:
                        False, f"Смотрю «{page.title}»…", str(page.id))  # fmt: skip
 
 
+async def _category_for(session: AsyncSession, user_id: int, name: str):  # type: ignore[no-untyped-def]
+    """The person's category the words name: its title or key, the start of its title, or the
+    code dictionary («лекарства» → Здоровье). None: not one of theirs."""
+    from sqlalchemy import select
+
+    from assistant.db.models_expenses import ExpenseCategory
+    from assistant.expenses.parse import category_of
+
+    rows = list(await session.scalars(select(ExpenseCategory).where(
+        ExpenseCategory.user_id == user_id, ExpenseCategory.hidden_at.is_(None))))  # fmt: skip
+    want = " ".join(name.lower().replace("ё", "е").split())
+    for c in rows:
+        if want in (c.title.lower().replace("ё", "е"), c.key):
+            return c
+    for c in rows:
+        if len(want) >= 3 and c.title.lower().replace("ё", "е").startswith(want[:5]):
+            return c
+    key = category_of(name)
+    return next((c for c in rows if c.key == key), None)
+
+
+async def _aggregate(env: ToolEnv, args: AggregateArgs) -> ToolOutcome:
+    """Totals by `expenses.calc`; every number it reports is allowed in the answer (founder
+    decision 2026-11-09), nothing the model adds up itself is."""
+    from assistant.expenses import calc
+    from assistant.expenses import service as expenses
+
+    activity = "Считаю траты…"
+    today = datetime.now(env.book.tz).date()
+    d_from, d_to = _day(args.date_from), _day(args.date_to)
+    period = args.period
+    if period == "custom" and d_from is None:
+        return _error("custom needs date_from", activity)
+    if period == "custom" and d_to is None:
+        d_to = today
+    currency = (args.currency or "").strip().upper() or None
+    if currency is not None and (len(currency) != 3 or not currency.isalpha()):
+        currency = None
+    async with env.sessionmaker() as session:
+        cat = None
+        if args.category and args.category.strip():
+            cat = await _category_for(session, env.user_id, args.category)
+            if cat is None:
+                return _error(f"no category «{args.category[:40]}»: answer that there are no "
+                              "such expenses", activity)  # fmt: skip
+        try:
+            t = await expenses.totals(session, env.user_id, period=period,
+                                      day=d_from if period != "custom" and d_from else today,
+                                      start=d_from, end=d_to, group_by=args.group_by,
+                                      currency=currency, category=cat)  # fmt: skip
+        except ValueError:
+            return _error("bad period", activity)
+        res = t.result
+        basis = [t.ids[i] for i in res.basis]
+        rows = (await session.execute(text("""
+            SELECT i.id, i.public_id, i.title, i.kind, i.occurred_at, i.created_at,
+                   left(coalesce(i.text, i.raw_text, ''), 300) AS body
+            FROM expense_entries e JOIN items i ON i.id = e.item_id
+            WHERE e.public_id = ANY(:ids) ORDER BY e.spent_on DESC, e.id DESC LIMIT 8
+        """), {"ids": basis})).all() if basis else []  # fmt: skip
+        links = await _page_links(session, [r.id for r in rows])
+    lo, hi = t.bounds
+    totals = []
+    for x in res.totals:
+        shown = calc.format_money(x.total, x.currency)
+        env.computed_by_code(shown, x.total, x.count)
+        item = {"currency": x.currency, "total": shown, "count": x.count}
+        if x.refund:
+            item["refunds"] = calc.format_money(x.refund, x.currency)
+            env.computed_by_code(item["refunds"], x.refund)
+        totals.append(item)
+    groups = []
+    for g in res.groups[:12]:
+        shown = calc.format_money(g.total, g.currency)
+        env.computed_by_code(shown, g.total, g.count)
+        if args.group_by == "category":
+            title = t.titles.get(g.key or "") or "без категории"
+        else:
+            title = g.key or "—"
+        groups.append({"title": title, "total": shown, "count": g.count})
+    for d in (lo, hi):
+        if d is not None:
+            env.computed_by_code(d)
+    records = []
+    for r in rows:
+        src = env.book.add(pk=r.id, item_id=r.public_id, title=r.title,
+                           body=_window(r.body or "", "", LIST_ITEM_CHARS), kind=r.kind,
+                           occurred_at=r.occurred_at, created_at=r.created_at,
+                           page_pks=links.get(r.id, []))  # fmt: skip
+        records.append(fragment_json(env, src))
+    return ToolOutcome(_json({
+        "period": {"from": lo.isoformat() if lo else None, "to": hi.isoformat() if hi else None},
+        "category": cat.title if cat else None,
+        "totals": totals or [{"currency": "KZT", "total": "0 ₸", "count": 0}],
+        "groups": groups, "to_check": res.review_count, "records": records,
+    }), False, activity)  # fmt: skip
+
+
 @dataclass(frozen=True)
 class ChatTool:
     spec: ToolSpec
@@ -271,6 +394,7 @@ class ChatTool:
 TOOLS: dict[str, ChatTool] = {
     "search": ChatTool(SEARCH, SearchArgs, _search),  # type: ignore[arg-type]
     "list_page": ChatTool(LIST_PAGE, ListPageArgs, _list_page),  # type: ignore[arg-type]
+    "aggregate": ChatTool(AGGREGATE, AggregateArgs, _aggregate),  # type: ignore[arg-type]
 }
 
 

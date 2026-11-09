@@ -30,6 +30,9 @@ An op is a JSON object with ids as public uuids (strings), never database ids:
   reminder's status back (the undo of a late «Сделано»). `restore_habit` may carry `state.key`
   (a rule moved to another page).
 - Week 11 (`ops_view`): `set_view_key`, `set_appearance`, `set_facet` (page views, own fields).
+- Week 12 (`ops_expenses`): `delete_entity_soft` / `restore_entity` take `entity: expenses` (the
+  expense and its own record together); `set_expense` {id, item, values, expect?};
+  `set_expense_category` {id, values, expect?} (name, icon, hidden, pinned, order).
 
 `apply` runs a list of ops in one transaction (the caller commits) and returns the ops that undo
 what it did, newest first, so `apply(apply(x).inverse)` is a round trip. With `check=True` (an
@@ -64,9 +67,12 @@ OPS = frozenset({"restore_positions", "restore_view_state", "add_screen_item",
                  "hide_item", "unhide_item", "relink", "set_status", "add_collection_item",
                  "remove_collection_item", "restore_collection",
                  # week 11 (actions/ops_view.py): page views
-                 "set_view_key", "set_appearance", "set_facet"})  # fmt: skip
+                 "set_view_key", "set_appearance", "set_facet",
+                 # week 12 (actions/ops_expenses.py): «Расходы»
+                 "set_expense", "set_expense_category"})  # fmt: skip
 HABIT_STATUSES = frozenset({"candidate", "active", "disabled"})
-ENTITIES = frozenset({"items", "screens", "tasks"})
+ENTITIES = frozenset({"items", "screens", "tasks", "expenses"})
+OWNED = frozenset({"tasks", "expenses"})  # a row with its own record: trash / back together
 TASK_FIELDS = frozenset({"title", "qty", "where_text", "due_date", "done_at", "list_key"})
 REMINDER_FIELDS = ("title", "body", "due_at", "tz", "rrule", "offsets", "level", "sensitivity")
 SCREEN_FIELDS = ("title", "title_kk", "icon", "layout")
@@ -249,8 +255,8 @@ def _item_of(op: dict) -> dict[str, str]:
 async def _soft(session: AsyncSession, user_id: int, op: dict, out: Outcome, *,
                 by: str, check: bool, now: datetime) -> None:  # fmt: skip
     entity, rid = op["entity"], str(op["id"])
-    if entity == "tasks":
-        task, item = await _task(session, user_id, rid)
+    if entity in OWNED:
+        task, item = await _owned(session, user_id, entity, rid)
         if task is None or item is None:
             out.skipped += 1
             return
@@ -285,8 +291,8 @@ async def _soft(session: AsyncSession, user_id: int, op: dict, out: Outcome, *,
 async def _restore(session: AsyncSession, user_id: int, op: dict, out: Outcome, *,
                    by: str, check: bool, now: datetime) -> None:  # fmt: skip
     entity, rid = op["entity"], str(op["id"])
-    if entity == "tasks":
-        task, item = await _task(session, user_id, rid)
+    if entity in OWNED:
+        task, item = await _owned(session, user_id, entity, rid)
         if task is None or item is None:  # purged after 30 days in the trash
             out.skipped += 1
             return
@@ -412,6 +418,23 @@ async def _habit_evidence(session: AsyncSession, user_id: int, op: dict, out: Ou
     if habits.count_evidence(habit, item, add=add, now=now):
         out.inverse.append({"op": "habit_evidence", "id": str(habit.public_id), "item": item,
                             "add": not add})  # fmt: skip
+
+
+async def _owned(session: AsyncSession, user_id: int, entity: str,
+                 rid: Any) -> tuple[Any, Item | None]:  # fmt: skip
+    """A task or an expense (week 12) and its own record, both locked."""
+    if entity == "tasks":
+        return await _task(session, user_id, rid)
+    from assistant.db.models_expenses import ExpenseEntry
+
+    row = await session.scalar(
+        select(ExpenseEntry).where(ExpenseEntry.user_id == user_id,
+                                   ExpenseEntry.public_id == _uuid(rid)).with_for_update()
+    )  # fmt: skip
+    if row is None:
+        return None, None
+    item = await session.scalar(select(Item).where(Item.id == row.item_id).with_for_update())
+    return row, item
 
 
 async def _task(session: AsyncSession, user_id: int, tid: Any) -> tuple[Task | None, Item | None]:
@@ -615,10 +638,15 @@ _HANDLERS = {
 
 
 def _register_week10() -> None:
-    from assistant.actions import ops_dedup, ops_view  # need Outcome and the helpers above
+    from assistant.actions import (  # need Outcome and the helpers above
+        ops_dedup,
+        ops_expenses,
+        ops_view,
+    )
 
     _HANDLERS.update(ops_dedup.HANDLERS)
     _HANDLERS.update(ops_view.HANDLERS)
+    _HANDLERS.update(ops_expenses.HANDLERS)
 
 
 _register_week10()

@@ -41,6 +41,9 @@ USER_TABLES: dict[str, Mode] = {
     "public.screen_items": "cascade",
     "public.screen_summaries": "cascade",  # via screens
     "public.item_facets": "cascade",  # week 11
+    # «Расходы» (week 12): user rows cascade; catalogue rows (user_id NULL) hold no personal data
+    "public.expense_entries": "cascade",
+    "public.expense_categories": "cascade",
     "public.user_habits": "cascade",
     # chat and actions
     "public.conversations": "cascade",

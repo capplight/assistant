@@ -6,6 +6,7 @@ import type { Layout, TemplateKey } from '@/pages/templates';
 import type { Page } from '@/store/pages';
 
 import { ClassicView, SimpleListView } from './ClassicView';
+import { ExpensesView } from './ExpensesView';
 import { NotebookView } from './NotebookView';
 import { PlannerView } from './PlannerView';
 import { ShoppingView } from './ShoppingView';
@@ -30,7 +31,7 @@ export type ViewDef = { key: string; Component: ComponentType<ViewProps> };
  * Tools by `template:layout` (or just `layout`). Week 11: «Своя страница» (the notebook) and
  * «Простой список» for all. Week 11а: the sticker wall, the day planner and the fridge list are the
  * defaults (catalogue notes v4, tasks v3, shopping v3); the older middles stay as the other allowed
- * views (`stacks`, `builtin:tasks`, `checklist`). Weeks 12–14: expenses, documents.
+ * views (`stacks`, `builtin:tasks`, `checklist`). Week 12: the expense calculator. Week 14: documents.
  * A new tool registers itself here and nothing around it changes.
  */
 const registry = new Map<string, ComponentType<ViewProps>>([
@@ -40,6 +41,8 @@ const registry = new Map<string, ComponentType<ViewProps>>([
   ['notes:builtin:notes_board', StickersView],
   ['tasks:builtin:planner', PlannerView],
   ['shopping:builtin:shopping', ShoppingView],
+  // Week 12: «Расходы» — the expense calculator (template-screens 2.2).
+  ['expenses:builtin:expenses', ExpensesView],
   ['notes:stacks', ClassicView],
   ['tasks:builtin:tasks', ClassicView],
   ['shopping:checklist', ClassicView],

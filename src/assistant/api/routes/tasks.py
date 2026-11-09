@@ -122,11 +122,17 @@ async def patch_task(task_id: uuid.UUID, body: TaskPatchIn, user: GatedUser,
     now = _now()
     await lock_user(db, user.id)
     task = await _own(db, user.id, task_id)
+    # Week 12: outbox-safe like «done» — a repeat of the same `client_id` returns the first action
+    # (and does not hit the version check: the first call already bumped the version).
+    first = await _by_client(db, user.id, body.client_id)
+    if first is not None:
+        return TaskChangedOut(task=await _task_out(db, task),
+                              action=await _action_out(db, first, now), repeated=True)
     if not await service.is_live(db, task):
         raise ApiError(404, "not_found")
     if task.version != body.version:
         raise ApiError(409, "conflict", details={"version": task.version})
-    sent = body.model_fields_set - {"version"}
+    sent = body.model_fields_set - {"version", "client_id"}
     values: dict[str, Any] = {}
     try:
         if "title" in sent:
@@ -172,6 +178,7 @@ async def patch_task(task_id: uuid.UUID, body: TaskPatchIn, user: GatedUser,
             changes=[_change_row(task, item_pid, "edit", f"«{task.title}» — изменено",
                                  new_page.public_id if new_page else None)],
             inverse=out.inverse, now=now, source_item_ids=[task.item_id],
+            client_id=body.client_id,
         )  # fmt: skip
     await db.flush()
     return TaskChangedOut(task=await _task_out(db, task), action=await _action_out(db, action, now))

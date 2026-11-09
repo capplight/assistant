@@ -62,6 +62,8 @@ tasks:
   reminder_parse: {budget_class: answers, timeout_s: 15}
   # The line waits for it (week 9: «купить хлеб и молоко» -> «Покупки»).
   tasks_parse: {budget_class: answers, timeout_s: 15}
+  # The line waits for it (week 12: «потратил 5000 на бензин» -> «Расходы»).
+  expense_parse: {budget_class: answers, timeout_s: 15}
   answer: {budget_class: answers, escalate: strong, timeout_s: 8}
   query_plan: {budget_class: answers, escalate: strong, timeout_s: 8}
   answer_general: {budget_class: answers, escalate: strong, timeout_s: 8}

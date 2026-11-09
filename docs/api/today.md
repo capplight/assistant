@@ -80,9 +80,12 @@ Show a task only while its record is live (`items[].deleted_at` null), like page
 `action.kind` = `save_item`, `summary.ru` «Добавил в Покупки: хлеб.» / «Добавил в дела: позвонить
 маме.»; «Отменить» = the task and its record go to the trash. Errors: `422 validation_error`.
 
-### `PATCH /v1/tasks/{id}` → `200 {task, action}`
+### `PATCH /v1/tasks/{id}` → `200 {task, action, repeated}`
 
-Body: `version` (required) + any of `title`, `qty`, `where`, `due_date`, `list_key`. A change of
+Body: `version` (required), `client_id` (optional, week 12: send it from the outbox; a repeat with
+the same `client_id` returns the first `task` + `action` with `repeated: true` and skips the version
+check, so «− 2 +» and its «Отменить» are safe to retry) + any of `title`, `qty`, `where`,
+`due_date`, `list_key`. A change of
 `list_key` moves it between «Покупки» and «Дела» (the row on the old page is taken off, a row on the
 new page is added). `action.kind` `facet_edit`, «Отменить» puts the old values back (a field the
 person changed again since keeps their version: `partial`). Errors: `404 not_found`, `409

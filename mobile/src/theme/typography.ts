@@ -25,7 +25,7 @@ export const MAX_FONT_SCALE = 2.0;
 export const LARGE_FONT_SCALE = 1.5;
 
 export type TypeToken =
-  'display' | 'title1' | 'title2' | 'section' | 'body' | 'bodyStrong' | 'button' | 'meta' | 'number';
+  'display' | 'title1' | 'title2' | 'section' | 'body' | 'bodyStrong' | 'button' | 'meta' | 'number' | 'amount';
 
 export const type: Record<TypeToken, TextStyle> = {
   display: { fontFamily: fontFamily.semibold, fontSize: 34, lineHeight: 40 },
@@ -43,4 +43,6 @@ export const type: Record<TypeToken, TextStyle> = {
   button: { fontFamily: fontFamily.semibold, fontSize: 20, lineHeight: 24 },
   meta: { fontFamily: fontFamily.regular, fontSize: 16, lineHeight: 22 },
   number: { fontFamily: fontFamily.semibold, fontSize: 18, lineHeight: 26, fontVariant: ['tabular-nums'] },
+  /** Week 12: the board of «Расходы» (template-screens 3, `type.amount` 48/56), tabular digits; scales to 1.6× at most. */
+  amount: { fontFamily: fontFamily.semibold, fontSize: 48, lineHeight: 56, fontVariant: ['tabular-nums'] },
 };

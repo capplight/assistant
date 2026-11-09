@@ -169,6 +169,12 @@ class Settings(BaseSettings):
     # phrase (`tasks_parse`, behind the consent gate). On = code reads simple lists first
     # («купить хлеб, молоко и сыр», «добавь в покупки …»). Env TASKS_RULES_FIRST=true.
     tasks_rules_first: bool = False
+    # Expenses from a phrase (week 12, «потратил 5000 на бензин»). Ф-1 is open, so off: the light
+    # model reads the phrase (`expense_parse`, behind the consent gate) and code checks that the
+    # amount is in the person's words. On = code reads the phrase first (expenses.parse, the
+    # shared vectors docs/spec/vectors/amounts.json). The keypad sum is code always (arithmetic).
+    # Env EXPENSES_RULES_FIRST=true.
+    expenses_rules_first: bool = False
     # Suggestions (spec 3.4, R-35, R-08): tips per day, pause after «Не сейчас», data proposals.
     suggestions_tips_per_day_new: int = 2  # the first `suggestions_new_days` days of the account
     suggestions_tips_per_day: int = 1

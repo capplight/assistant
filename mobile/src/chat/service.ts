@@ -43,6 +43,7 @@ import { useView } from '@/store/view';
 import type { ActionUndoPayload } from '@/sync/engine';
 import { applyAssistantView, lookBefore, restoreLook, type SavedLook } from '@/pages/viewService';
 import { addTask, listForPage, rememberActions, taskSink } from '@/tasks/service';
+import { applyServer as applyExpenses } from '@/expenses/service';
 import { newId } from '@/utils/id';
 
 /**
@@ -207,6 +208,8 @@ function apply(answerId: string, e: ChatEvent): void {
     case 'action': {
       // Week 9: tasks it made show on «Покупки» / «Дела» at once, before /sync brings their records.
       if (e.tasks && e.tasks.length > 0) taskSink.applyServer(e.tasks);
+      // Week 12: «потратил 5000 на бензин» — the month total is counted by code from these at once.
+      if (e.expenses && e.expenses.length > 0) applyExpenses(e.expenses);
       rememberActions([e.action]);
       // Several `action` events in one reply are the same action growing: replace it.
       const action = { ...fromAction(e.action), changedItemIds: e.changedItemIds };

@@ -5,7 +5,8 @@
                                                other page of the person takes the record
 
 Conditions: {"always": true} · {"kinds": [...]} · {"envelope_types": [...]} · {"aspects": [...]} ·
-{"words": [...]} · {"task_record": true} (week 10: the record of a «Дела» / «Покупки» line).
+{"words": [...]} · {"task_record": true} (week 10: the record of a «Дела» / «Покупки» line;
+week 12: also of a «Расходы» line).
 A rule with an unknown condition never matches, so an old server reading a newer template places
 too little rather than too much.
 """
@@ -28,7 +29,7 @@ class ItemFacts:
     title: str | None = None
     summary: str | None = None
     text: str | None = None
-    is_task: bool = False  # a task's own record (tasks.item_id)
+    is_task: bool = False  # a tool row's own record: a task (tasks.item_id), an expense (week 12)
 
 
 def _non_empty(value: Any) -> bool:

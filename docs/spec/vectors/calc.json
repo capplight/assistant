@@ -1,0 +1,171 @@
+{
+ "version": 1,
+ "calc_version": "calc.v1",
+ "about": "Shared vectors of src/assistant/expenses/calc.py and its TS port on the phone. Amounts are decimal strings with two places. `expressions`: the keypad sum (only digits, one ',' or '.' per number with at most 2 decimals, '+', '-' or '−'; spaces ignored; a trailing operator ignored; never eval); `expect` is the amount or {error}; `canonical` is what is stored in `expense_entries.expression`. `aggregates`: rows -> totals per currency (KZT first, then by code) and groups (per currency, biggest total first, then key; null key last among equals). `periods`: inclusive bounds on the person's clock (week = Monday to Sunday). `format`: how the phone and the line print money.",
+ "expressions": [
+  {"expr": "1200+350", "expect": "1550.00", "canonical": "1200+350"},
+  {"expr": "1 200 + 350", "expect": "1550.00", "canonical": "1200+350"},
+  {"expr": "5000", "expect": "5000.00", "canonical": "5000"},
+  {"expr": "000", "expect": {"error": "amount_not_positive"}},
+  {"expr": "5000000", "expect": "5000000.00", "canonical": "5000000"},
+  {"expr": "99,9", "expect": "99.90", "canonical": "99.9"},
+  {"expr": "99.99+0.01", "expect": "100.00", "canonical": "99.99+0.01"},
+  {"expr": "1550,50", "expect": "1550.50", "canonical": "1550.5"},
+  {"expr": "1000-250", "expect": "750.00", "canonical": "1000-250"},
+  {"expr": "1000−250", "expect": "750.00", "canonical": "1000-250"},
+  {"expr": "100+200+300+400", "expect": "1000.00", "canonical": "100+200+300+400"},
+  {"expr": "0,1+0,2", "expect": "0.30", "canonical": "0.1+0.2"},
+  {"expr": "1200+", "expect": "1200.00", "canonical": "1200"},
+  {"expr": "1200+350-", "expect": "1550.00", "canonical": "1200+350"},
+  {"expr": ",5", "expect": "0.50", "canonical": "0.5"},
+  {"expr": "5,", "expect": "5.00", "canonical": "5"},
+  {"expr": "0050", "expect": "50.00", "canonical": "50"},
+  {"expr": "500-500", "expect": {"error": "amount_not_positive"}},
+  {"expr": "100-200", "expect": {"error": "amount_not_positive"}},
+  {"expr": "", "expect": {"error": "expression_invalid"}},
+  {"expr": "+", "expect": {"error": "expression_invalid"}},
+  {"expr": "+500", "expect": {"error": "expression_invalid"}},
+  {"expr": "-500", "expect": {"error": "expression_invalid"}},
+  {"expr": "5++3", "expect": {"error": "expression_invalid"}},
+  {"expr": "5*3", "expect": {"error": "expression_invalid"}},
+  {"expr": "5/3", "expect": {"error": "expression_invalid"}},
+  {"expr": "1,2,3", "expect": {"error": "expression_invalid"}},
+  {"expr": "1.234", "expect": {"error": "expression_invalid"}},
+  {"expr": "abc", "expect": {"error": "expression_invalid"}},
+  {"expr": "__import__('os')", "expect": {"error": "expression_invalid"}},
+  {"expr": "2**64", "expect": {"error": "expression_invalid"}},
+  {"expr": "999999999999.99", "expect": "999999999999.99", "canonical": "999999999999.99"},
+  {"expr": "999999999999.99+0.01", "expect": {"error": "amount_too_large"}},
+  {"expr": "1e5", "expect": {"error": "expression_invalid"}}
+ ],
+ "aggregates": [
+  {
+   "name": "one currency, refund subtracted, income apart, transfers out",
+   "group_by": "category",
+   "rows": [
+    {"id": "a", "amount": "5000.00", "currency": "KZT", "direction": "expense", "spent_on": "2026-11-09", "category": "transport"},
+    {"id": "b", "amount": "1200.50", "currency": "KZT", "direction": "expense", "spent_on": "2026-11-08", "category": "groceries", "review": true},
+    {"id": "c", "amount": "350.25", "currency": "KZT", "direction": "expense", "spent_on": "2026-11-08", "category": "groceries"},
+    {"id": "d", "amount": "500.00", "currency": "KZT", "direction": "refund", "spent_on": "2026-11-08", "category": "groceries"},
+    {"id": "e", "amount": "300000.00", "currency": "KZT", "direction": "income", "spent_on": "2026-11-05"},
+    {"id": "f", "amount": "100000.00", "currency": "KZT", "direction": "transfer_own", "spent_on": "2026-11-05"},
+    {"id": "g", "amount": "20000.00", "currency": "KZT", "direction": "expense", "spent_on": "2026-11-05", "category": "transfers", "service": true},
+    {"id": "h", "amount": "999.00", "currency": "KZT", "direction": "expense", "spent_on": "2026-11-04", "category": "health", "deleted": true},
+    {"id": "i", "amount": "700.00", "currency": "KZT", "direction": "expense", "spent_on": "2026-11-04"}
+   ],
+   "expect": {
+    "totals": [{"currency": "KZT", "total": "6750.75", "expense": "7250.75", "refund": "500.00", "income": "300000.00", "count": 5}],
+    "groups": [
+     {"key": "transport", "currency": "KZT", "total": "5000.00", "count": 1},
+     {"key": "groceries", "currency": "KZT", "total": "1050.75", "count": 3},
+     {"key": null, "currency": "KZT", "total": "700.00", "count": 1}
+    ],
+    "review_count": 1,
+    "basis": ["a", "b", "c", "d", "i"]
+   }
+  },
+  {
+   "name": "currencies apart, never converted",
+   "group_by": null,
+   "rows": [
+    {"id": "a", "amount": "50.00", "currency": "USD", "direction": "expense", "spent_on": "2026-11-01"},
+    {"id": "b", "amount": "214600.00", "currency": "KZT", "direction": "expense", "spent_on": "2026-11-02"},
+    {"id": "c", "amount": "70.00", "currency": "USD", "direction": "expense", "spent_on": "2026-11-03"},
+    {"id": "d", "amount": "2000.00", "currency": "KGS", "direction": "expense", "spent_on": "2026-11-03"}
+   ],
+   "expect": {
+    "totals": [
+     {"currency": "KZT", "total": "214600.00", "expense": "214600.00", "refund": "0.00", "income": "0.00", "count": 1},
+     {"currency": "KGS", "total": "2000.00", "expense": "2000.00", "refund": "0.00", "income": "0.00", "count": 1},
+     {"currency": "USD", "total": "120.00", "expense": "120.00", "refund": "0.00", "income": "0.00", "count": 2}
+    ],
+    "groups": [],
+    "review_count": 0,
+    "basis": ["a", "b", "c", "d"]
+   }
+  },
+  {
+   "name": "by month",
+   "group_by": "month",
+   "rows": [
+    {"id": "a", "amount": "100.00", "currency": "KZT", "direction": "expense", "spent_on": "2026-10-31"},
+    {"id": "b", "amount": "200.00", "currency": "KZT", "direction": "expense", "spent_on": "2026-11-01"},
+    {"id": "c", "amount": "300.00", "currency": "KZT", "direction": "expense", "spent_on": "2026-11-30"}
+   ],
+   "expect": {
+    "totals": [{"currency": "KZT", "total": "600.00", "expense": "600.00", "refund": "0.00", "income": "0.00", "count": 3}],
+    "groups": [
+     {"key": "2026-11", "currency": "KZT", "total": "500.00", "count": 2},
+     {"key": "2026-10", "currency": "KZT", "total": "100.00", "count": 1}
+    ],
+    "review_count": 0,
+    "basis": ["a", "b", "c"]
+   }
+  },
+  {
+   "name": "only income: no spend rows",
+   "group_by": "method",
+   "rows": [
+    {"id": "a", "amount": "1000.00", "currency": "KZT", "direction": "income", "spent_on": "2026-11-01"}
+   ],
+   "expect": {
+    "totals": [{"currency": "KZT", "total": "0.00", "expense": "0.00", "refund": "0.00", "income": "1000.00", "count": 0}],
+    "groups": [],
+    "review_count": 0,
+    "basis": []
+   }
+  },
+  {
+   "name": "by method, ties by key, null last",
+   "group_by": "method",
+   "rows": [
+    {"id": "a", "amount": "500.00", "currency": "KZT", "direction": "expense", "spent_on": "2026-11-01", "method": "kaspi"},
+    {"id": "b", "amount": "500.00", "currency": "KZT", "direction": "expense", "spent_on": "2026-11-01", "method": "cash"},
+    {"id": "c", "amount": "500.00", "currency": "KZT", "direction": "expense", "spent_on": "2026-11-01"}
+   ],
+   "expect": {
+    "totals": [{"currency": "KZT", "total": "1500.00", "expense": "1500.00", "refund": "0.00", "income": "0.00", "count": 3}],
+    "groups": [
+     {"key": "cash", "currency": "KZT", "total": "500.00", "count": 1},
+     {"key": "kaspi", "currency": "KZT", "total": "500.00", "count": 1},
+     {"key": null, "currency": "KZT", "total": "500.00", "count": 1}
+    ],
+    "review_count": 0,
+    "basis": ["a", "b", "c"]
+   }
+  },
+  {
+   "name": "half-up rounding of a stored amount",
+   "group_by": null,
+   "rows": [
+    {"id": "a", "amount": "0.10", "currency": "KZT", "direction": "expense", "spent_on": "2026-11-01"},
+    {"id": "b", "amount": "0.20", "currency": "KZT", "direction": "expense", "spent_on": "2026-11-01"}
+   ],
+   "expect": {
+    "totals": [{"currency": "KZT", "total": "0.30", "expense": "0.30", "refund": "0.00", "income": "0.00", "count": 2}],
+    "groups": [],
+    "review_count": 0,
+    "basis": ["a", "b"]
+   }
+  }
+ ],
+ "periods": [
+  {"kind": "week", "date": "2026-11-09", "from": "2026-11-09", "to": "2026-11-15"},
+  {"kind": "week", "date": "2026-11-15", "from": "2026-11-09", "to": "2026-11-15"},
+  {"kind": "month", "date": "2026-11-09", "from": "2026-11-01", "to": "2026-11-30"},
+  {"kind": "month", "date": "2026-02-10", "from": "2026-02-01", "to": "2026-02-28"},
+  {"kind": "month", "date": "2028-02-10", "from": "2028-02-01", "to": "2028-02-29"},
+  {"kind": "month", "date": "2026-12-31", "from": "2026-12-01", "to": "2026-12-31"},
+  {"kind": "year", "date": "2026-11-09", "from": "2026-01-01", "to": "2026-12-31"},
+  {"kind": "all", "date": "2026-11-09", "from": null, "to": null}
+ ],
+ "format": [
+  {"amount": "5000.00", "currency": "KZT", "text": "5 000 ₸"},
+  {"amount": "1550.50", "currency": "KZT", "text": "1 550,50 ₸"},
+  {"amount": "120.00", "currency": "USD", "text": "120 $"},
+  {"amount": "999.00", "currency": "KZT", "text": "999 ₸"},
+  {"amount": "1250000.00", "currency": "KZT", "text": "1 250 000 ₸"},
+  {"amount": "2000.00", "currency": "KGS", "text": "2 000 сом"},
+  {"amount": "10.00", "currency": "GBP", "text": "10 GBP"}
+ ]
+}

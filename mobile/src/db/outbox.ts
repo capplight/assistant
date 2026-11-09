@@ -59,7 +59,15 @@ export type OutboxKind =
   /** Week 11а: «Убрать все купленные» (POST /tasks/clear-done, one action). */
   | 'task.clear_done'
   /** Week 10: a Telegram Desktop export (result.json / zip): upload, then POST /imports/telegram/file. */
-  | 'import.telegram';
+  | 'import.telegram'
+  /** Week 12: «Записать» on «Расходы» (POST /expenses, idempotent by `client_id`). */
+  | 'expense.create'
+  /** A category, the amount, the date, «Верно» of a spending (PATCH /expenses/{id}). */
+  | 'expense.patch'
+  /** «Удалить» a spending (DELETE /expenses/{id}). */
+  | 'expense.delete'
+  /** The person's order of the category chips (PATCH /expense-categories/reorder). */
+  | 'expense.categories';
 
 export type OutboxStatus = 'pending' | 'sent' | 'failed';
 

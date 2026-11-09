@@ -23,6 +23,7 @@ import { useDedup } from '@/dedup/store';
 import { setFilePickerForTests } from '@/dedup/pickFile';
 import { useCatalog } from '@/pages/catalog';
 import { useFacets } from '@/pages/facets';
+import { useExpenses } from '@/expenses/store';
 
 export const APP_DIR = path.resolve(__dirname, '../app');
 
@@ -60,6 +61,7 @@ export function resetApp(o: { fetch?: FetchLike; push?: FakePush; alarms?: FakeA
   useOnboarding.getState().reset();
   useAlarms.getState().reset();
   useTasks.getState().reset();
+  useExpenses.getState().reset();
   useDedup.getState().reset();
   useCatalog.getState().reset();
   useFacets.getState().reset();

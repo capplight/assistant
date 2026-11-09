@@ -1,9 +1,10 @@
 """Page summaries (`screen_summaries`, spec 3.10), counted by code, no model.
 
 Triggers from migration 0009 keep `item_count` and `last_titles` in the transaction that changes the
-page. The nightly `rebuild_summaries` repairs them and fills `aggregates`. Aggregates have nothing
-to count yet: `expense_entries` and `tasks` don't exist, so each stays {} (spec: «Расходы» month
-totals, «Дела» today/missed). Add them to `_aggregates` when those tables come.
+page. The nightly `rebuild_summaries` repairs them and fills `aggregates`. Week 12: «Расходы» gets
+`month_total` (this month on the person's clock, per currency, computed by `expenses.calc`; the
+phone recomputes it offline with the same vectors). Other pages stay {} («Дела» today/missed:
+later).
 """
 
 from sqlalchemy import select, text
@@ -16,7 +17,23 @@ BATCH = 200
 
 
 async def _aggregates(session: AsyncSession, page: Screen) -> dict:
-    return {}
+    if page.template_key != "expenses":
+        return {}
+    from datetime import UTC, datetime
+    from zoneinfo import ZoneInfo
+
+    from assistant.db.models import User
+    from assistant.expenses import service as expenses
+
+    tz = await session.scalar(select(User.tz).where(User.id == page.user_id)) or "Asia/Almaty"
+    today = datetime.now(UTC).astimezone(ZoneInfo(tz)).date()
+    t = await expenses.totals(session, page.user_id, period="month", day=today)
+    return {"month_total": {
+        "period": today.strftime("%Y-%m"), "calc_version": t.result.calc_version,
+        "totals": [{"currency": x.currency, "total": f"{x.total:.2f}", "count": x.count}
+                   for x in t.result.totals],
+        "review_count": t.result.review_count,
+    }}  # fmt: skip
 
 
 async def rebuild_summaries(maker: async_sessionmaker[AsyncSession]) -> int:

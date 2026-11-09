@@ -755,7 +755,7 @@ export type ChatEvent = (
   /** Resume of a finished reply: replace what was shown. */
   | { type: 'snapshot'; message: ChatMessageOut }
   /** Several in one reply = the same action growing: replace by `action.id`. */
-  | { type: 'action'; action: ActionOut; changedItemIds: string[]; tasks?: TaskOut[] }
+  | { type: 'action'; action: ActionOut; changedItemIds: string[]; tasks?: TaskOut[]; expenses?: ExpenseOut[] }
   /** Week 9: a reminder phrase read as `/reminders/parse` would (S13; nothing saved). */
   | { type: 'reminder_draft'; replyId: string | null; draft: ReminderParseOut; createdVia: 'voice' | 'typed' }
   | { type: 'page_patch'; patch: PagePatchOut }
@@ -982,6 +982,8 @@ export type TaskCreateIn = {
  */
 export type TaskPatchIn = {
   version: number;
+  /** Week 12 (today.md): outbox-safe; a repeat returns the first task + action (`repeated: true`). */
+  client_id?: string;
   title?: string;
   qty?: string | null;
   where?: string | null;
@@ -1198,4 +1200,125 @@ export type ImportOut = {
   seq: number;
   started_at: string | null;
   finished_at: string | null;
+};
+
+// --- week 12: «Расходы» (docs/api/expenses.md, 3-engineering 3.12) ---
+// Every expense shape is here and the decoding in endpoints.ts, so a contract change is two files.
+// Money is text: a decimal string with two places («5000.00»), never parsed into a float.
+
+export type ExpenseDirection = 'expense' | 'income' | 'refund' | 'transfer_own';
+
+export type ExpenseMethod = 'cash' | 'card' | 'kaspi' | 'transfer' | 'other';
+
+/** One spending (expenses.md «Expense»). */
+export type ExpenseOut = {
+  id: string;
+  client_id: string | null;
+  /** Its own record (kind `note`): the row on the page; shown only while that record is live. */
+  item_id: string | null;
+  amount: string;
+  currency: string;
+  /** The keys' «1200+350» (only `+` / `−`), or null; `amount` is what code computed from it. */
+  expression: string | null;
+  /** The day on the person's clock. */
+  spent_on: string;
+  category_id: string | null;
+  /** The system key or `own:<id>`, for icons. */
+  category_key: string | null;
+  payee: string | null;
+  method: ExpenseMethod | null;
+  direction: ExpenseDirection;
+  /** What it was on, in the person's words («бензин»): the line title, then `payee`, then the category. */
+  note: string | null;
+  source: string;
+  parse_source: 'rules' | 'llm' | 'user_edit' | null;
+  /** «Проверьте» (R-36): `["amount"]` until «Верно». */
+  review_fields: string[];
+  ai_generated: boolean;
+  version: number;
+  seq: number;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+};
+
+/** A category: the person's copy of the 8 system ones, the hidden service «Переводы», own ones. */
+export type ExpenseCategoryOut = {
+  id: string;
+  client_id: string | null;
+  key: string;
+  title: string;
+  title_kk: string | null;
+  icon: string | null;
+  system: boolean;
+  /** «Переводы»: never a chip, its expenses are in no total. */
+  service: boolean;
+  /** Byte order of the string. */
+  position: string | null;
+  /** The person ordered the chips by hand: sort by `position`, else by use. */
+  manual: boolean;
+  pinned: boolean;
+  hidden: boolean;
+  version: number;
+  seq: number;
+};
+
+/** POST /expenses: `expression` (keys) or `amount`; idempotent by `client_id`. */
+export type ExpenseCreateIn = {
+  client_id: string;
+  expression?: string | null;
+  amount?: string | null;
+  currency: string;
+  spent_on: string;
+  category_id: string | null;
+  note?: string | null;
+  payee?: string | null;
+  method?: ExpenseMethod | null;
+  direction?: ExpenseDirection;
+  source: 'form' | 'typed';
+};
+
+/** PATCH /expenses/{id}: `version` + the keys that change; `confirm: ["amount"]` = «Верно». */
+export type ExpensePatchIn = {
+  client_id: string;
+  version?: number;
+  amount?: string;
+  expression?: string | null;
+  currency?: string;
+  spent_on?: string;
+  category_id?: string | null;
+  note?: string | null;
+  payee?: string | null;
+  method?: ExpenseMethod | null;
+  direction?: ExpenseDirection;
+  confirm?: string[];
+};
+
+/** POST / PATCH / DELETE: the expense now and its action («Отменить»). */
+export type ExpenseWriteOut = { expense: ExpenseOut | null; action: ActionOut | null; page_patches: PagePatchOut[]; repeated: boolean };
+
+/** GET /expense-categories: in chip order, then hidden, then service. */
+export type ExpenseCategoriesListOut = { order: 'manual' | 'frequency'; categories: ExpenseCategoryOut[] };
+
+/** PATCH /expense-categories/reorder: the chips in the person's new order (by id). */
+export type ExpenseCategoriesReorderIn = { client_id: string; ids: string[] };
+export type ExpenseCategoriesOut = { categories: ExpenseCategoryOut[]; action: ActionOut | null; repeated: boolean };
+
+export type ExpenseAggregateQuery = {
+  period: 'week' | 'month' | 'year' | 'all' | 'custom';
+  date?: string;
+  from?: string;
+  to?: string;
+  group_by?: 'category' | 'month' | 'payee' | 'method';
+  currency?: string;
+};
+
+/** GET /expenses/aggregate: sums by currency (never added together), counted by `calc.py`. */
+export type ExpenseAggregateOut = {
+  calc_version: string | null;
+  period: { kind: string; from: string; to: string } | null;
+  totals: { currency: string; total: string; expense: string | null; refund: string | null; income: string | null; count: number }[];
+  groups: { key: string | null; title: string | null; currency: string; total: string; count: number }[];
+  review_count: number;
+  basis_ids: string[];
 };

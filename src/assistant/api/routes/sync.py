@@ -7,7 +7,8 @@ order per user and a client that stores `next_since` never misses a change.
 Soft-deleted records come back as items with `deleted_at` (trash); records purged after 30 days
 come back as tombstones. Pages (`screens`, `screen_items`) and app reminders (`reminders`,
 `reminder_fires`, week 8) are in the same stream; week 9 adds `tasks`, `suggestions`,
-`pending_actions` and learned `habits`. Other synced entities join the same response.
+`pending_actions` and learned `habits`; week 12 adds `expenses` and `expense_categories`. Other
+synced entities join the same response.
 """
 
 import uuid
@@ -26,6 +27,8 @@ from assistant.api.routes.pages import page_item_out, page_out
 from assistant.api.schemas import (
     ActionOut,
     ChatMessageOut,
+    ExpenseCategoryOut,
+    ExpenseOut,
     FireOut,
     HabitSyncOut,
     ItemFacetOut,
@@ -43,12 +46,14 @@ from assistant.chat import store as chat_store
 from assistant.db.models import Item, Reminder, User
 from assistant.db.models_actions import Action
 from assistant.db.models_chat import ConversationMessage, MessageRole
+from assistant.db.models_expenses import ExpenseCategory, ExpenseEntry
 from assistant.db.models_habits import HabitKind, UserHabit
 from assistant.db.models_pages import ItemFacet, Screen, ScreenItem
 from assistant.db.models_reminders import APP_KINDS, ReminderFire
 from assistant.db.models_search import ScreenSummary
 from assistant.db.models_tasks import PendingAction, Suggestion, Task
 from assistant.db.models_v2 import Device, HiddenReason, SyncTombstone
+from assistant.expenses import service as expenses
 from assistant.pages import habits as page_habits
 from assistant.reminders import service as reminder_service
 from assistant.suggestions import engine as suggestions
@@ -172,7 +177,7 @@ async def sync(
         )
     ]  # fmt: skip
     extra: list[object] = []
-    for model in (Task, Suggestion, PendingAction, UserHabit):
+    for model in (Task, Suggestion, PendingAction, UserHabit, ExpenseEntry, ExpenseCategory):
         extra.extend(await db.scalars(
             select(model).where(model.user_id == user.id, model.seq > since)  # type: ignore[attr-defined]
             .order_by(model.seq).limit(limit + 1)))  # type: ignore[attr-defined]  # fmt: skip
@@ -196,6 +201,8 @@ async def sync(
     page_pending = [row for _, row in page if isinstance(row, PendingAction)]
     page_habits = [row for _, row in page if isinstance(row, UserHabit)]
     page_facets = [row for _, row in page if isinstance(row, ItemFacetOut)]
+    page_expenses = [row for _, row in page if isinstance(row, ExpenseEntry)]
+    page_categories = [row for _, row in page if isinstance(row, ExpenseCategory)]
     next_since = page[-1][0] if page else since
     if not has_more:  # nothing older than the floor is left to see
         next_since = max(next_since, floor)
@@ -226,6 +233,10 @@ async def sync(
         pending_actions=await pending_out(db, page_pending),
         habits=await habits_out(db, user.id, page_habits),
         item_facets=page_facets,
+        expenses=[ExpenseOut.model_validate(d)
+                  for d in await expenses.expenses_dicts(db, page_expenses)],
+        expense_categories=[ExpenseCategoryOut.model_validate(expenses.category_dict(c))
+                            for c in page_categories],
         tombstones=[
             TombstoneOut(entity=t.entity, id=t.public_id, seq=t.seq, deleted_at=t.deleted_at)
             for t in page_tombs

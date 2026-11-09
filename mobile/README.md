@@ -1,4 +1,4 @@
-# Mobile app — week 11а (stickers, the planner, the fridge list with «Я в магазине») on week 11's PageFrame + view registry
+# Mobile app — week 12 («Расходы» — the expense calculator) on week 11's PageFrame + view registry
 
 Expo SDK 58 (React Native 0.88, New Architecture), TypeScript strict, expo-router.
 Spec: `../docs/spec/SPEC.md`, `../docs/spec/final/2-design.md`, `../docs/spec/final/3-engineering.md` §2.1, §11.2 (week 1, Mobile).
@@ -92,6 +92,38 @@ src/
   alarms/                    week 8: port (FakeAlarms), native + notification adapters, planner, S15 steps, service
 modules/alarms/              native Expo module: Android (Kotlin) AlarmManager + S14 + battery-guide, iOS (Swift) AlarmKit
 ```
+
+## Week 12: what works
+
+Contract: `../docs/api/expenses.md`, `../docs/spec/vectors/calc.json`, `routes/expenses.py` / `schemas.py` as of 2026-11-09.
+Shapes only in `src/api/types.ts` + `src/api/endpoints.ts`. **Checked by Jest with a fake server only: not against the real
+server, not on a device.** KK strings of this week are drafts.
+
+- **«Расходы» = the calculator** (`components/page/ExpensesView.tsx`, registered as `expenses:builtin:expenses`; the frame's
+  edges unchanged, «Простой список» still offered): [Неделя | Месяц | Год], the board ‹ period › with the total
+  (`type.amount` 48/56, ≤1.6×), «23 траты · ⚠ проверить: 2» (tap = only those), other currencies on their own line; the
+  keys (64 pt, 4×4, spoken names, the sum read out as typed): «1200+350» → «= 1 550 ₸»; the day chip (Сегодня / Вчера /
+  ‹ › ); the 8 chips; «Записать». Folded to «Ввести трату» after 10 spendings. Bars by category, the feed by day
+  (dashed, «Итого за день»), «⋯» per line: Категория, День, «Верно» (`confirm: ["amount"]`), Изменить сумму, Удалить.
+- **Totals by code** (`expenses/calc.ts`): TS port of `calc.py` in integer tiyn (`bigint`), ROUND_HALF_UP to 0.01 on
+  reading; all of `calc.json` (expressions, aggregates, periods, format) runs in Jest, plus 1 000 random sets. The keys'
+  `evaluate` is a tokenizer (no `eval`), same codes as the server (`expression_invalid`, `amount_not_positive`,
+  `amount_too_large`) and the same `canonical` expression.
+- **Offline and «Без ИИ»**: keys, totals, chips, every change work at once (zustand store `expenses.v1` + outbox
+  `expense.create` / `expense.patch` / `expense.delete` / `expense.categories`, in tap order). Each with «Отменить»:
+  waiting → dropped; sent → the undo of its action. The category id is looked up when the row goes
+  (`GET /expense-categories` once if the person's copies are not on the phone yet). Free phrases are never read on the
+  phone (Ф-1 is the server's): they go to the line and wait for the server.
+- **The line**: the SSE `action` event's `expenses` are applied at once (US-31: «потратил 5000 на бензин» → the month total
+  by code). `/sync` `expenses`, `expense_categories`, tombstone `expense`.
+- **Chips order** (expenses.md): pending order → `manual` by `position` → by use (90 days), own after the 8; «Порядок» on
+  the page shows ↑ ↓ for the categories (`PATCH /expense-categories/reorder` with ids).
+- **≥150%**: the keys open on a full screen, chips in one column, the line's amount under its title.
+- **Shopping «− +»** now sends `client_id` on `PATCH /tasks/{id}`; its «Отменить» once sent is the server's action undo.
+
+Not yet: «Период…» (custom range), reordering lines inside a day, own categories from S38, the count animation of the
+board, an external keyboard on the keys, a check of the phone's total against `GET /expenses/aggregate`, the Kaspi sheet
+is text only. `amounts.json` (phrase reading) is not ported: the phone does not read phrases.
 
 ## Week 11а: what works
 

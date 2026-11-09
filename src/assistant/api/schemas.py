@@ -325,7 +325,9 @@ class ItemListOut(BaseModel):
 
 
 class TombstoneOut(BaseModel):
-    entity: Literal["item", "screen", "screen_item", "conversation_message", "action"]
+    # 0014 added `task`, 0018 `expense` (a record purged with its tool row)
+    entity: Literal["item", "screen", "screen_item", "conversation_message", "action", "task",
+                    "expense"]
     id: uuid.UUID
     seq: int
     deleted_at: datetime
@@ -441,6 +443,7 @@ class PageEntryOut(BaseModel):
     item: ItemOut
     fields: dict[str, Any]
     task: "TaskOut | None" = None  # week 9: on «Дела» / «Покупки»
+    expense: "ExpenseOut | None" = None  # week 12: on «Расходы»
 
 
 class PageItemsOut(BaseModel):
@@ -634,6 +637,8 @@ class SyncOut(BaseModel):
     pending_actions: list["PendingActionOut"] = []  # week 9 (actions.md)
     habits: list["HabitSyncOut"] = []  # week 9 (pages.md)
     item_facets: list[ItemFacetOut] = []  # week 11: values of the pages' own fields (views.md)
+    expenses: list["ExpenseOut"] = []  # week 12 (expenses.md), incl. trashed ones
+    expense_categories: list["ExpenseCategoryOut"] = []  # week 12, hidden ones too
     tombstones: list[TombstoneOut]  # purged for good: drop locally
     next_since: int  # pass as `since` next time
     has_more: bool  # true: call again right away with next_since
@@ -1171,6 +1176,8 @@ class TaskIn(BaseModel):
 
 class TaskPatchIn(BaseModel):
     version: int
+    # week 12: outbox-safe like the other writes; a repeat returns the first action
+    client_id: uuid.UUID | None = None
     title: str | None = Field(default=None, min_length=1, max_length=200)
     qty: str | None = Field(default=None, max_length=60)
     where: str | None = Field(default=None, max_length=60)
@@ -1309,6 +1316,208 @@ class HabitPatchOut(BaseModel):
     action: "ActionOut | None"
     repeated: bool = False
 
+
+# --- «Расходы» (docs/api/expenses.md, week 12) ---
+
+MoneyStr = Annotated[str, Field(pattern=r"^\d{1,12}([.,]\d{1,2})?$")]
+CurrencyStr = Annotated[str, Field(pattern=r"^[A-Z]{3}$")]
+MethodStr = Literal["cash", "card", "kaspi", "transfer", "other"]
+DirectionStr = Literal["expense", "income", "refund", "transfer_own"]
+
+
+class ExpenseOut(BaseModel):
+    id: uuid.UUID
+    client_id: uuid.UUID | None
+    item_id: uuid.UUID | None
+    amount: str
+    currency: str
+    expression: str | None
+    spent_on: str
+    spent_at: datetime | None
+    category_id: uuid.UUID | None
+    category_key: str | None
+    payee: str | None
+    method: str | None
+    direction: str
+    note: str | None
+    source: str
+    parse_source: str | None
+    review_fields: list[str]
+    ai_generated: bool
+    version: int
+    seq: int
+    created_at: datetime
+    updated_at: datetime
+    deleted_at: datetime | None
+
+
+class ExpenseCategoryOut(BaseModel):
+    id: uuid.UUID
+    client_id: uuid.UUID | None
+    key: str
+    title: str
+    title_kk: str | None
+    icon: str | None
+    system: bool
+    service: bool
+    position: str
+    manual: bool
+    pinned: bool
+    hidden: bool
+    hidden_at: datetime | None
+    version: int
+    seq: int
+    updated_at: datetime
+
+
+class ExpenseIn(BaseModel):
+    client_id: uuid.UUID
+    amount: MoneyStr | None = None
+    expression: str | None = Field(default=None, max_length=200)
+    currency: CurrencyStr = "KZT"
+    spent_on: DateStr | None = None
+    category_id: uuid.UUID | None = None
+    note: str | None = Field(default=None, max_length=200)
+    payee: str | None = Field(default=None, max_length=120)
+    method: MethodStr | None = None
+    direction: DirectionStr = "expense"
+    source: Literal["form", "typed"] = "form"
+
+
+class ExpensePatchIn(BaseModel):
+    version: int
+    client_id: uuid.UUID | None = None
+    amount: MoneyStr | None = None
+    expression: str | None = Field(default=None, max_length=200)
+    currency: CurrencyStr | None = None
+    spent_on: DateStr | None = None
+    category_id: uuid.UUID | None = None
+    note: str | None = Field(default=None, max_length=200)
+    payee: str | None = Field(default=None, max_length=120)
+    method: MethodStr | None = None
+    direction: DirectionStr | None = None
+    confirm: list[Literal["amount"]] = Field(default_factory=list, max_length=5)
+
+
+class ExpenseCreatedOut(BaseModel):
+    expense: ExpenseOut
+    action: "ActionOut | None"
+    page_patches: list[dict[str, Any]] = []
+    repeated: bool = False
+
+
+class ExpenseChangedOut(BaseModel):
+    expense: ExpenseOut
+    action: "ActionOut | None"
+    repeated: bool = False
+
+
+class ExpensesOut(BaseModel):
+    expenses: list[ExpenseOut]
+    next_before: uuid.UUID | None
+
+
+class ExpenseParseIn(BaseModel):
+    text: str = Field(min_length=1, max_length=300)
+    input_kind: Literal["typed", "voice"] = "typed"
+    page_id: uuid.UUID | None = None
+
+
+class ExpenseDraftOut(BaseModel):
+    amount: str
+    currency: str
+    spent_on: str
+    category_id: uuid.UUID | None
+    category_key: str | None
+    method: str | None
+    direction: str
+    note: str | None
+    payee: str | None
+    review_fields: list[str]
+
+
+class ExpenseParseOut(BaseModel):
+    status: Literal["ok", "form"]
+    source: Literal["rules", "llm"] | None
+    parser: Literal["rules_first", "llm"]
+    draft: ExpenseDraftOut | None
+    message: str | None
+
+
+class AggregatePeriodOut(BaseModel):
+    kind: str
+    from_: str | None = Field(alias="from", serialization_alias="from")
+    to: str | None
+
+    model_config = {"populate_by_name": True}
+
+
+class AggregateTotalOut(BaseModel):
+    currency: str
+    total: str
+    expense: str
+    refund: str
+    income: str
+    count: int
+
+
+class AggregateGroupOut(BaseModel):
+    key: str | None
+    title: str | None
+    currency: str
+    total: str
+    count: int
+
+
+class AggregateOut(BaseModel):
+    calc_version: str
+    period: AggregatePeriodOut
+    group_by: str | None
+    totals: list[AggregateTotalOut]
+    groups: list[AggregateGroupOut]
+    review_count: int
+    basis_ids: list[uuid.UUID]
+
+
+class CategoriesOut(BaseModel):
+    order: Literal["manual", "frequency"]
+    categories: list[ExpenseCategoryOut]
+
+
+class CategoryIn(BaseModel):
+    client_id: uuid.UUID
+    title: str = Field(min_length=1, max_length=40)
+    icon: str | None = Field(default=None, max_length=40)
+
+
+class CategoryPatchIn(BaseModel):
+    version: int
+    client_id: uuid.UUID | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=40)
+    icon: str | None = Field(default=None, max_length=40)
+    hidden: bool | None = None
+    pinned: bool | None = None
+
+
+class CategoryReorderIn(BaseModel):
+    client_id: uuid.UUID
+    ids: list[uuid.UUID] = Field(min_length=1, max_length=60)
+
+
+class CategoryChangedOut(BaseModel):
+    category: ExpenseCategoryOut
+    action: "ActionOut | None"
+    repeated: bool = False
+
+
+class CategoriesChangedOut(BaseModel):
+    categories: list[ExpenseCategoryOut]
+    action: "ActionOut | None"
+    repeated: bool = False
+
+
+for _m in (ExpenseCreatedOut, ExpenseChangedOut, CategoryChangedOut, CategoriesChangedOut):
+    _m.model_rebuild()
 
 for _m in (ReminderEventsOut, HabitPatchOut, PageCreateOut, PageEntryOut, PageItemAddOut,
            PageWithActionOut, ReminderWithFiresOut,

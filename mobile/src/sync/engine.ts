@@ -2,6 +2,8 @@ import {
   actionsOf,
   collectionsOf,
   duplicateGroupsOf,
+  expenseCategoriesOf,
+  expensesOf,
   firesOf,
   habitsOf,
   importsOf,
@@ -39,6 +41,8 @@ import type {
   ManualOut,
   PageCreateIn,
   ItemFacetOut,
+  ExpenseCategoryOut,
+  ExpenseOut,
 } from '@/api/types';
 import type { OutboxEntry, OutboxRepository } from '@/db/outbox';
 import type { PagesRepository } from '@/db/pages';
@@ -234,6 +238,12 @@ export type SyncDeps = {
   dedup?: DedupSink;
   /** Week 11: view changes by hand (`page.view`) and field values of «Своя страница» (`page.item_fields`). */
   views?: { send(e: OutboxEntry): Promise<void>; facets?: (list: ItemFacetOut[]) => Promise<void> };
+  /** Week 12: «Расходы» — changes by hand (`expense.*`), /sync `expense_entries` / `expense_categories` (src/expenses/service.ts). */
+  expenses?: {
+    send(e: OutboxEntry): Promise<void>;
+    apply(x: { entries: ExpenseOut[]; categories: ExpenseCategoryOut[] }): void;
+    tombstone?(id: string): void;
+  };
 };
 
 export type PushResult = { sent: number; retried: number; failed: number; offline: boolean };
@@ -260,6 +270,10 @@ const IN_TAP_ORDER = new Set<string>([
   'page.item_look',
   'task.patch',
   'task.clear_done',
+  'expense.create',
+  'expense.patch',
+  'expense.delete',
+  'expense.categories',
 ]);
 
 /**
@@ -459,6 +473,12 @@ export class SyncEngine {
         await this.d.views.facets(facets);
         applied += facets.length;
       }
+      // Week 12 (docs/api/expenses.md «Sync»): `expenses` (`deleted_at` while in the trash) and `expense_categories`.
+      const spent = { entries: expensesOf(out.expenses), categories: expenseCategoriesOf(out.expense_categories) };
+      if (spent.entries.length + spent.categories.length > 0) {
+        this.d.expenses?.apply(spent);
+        applied += spent.entries.length + spent.categories.length;
+      }
       const acts = Array.isArray(out.actions) ? actionsOf(out.actions) : [];
       if (acts.length > 0) {
         this.d.actions?.(acts);
@@ -468,6 +488,7 @@ export class SyncEngine {
         if (t.entity === 'item' || t.entity === 'items') await this.d.records.applyTombstone(t.id);
         else if (t.entity === 'screen') await this.d.pages.applyTombstone(t.id);
         else if (t.entity === 'screen_item') await this.d.pages.removeLink(t.id);
+        else if (t.entity === 'expense_entry' || t.entity === 'expense') this.d.expenses?.tombstone?.(t.id);
         applied++;
       }
       if (typeof out.next_since === 'number' && out.next_since >= since) {
@@ -541,6 +562,13 @@ export class SyncEngine {
         return (e) => this.sendItemLook(e);
       case 'import.telegram':
         return (e) => this.sendImport(e);
+      case 'expense.create':
+      case 'expense.patch':
+      case 'expense.delete':
+      case 'expense.categories': {
+        const expenses = this.d.expenses;
+        return expenses ? (e) => expenses.send(e) : null;
+      }
       case 'page.view':
       case 'page.item_fields': {
         const views = this.d.views;
@@ -1310,7 +1338,7 @@ export class SyncEngine {
       sink?.patchFailed?.(p.key, p.clientId);
       return; // lives on this phone only
     }
-    const call = (version: number) => this.d.api.patchTask(id, { version, ...p.body });
+    const call = (version: number) => this.d.api.patchTask(id, { version, client_id: p.clientId, ...p.body });
     try {
       let out: TaskWriteOut;
       try {

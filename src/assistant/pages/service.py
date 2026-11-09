@@ -183,12 +183,12 @@ async def place_item(session: AsyncSession, item: Item) -> int:
         )
     )
     rules = await _rules(session, pages)
-    is_task = await session.scalar(text("SELECT 1 FROM tasks WHERE item_id = :i"),
-                                   {"i": item.id}) is not None  # fmt: skip
+    owners = await _owners(session, item.user_id, [item.id])
+    owned_by = owners.get(item.id, frozenset())
     facts = ItemFacts(kind=str(item.kind), envelope=item.envelope, title=item.title,
                       summary=item.summary,
                       text=item.text if item.text is not None else item.raw_text,
-                      is_task=is_task)  # fmt: skip
+                      is_task=bool(owned_by))  # fmt: skip
     # Learned from the person's moves: such records also go where they put the others.
     learned = await habits.placements(session, item.user_id, item.envelope)
     targets = {str(h.value.get("page_id")) for h in learned}
@@ -197,7 +197,7 @@ async def place_item(session: AsyncSession, item: Item) -> int:
     # Which pages take it regardless of `none` (week 10): a page that takes it elsewhere lets
     # «Заметки» leave a receipt or a task out; with no such page the record stays on «Заметки».
     takes = {p.id: str(p.public_id) in targets or matches(rules[p.id], facts, elsewhere=False)
-             or (is_task and p.template_key in TASK_LISTS) for p in live}  # fmt: skip
+             or p.template_key in owned_by for p in live}  # fmt: skip
     added = 0
     for page in live:
         others = any(takes[q.id] and not excluded(rules[q.id], facts) for q in live
@@ -257,6 +257,24 @@ async def rescue_moved(session: AsyncSession, page: Screen) -> int:
 # «Дела» / «Покупки» are views over the tasks table (spec 3.10): their pages hold the records of
 # these lists' tasks besides what their rule matches.
 TASK_LISTS = {"tasks": ("todo",), "shopping": ("shopping",)}
+# Week 12: «Расходы» is a view over `expense_entries` the same way.
+EXPENSES_TEMPLATE = "expenses"
+
+
+async def _owners(session: AsyncSession, user_id: int,
+                  item_ids: list[int] | None) -> dict[int, frozenset[str]]:  # fmt: skip
+    """Records that are a tool row's own record (a task, an expense, week 12) → the templates
+    whose page takes them. `item_ids=None`: all of the person's."""
+    where = "user_id = :u" + (" AND item_id = ANY(:i)" if item_ids is not None else "")
+    params = {"u": user_id, "i": item_ids or []}
+    out: dict[int, set[str]] = {}
+    for (item_id,) in await session.execute(text(f"SELECT item_id FROM tasks WHERE {where}"),
+                                            params):  # fmt: skip
+        out.setdefault(item_id, set()).update(TASK_LISTS)
+    for (item_id,) in await session.execute(
+            text(f"SELECT item_id FROM expense_entries WHERE {where}"), params):  # fmt: skip
+        out.setdefault(item_id, set()).add(EXPENSES_TEMPLATE)
+    return {k: frozenset(v) for k, v in out.items()}
 
 
 async def fill_page(session: AsyncSession, page: Screen) -> int:
@@ -266,7 +284,8 @@ async def fill_page(session: AsyncSession, page: Screen) -> int:
     await lock_user(session, page.user_id)
     rule = (await _rules(session, [page]))[page.id]
     lists = TASK_LISTS.get(page.template_key, ())
-    if not rule.get("any") and not lists:
+    expenses = page.template_key == EXPENSES_TEMPLATE
+    if not rule.get("any") and not lists and not expenses:
         return 0
     when = func.coalesce(Item.occurred_at, Item.created_at)
     rows = await session.execute(
@@ -281,8 +300,11 @@ async def fill_page(session: AsyncSession, page: Screen) -> int:
         task_items = set(await session.scalars(
             text("SELECT item_id FROM tasks WHERE user_id = :u AND list_key = ANY(:l) "
                  "AND deleted_at IS NULL"), {"u": page.user_id, "l": list(lists)}))  # fmt: skip
-    all_tasks: set[int] = set(await session.scalars(
-        text("SELECT item_id FROM tasks WHERE user_id = :u"), {"u": page.user_id}))
+    if expenses:
+        task_items |= set(await session.scalars(
+            text("SELECT item_id FROM expense_entries WHERE user_id = :u "
+                 "AND deleted_at IS NULL"), {"u": page.user_id}))  # fmt: skip
+    owners = await _owners(session, page.user_id, None)
     # Week 10 (rules.py `none`): what another page takes stays off a page whose rule says so.
     others = list(await session.scalars(select(Screen).where(
         Screen.user_id == page.user_id, Screen.deleted_at.is_(None), Screen.id != page.id,
@@ -292,12 +314,12 @@ async def fill_page(session: AsyncSession, page: Screen) -> int:
 
     def wanted(r) -> bool:  # type: ignore[no-untyped-def]
         facts = ItemFacts(kind=str(r.kind), envelope=r.envelope, title=r.title,
-                          summary=r.summary, text=r.body, is_task=r.id in all_tasks)  # fmt: skip
+                          summary=r.summary, text=r.body, is_task=r.id in owners)  # fmt: skip
         facts_of[r.id] = facts
         if not rule.get("none"):
             return r.id in task_items or matches(rule, facts)
-        elsewhere = any(matches(other_rules[q.id], facts) or (facts.is_task and
-                                                              q.template_key in TASK_LISTS)
+        elsewhere = any(matches(other_rules[q.id], facts)
+                        or q.template_key in owners.get(r.id, frozenset())
                         for q in others)  # fmt: skip
         return r.id in task_items or matches(rule, facts, elsewhere=elsewhere)
 

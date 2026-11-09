@@ -3,6 +3,16 @@ import { ApiError } from './errors';
 import { readSse, StreamDroppedError, type SseMessage } from './sse';
 import type {
   ActionChangeOut,
+  ExpenseAggregateOut,
+  ExpenseAggregateQuery,
+  ExpenseCategoriesListOut,
+  ExpenseCategoriesOut,
+  ExpenseCategoriesReorderIn,
+  ExpenseCategoryOut,
+  ExpenseCreateIn,
+  ExpenseOut,
+  ExpensePatchIn,
+  ExpenseWriteOut,
   ActionOut,
   ActionUndoIn,
   ActionUndoOut,
@@ -574,7 +584,9 @@ export function decodeChatEvent(m: SseMessage): ChatEvent | null {
         const ids = strs(d.changed_item_ids);
         // Week 9: the tasks it made, for instant display (today.md «From the assistant line»).
         const tasks = tasksOf(d.tasks ?? obj(d.action)?.tasks);
-        return { type: 'action', action, changedItemIds: ids.length > 0 ? ids : action.changed_item_ids, tasks };
+        // Week 12 (expenses.md «From the line»): the expenses it saved, so the totals change at once.
+        const expenses = expensesOf(d.expenses ?? obj(d.action)?.expenses);
+        return { type: 'action', action, changedItemIds: ids.length > 0 ? ids : action.changed_item_ids, tasks, expenses };
       }
       case 'reminder_draft': {
         // Week 9 (reminders.md «From the assistant line»): S13, nothing is saved.
@@ -1018,6 +1030,118 @@ export function importOut(v: unknown): ImportOut | null {
 export const importsOf = (v: unknown) => arr(v).map(importOut).filter((x): x is ImportOut => x !== null);
 
 /** Typed /v1 endpoints. The ONLY place that knows paths and request bodies. */
+// --- week 12: «Расходы» (docs/api/expenses.md) ---
+
+const DIRECTIONS = new Set<string>(['expense', 'income', 'refund', 'transfer_own']);
+const METHODS = new Set<string>(['cash', 'card', 'kaspi', 'transfer', 'other']);
+const PARSE_SOURCES = new Set<string>(['rules', 'llm', 'user_edit']);
+
+/** Money is text: the server's decimal string as it is. A JSON number (never in the contract) is refused, not rounded. */
+const money = (v: unknown): string | null => (typeof v === 'string' && v.trim() !== '' ? v.trim() : null);
+
+export function expenseOut(v: unknown): ExpenseOut | null {
+  const o = obj(v);
+  const id = o && str(o.id);
+  const amount = o && money(o.amount);
+  const spentOn = o && str(o.spent_on);
+  if (!o || !id || !amount || !spentOn) return null;
+  const now = new Date().toISOString();
+  const method = str(o.method);
+  const ps = str(o.parse_source);
+  return {
+    id,
+    client_id: str(o.client_id),
+    item_id: str(o.item_id),
+    amount,
+    currency: (str(o.currency) ?? 'KZT').toUpperCase(),
+    expression: str(o.expression),
+    spent_on: spentOn.slice(0, 10),
+    category_id: str(o.category_id),
+    category_key: str(o.category_key),
+    payee: str(o.payee),
+    method: method && METHODS.has(method) ? (method as ExpenseOut['method']) : null,
+    direction: typeof o.direction === 'string' && DIRECTIONS.has(o.direction) ? (o.direction as ExpenseOut['direction']) : 'expense',
+    note: str(o.note),
+    source: str(o.source) ?? 'form',
+    parse_source: ps && PARSE_SOURCES.has(ps) ? (ps as ExpenseOut['parse_source']) : null,
+    review_fields: strs(o.review_fields),
+    ai_generated: o.ai_generated === true,
+    version: num(o.version, 1),
+    seq: num(o.seq),
+    created_at: str(o.created_at) ?? now,
+    updated_at: str(o.updated_at) ?? now,
+    deleted_at: str(o.deleted_at),
+  };
+}
+
+export const expensesOf = (v: unknown) => arr(v).map(expenseOut).filter((x): x is ExpenseOut => x !== null);
+
+export function expenseCategoryOut(v: unknown): ExpenseCategoryOut | null {
+  const o = obj(v);
+  const id = o && str(o.id);
+  const key = o && str(o.key);
+  const title = o && str(o.title);
+  if (!o || !id || !key || !title) return null;
+  return {
+    id,
+    client_id: str(o.client_id),
+    key,
+    title,
+    title_kk: str(o.title_kk),
+    icon: str(o.icon),
+    system: o.system === true,
+    service: o.service === true || key === 'transfers',
+    position: str(o.position),
+    manual: o.manual === true,
+    pinned: o.pinned === true,
+    hidden: o.hidden === true || !!str(o.hidden_at),
+    version: num(o.version, 1),
+    seq: num(o.seq),
+  };
+}
+
+export const expenseCategoriesOf = (v: unknown) =>
+  arr(v).map(expenseCategoryOut).filter((x): x is ExpenseCategoryOut => x !== null);
+
+function expenseWrite(v: unknown): ExpenseWriteOut {
+  const o = obj(v) ?? {};
+  return {
+    expense: expenseOut(o.expense),
+    action: actionOut(o.action),
+    page_patches: arr(o.page_patches).map(pagePatchOut).filter((x): x is PagePatchOut => x !== null),
+    repeated: o.repeated === true,
+  };
+}
+
+export function expenseAggregateOut(v: unknown): ExpenseAggregateOut {
+  const o = obj(v) ?? {};
+  const p = obj(o.period);
+  const totals = arr(o.totals)
+    .map((x) => {
+      const t = obj(x);
+      const total = t && money(t.total);
+      const currency = t && str(t.currency);
+      if (!t || !total || !currency) return null;
+      return { currency, total, expense: money(t.expense), refund: money(t.refund), income: money(t.income), count: num(t.count) };
+    })
+    .filter((x): x is ExpenseAggregateOut['totals'][number] => x !== null);
+  const groups = arr(o.groups)
+    .map((x) => {
+      const g = obj(x);
+      const total = g && money(g.total);
+      return g && total ? { key: str(g.key), title: str(g.title), currency: str(g.currency) ?? 'KZT', total, count: num(g.count) } : null;
+    })
+    .filter((x): x is ExpenseAggregateOut['groups'][number] => x !== null);
+  return {
+    calc_version: str(o.calc_version),
+    period: p && str(p.from) && str(p.to) ? { kind: str(p.kind) ?? 'custom', from: str(p.from)!, to: str(p.to)! } : null,
+    totals,
+    groups,
+    review_count: num(o.review_count),
+    basis_ids: strs(o.basis_ids),
+  };
+}
+
 export class Api {
   constructor(
     readonly client: ApiClient,
@@ -1584,6 +1708,46 @@ export class Api {
   async cancelImport(id: string): Promise<ImportOut | null> {
     const o = await this.client.request<unknown>('POST', `/imports/${encodeURIComponent(id)}/cancel`, { body: {} });
     return importOut(obj(o)?.import ?? o);
+  }
+
+  // week 12 — «Расходы» (docs/api/expenses.md). Amounts are decimal strings both ways.
+
+  async createExpense(body: ExpenseCreateIn): Promise<ExpenseWriteOut> {
+    return expenseWrite(await this.client.request<unknown>('POST', '/expenses', { body, idempotencyKey: body.client_id }));
+  }
+
+  /** `409 conflict` on a stale `version`. */
+  async patchExpense(id: string, body: ExpensePatchIn): Promise<ExpenseWriteOut> {
+    return expenseWrite(
+      await this.client.request<unknown>('PATCH', `/expenses/${encodeURIComponent(id)}`, { body, idempotencyKey: body.client_id }),
+    );
+  }
+
+  /** To the trash with its record; «Отменить» brings both back. */
+  async deleteExpense(id: string, clientId: string): Promise<ExpenseWriteOut> {
+    return expenseWrite(
+      await this.client.request<unknown>('DELETE', `/expenses/${encodeURIComponent(id)}`, {
+        query: { client_id: clientId },
+        idempotencyKey: clientId,
+      }),
+    );
+  }
+
+  async expenseCategories(): Promise<ExpenseCategoriesListOut> {
+    const o = obj(await this.client.request<unknown>('GET', '/expense-categories')) ?? {};
+    return { order: o.order === 'manual' ? 'manual' : 'frequency', categories: expenseCategoriesOf(o.categories) };
+  }
+
+  async reorderExpenseCategories(body: ExpenseCategoriesReorderIn): Promise<ExpenseCategoriesOut> {
+    const o =
+      obj(await this.client.request<unknown>('PATCH', '/expense-categories/reorder', { body, idempotencyKey: body.client_id })) ?? {};
+    return { categories: expenseCategoriesOf(o.categories), action: actionOut(o.action), repeated: o.repeated === true };
+  }
+
+  /** The server's own count (`calc.py`), to check the phone's against. */
+  async expenseAggregate(q: ExpenseAggregateQuery): Promise<ExpenseAggregateOut> {
+    const query = Object.fromEntries(Object.entries(q).filter(([, v]) => typeof v === 'string')) as Record<string, string>;
+    return expenseAggregateOut(await this.client.request<unknown>('GET', '/expenses/aggregate', { query }));
   }
 
   // feedback («Сообщить о проблеме», R-41)

@@ -23,6 +23,7 @@ from assistant.api.errors import ApiError
 from assistant.api.routes.items import items_out
 from assistant.api.schemas import (
     ActionOut,
+    ExpenseOut,
     HabitOffOut,
     HabitOut,
     HabitPatchIn,
@@ -53,6 +54,7 @@ from assistant.api.schemas import (
 )
 from assistant.db.models import Item
 from assistant.db.models_actions import Action, ActionKind, Initiator
+from assistant.db.models_expenses import ExpenseCategory, ExpenseEntry
 from assistant.db.models_habits import HabitKind, HabitStatus, UserHabit
 from assistant.db.models_pages import (
     MAX_PAGES,
@@ -66,6 +68,7 @@ from assistant.db.models_pages import (
     UpdatedBy,
 )
 from assistant.db.models_tasks import Task
+from assistant.expenses import service as expenses_service
 from assistant.pages import (
     add_link,
     create_page,
@@ -510,10 +513,19 @@ async def page_items(
         rows_t = list(await db.scalars(select(Task).where(
             Task.user_id == user.id, Task.item_id.in_([item.id for _, item in candidates]))))
         task_of = {t.item_id: t for t in rows_t}
+    expense_of: dict[int, tuple[ExpenseEntry, ExpenseCategory | None]] = {}
+    if page.template_key == expenses_service.PAGE_TEMPLATE and candidates:
+        expense_of = {e.item_id: (e, c) for e, c in await db.execute(
+            select(ExpenseEntry, ExpenseCategory)
+            .outerjoin(ExpenseCategory, ExpenseCategory.id == ExpenseEntry.category_id)
+            .where(ExpenseEntry.user_id == user.id,
+                   ExpenseEntry.item_id.in_([item.id for _, item in candidates])))}  # fmt: skip
     own = await _own_values(db, page, [item.id for _, item in candidates])
     entries = [(link, item, {**field_values(template_fields, item),
                              **(tasks_service.field_values(page.template_key, task_of[item.id])
                                 if item.id in task_of else {}),
+                             **(expenses_service.field_values(*expense_of[item.id])
+                                if item.id in expense_of else {}),
                              **own.get(item.id, {})})
                for link, item in candidates]  # fmt: skip
     more = len(rows) > limit
@@ -534,10 +546,17 @@ async def page_items(
         task_out = {t.item_id: TaskOut.model_validate(d) for t, d in
                     zip(shown_tasks, await tasks_service.tasks_dicts(db, shown_tasks),
                         strict=True)}  # fmt: skip
+    expense_out: dict[int, ExpenseOut] = {}
+    shown_expenses = [expense_of[item.id][0] for _, item, _ in entries if item.id in expense_of]
+    if shown_expenses:
+        dicts = await expenses_service.expenses_dicts(db, shown_expenses)
+        expense_out = {e.item_id: ExpenseOut.model_validate(d)
+                       for e, d in zip(shown_expenses, dicts, strict=True)}
     items = await items_out(db, [item for _, item, _ in entries])
     out = [
         PageEntryOut(link=page_item_out(link, page.public_id, item.public_id), item=io,
-                     fields=fields, task=task_out.get(item.id))
+                     fields=fields, task=task_out.get(item.id),
+                     expense=expense_out.get(item.id))
         for (link, item, fields), io in zip(entries, items, strict=True)
     ]  # fmt: skip
     return PageItemsOut(entries=out, next_cursor=out[-1].link.id if more and out else None)

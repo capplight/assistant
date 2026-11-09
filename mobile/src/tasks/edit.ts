@@ -5,6 +5,7 @@ import { useOnboarding } from '@/store/onboarding';
 import { useUndo } from '@/store/undo';
 import { newId } from '@/utils/id';
 
+import { undoServerAction } from './actions';
 import { rememberActions, taskSink } from './service';
 import { tasksState, type TaskEdit } from './store';
 
@@ -12,8 +13,9 @@ import { tasksState, type TaskEdit } from './store';
  * Week 11а (template-screens 2.3, 2.4; today.md `PATCH /tasks/{id}`): «− 2 +» of «Сколько» on
  * «Покупки» and «На завтра» of a to-do on «Дела». By hand, so at once, offline and in «Без ИИ» too:
  * the change is shown from `edits` (it wins over /sync until its outbox row is answered), one tap =
- * one `task.patch` row in tap order. «Отменить»: still waiting → dropped; sent → the old value goes
- * as a change of its own (PATCH has no `client_id`, so the phone never replays the server's undo).
+ * one `task.patch` row in tap order (with its `client_id`: a retry returns the first action).
+ * «Отменить»: still waiting → dropped; sent → the undo of its action on the server (actions.md), the
+ * old value shown at once; an older answer without an action → the old value goes as a change of its own.
  */
 
 export type TaskChange = Pick<TaskPatchIn, 'qty' | 'due_date'>;
@@ -88,6 +90,12 @@ async function undoChange(rowId: string): Promise<void> {
     if (!t) return;
     const clientId = newId();
     setEdit(t.id, { ...tasksState().edits[t.id], ...p.before, clientId });
+    if (p.actionId) {
+      // The server's undo (week 12, PATCH has `client_id`): the old value stays shown until /sync brings it.
+      const r = await undoServerAction(p.actionId);
+      if ((r.result === 'expired' || r.result === 'failed') && tasksState().edits[t.id]?.clientId === clientId) setEdit(t.id, null);
+      return;
+    }
     const back: TaskPatchPayload = { key: t.id, clientId, body: p.before, before: p.body, at: nowIso() };
     await outbox.enqueue('task.patch', back);
   } finally {
@@ -96,8 +104,22 @@ async function undoChange(rowId: string): Promise<void> {
   }
 }
 
+/** An edit whose values the server's task now has is done (e.g. after the undo of its action). */
+export function settleMatchingEdits(tasks: TaskOut[]): void {
+  for (const x of tasks) {
+    const e = tasksState().edits[x.id];
+    if (!e) continue;
+    const same = (['qty', 'due_date'] as const).every((k) => !(k in e) || (e[k] ?? null) === (x[k] ?? null));
+    if (same) setEdit(x.id, null);
+  }
+}
+
 /** The sync engine's side of `task.patch`. */
 export const taskPatchSink = {
+  applyServer: (tasks: TaskOut[]) => {
+    taskSink.applyServer(tasks);
+    settleMatchingEdits(tasks);
+  },
   version: (key: string): number | null => findTask(key)?.version ?? null,
   /** Answered: the server's task is the truth; the edit goes when no newer tap is waiting. */
   patched: (key: string, out: TaskWriteOut, clientId: string) => {

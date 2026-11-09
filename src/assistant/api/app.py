@@ -20,6 +20,7 @@ from assistant.api.routes import (
     devices,
     duplicates,
     events,
+    expenses,
     imports,
     items,
     me,
@@ -118,7 +119,8 @@ def create_app(
                    chat.feedback_router,
                    actions.router, reminders.router, tasks.router, today.router,
                    today.suggestions_router, duplicates.router, duplicates.pending_router,
-                   imports.router, collections.router, events.router):
+                   imports.router, collections.router, events.router, expenses.router,
+                   expenses.categories_router):
         v1.include_router(router)
     if isinstance(storage, LocalObjectStorage):
         v1.include_router(misc.dev_storage)

@@ -1,0 +1,2235 @@
+{
+ "version": 1,
+ "about": "Shared vectors of the rules-first expense reader (Ф-1) and of the amount check of the model's reading. Server: assistant.expenses.amounts / parse.rules_parse; phone: the same rules. SYNTHETIC: written by the team, not phrases of real people (Ф-20, Ф-26). `expect: null` = code must not guess (hand over to the model or the form). `on_page: true` = said on «Расходы» (a bare «5000 бензин» is an expense there). Fields left out of `expect` are not checked; `amount` and `currency` always are. `spent_on` left out = today. Today is 2026-11-09 (Monday) in Asia/Almaty.",
+ "today": "2026-11-09",
+ "tz": "Asia/Almaty",
+ "vectors": [
+  {
+   "text": "потратил 5000 на бензин",
+   "expect": {
+    "amount": "5000.00",
+    "currency": "KZT",
+    "category": "transport",
+    "note": "бензин"
+   }
+  },
+  {
+   "text": "Потратила 5000 на бензин",
+   "expect": {
+    "amount": "5000.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "потратил 2500 на такси",
+   "expect": {
+    "amount": "2500.00",
+    "currency": "KZT",
+    "category": "transport",
+    "note": "такси"
+   }
+  },
+  {
+   "text": "заплатил 3200 за свет",
+   "expect": {
+    "amount": "3200.00",
+    "currency": "KZT",
+    "category": "utilities"
+   }
+  },
+  {
+   "text": "заплатила 12000 за интернет",
+   "expect": {
+    "amount": "12000.00",
+    "currency": "KZT",
+    "category": "utilities"
+   }
+  },
+  {
+   "text": "оплатил 8500 коммуналку",
+   "expect": {
+    "amount": "8500.00",
+    "currency": "KZT",
+    "category": "utilities"
+   }
+  },
+  {
+   "text": "отдал 15000 за садик",
+   "expect": {
+    "amount": "15000.00",
+    "currency": "KZT",
+    "category": "family"
+   }
+  },
+  {
+   "text": "купил продукты на 7800",
+   "expect": {
+    "amount": "7800.00",
+    "currency": "KZT",
+    "category": "groceries"
+   }
+  },
+  {
+   "text": "купила лекарства за 4300",
+   "expect": {
+    "amount": "4300.00",
+    "currency": "KZT",
+    "category": "health"
+   }
+  },
+  {
+   "text": "в аптеке потратил 2100",
+   "expect": {
+    "amount": "2100.00",
+    "currency": "KZT",
+    "category": "health"
+   }
+  },
+  {
+   "text": "ушло 900 на хлеб и молоко",
+   "expect": {
+    "amount": "900.00",
+    "currency": "KZT",
+    "category": "groceries"
+   }
+  },
+  {
+   "text": "потратил 450 на кофе",
+   "expect": {
+    "amount": "450.00",
+    "currency": "KZT",
+    "category": "cafe_gifts"
+   }
+  },
+  {
+   "text": "кафе 6700 потратили",
+   "expect": {
+    "amount": "6700.00",
+    "currency": "KZT",
+    "category": "cafe_gifts"
+   }
+  },
+  {
+   "text": "потратил 18000 на подарок маме",
+   "expect": {
+    "amount": "18000.00",
+    "currency": "KZT",
+    "category": "cafe_gifts"
+   }
+  },
+  {
+   "text": "заправился на 10000",
+   "expect": {
+    "amount": "10000.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "заправил машину 9000",
+   "expect": {
+    "amount": "9000.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "за парковку отдал 500",
+   "expect": {
+    "amount": "500.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "заплатил 25000 за плитку",
+   "expect": {
+    "amount": "25000.00",
+    "currency": "KZT",
+    "category": "home"
+   }
+  },
+  {
+   "text": "купил обои за 32000",
+   "expect": {
+    "amount": "32000.00",
+    "currency": "KZT",
+    "category": "home"
+   }
+  },
+  {
+   "text": "потратил 120000 на ремонт",
+   "expect": {
+    "amount": "120000.00",
+    "currency": "KZT",
+    "category": "home"
+   }
+  },
+  {
+   "text": "оплатила кружок 20000",
+   "expect": {
+    "amount": "20000.00",
+    "currency": "KZT",
+    "category": "family"
+   }
+  },
+  {
+   "text": "репетитор 10000 заплатил",
+   "expect": {
+    "amount": "10000.00",
+    "currency": "KZT",
+    "category": "family"
+   }
+  },
+  {
+   "text": "потратил 300",
+   "expect": {
+    "amount": "300.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "потратил 1",
+   "expect": {
+    "amount": "1.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "заплатил 99 за пакет",
+   "expect": {
+    "amount": "99.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "потратила 65000 на телефон",
+   "expect": {
+    "amount": "65000.00",
+    "currency": "KZT",
+    "category": "utilities"
+   }
+  },
+  {
+   "text": "стоматолог 40000 заплатил",
+   "expect": {
+    "amount": "40000.00",
+    "currency": "KZT",
+    "category": "health"
+   }
+  },
+  {
+   "text": "Магнум 12400 потратил",
+   "expect": {
+    "amount": "12400.00",
+    "currency": "KZT",
+    "category": "groceries"
+   }
+  },
+  {
+   "text": "обед обошёлся в 3500",
+   "expect": {
+    "amount": "3500.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "билет на автобус 250 заплатил",
+   "expect": {
+    "amount": "250.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "потратил 5 000 на бензин",
+   "expect": {
+    "amount": "5000.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "Магнум 12 400 вчера каспи",
+   "on_page": true,
+   "expect": {
+    "amount": "12400.00",
+    "currency": "KZT",
+    "spent_on": "2026-11-08",
+    "category": "groceries",
+    "method": "kaspi"
+   }
+  },
+  {
+   "text": "потратил 1 250 000 на машину",
+   "expect": {
+    "amount": "1250000.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "заплатил 12.400 за продукты",
+   "expect": {
+    "amount": "12400.00",
+    "currency": "KZT",
+    "category": "groceries"
+   }
+  },
+  {
+   "text": "заплатил 12,400 за продукты",
+   "expect": {
+    "amount": "12400.00",
+    "currency": "KZT",
+    "category": "groceries"
+   }
+  },
+  {
+   "text": "потратил 1550,50 в аптеке",
+   "expect": {
+    "amount": "1550.50",
+    "currency": "KZT",
+    "category": "health"
+   }
+  },
+  {
+   "text": "заплатил 99.90 за воду",
+   "expect": {
+    "amount": "99.90",
+    "currency": "KZT",
+    "category": "utilities"
+   }
+  },
+  {
+   "text": "потратил 12,4к на продукты",
+   "expect": {
+    "amount": "12400.00",
+    "currency": "KZT",
+    "category": "groceries"
+   }
+  },
+  {
+   "text": "потратил 5к на бензин",
+   "expect": {
+    "amount": "5000.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "ушло 3к на такси",
+   "expect": {
+    "amount": "3000.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "потратил 1,5к",
+   "expect": {
+    "amount": "1500.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "потратил 2кк на машину",
+   "expect": {
+    "amount": "2000000.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "заплатил 15k за свет",
+   "expect": {
+    "amount": "15000.00",
+    "currency": "KZT",
+    "category": "utilities"
+   }
+  },
+  {
+   "text": "потратил 5 к",
+   "expect": {
+    "amount": "5000.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "потратил 500 к ужину",
+   "expect": {
+    "amount": "500.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "потратил 7 500 тг на продукты",
+   "expect": {
+    "amount": "7500.00",
+    "currency": "KZT",
+    "category": "groceries"
+   }
+  },
+  {
+   "text": "заплатил 10 тыс за свет",
+   "expect": {
+    "amount": "10000.00",
+    "currency": "KZT",
+    "category": "utilities"
+   }
+  },
+  {
+   "text": "потратил 10 тыс. тг",
+   "expect": {
+    "amount": "10000.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "потратил 5 тысяч на бензин",
+   "expect": {
+    "amount": "5000.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "отдал 2 тысячи за такси",
+   "expect": {
+    "amount": "2000.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "потратил 1,5 тысячи",
+   "expect": {
+    "amount": "1500.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "потратил 2.5 тыс на кофе",
+   "expect": {
+    "amount": "2500.00",
+    "currency": "KZT",
+    "category": "cafe_gifts"
+   }
+  },
+  {
+   "text": "потратил 3 тыщи на продукты",
+   "expect": {
+    "amount": "3000.00",
+    "currency": "KZT",
+    "category": "groceries"
+   }
+  },
+  {
+   "text": "ушло 5 тысяч 300 на рынке",
+   "expect": {
+    "amount": "5300.00",
+    "currency": "KZT",
+    "category": "groceries"
+   }
+  },
+  {
+   "text": "потратил 1 млн на ремонт",
+   "expect": {
+    "amount": "1000000.00",
+    "currency": "KZT",
+    "category": "home"
+   }
+  },
+  {
+   "text": "потратил 1,2 млн",
+   "expect": {
+    "amount": "1200000.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "потратил 2 с половиной тысячи на такси",
+   "expect": {
+    "amount": "2500.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "потратил 3 косаря на бензин",
+   "expect": {
+    "amount": "3000.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "потратил пять тысяч на бензин",
+   "expect": {
+    "amount": "5000.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "потратила пятьсот тенге на хлеб",
+   "expect": {
+    "amount": "500.00",
+    "currency": "KZT",
+    "category": "groceries"
+   }
+  },
+  {
+   "text": "заплатил сто пятьдесят тенге за пакет",
+   "expect": {
+    "amount": "150.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "потратил двести на проезд",
+   "expect": {
+    "amount": "200.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "потратил тысячу на такси",
+   "expect": {
+    "amount": "1000.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "потратила полторы тысячи на кофе",
+   "expect": {
+    "amount": "1500.00",
+    "currency": "KZT",
+    "category": "cafe_gifts"
+   }
+  },
+  {
+   "text": "потратил полторы тыщи",
+   "expect": {
+    "amount": "1500.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "потратил две с половиной тысячи на такси",
+   "expect": {
+    "amount": "2500.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "отдал три тысячи двести за свет",
+   "expect": {
+    "amount": "3200.00",
+    "currency": "KZT",
+    "category": "utilities"
+   }
+  },
+  {
+   "text": "потратил двенадцать тысяч четыреста в магнуме",
+   "expect": {
+    "amount": "12400.00",
+    "currency": "KZT",
+    "category": "groceries"
+   }
+  },
+  {
+   "text": "потратил сорок пять тысяч на ремонт",
+   "expect": {
+    "amount": "45000.00",
+    "currency": "KZT",
+    "category": "home"
+   }
+  },
+  {
+   "text": "заплатил девятьсот девяносто девять",
+   "expect": {
+    "amount": "999.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "ушло пол тысячи на хлеб",
+   "expect": {
+    "amount": "500.00",
+    "currency": "KZT",
+    "category": "groceries"
+   }
+  },
+  {
+   "text": "потратил полтысячи",
+   "expect": {
+    "amount": "500.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "потратил миллион на машину",
+   "expect": {
+    "amount": "1000000.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "потратил миллион двести тысяч на ремонт",
+   "expect": {
+    "amount": "1200000.00",
+    "currency": "KZT",
+    "category": "home"
+   }
+  },
+  {
+   "text": "заплатил двадцать пять тысяч за кружок",
+   "expect": {
+    "amount": "25000.00",
+    "currency": "KZT",
+    "category": "family"
+   }
+  },
+  {
+   "text": "потратил семьсот пятьдесят тенге",
+   "expect": {
+    "amount": "750.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "потратил одну тысячу",
+   "expect": {
+    "amount": "1000.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "потратил восемь тысяч на лекарства",
+   "expect": {
+    "amount": "8000.00",
+    "currency": "KZT",
+    "category": "health"
+   }
+  },
+  {
+   "text": "потратила шестьдесят тысяч на телефон",
+   "expect": {
+    "amount": "60000.00",
+    "currency": "KZT",
+    "category": "utilities"
+   }
+  },
+  {
+   "text": "заплатил тридцать тысяч за садик",
+   "expect": {
+    "amount": "30000.00",
+    "currency": "KZT",
+    "category": "family"
+   }
+  },
+  {
+   "text": "потратил пятнадцать тысяч на подарок",
+   "expect": {
+    "amount": "15000.00",
+    "currency": "KZT",
+    "category": "cafe_gifts"
+   }
+  },
+  {
+   "text": "потратил сто тысяч",
+   "expect": {
+    "amount": "100000.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "потратил триста рублей",
+   "expect": {
+    "amount": "300.00",
+    "currency": "RUB"
+   }
+  },
+  {
+   "text": "потратил пятьдесят долларов",
+   "expect": {
+    "amount": "50.00",
+    "currency": "USD"
+   }
+  },
+  {
+   "text": "потратил двадцать евро на кофе",
+   "expect": {
+    "amount": "20.00",
+    "currency": "EUR",
+    "category": "cafe_gifts"
+   }
+  },
+  {
+   "text": "потратил две тысячи сомов",
+   "expect": {
+    "amount": "2000.00",
+    "currency": "KGS"
+   }
+  },
+  {
+   "text": "потратил пять тыщ на бензин",
+   "expect": {
+    "amount": "5000.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "бензинге 5000 жұмсадым",
+   "expect": {
+    "amount": "5000.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "бес мың теңге жұмсадым",
+   "expect": {
+    "amount": "5000.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "жанармайға бес мың теңге жұмсадым",
+   "expect": {
+    "amount": "5000.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "дәріханада екі мың төледім",
+   "expect": {
+    "amount": "2000.00",
+    "currency": "KZT",
+    "category": "health"
+   }
+  },
+  {
+   "text": "дәріге үш мың бес жүз төледім",
+   "expect": {
+    "amount": "3500.00",
+    "currency": "KZT",
+    "category": "health"
+   }
+  },
+  {
+   "text": "он екі мың төрт жүз теңге жұмсадым",
+   "expect": {
+    "amount": "12400.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "нанға жүз елу теңге жұмсадым",
+   "expect": {
+    "amount": "150.00",
+    "currency": "KZT",
+    "category": "groceries"
+   }
+  },
+  {
+   "text": "кеше таксиге екі мың жұмсадым",
+   "expect": {
+    "amount": "2000.00",
+    "currency": "KZT",
+    "spent_on": "2026-11-08",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "бүгін кафеге алты мың жұмсадым",
+   "expect": {
+    "amount": "6000.00",
+    "currency": "KZT",
+    "spent_on": "2026-11-09",
+    "category": "cafe_gifts"
+   }
+  },
+  {
+   "text": "интернетке 7000 төледім",
+   "expect": {
+    "amount": "7000.00",
+    "currency": "KZT",
+    "category": "utilities"
+   }
+  },
+  {
+   "text": "балабақшаға жиырма мың төледім",
+   "expect": {
+    "amount": "20000.00",
+    "currency": "KZT",
+    "category": "family"
+   }
+  },
+  {
+   "text": "сыйлыққа он бес мың жұмсадым",
+   "expect": {
+    "amount": "15000.00",
+    "currency": "KZT",
+    "category": "cafe_gifts"
+   }
+  },
+  {
+   "text": "жарыққа төрт мың төледім",
+   "expect": {
+    "amount": "4000.00",
+    "currency": "KZT",
+    "category": "utilities"
+   }
+  },
+  {
+   "text": "бір жарым мың жұмсадым",
+   "expect": {
+    "amount": "1500.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "екі мың бес жүз елу теңге төледім",
+   "expect": {
+    "amount": "2550.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "мың теңге жұмсадым",
+   "expect": {
+    "amount": "1000.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "жүз мың жұмсадым жөндеуге",
+   "expect": {
+    "amount": "100000.00",
+    "currency": "KZT",
+    "category": "home"
+   }
+  },
+  {
+   "text": "тоқсан тоғыз теңге төледім",
+   "expect": {
+    "amount": "99.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "каспимен 3000 төледім",
+   "expect": {
+    "amount": "3000.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "отыз мың жұмсадым",
+   "expect": {
+    "amount": "30000.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "сүт пен нанға 1200 жұмсадым",
+   "expect": {
+    "amount": "1200.00",
+    "currency": "KZT",
+    "category": "groceries"
+   }
+  },
+  {
+   "text": "мектепке 5000 төледім",
+   "expect": {
+    "amount": "5000.00",
+    "currency": "KZT",
+    "category": "family"
+   }
+  },
+  {
+   "text": "кеше дүкенде 8500 жұмсадым",
+   "expect": {
+    "amount": "8500.00",
+    "currency": "KZT",
+    "spent_on": "2026-11-08",
+    "category": "groceries"
+   }
+  },
+  {
+   "text": "бес мың жұмсадым",
+   "expect": {
+    "amount": "5000.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "елу мың төледім",
+   "expect": {
+    "amount": "50000.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "потратил 50$ на подписку",
+   "expect": {
+    "amount": "50.00",
+    "currency": "USD"
+   }
+  },
+  {
+   "text": "потратил $50 на подписку",
+   "expect": {
+    "amount": "50.00",
+    "currency": "USD"
+   }
+  },
+  {
+   "text": "потратил 20 usd",
+   "expect": {
+    "amount": "20.00",
+    "currency": "USD"
+   }
+  },
+  {
+   "text": "заплатил 100 баксов",
+   "expect": {
+    "amount": "100.00",
+    "currency": "USD"
+   }
+  },
+  {
+   "text": "потратил 30 долларов на книги",
+   "expect": {
+    "amount": "30.00",
+    "currency": "USD"
+   }
+  },
+  {
+   "text": "потратил 500 руб на такси",
+   "expect": {
+    "amount": "500.00",
+    "currency": "RUB",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "потратил 1500 рублей",
+   "expect": {
+    "amount": "1500.00",
+    "currency": "RUB"
+   }
+  },
+  {
+   "text": "потратил 1000₽",
+   "expect": {
+    "amount": "1000.00",
+    "currency": "RUB"
+   }
+  },
+  {
+   "text": "потратил 40 евро",
+   "expect": {
+    "amount": "40.00",
+    "currency": "EUR"
+   }
+  },
+  {
+   "text": "потратил 15€ на кофе",
+   "expect": {
+    "amount": "15.00",
+    "currency": "EUR",
+    "category": "cafe_gifts"
+   }
+  },
+  {
+   "text": "потратил 2000 сом на такси",
+   "expect": {
+    "amount": "2000.00",
+    "currency": "KGS",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "потратил 5000₸ на бензин",
+   "expect": {
+    "amount": "5000.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "потратил ₸5000 на бензин",
+   "expect": {
+    "amount": "5000.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "потратил 5000 тенге на бензин",
+   "expect": {
+    "amount": "5000.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "потратил 5000тг на бензин",
+   "expect": {
+    "amount": "5000.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "потратил 5000 KZT",
+   "expect": {
+    "amount": "5000.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "потратил 12.50 $ на приложение",
+   "expect": {
+    "amount": "12.50",
+    "currency": "USD"
+   }
+  },
+  {
+   "text": "заплатил 3000 теңге",
+   "expect": {
+    "amount": "3000.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "потратил 200 тг на автобус",
+   "expect": {
+    "amount": "200.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "заплатил 70 сомов за хлеб",
+   "expect": {
+    "amount": "70.00",
+    "currency": "KGS",
+    "category": "groceries"
+   }
+  },
+  {
+   "text": "вчера потратил 5000 на бензин",
+   "expect": {
+    "amount": "5000.00",
+    "currency": "KZT",
+    "spent_on": "2026-11-08",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "сегодня потратил 3000 на такси",
+   "expect": {
+    "amount": "3000.00",
+    "currency": "KZT",
+    "spent_on": "2026-11-09",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "позавчера заплатил 7000 за свет",
+   "expect": {
+    "amount": "7000.00",
+    "currency": "KZT",
+    "spent_on": "2026-11-07",
+    "category": "utilities"
+   }
+  },
+  {
+   "text": "потратил 2000 на кофе вчера",
+   "expect": {
+    "amount": "2000.00",
+    "currency": "KZT",
+    "spent_on": "2026-11-08"
+   }
+  },
+  {
+   "text": "в пятницу потратил 15000 на продукты",
+   "expect": {
+    "amount": "15000.00",
+    "currency": "KZT",
+    "spent_on": "2026-11-06",
+    "category": "groceries"
+   }
+  },
+  {
+   "text": "в субботу потратил 4000 на кино",
+   "expect": {
+    "amount": "4000.00",
+    "currency": "KZT",
+    "spent_on": "2026-11-07",
+    "category": "cafe_gifts"
+   }
+  },
+  {
+   "text": "в среду заплатил 6000 за кружок",
+   "expect": {
+    "amount": "6000.00",
+    "currency": "KZT",
+    "spent_on": "2026-11-04",
+    "category": "family"
+   }
+  },
+  {
+   "text": "5-го заплатил 20000 за садик",
+   "expect": {
+    "amount": "20000.00",
+    "currency": "KZT",
+    "spent_on": "2026-11-05",
+    "category": "family"
+   }
+  },
+  {
+   "text": "15-го заплатил 30000 за квартиру",
+   "expect": {
+    "amount": "30000.00",
+    "currency": "KZT",
+    "spent_on": "2026-10-15",
+    "category": "home"
+   }
+  },
+  {
+   "text": "3 ноября потратил 8000 на лекарства",
+   "expect": {
+    "amount": "8000.00",
+    "currency": "KZT",
+    "spent_on": "2026-11-03",
+    "category": "health"
+   }
+  },
+  {
+   "text": "20 октября заплатил 12000 за интернет",
+   "expect": {
+    "amount": "12000.00",
+    "currency": "KZT",
+    "spent_on": "2026-10-20",
+    "category": "utilities"
+   }
+  },
+  {
+   "text": "1.11 потратил 9000 на продукты",
+   "expect": {
+    "amount": "9000.00",
+    "currency": "KZT",
+    "spent_on": "2026-11-01",
+    "category": "groceries"
+   }
+  },
+  {
+   "text": "28.10 заплатил 4500 за воду",
+   "expect": {
+    "amount": "4500.00",
+    "currency": "KZT",
+    "spent_on": "2026-10-28",
+    "category": "utilities"
+   }
+  },
+  {
+   "text": "потратил 3500 на такси 7 ноября",
+   "expect": {
+    "amount": "3500.00",
+    "currency": "KZT",
+    "spent_on": "2026-11-07",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "кеше 5000 жұмсадым",
+   "expect": {
+    "amount": "5000.00",
+    "currency": "KZT",
+    "spent_on": "2026-11-08"
+   }
+  },
+  {
+   "text": "потратил 5000 сегодня",
+   "expect": {
+    "amount": "5000.00",
+    "currency": "KZT",
+    "spent_on": "2026-11-09"
+   }
+  },
+  {
+   "text": "потратил 1200 на хлеб 2 ноября",
+   "expect": {
+    "amount": "1200.00",
+    "currency": "KZT",
+    "spent_on": "2026-11-02",
+    "category": "groceries"
+   }
+  },
+  {
+   "text": "вчера в 10:30 потратил 2500 на такси",
+   "expect": {
+    "amount": "2500.00",
+    "currency": "KZT",
+    "spent_on": "2026-11-08",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "в 7 утра заплатил 800 за автобус",
+   "expect": {
+    "amount": "800.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "вчера в 9 вечера потратил 6000 в кафе",
+   "expect": {
+    "amount": "6000.00",
+    "currency": "KZT",
+    "spent_on": "2026-11-08",
+    "category": "cafe_gifts"
+   }
+  },
+  {
+   "text": "потратил 5000 на бензин каспи",
+   "expect": {
+    "amount": "5000.00",
+    "currency": "KZT",
+    "category": "transport",
+    "method": "kaspi"
+   }
+  },
+  {
+   "text": "заплатил каспи 3000 за свет",
+   "expect": {
+    "amount": "3000.00",
+    "currency": "KZT",
+    "category": "utilities",
+    "method": "kaspi"
+   }
+  },
+  {
+   "text": "потратил 2000 наличкой на рынке",
+   "expect": {
+    "amount": "2000.00",
+    "currency": "KZT",
+    "category": "groceries",
+    "method": "cash"
+   }
+  },
+  {
+   "text": "потратил 1500 налом",
+   "expect": {
+    "amount": "1500.00",
+    "currency": "KZT",
+    "method": "cash"
+   }
+  },
+  {
+   "text": "заплатил картой 7000 в аптеке",
+   "expect": {
+    "amount": "7000.00",
+    "currency": "KZT",
+    "category": "health",
+    "method": "card"
+   }
+  },
+  {
+   "text": "заплатил 4000 kaspi gold",
+   "expect": {
+    "amount": "4000.00",
+    "currency": "KZT",
+    "method": "kaspi"
+   }
+  },
+  {
+   "text": "скинул переводом 10000 за кружок",
+   "expect": {
+    "amount": "10000.00",
+    "currency": "KZT",
+    "category": "family",
+    "method": "transfer"
+   }
+  },
+  {
+   "text": "потратил 3000 наличными",
+   "expect": {
+    "amount": "3000.00",
+    "currency": "KZT",
+    "method": "cash"
+   }
+  },
+  {
+   "text": "потратил 12000 по карте на продукты",
+   "expect": {
+    "amount": "12000.00",
+    "currency": "KZT",
+    "category": "groceries",
+    "method": "card"
+   }
+  },
+  {
+   "text": "оплатил через каспи 6500 интернет",
+   "expect": {
+    "amount": "6500.00",
+    "currency": "KZT",
+    "category": "utilities",
+    "method": "kaspi"
+   }
+  },
+  {
+   "text": "потратил 800 кэшем",
+   "expect": {
+    "amount": "800.00",
+    "currency": "KZT",
+    "method": "cash"
+   }
+  },
+  {
+   "text": "заплатил с карты 2200",
+   "expect": {
+    "amount": "2200.00",
+    "currency": "KZT",
+    "method": "card"
+   }
+  },
+  {
+   "text": "қолма-қол 3000 төледім",
+   "expect": {
+    "amount": "3000.00",
+    "currency": "KZT",
+    "method": "cash"
+   }
+  },
+  {
+   "text": "Магнум 8 300 каспи",
+   "on_page": true,
+   "expect": {
+    "amount": "8300.00",
+    "currency": "KZT",
+    "category": "groceries",
+    "method": "kaspi"
+   }
+  },
+  {
+   "text": "такси 1500 наличкой",
+   "on_page": true,
+   "expect": {
+    "amount": "1500.00",
+    "currency": "KZT",
+    "category": "transport",
+    "method": "cash"
+   }
+  },
+  {
+   "text": "вернули 2000 за возврат товара",
+   "expect": {
+    "amount": "2000.00",
+    "currency": "KZT",
+    "direction": "refund"
+   }
+  },
+  {
+   "text": "возврат 5000 из магазина",
+   "on_page": true,
+   "expect": {
+    "amount": "5000.00",
+    "currency": "KZT",
+    "direction": "refund"
+   }
+  },
+  {
+   "text": "мне вернули 1500 за билет",
+   "expect": {
+    "amount": "1500.00",
+    "currency": "KZT",
+    "direction": "refund"
+   }
+  },
+  {
+   "text": "получил зарплату 350000",
+   "expect": {
+    "amount": "350000.00",
+    "currency": "KZT",
+    "direction": "income"
+   }
+  },
+  {
+   "text": "пришло 50000 аванс",
+   "on_page": true,
+   "expect": {
+    "amount": "50000.00",
+    "currency": "KZT",
+    "direction": "income"
+   }
+  },
+  {
+   "text": "перевёл себе на депозит 100000",
+   "expect": {
+    "amount": "100000.00",
+    "currency": "KZT",
+    "direction": "transfer_own"
+   }
+  },
+  {
+   "text": "перевел на свою карту 20000",
+   "expect": {
+    "amount": "20000.00",
+    "currency": "KZT",
+    "direction": "transfer_own"
+   }
+  },
+  {
+   "text": "кэшбэк 1200",
+   "on_page": true,
+   "expect": {
+    "amount": "1200.00",
+    "currency": "KZT",
+    "direction": "refund"
+   }
+  },
+  {
+   "text": "потратил 5000, потом вернули",
+   "expect": null
+  },
+  {
+   "text": "получила 20000 от сына",
+   "expect": {
+    "amount": "20000.00",
+    "currency": "KZT",
+    "direction": "income"
+   }
+  },
+  {
+   "text": "айлық 300000 келді",
+   "on_page": true,
+   "expect": {
+    "amount": "300000.00",
+    "currency": "KZT",
+    "direction": "income"
+   }
+  },
+  {
+   "text": "заработал 15000",
+   "expect": {
+    "amount": "15000.00",
+    "currency": "KZT",
+    "direction": "income"
+   }
+  },
+  {
+   "text": "5000 бензин",
+   "on_page": true,
+   "expect": {
+    "amount": "5000.00",
+    "currency": "KZT",
+    "category": "transport",
+    "note": "бензин"
+   }
+  },
+  {
+   "text": "бензин 5000",
+   "on_page": true,
+   "expect": {
+    "amount": "5000.00",
+    "currency": "KZT",
+    "category": "transport",
+    "note": "бензин"
+   }
+  },
+  {
+   "text": "такси 2000",
+   "on_page": true,
+   "expect": {
+    "amount": "2000.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "продукты 15 600",
+   "on_page": true,
+   "expect": {
+    "amount": "15600.00",
+    "currency": "KZT",
+    "category": "groceries"
+   }
+  },
+  {
+   "text": "кофе 900",
+   "on_page": true,
+   "expect": {
+    "amount": "900.00",
+    "currency": "KZT",
+    "category": "cafe_gifts"
+   }
+  },
+  {
+   "text": "садик 25000",
+   "on_page": true,
+   "expect": {
+    "amount": "25000.00",
+    "currency": "KZT",
+    "category": "family"
+   }
+  },
+  {
+   "text": "свет 4200",
+   "on_page": true,
+   "expect": {
+    "amount": "4200.00",
+    "currency": "KZT",
+    "category": "utilities"
+   }
+  },
+  {
+   "text": "аптека 3 400",
+   "on_page": true,
+   "expect": {
+    "amount": "3400.00",
+    "currency": "KZT",
+    "category": "health"
+   }
+  },
+  {
+   "text": "плитка 48 500",
+   "on_page": true,
+   "expect": {
+    "amount": "48500.00",
+    "currency": "KZT",
+    "category": "home",
+    "note": "плитка"
+   }
+  },
+  {
+   "text": "пять тысяч бензин",
+   "on_page": true,
+   "expect": {
+    "amount": "5000.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "1200",
+   "on_page": true,
+   "expect": {
+    "amount": "1200.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "бензин",
+   "on_page": true,
+   "expect": null
+  },
+  {
+   "text": "потратил 3000 на онай",
+   "expect": {
+    "amount": "3000.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "заплатил 15000 за техосмотр",
+   "expect": {
+    "amount": "15000.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "потратил 4000 на шаурму",
+   "expect": {
+    "amount": "4000.00",
+    "currency": "KZT",
+    "category": "cafe_gifts"
+   }
+  },
+  {
+   "text": "потратил 9000 на суши",
+   "expect": {
+    "amount": "9000.00",
+    "currency": "KZT",
+    "category": "cafe_gifts"
+   }
+  },
+  {
+   "text": "потратил 7000 на цветы",
+   "expect": {
+    "amount": "7000.00",
+    "currency": "KZT",
+    "category": "cafe_gifts"
+   }
+  },
+  {
+   "text": "потратил 2500 на анализы",
+   "expect": {
+    "amount": "2500.00",
+    "currency": "KZT",
+    "category": "health"
+   }
+  },
+  {
+   "text": "потратил 6000 на витамины",
+   "expect": {
+    "amount": "6000.00",
+    "currency": "KZT",
+    "category": "health"
+   }
+  },
+  {
+   "text": "потратил 11000 на памперсы",
+   "expect": {
+    "amount": "11000.00",
+    "currency": "KZT",
+    "category": "family"
+   }
+  },
+  {
+   "text": "потратил 5000 на игрушки",
+   "expect": {
+    "amount": "5000.00",
+    "currency": "KZT",
+    "category": "family"
+   }
+  },
+  {
+   "text": "потратил 30000 на мебель",
+   "expect": {
+    "amount": "30000.00",
+    "currency": "KZT",
+    "category": "home"
+   }
+  },
+  {
+   "text": "заплатил 150000 за аренду",
+   "expect": {
+    "amount": "150000.00",
+    "currency": "KZT",
+    "category": "home"
+   }
+  },
+  {
+   "text": "потратил 3500 на посуду",
+   "expect": {
+    "amount": "3500.00",
+    "currency": "KZT",
+    "category": "home"
+   }
+  },
+  {
+   "text": "заплатил 2500 за газ",
+   "expect": {
+    "amount": "2500.00",
+    "currency": "KZT",
+    "category": "utilities"
+   }
+  },
+  {
+   "text": "заплатил 3000 за мобильный",
+   "expect": {
+    "amount": "3000.00",
+    "currency": "KZT",
+    "category": "utilities"
+   }
+  },
+  {
+   "text": "пополнил билайн на 2000",
+   "on_page": true,
+   "expect": {
+    "amount": "2000.00",
+    "currency": "KZT",
+    "category": "utilities"
+   }
+  },
+  {
+   "text": "потратил 5500 на мясо",
+   "expect": {
+    "amount": "5500.00",
+    "currency": "KZT",
+    "category": "groceries"
+   }
+  },
+  {
+   "text": "потратил 2000 на овощи на базаре",
+   "expect": {
+    "amount": "2000.00",
+    "currency": "KZT",
+    "category": "groceries"
+   }
+  },
+  {
+   "text": "потратил 8000 на одежду",
+   "expect": {
+    "amount": "8000.00",
+    "currency": "KZT",
+    "category": null
+   }
+  },
+  {
+   "text": "потратил 25000 на кроссовки",
+   "expect": {
+    "amount": "25000.00",
+    "currency": "KZT",
+    "category": null
+   }
+  },
+  {
+   "text": "потратил 1000",
+   "expect": {
+    "amount": "1000.00",
+    "currency": "KZT",
+    "category": null
+   }
+  },
+  {
+   "text": "позвонить Ерлану",
+   "expect": null
+  },
+  {
+   "text": "потратил много на бензин",
+   "expect": null
+  },
+  {
+   "text": "сколько я потратил на бензин?",
+   "expect": null
+  },
+  {
+   "text": "сколько ушло в этом месяце",
+   "expect": null
+  },
+  {
+   "text": "потратил 2000 и 3000",
+   "expect": null
+  },
+  {
+   "text": "купил 3 кофе по 500",
+   "expect": null
+  },
+  {
+   "text": "две булки по 150",
+   "on_page": true,
+   "expect": null
+  },
+  {
+   "text": "в 7 утра на работу",
+   "on_page": true,
+   "expect": null
+  },
+  {
+   "text": "встреча в 10:30",
+   "on_page": true,
+   "expect": null
+  },
+  {
+   "text": "купить 2 кг мяса",
+   "expect": null
+  },
+  {
+   "text": "заправил 20 литров",
+   "expect": null
+  },
+  {
+   "text": "+7 701 123 45 67",
+   "on_page": true,
+   "expect": null
+  },
+  {
+   "text": "87011234567 позвонить",
+   "on_page": true,
+   "expect": null
+  },
+  {
+   "text": "карта 4400 4302 1234 5678",
+   "on_page": true,
+   "expect": null
+  },
+  {
+   "text": "скидка 10%",
+   "on_page": true,
+   "expect": null
+  },
+  {
+   "text": "в 2026 году ремонт",
+   "on_page": true,
+   "expect": null
+  },
+  {
+   "text": "15 ноября день рождения",
+   "on_page": true,
+   "expect": null
+  },
+  {
+   "text": "15.11 врач",
+   "on_page": true,
+   "expect": null
+  },
+  {
+   "text": "за 2 дня",
+   "on_page": true,
+   "expect": null
+  },
+  {
+   "text": "потратил 500-600 на такси",
+   "expect": null
+  },
+  {
+   "text": "номер заказа 123456",
+   "on_page": true,
+   "expect": null
+  },
+  {
+   "text": "№ 4512 домофон",
+   "on_page": true,
+   "expect": null
+  },
+  {
+   "text": "он заплатил",
+   "expect": null
+  },
+  {
+   "text": "он сказал что заплатил",
+   "expect": null
+  },
+  {
+   "text": "3 этаж квартира 12",
+   "on_page": true,
+   "expect": null
+  },
+  {
+   "text": "на 5 человек",
+   "on_page": true,
+   "expect": null
+  },
+  {
+   "text": "потратил пару тысяч",
+   "expect": null
+  },
+  {
+   "text": "потратил тысячи две",
+   "expect": null
+  },
+  {
+   "text": "5000 бензин",
+   "expect": null
+  },
+  {
+   "text": "молоко 2 пачки",
+   "on_page": true,
+   "expect": null
+  },
+  {
+   "text": "сохрани 5000",
+   "expect": null
+  },
+  {
+   "text": "итог за ноябрь?",
+   "on_page": true,
+   "expect": null
+  },
+  {
+   "text": "қанша жұмсадым?",
+   "expect": null
+  },
+  {
+   "text": "потратил 2000 на такси и 3000 на кофе",
+   "expect": null
+  },
+  {
+   "text": "10 раз звонил",
+   "on_page": true,
+   "expect": null
+  },
+  {
+   "text": "потратил 3700 на шиномонтаж",
+   "expect": {
+    "amount": "3700.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "заплатила за газ 1800",
+   "expect": {
+    "amount": "1800.00",
+    "currency": "KZT",
+    "category": "utilities"
+   }
+  },
+  {
+   "text": "ушло 4 тысячи на лекарства для мамы",
+   "expect": {
+    "amount": "4000.00",
+    "currency": "KZT",
+    "category": "health"
+   }
+  },
+  {
+   "text": "купил хлеб за 250",
+   "expect": {
+    "amount": "250.00",
+    "currency": "KZT",
+    "category": "groceries"
+   }
+  },
+  {
+   "text": "отдала 7 тысяч за школу",
+   "expect": {
+    "amount": "7000.00",
+    "currency": "KZT",
+    "category": "family"
+   }
+  },
+  {
+   "text": "потратил на ужин в ресторане 23000",
+   "expect": {
+    "amount": "23000.00",
+    "currency": "KZT",
+    "category": "cafe_gifts"
+   }
+  },
+  {
+   "text": "вчера заплатил 2 300 за такси каспи",
+   "expect": {
+    "amount": "2300.00",
+    "currency": "KZT",
+    "spent_on": "2026-11-08",
+    "category": "transport",
+    "method": "kaspi"
+   }
+  },
+  {
+   "text": "потратила восемьсот тенге на автобус",
+   "expect": {
+    "amount": "800.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "заплатил тридцать пять тысяч за квартплату",
+   "expect": {
+    "amount": "35000.00",
+    "currency": "KZT",
+    "category": "utilities"
+   }
+  },
+  {
+   "text": "потратил 1,8к на кофе",
+   "expect": {
+    "amount": "1800.00",
+    "currency": "KZT",
+    "category": "cafe_gifts"
+   }
+  },
+  {
+   "text": "заплатил 4500 за мойку",
+   "expect": {
+    "amount": "4500.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "потратил 60 долларов на подписку",
+   "expect": {
+    "amount": "60.00",
+    "currency": "USD"
+   }
+  },
+  {
+   "text": "кеше аптекаға 3200 жұмсадым",
+   "expect": {
+    "amount": "3200.00",
+    "currency": "KZT",
+    "spent_on": "2026-11-08",
+    "category": "health"
+   }
+  },
+  {
+   "text": "таксиге мың теңге төледім",
+   "expect": {
+    "amount": "1000.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "потратил 950 на молоко",
+   "expect": {
+    "amount": "950.00",
+    "currency": "KZT",
+    "category": "groceries"
+   }
+  },
+  {
+   "text": "заплатил 6 тыс за интернет",
+   "expect": {
+    "amount": "6000.00",
+    "currency": "KZT",
+    "category": "utilities"
+   }
+  },
+  {
+   "text": "потратил 14 500 в Small",
+   "expect": {
+    "amount": "14500.00",
+    "currency": "KZT",
+    "category": "groceries"
+   }
+  },
+  {
+   "text": "потратила 2 тыщи на цветы",
+   "expect": {
+    "amount": "2000.00",
+    "currency": "KZT",
+    "category": "cafe_gifts"
+   }
+  },
+  {
+   "text": "потратил 250000 на мебель на кухню",
+   "expect": {
+    "amount": "250000.00",
+    "currency": "KZT",
+    "category": "home"
+   }
+  },
+  {
+   "text": "вернули 3000 за кроссовки",
+   "expect": {
+    "amount": "3000.00",
+    "currency": "KZT",
+    "direction": "refund"
+   }
+  },
+  {
+   "text": "сегодня потратил 1200 наличкой на хлеб",
+   "expect": {
+    "amount": "1200.00",
+    "currency": "KZT",
+    "spent_on": "2026-11-09",
+    "category": "groceries",
+    "method": "cash"
+   }
+  },
+  {
+   "text": "заплатил двести пятьдесят за проезд",
+   "expect": {
+    "amount": "250.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "потратил 5 500 тенге на бензин",
+   "expect": {
+    "amount": "5500.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "отдал 12 000 за кружок дочке",
+   "expect": {
+    "amount": "12000.00",
+    "currency": "KZT",
+    "category": "family"
+   }
+  },
+  {
+   "text": "потратил 300 рублей на метро",
+   "expect": {
+    "amount": "300.00",
+    "currency": "RUB",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "в субботу потратил 9000 на торт",
+   "expect": {
+    "amount": "9000.00",
+    "currency": "KZT",
+    "spent_on": "2026-11-07",
+    "category": "cafe_gifts"
+   }
+  },
+  {
+   "text": "потратил 45 тысяч на стройматериалы",
+   "expect": {
+    "amount": "45000.00",
+    "currency": "KZT",
+    "category": "home"
+   }
+  },
+  {
+   "text": "оплатил садик 28000 каспи",
+   "expect": {
+    "amount": "28000.00",
+    "currency": "KZT",
+    "category": "family",
+    "method": "kaspi"
+   }
+  },
+  {
+   "text": "потратил 700 на воду",
+   "expect": {
+    "amount": "700.00",
+    "currency": "KZT"
+   }
+  },
+  {
+   "text": "заплатил 10 000 тг за анализы",
+   "expect": {
+    "amount": "10000.00",
+    "currency": "KZT",
+    "category": "health"
+   }
+  },
+  {
+   "text": "бензин 7 000",
+   "on_page": true,
+   "expect": {
+    "amount": "7000.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "продукты 23 400 магнум",
+   "on_page": true,
+   "expect": {
+    "amount": "23400.00",
+    "currency": "KZT",
+    "category": "groceries"
+   }
+  },
+  {
+   "text": "кафе 4 тыс",
+   "on_page": true,
+   "expect": {
+    "amount": "4000.00",
+    "currency": "KZT",
+    "category": "cafe_gifts"
+   }
+  },
+  {
+   "text": "лекарства 3500 наличкой",
+   "on_page": true,
+   "expect": {
+    "amount": "3500.00",
+    "currency": "KZT",
+    "category": "health",
+    "method": "cash"
+   }
+  },
+  {
+   "text": "свет 3 200 каспи",
+   "on_page": true,
+   "expect": {
+    "amount": "3200.00",
+    "currency": "KZT",
+    "category": "utilities",
+    "method": "kaspi"
+   }
+  },
+  {
+   "text": "1500 такси",
+   "on_page": true,
+   "expect": {
+    "amount": "1500.00",
+    "currency": "KZT",
+    "category": "transport"
+   }
+  },
+  {
+   "text": "потратил триста на хлеб",
+   "expect": {
+    "amount": "300.00",
+    "currency": "KZT",
+    "category": "groceries"
+   }
+  },
+  {
+   "text": "получил 120000 зарплату",
+   "expect": {
+    "amount": "120000.00",
+    "currency": "KZT",
+    "direction": "income"
+   }
+  },
+  {
+   "text": "потратил 80 000 на ремонт ванной",
+   "expect": {
+    "amount": "80000.00",
+    "currency": "KZT",
+    "category": "home"
+   }
+  },
+  {
+   "text": "заплатила 5 тысяч 500 за массаж",
+   "expect": {
+    "amount": "5500.00",
+    "currency": "KZT",
+    "category": "health"
+   }
+  },
+  {
+   "text": "завтра в 9 к врачу",
+   "on_page": true,
+   "expect": null
+  },
+  {
+   "text": "сколько ушло на продукты?",
+   "on_page": true,
+   "expect": null
+  },
+  {
+   "text": "купил 2 хлеба по 200",
+   "expect": null
+  },
+  {
+   "text": "потратил 3000 на такси и 2000 на кофе",
+   "expect": null
+  },
+  {
+   "text": "позвони на 8 777 123 45 67",
+   "on_page": true,
+   "expect": null
+  },
+  {
+   "text": "купить 5 кг картошки",
+   "expect": null
+  },
+  {
+   "text": "потратил немного на кофе",
+   "expect": null
+  },
+  {
+   "text": "офис 305",
+   "on_page": true,
+   "expect": null
+  },
+  {
+   "text": "в 2025 году",
+   "on_page": true,
+   "expect": null
+  },
+  {
+   "text": "10.12 встреча",
+   "on_page": true,
+   "expect": null
+  }
+ ]
+}

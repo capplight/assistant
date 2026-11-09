@@ -45,6 +45,8 @@ class ActionKind(enum.StrEnum):
     DELETE_STACK = "delete_stack"
     SCREEN_VIEW_CHANGE = "screen_view_change"  # week 11: set_view (S38 or the assistant)
     SCREEN_RESET = "screen_reset"  # week 11: «Вернуть как было»
+    CREATE_EXPENSE = "create_expense"  # week 12: «Расходы» (already in the 0011 CHECK)
+    EDIT_EXPENSE = "edit_expense"
 
 
 class Initiator(enum.StrEnum):
