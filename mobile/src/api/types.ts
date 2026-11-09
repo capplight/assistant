@@ -272,8 +272,15 @@ export type PageOut = {
   icon: string;
   position: string;
   layout: string;
-  /** `groups`: group titles after «Разложи», in order (docs/api/chat.md PagePatch). */
-  view_state?: { groups?: string[]; [k: string]: unknown } | null;
+  /**
+   * `groups`: group titles after «Разложи», in order (docs/api/chat.md PagePatch). Week 11
+   * (template-screens 2.8, 4): `sort`, `group_by`, `mode`, and `set_by` = who set each setting.
+   */
+  view_state?: ViewStateOut | null;
+  /** Week 11 (R-51, S38): empty = as in the template. */
+  field_prefs?: FieldPrefOut[];
+  custom_fields?: CustomFieldOut[];
+  customized?: boolean;
   view_version: number;
   created_by: string;
   hidden_at: string | null;
@@ -296,7 +303,136 @@ export type PageCreateIn = {
 /** `revived`: a removed topic page came back, with its id, order and rows; `created` is false. */
 export type PageCreateOut = { page: PageOut; created: boolean; revived?: boolean };
 
-export type PagePatchIn = { title?: string; icon?: string; layout?: string; base_view_version?: number };
+/** `client_id` (week 11): from the outbox, a repeat returns the first action. */
+export type PagePatchIn = { title?: string; icon?: string; layout?: string; base_view_version?: number; client_id?: string };
+
+// --- week 11: «Настроить страницу» S38 and `set_view` (template-screens 2.8, 4; docs/api/views.md) ---
+
+/** Who set a setting: the person by hand, the assistant, or the template (template-screens 2.8). */
+export type SetBy = 'user' | 'agent' | 'template';
+
+export type ViewStateOut = {
+  sort?: string;
+  /** Group rows by a field (`field id`); null = no grouping. */
+  group_by?: string | null;
+  groups?: string[];
+  /** Template modes: «Доска» (week 16а), «В магазине» stays on the phone. */
+  mode?: string | null;
+  set_by?: Record<string, SetBy>;
+  [k: string]: unknown;
+};
+
+export type FieldType =
+  | 'text'
+  | 'long_text'
+  | 'number'
+  | 'money'
+  | 'date'
+  | 'datetime'
+  | 'enum'
+  | 'tags'
+  | 'bool'
+  | 'person'
+  | 'link';
+
+/** A field of the template catalogue (`GET /page-templates`). `required` = ★, never hidden. */
+export type TemplateFieldOut = {
+  id: string;
+  title: { ru: string; kk: string | null };
+  type: FieldType;
+  required: boolean;
+  default_visible: boolean;
+  source: string;
+  options?: string[];
+};
+
+export type PageTemplateOut = {
+  key: string;
+  version: number;
+  title: { ru: string; kk: string | null };
+  icon: string;
+  singleton: boolean;
+  fields: TemplateFieldOut[];
+  layouts: string[];
+  default_layout: string;
+  default_view: Record<string, unknown> | null;
+  min_app_version: string | null;
+};
+
+/** The person's choice for a template field: shown or not, its place. */
+export type FieldPrefOut = { field_id: string; visible: boolean; order: number; set_by?: SetBy };
+
+/** S38 «+ Своё поле»: 5 types, at most 5 per page. */
+export type CustomFieldType = 'text' | 'number' | 'money' | 'date' | 'bool';
+export type CustomFieldOut = {
+  id: string;
+  title: string;
+  type: CustomFieldType;
+  order: number;
+  visible: boolean;
+  set_by?: SetBy;
+};
+
+/**
+ * One view change (S38 by hand, the same `set_view` the assistant calls). Everything optional
+ * except `client_id`; `confirm_manual` only after the person's «Да».
+ */
+/**
+ * `POST /v1/pages/{id}/view` (views.md): every key optional, a key left out stays, `null` on a view
+ * key = the template's value. The person by hand is never asked «Да» by the server.
+ */
+export type PageViewIn = {
+  client_id: string;
+  base_view_version?: number;
+  layout?: string;
+  board?: boolean | null;
+  sort?: string | null;
+  sort_dir?: 'asc' | 'desc' | null;
+  group_by?: string | null;
+  title?: string;
+  icon?: string;
+  /** The whole order the person sees, with the switches. */
+  fields?: { field_id: string; visible: boolean }[];
+  /** `id`: made on the phone (`c_` + 32 hex), so values typed offline map to it (views.md). */
+  add_fields?: { id?: string; title: string; type: CustomFieldType }[];
+  rename_fields?: { field_id: string; title: string }[];
+  remove_fields?: string[];
+  reset?: boolean;
+};
+
+/** A view change answered: the page as it is now and the action for «Отменить». */
+export type PageViewOut = { page: PageOut | null; action: ActionOut | null; repeated: boolean; changed: boolean; page_patch: PagePatchOut | null };
+
+/** `PATCH /pages/{id}/items/{item_id}` `values`: own field id → value (`null` clears). */
+export type PageItemFieldsIn = {
+  client_id: string;
+  values?: Record<string, string | number | boolean | null>;
+  /** The checklist tick (`link.done_at`). */
+  done?: boolean;
+  color?: string | null;
+  pinned?: boolean;
+};
+export type PageItemFieldsOut = { values: Record<string, unknown>; action: ActionOut | null };
+
+/** `/v1/sync` `item_facets`: own field values of one record on one page. */
+export type ItemFacetOut = { id: string; page_id: string; item_id: string; data: Record<string, unknown>; seq: number };
+
+/** «Сделать стопку страницей» (founder addition): a «Своя страница» with the stack's records. */
+export type CollectionToPageOut = {
+  page: PageOut | null;
+  collection: CollectionOut | null;
+  action: ActionOut | null;
+  repeated: boolean;
+};
+
+/** «Объединить все отмеченные (N)»: one `merge_group` action for all of them (duplicates.md). */
+export type DuplicatesMergeIn = { client_id: string; groups: { id: string; keep_item_id?: string }[] };
+export type DuplicatesMergeOut = {
+  groups: DuplicateGroupOut[];
+  action: ActionOut | null;
+  skipped_group_ids: string[];
+  repeated: boolean;
+};
 
 export type PageItemOut = {
   id: string;
@@ -312,6 +448,8 @@ export type PageItemOut = {
   seq: number;
   updated_at: string;
   updated_by: string;
+  /** Week 11 (views.md): the checklist tick of a `checklist` page; undefined = an older server. */
+  done_at?: string | null;
 };
 
 export type PageLinkCreateOut = { link: PageItemOut; created: boolean };
@@ -505,6 +643,8 @@ export type ActionChangeOut = {
   text: string;
   page_id: string | null;
   reverted: boolean;
+  /** Week 11 (views.md): a view setting's row («Вид: Список → Таблица»): «Вернуть» = undo `keys`. */
+  key?: string | null;
 };
 
 /** One change of the assistant with one «Отменить» (actions.md «Action»). */
@@ -538,6 +678,10 @@ export type PagePatchOut = {
   view_state: { sort?: string; groups?: string[]; [k: string]: unknown } | null;
   rows: PageItemOut[];
   removed_item_ids: string[];
+  /** Week 11: the assistant changed the view (`set_view`); absent = unchanged. */
+  layout?: string;
+  field_prefs?: FieldPrefOut[];
+  custom_fields?: CustomFieldOut[];
 };
 
 export type ProposalOptionKind = 'item' | 'pick' | 'yes' | 'no' | 'keep_mine' | 'cancel';
@@ -561,7 +705,8 @@ export type ProposalOut = {
 };
 
 /** POST /actions/{id}/undo. `item_ids`: «Вернуть» one row of «Что изменилось». */
-export type ActionUndoIn = { client_id?: string; item_ids?: string[] };
+/** `keys` (week 11, views.md): «Вернуть» one view setting of «Что изменилось». */
+export type ActionUndoIn = { client_id?: string; item_ids?: string[]; keys?: string[] };
 
 export type ActionUndoOut = {
   action: ActionOut | null;

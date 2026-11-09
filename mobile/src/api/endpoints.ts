@@ -45,6 +45,21 @@ import type {
   PageLinkCreateOut,
   PageOut,
   PagePatchIn,
+  CollectionToPageOut,
+  CustomFieldOut,
+  CustomFieldType,
+  DuplicatesMergeIn,
+  DuplicatesMergeOut,
+  FieldPrefOut,
+  FieldType,
+  ItemFacetOut,
+  PageItemFieldsIn,
+  PageItemFieldsOut,
+  PageTemplateOut,
+  PageViewIn,
+  PageViewOut,
+  SetBy,
+  TemplateFieldOut,
   ProfilePatchIn,
   SearchIn,
   SearchOut,
@@ -195,6 +210,7 @@ function changeOut(v: unknown): ActionChangeOut | null {
     text: str(o.text) ?? str(o.title) ?? '',
     page_id: str(o.page_id),
     reverted: o.reverted === true,
+    key: str(o.key),
   };
 }
 
@@ -245,6 +261,7 @@ function linkOut(v: unknown): PageItemOut | null {
     seq: Number(o.seq) || 0,
     updated_at: str(o.updated_at) ?? new Date().toISOString(),
     updated_by: str(o.updated_by) ?? 'agent',
+    ...('done_at' in o ? { done_at: str(o.done_at) } : {}),
   };
 }
 
@@ -260,18 +277,141 @@ export function pagePatchOut(v: unknown): PagePatchOut | null {
   if (!d || !pageId) return null;
   const vs = obj(d.view_state);
   const groups = groupTitles(vs);
+  // Week 11 (views.md): `page_view` with the page's look; older shapes put `layout` beside.
+  const pv = obj(d.page_view) ?? d;
+  const layout = str(pv.layout);
   return {
     page_id: pageId,
     view_version: Number(d.view_version) || 0,
     view_state: vs ? { ...vs, ...(groups ? { groups } : {}) } : null,
     rows: arr(d.rows).map(linkOut).filter((x): x is PageItemOut => x !== null),
     removed_item_ids: strs(d.removed_item_ids),
+    ...(layout ? { layout } : {}),
+    ...(Array.isArray(pv.field_prefs) ? { field_prefs: fieldPrefsOf(pv.field_prefs) } : {}),
+    ...(Array.isArray(pv.custom_fields) ? { custom_fields: customFieldsOf(pv.custom_fields) } : {}),
+  };
+}
+
+/** `/v1/sync` `item_facets` (views.md «Sync»). */
+export function itemFacetsOf(v: unknown): ItemFacetOut[] {
+  return arr(v).flatMap((x): ItemFacetOut[] => {
+    const o = obj(x);
+    const pageId = o && str(o.page_id);
+    const itemId = o && str(o.item_id);
+    if (!o || !pageId || !itemId) return [];
+    return [{ id: str(o.id) ?? `${pageId}|${itemId}`, page_id: pageId, item_id: itemId, data: obj(o.data) ?? {}, seq: num(o.seq) }];
+  });
+}
+
+// --- week 11: view settings (template-screens 2.8, 4; docs/api/views.md) ---
+
+const SET_BY = new Set<string>(['user', 'agent', 'template']);
+const setBy = (v: unknown): SetBy | undefined => (typeof v === 'string' && SET_BY.has(v) ? (v as SetBy) : undefined);
+
+/** `field_prefs`: `{field_id, visible, order, set_by?}`; unknown rows are dropped. */
+export function fieldPrefsOf(v: unknown): FieldPrefOut[] {
+  return arr(v).flatMap((x, i): FieldPrefOut[] => {
+    const o = obj(x);
+    const id = o && (str(o.field_id) ?? str(o.id));
+    if (!o || !id) return [];
+    const by = setBy(o.set_by);
+    return [{ field_id: id, visible: o.visible !== false, order: num(o.order, i), ...(by ? { set_by: by } : {}) }];
+  });
+}
+
+const CUSTOM_TYPES = new Set<string>(['text', 'number', 'money', 'date', 'bool']);
+
+/** `custom_fields`: at most 5, five types; an unknown type reads as text. */
+export function customFieldsOf(v: unknown): CustomFieldOut[] {
+  return arr(v).flatMap((x, i): CustomFieldOut[] => {
+    const o = obj(x);
+    const id = o && str(o.id);
+    const title = o && str(o.title);
+    if (!o || !id || !title) return [];
+    const type = (CUSTOM_TYPES.has(String(o.type)) ? o.type : 'text') as CustomFieldType;
+    const by = setBy(o.set_by);
+    return [{ id, title, type, order: num(o.order, i), visible: o.visible !== false, ...(by ? { set_by: by } : {}) }];
+  });
+}
+
+const FIELD_TYPES = new Set<string>(['text', 'long_text', 'number', 'money', 'date', 'datetime', 'enum', 'tags', 'bool', 'person', 'link']);
+
+function i18nText(v: unknown): { ru: string; kk: string | null } | null {
+  const o = obj(v);
+  const ru = o ? str(o.ru) : str(v);
+  return ru ? { ru, kk: o ? str(o.kk) : null } : null;
+}
+
+export function templateFieldOut(v: unknown): TemplateFieldOut | null {
+  const o = obj(v);
+  const id = o && str(o.id);
+  const title = o && i18nText(o.title);
+  if (!o || !id || !title) return null;
+  return {
+    id,
+    title,
+    type: (FIELD_TYPES.has(String(o.type)) ? o.type : 'text') as FieldType,
+    required: o.required === true,
+    default_visible: o.default_visible !== false,
+    source: str(o.source) ?? '',
+    ...(Array.isArray(o.options) ? { options: strs(o.options) } : {}),
+  };
+}
+
+/** One template of `GET /page-templates` (pages.md «Catalogue»). */
+export function pageTemplateOut(v: unknown): PageTemplateOut | null {
+  const o = obj(v);
+  const key = o && str(o.key);
+  if (!o || !key) return null;
+  const layouts = strs(o.layouts);
+  return {
+    key,
+    version: num(o.version, 1),
+    title: i18nText(o.title) ?? { ru: key, kk: null },
+    icon: str(o.icon) ?? 'other',
+    singleton: o.singleton !== false,
+    fields: arr(o.fields).map(templateFieldOut).filter((x): x is TemplateFieldOut => x !== null),
+    layouts,
+    default_layout: str(o.default_layout) ?? layouts[0] ?? 'list',
+    default_view: obj(o.default_view),
+    min_app_version: str(o.min_app_version),
+  };
+}
+
+/** A page answer: `{page, action}`, or the page itself with `action` beside its fields. */
+export function pageViewOut(v: unknown): PageViewOut {
+  const o = obj(v) ?? {};
+  const page = pageOutOf(o.page) ?? pageOutOf(o);
+  return {
+    page,
+    action: actionOut(o.action),
+    repeated: o.repeated === true,
+    changed: o.changed !== false,
+    page_patch: pagePatchOut(o.page_patch),
+  };
+}
+
+/** «Сделать стопку страницей»: the new page, the stack as it is now, the action. */
+export function collectionToPageOut(v: unknown): CollectionToPageOut {
+  const o = obj(v) ?? {};
+  return {
+    page: pageOutOf(o.page),
+    collection: collectionOut(o.collection),
+    action: actionOut(o.action),
+    repeated: o.repeated === true,
   };
 }
 
 function pageOutOf(v: unknown): PageOut | null {
   const o = obj(v);
-  return o && str(o.id) && typeof o.position === 'string' ? (o as unknown as PageOut) : null;
+  if (!o || !str(o.id) || typeof o.position !== 'string') return null;
+  const out = o as unknown as PageOut;
+  // Week 11 lists are read leniently; an older server has none (= as in the template).
+  return {
+    ...out,
+    ...(o.field_prefs !== undefined ? { field_prefs: fieldPrefsOf(o.field_prefs) } : {}),
+    ...(o.custom_fields !== undefined ? { custom_fields: customFieldsOf(o.custom_fields) } : {}),
+  };
 }
 
 const MOVE_REASONS = new Set<string>(['newer_move', 'anchor_gone', 'nothing_to_do', 'page_removed']);
@@ -955,7 +1095,45 @@ export class Api {
   }
 
   patchPage(id: string, body: PagePatchIn): Promise<PageOut> {
-    return this.client.request('PATCH', `/pages/${encodeURIComponent(id)}`, { body });
+    return this.client.request('PATCH', `/pages/${encodeURIComponent(id)}`, { body, ...(body.client_id ? { idempotencyKey: body.client_id } : {}) });
+  }
+
+  /** Rename with its action («Отменить» = the old name), pages.md / views.md «Renaming». */
+  async renamePage(id: string, title: string, clientId: string): Promise<PageViewOut> {
+    return pageViewOut(
+      await this.client.request<unknown>('PATCH', `/pages/${encodeURIComponent(id)}`, { body: { title, client_id: clientId }, idempotencyKey: clientId }),
+    );
+  }
+
+  // week 11 — «Настроить страницу» S38 and `set_view` (docs/api/views.md)
+
+  /** The catalogue: fields with ★, allowed views. */
+  async pageTemplates(): Promise<PageTemplateOut[]> {
+    const o = await this.client.request<unknown>('GET', '/page-templates');
+    return arr(obj(o)?.templates ?? o).map(pageTemplateOut).filter((x): x is PageTemplateOut => x !== null);
+  }
+
+  /**
+   * S38: view, sort, grouping, name, icon, fields, own fields, «Вернуть как было» (`reset`) — one
+   * call, one action with «Отменить» (`POST /pages/{id}/view`, views.md). ★ hidden → `422
+   * field_required`; a 6th own field → `422 fields_limit`.
+   */
+  async setView(pageId: string, body: PageViewIn): Promise<PageViewOut> {
+    return pageViewOut(
+      await this.client.request<unknown>('POST', `/pages/${encodeURIComponent(pageId)}/view`, { body, idempotencyKey: body.client_id }),
+    );
+  }
+
+  /** A value of one field of one record on this page (a tick of a checklist, a table cell). */
+  async setItemFields(pageId: string, itemId: string, body: PageItemFieldsIn): Promise<PageItemFieldsOut> {
+    const o =
+      obj(
+        await this.client.request<unknown>('PATCH', `/pages/${encodeURIComponent(pageId)}/items/${encodeURIComponent(itemId)}`, {
+          body,
+          idempotencyKey: body.client_id,
+        }),
+      ) ?? {};
+    return { values: obj(o.values) ?? {}, action: actionOut(o.action) };
   }
 
   /** Show an existing item on this page too. Idempotent by page + item. */
@@ -1264,6 +1442,17 @@ export class Api {
     return this.decide(id, 'merge', body);
   }
 
+  /** «Объединить все отмеченные (N)»: one action, one «Отменить»; groups closed meanwhile are skipped. */
+  async mergeGroups(body: DuplicatesMergeIn): Promise<DuplicatesMergeOut> {
+    const o = obj(await this.client.request<unknown>('POST', '/duplicates/merge', { body, idempotencyKey: body.client_id })) ?? {};
+    return {
+      groups: duplicateGroupsOf(o.groups),
+      action: actionOut(o.action),
+      skipped_group_ids: strs(o.skipped_group_ids),
+      repeated: o.repeated === true,
+    };
+  }
+
   /** [Это разные]: the group is not offered again. */
   dismissGroup(id: string, body: DuplicateDecisionIn): Promise<DuplicateDecisionOut> {
     return this.decide(id, 'dismiss', body);
@@ -1321,6 +1510,16 @@ export class Api {
   }
 
   /** «Разобрать стопку»: the records stay. */
+  /** «Сделать стопку страницей» (founder addition): a «Своя страница» with its records, with «Отменить». */
+  async collectionToPage(id: string, clientId: string): Promise<CollectionToPageOut> {
+    return collectionToPageOut(
+      await this.client.request<unknown>('POST', `/collections/${encodeURIComponent(id)}/to-page`, {
+        body: { client_id: clientId },
+        idempotencyKey: clientId,
+      }),
+    );
+  }
+
   async deleteCollection(id: string, clientId: string): Promise<CollectionWriteOut> {
     return collectionWrite(
       await this.client.request<unknown>('DELETE', `/collections/${encodeURIComponent(id)}`, {

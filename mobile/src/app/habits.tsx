@@ -11,6 +11,7 @@ import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { PageIcon } from '@/components/Icon';
 import { Screen } from '@/components/Screen';
+import { StandaloneUndoStrip } from '@/components/UndoStrip';
 import { usePageLabels } from '@/pages/usePageLabels';
 import { getApi, kickSync, syncBlocked } from '@/services';
 import { useOnboarding } from '@/store/onboarding';
@@ -98,82 +99,85 @@ export default function HabitsScreen() {
   const targets = editing ? pages.filter((p) => p.serverId && p.serverId !== editing.page?.id) : [];
 
   return (
-    <Screen testID="page-habits">
-      <View style={[styles.row, { marginBottom: theme.space[4] }]}>
-        <Button
-          testID="habits-back"
-          label={t('common.back')}
-          variant="text"
-          minHeight={theme.size.minTouch}
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
-        />
-        <AppText variant="title1" accessibilityRole="header" style={styles.flex}>
-          {t('habits.title')}
+    <View style={styles.flex}>
+      <Screen testID="page-habits" edges={['top']}>
+        <View style={[styles.row, { marginBottom: theme.space[4] }]}>
+          <Button
+            testID="habits-back"
+            label={t('common.back')}
+            variant="text"
+            minHeight={theme.size.minTouch}
+            onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+          />
+          <AppText variant="title1" accessibilityRole="header" style={styles.flex}>
+            {t('habits.title')}
+          </AppText>
+        </View>
+        <AppText variant="meta" style={{ marginBottom: theme.space[4] }}>
+          {t('habits.hint')}
         </AppText>
-      </View>
-      <AppText variant="meta" style={{ marginBottom: theme.space[4] }}>
-        {t('habits.hint')}
-      </AppText>
-      {offline && list.length === 0 ? <AppText testID="habits-offline">{t('habits.offline')}</AppText> : null}
-      {!offline && list.length === 0 ? <AppText testID="habits-empty">{t('habits.empty')}</AppText> : null}
-      {list.map((h) => {
-        const text = (i18n.language === 'kk' && h.text_kk) || h.text_ru;
-        return (
-          <View
-            key={h.id}
-            testID={`habit-${h.id}`}
-            style={{ borderBottomWidth: 1, borderBottomColor: theme.colors.line, gap: theme.space[1], paddingVertical: theme.space[2] }}
-          >
-            <AppText>{text}</AppText>
-            <View style={[styles.row, { gap: theme.space[2], flexWrap: 'wrap' }]}>
-              {h.kind === 'placement_rule' ? (
+        {offline && list.length === 0 ? <AppText testID="habits-offline">{t('habits.offline')}</AppText> : null}
+        {!offline && list.length === 0 ? <AppText testID="habits-empty">{t('habits.empty')}</AppText> : null}
+        {list.map((h) => {
+          const text = (i18n.language === 'kk' && h.text_kk) || h.text_ru;
+          return (
+            <View
+              key={h.id}
+              testID={`habit-${h.id}`}
+              style={{ borderBottomWidth: 1, borderBottomColor: theme.colors.line, gap: theme.space[1], paddingVertical: theme.space[2] }}
+            >
+              <AppText>{text}</AppText>
+              <View style={[styles.row, { gap: theme.space[2], flexWrap: 'wrap' }]}>
+                {h.kind === 'placement_rule' ? (
+                  <Button
+                    testID={`habit-change-${h.id}`}
+                    label={t('habits.change')}
+                    accessibilityLabel={t('habits.change_a11y', { what: text })}
+                    variant="text"
+                    minHeight={theme.size.minTouch}
+                    disabled={offline}
+                    onPress={() => setEditing(h)}
+                  />
+                ) : null}
                 <Button
-                  testID={`habit-change-${h.id}`}
-                  label={t('habits.change')}
-                  accessibilityLabel={t('habits.change_a11y', { what: text })}
+                  testID={`habit-remove-${h.id}`}
+                  label={t('habits.remove')}
+                  accessibilityLabel={t('habits.remove_a11y', { what: text })}
                   variant="text"
                   minHeight={theme.size.minTouch}
-                  disabled={offline}
-                  onPress={() => setEditing(h)}
+                  onPress={() => void remove(h)}
                 />
-              ) : null}
-              <Button
-                testID={`habit-remove-${h.id}`}
-                label={t('habits.remove')}
-                accessibilityLabel={t('habits.remove_a11y', { what: text })}
-                variant="text"
-                minHeight={theme.size.minTouch}
-                onPress={() => void remove(h)}
-              />
+              </View>
             </View>
+          );
+        })}
+        <Modal visible={!!editing} transparent animationType="slide" onRequestClose={() => setEditing(null)}>
+          <View style={[styles.scrim, { backgroundColor: theme.colors.scrim }]}>
+            <SafeAreaView edges={['bottom']} style={{ backgroundColor: theme.colors.surface, borderTopLeftRadius: theme.radius.sheet, borderTopRightRadius: theme.radius.sheet, maxHeight: '85%' }}>
+              <ScrollView contentContainerStyle={{ padding: theme.space[5], gap: theme.space[2] }}>
+                <AppText variant="title2" accessibilityRole="header">
+                  {t('habits.change_title')}
+                </AppText>
+                {targets.map((p) => (
+                  <Pressable
+                    key={p.id}
+                    testID={`habit-page-${p.id}`}
+                    accessibilityRole="button"
+                    onPress={() => editing && void move(editing, p)}
+                    style={[styles.row, { minHeight: theme.size.primaryTouch, gap: theme.space[3], borderBottomWidth: 1, borderBottomColor: theme.colors.line }]}
+                  >
+                    <PageIcon name={p.icon} color={theme.colors.ink} size={24} />
+                    <AppText style={styles.flex}>{title(p)}</AppText>
+                  </Pressable>
+                ))}
+                <Button testID="habit-change-close" label={t('common.close')} variant="text" onPress={() => setEditing(null)} />
+              </ScrollView>
+            </SafeAreaView>
           </View>
-        );
-      })}
-      <Modal visible={!!editing} transparent animationType="slide" onRequestClose={() => setEditing(null)}>
-        <View style={[styles.scrim, { backgroundColor: theme.colors.scrim }]}>
-          <SafeAreaView edges={['bottom']} style={{ backgroundColor: theme.colors.surface, borderTopLeftRadius: theme.radius.sheet, borderTopRightRadius: theme.radius.sheet, maxHeight: '85%' }}>
-            <ScrollView contentContainerStyle={{ padding: theme.space[5], gap: theme.space[2] }}>
-              <AppText variant="title2" accessibilityRole="header">
-                {t('habits.change_title')}
-              </AppText>
-              {targets.map((p) => (
-                <Pressable
-                  key={p.id}
-                  testID={`habit-page-${p.id}`}
-                  accessibilityRole="button"
-                  onPress={() => editing && void move(editing, p)}
-                  style={[styles.row, { minHeight: theme.size.primaryTouch, gap: theme.space[3], borderBottomWidth: 1, borderBottomColor: theme.colors.line }]}
-                >
-                  <PageIcon name={p.icon} color={theme.colors.ink} size={24} />
-                  <AppText style={styles.flex}>{title(p)}</AppText>
-                </Pressable>
-              ))}
-              <Button testID="habit-change-close" label={t('common.close')} variant="text" onPress={() => setEditing(null)} />
-            </ScrollView>
-          </SafeAreaView>
-        </View>
-      </Modal>
-    </Screen>
+        </Modal>
+      </Screen>
+      <StandaloneUndoStrip />
+    </View>
   );
 }
 

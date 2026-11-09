@@ -21,6 +21,8 @@ import { useTasks } from '@/tasks/store';
 import { useToday } from '@/today/service';
 import { useDedup } from '@/dedup/store';
 import { setFilePickerForTests } from '@/dedup/pickFile';
+import { useCatalog } from '@/pages/catalog';
+import { useFacets } from '@/pages/facets';
 
 export const APP_DIR = path.resolve(__dirname, '../app');
 
@@ -59,6 +61,8 @@ export function resetApp(o: { fetch?: FetchLike; push?: FakePush; alarms?: FakeA
   useAlarms.getState().reset();
   useTasks.getState().reset();
   useDedup.getState().reset();
+  useCatalog.getState().reset();
+  useFacets.getState().reset();
   setFilePickerForTests(null);
   useToday.setState({ last: null, answered: [] });
   usePages.getState().reset();

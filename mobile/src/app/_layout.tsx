@@ -58,6 +58,7 @@ export default function RootLayout() {
             <Stack.Screen name="alarm-setup" />
             <Stack.Screen name="reminder-new" options={{ presentation: 'modal' }} />
             <Stack.Screen name="notify" options={{ gestureEnabled: false }} />
+            <Stack.Screen name="page-settings/[id]" />
           </Stack>
           <ToastHost />
         </ThemeProvider>

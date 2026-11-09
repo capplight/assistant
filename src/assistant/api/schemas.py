@@ -406,6 +406,7 @@ class PageCreateOut(BaseModel):
 
 
 class PagePatchIn(BaseModel):
+    client_id: uuid.UUID | None = None  # week 11: outbox repeats return the first action
     title: PageTitle | None = None
     icon: PageIcon | None = None
     layout: str | None = Field(default=None, max_length=32)
@@ -426,6 +427,13 @@ class PageItemOut(BaseModel):
     seq: int
     updated_at: datetime
     updated_by: str
+    # week 11 (0016): colour on this page and who set it; the free-board place (weeks 16а-16б)
+    appearance: dict[str, Any] = {}
+    board_x: float | None = None
+    board_y: float | None = None
+    board_z: int | None = None
+    board_manual: bool = False
+    done_at: datetime | None = None  # week 11: the checklist tick of this row (views.md)
 
 
 class PageEntryOut(BaseModel):
@@ -448,6 +456,127 @@ class PageItemAddOut(BaseModel):
     link: PageItemOut
     created: bool
     action: "ActionOut | None" = None  # week 9
+
+
+# --- page views (week 11, docs/api/views.md) ---
+
+FieldType = Literal["text", "number", "money", "date", "bool"]
+NoteColor = Literal["yellow", "pink", "green", "blue", "peach", "white"]
+
+
+class FieldPrefIn(BaseModel):
+    field_id: str = Field(min_length=1, max_length=40)
+    visible: bool = True
+
+
+class NewFieldIn(BaseModel):
+    # the phone's own id for a field made offline (`c_` + 4-40 of [0-9a-z_-]): values typed into
+    # it before the sync map to it; a repeat with the same id adds nothing
+    id: str | None = Field(default=None, pattern=r"^c_[0-9a-z_-]{4,40}$")
+    title: str = Field(min_length=1, max_length=40)
+    type: FieldType = "text"
+
+
+class RenameFieldIn(BaseModel):
+    field_id: str = Field(min_length=1, max_length=40)
+    title: str = Field(min_length=1, max_length=40)
+
+
+class FilterIn(BaseModel):
+    field: str = Field(min_length=1, max_length=40)
+    op: Literal["eq", "empty", "not_empty"] = "eq"
+    value: str | int | float | bool | None = None
+
+
+class ColorIn(BaseModel):
+    item_id: uuid.UUID
+    color: NoteColor | None
+
+
+class PinIn(BaseModel):
+    item_id: uuid.UUID
+    pinned: bool
+
+
+class ViewIn(BaseModel):
+    """`POST /v1/pages/{id}/view`. A key left out stays; `null` on a view key = the template's."""
+
+    client_id: uuid.UUID | None = None
+    base_view_version: int | None = None
+    layout: str | None = Field(default=None, max_length=32)
+    board: bool | None = None
+    sort: str | None = Field(default=None, max_length=40)
+    sort_dir: Literal["asc", "desc"] | None = None
+    group_by: str | None = Field(default=None, max_length=40)
+    filters: list[FilterIn] | None = Field(default=None, max_length=5)
+    period: Literal["week", "month", "year"] | None = None
+    today_tile: Literal["auto", "pinned", "hidden"] | None = None
+    title: PageTitle | None = None
+    icon: PageIcon | None = None
+    fields: list[FieldPrefIn] | None = Field(default=None, max_length=40)
+    show_fields: list[str] = Field(default=[], max_length=40)
+    hide_fields: list[str] = Field(default=[], max_length=40)
+    add_fields: list[NewFieldIn] = Field(default=[], max_length=5)
+    rename_fields: list[RenameFieldIn] = Field(default=[], max_length=5)
+    remove_fields: list[str] = Field(default=[], max_length=5)
+    colors: list[ColorIn] = Field(default=[], max_length=500)
+    pins: list[PinIn] = Field(default=[], max_length=500)
+    reset: bool = False
+
+
+class FieldsPutIn(BaseModel):
+    """`PUT /v1/pages/{id}/fields` (spec 4.10): the fields part of ViewIn."""
+
+    client_id: uuid.UUID | None = None
+    fields: list[FieldPrefIn] | None = Field(default=None, max_length=40)
+    add_fields: list[NewFieldIn] = Field(default=[], max_length=5)
+    rename_fields: list[RenameFieldIn] = Field(default=[], max_length=5)
+    remove_fields: list[str] = Field(default=[], max_length=5)
+
+
+class ResetIn(BaseModel):
+    client_id: uuid.UUID | None = None
+
+
+class ViewOut(BaseModel):
+    page: "PageOut"
+    changed: bool
+    repeated: bool
+    action: "ActionOut | None"
+    page_patch: dict[str, Any]
+
+
+class PageItemPatchIn(BaseModel):
+    """`PATCH /v1/pages/{id}/items/{item_id}`: colour, «приколоть», own field values."""
+
+    client_id: uuid.UUID | None = None
+    color: NoteColor | None = None  # null = no colour; leave out to keep
+    pinned: bool | None = None
+    done: bool | None = None  # the checklist tick (week 11)
+    values: dict[str, Any] | None = None  # own field id -> value (null clears)
+
+
+class PageItemPatchOut(BaseModel):
+    link: PageItemOut
+    values: dict[str, Any]
+    repeated: bool
+    action: "ActionOut | None"
+    page_patch: dict[str, Any]
+
+
+class ItemFacetOut(BaseModel):
+    id: uuid.UUID
+    page_id: uuid.UUID
+    item_id: uuid.UUID
+    data: dict[str, Any]
+    updated_by: str
+    seq: int
+    updated_at: datetime
+
+
+class StackToPageIn(BaseModel):
+    client_id: uuid.UUID | None = None
+    title: PageTitle | None = None
 
 
 class PageWithActionOut(PageOut):
@@ -503,6 +632,7 @@ class SyncOut(BaseModel):
     suggestions: list["SuggestionOut"] = []  # week 9, status changes too
     pending_actions: list["PendingActionOut"] = []  # week 9 (actions.md)
     habits: list["HabitSyncOut"] = []  # week 9 (pages.md)
+    item_facets: list[ItemFacetOut] = []  # week 11: values of the pages' own fields (views.md)
     tombstones: list[TombstoneOut]  # purged for good: drop locally
     next_since: int  # pass as `since` next time
     has_more: bool  # true: call again right away with next_since
@@ -611,6 +741,7 @@ class ActionChangeOut(BaseModel):
     reverted: bool
     task_id: uuid.UUID | None = None  # week 9: a task row
     reminder_id: uuid.UUID | None = None  # week 9: a reminder row (item_id null)
+    key: str | None = None  # week 11: a view setting row (item_id null); «Вернуть» = undo keys
 
 
 class ActionSummaryOut(BaseModel):
@@ -649,6 +780,7 @@ class ActionsOut(BaseModel):
 class UndoIn(BaseModel):
     client_id: uuid.UUID | None = None
     item_ids: list[uuid.UUID] | None = Field(default=None, max_length=500)
+    keys: list[str] | None = Field(default=None, max_length=100)  # week 11: view rows
 
 
 class UndoOut(BaseModel):

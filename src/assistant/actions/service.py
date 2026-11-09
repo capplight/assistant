@@ -28,6 +28,11 @@ class UndoExpired(Exception):
     pass
 
 
+def row_id(change: dict[str, Any]) -> str | None:
+    """What «Вернуть» on a «Что изменилось» row names: the record, or the view setting's key."""
+    return change.get("item_id") or change.get("key")
+
+
 def is_undoable(a: Action, now: datetime) -> bool:
     return (a.undone_at is None and bool(a.inverse) and a.undoable_until is not None
             and now < a.undoable_until)  # fmt: skip
@@ -82,10 +87,11 @@ class UndoResult:
 
 
 async def undo(session: AsyncSession, user_id: int, action_id: uuid.UUID, *, now: datetime,
-               item_ids: list[uuid.UUID] | None = None,
+               item_ids: list[uuid.UUID] | None = None, keys: list[str] | None = None,
                client_id: uuid.UUID | None = None) -> UndoResult:  # fmt: skip
     """Run the action's `inverse` (all of it, or the rows of some items: «Вернуть» in «Что
-    изменилось»). Idempotent: a repeat (same `client_id`, or an action already undone) returns
+    изменилось»; a view setting is named by its row `key`, week 11).
+    Idempotent: a repeat (same `client_id`, or an action already undone) returns
     the first result and changes nothing."""
     if client_id is not None:
         done = await session.scalar(select(Action).where(Action.user_id == user_id,
@@ -108,11 +114,11 @@ async def undo(session: AsyncSession, user_id: int, action_id: uuid.UUID, *, now
     if not is_undoable(action, now):
         raise UndoExpired(str(action_id))
     reverted = set(action.payload.get("reverted") or [])
-    only = {str(i) for i in item_ids} if item_ids else None
+    only = {str(i) for i in item_ids or []} | set(keys or []) if item_ids or keys else None
     ops = engine.select_ops(action.inverse, only=only, without=reverted)
     out = await engine.apply(session, user_id, ops, by=Initiator.USER, check=True, now=now)
     changes = [c for c in action.payload.get("changes", [])
-               if only is None or c.get("item_id") in only]  # fmt: skip
+               if only is None or row_id(c) in only]  # fmt: skip
     ru = (action.summary or {}).get("ru") or ""
     undo_action = await record(
         session, user_id=user_id, kind=action.kind, initiated_by=Initiator.USER,
@@ -120,7 +126,7 @@ async def undo(session: AsyncSession, user_id: int, action_id: uuid.UUID, *, now
         changes=changes, inverse=out.inverse, now=now, screen_id=action.screen_id,
         undo_of=action.id, client_id=client_id,
     )  # fmt: skip
-    all_items = {c.get("item_id") for c in action.payload.get("changes", []) if c.get("item_id")}
+    all_items = {row_id(c) for c in action.payload.get("changes", []) if row_id(c)}
     if only is None:
         action.undone_at = now
     else:
@@ -154,7 +160,7 @@ async def actions_dicts(session: AsyncSession, rows: list[Action],
     out = []
     for a in rows:
         reverted = set(a.payload.get("reverted") or [])
-        changes = [{**c, "reverted": c.get("item_id") in reverted}
+        changes = [{**c, "reverted": row_id(c) in reverted}
                    for c in a.payload.get("changes", [])]  # fmt: skip
         out.append({
             "id": str(a.public_id), "kind": a.kind, "scope": a.scope,

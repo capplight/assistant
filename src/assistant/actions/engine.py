@@ -29,6 +29,7 @@ An op is a JSON object with ids as public uuids (strings), never database ids:
   {reminder, fires: [{id, state, acked_at, expect}], status?}: fires of one occurrence and the
   reminder's status back (the undo of a late «Сделано»). `restore_habit` may carry `state.key`
   (a rule moved to another page).
+- Week 11 (`ops_view`): `set_view_key`, `set_appearance`, `set_facet` (page views, own fields).
 
 `apply` runs a list of ops in one transaction (the caller commits) and returns the ops that undo
 what it did, newest first, so `apply(apply(x).inverse)` is a round trip. With `check=True` (an
@@ -61,7 +62,9 @@ OPS = frozenset({"restore_positions", "restore_view_state", "add_screen_item",
                  "restore_screen_config", "restore_fires",
                  # week 10 (actions/ops_dedup.py): repeats and stacks
                  "hide_item", "unhide_item", "relink", "set_status", "add_collection_item",
-                 "remove_collection_item", "restore_collection"})  # fmt: skip
+                 "remove_collection_item", "restore_collection",
+                 # week 11 (actions/ops_view.py): page views
+                 "set_view_key", "set_appearance", "set_facet"})  # fmt: skip
 HABIT_STATUSES = frozenset({"candidate", "active", "disabled"})
 ENTITIES = frozenset({"items", "screens", "tasks"})
 TASK_FIELDS = frozenset({"title", "qty", "where_text", "due_date", "done_at", "list_key"})
@@ -612,9 +615,10 @@ _HANDLERS = {
 
 
 def _register_week10() -> None:
-    from assistant.actions import ops_dedup  # needs Outcome and the helpers above
+    from assistant.actions import ops_dedup, ops_view  # need Outcome and the helpers above
 
     _HANDLERS.update(ops_dedup.HANDLERS)
+    _HANDLERS.update(ops_view.HANDLERS)
 
 
 _register_week10()
@@ -646,7 +650,10 @@ async def apply(session: AsyncSession, user_id: int, ops: list[dict[str, Any]], 
 
 
 def op_items(op: dict[str, Any]) -> set[str]:
-    """Item ids an op is about (empty: a page-level op)."""
+    """Item ids an op is about (empty: a page-level op). A view setting (week 11) is named by
+    its «Что изменилось» key instead, so «Вернуть» on that row undoes it alone."""
+    if op.get("change"):
+        return {str(op["change"])}
     if op["op"] == "restore_positions":
         return {str(r["item"]) for r in op.get("rows") or []}
     if op.get("item"):  # add/remove_screen_item, habit_evidence, task ops

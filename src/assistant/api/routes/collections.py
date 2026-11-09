@@ -14,11 +14,12 @@ from assistant.analytics import server_event
 from assistant.api.consent_gate import require_base_consent
 from assistant.api.deps import CurrentUser, Db
 from assistant.api.errors import ApiError
+from assistant.api.schemas import StackToPageIn
 from assistant.db.models import Item
 from assistant.db.models_actions import Action, ActionKind, Initiator
 from assistant.db.models_dedup import Collection, CollectionItem
-from assistant.db.models_pages import Screen, ScreenItem
-from assistant.pages import lock_user
+from assistant.db.models_pages import MAX_PAGES, Screen, ScreenCreatedBy, ScreenItem
+from assistant.pages import create_page, latest_template, lock_user
 from assistant.stacks import group_rows_ops, refresh_count
 
 router = APIRouter(prefix="/collections", tags=["collections"])
@@ -231,3 +232,65 @@ async def delete_stack(collection_id: uuid.UUID, user: BaseUser, db: Db) -> dict
     action = await _write(db, user, c, ActionKind.DELETE_STACK,
                           f"Убрал стопку «{c.title}». Записи остались", ops, [])  # fmt: skip
     return {"collection": (await stacks_out(db, [c]))[0], "action": action}
+
+
+@router.post("/{collection_id}/to-page")
+async def stack_to_page(collection_id: uuid.UUID, user: BaseUser, db: Db,
+                        body: StackToPageIn | None = None) -> dict[str, Any]:  # fmt: skip
+    """«Сделать стопку страницей» (F-09, R-55; 2-design 3.x): a new «Своя страница» with the
+    stack's records; the stack leaves its page (its records stay there, out of the group). One
+    action, «Отменить» takes the page away and brings the stack back."""
+    from assistant.api.routes.pages import page_out  # pages imports the API schemas
+
+    body = body or StackToPageIn()
+    now = _now()
+    await lock_user(db, user.id)
+    if body.client_id is not None:
+        done = await db.scalar(select(Action).where(Action.user_id == user.id,
+                                                    Action.client_id == body.client_id))
+        if done is not None:
+            page = await db.scalar(select(Screen).where(Screen.user_id == user.id,
+                                                        Screen.client_id == body.client_id))
+            return {"page": page_out(page).model_dump(mode="json") if page else None,
+                    "action": (await actions_dicts(db, [done], now))[0], "repeated": True}
+    c = await _own(db, user, collection_id)
+    live = await db.scalar(select(func.count()).select_from(Screen).where(
+        Screen.user_id == user.id, Screen.deleted_at.is_(None)))  # fmt: skip
+    if (live or 0) >= MAX_PAGES:
+        raise ApiError(422, "pages_limit")
+    template = await latest_template(db, "custom")
+    assert template is not None
+    members = [str(pid) for pid in await db.scalars(
+        select(Item.public_id).join(CollectionItem, CollectionItem.item_id == Item.id)
+        .where(CollectionItem.collection_id == c.id, CollectionItem.removed_by_user_at.is_(None),
+               Item.deleted_at.is_(None), Item.hidden_reason.is_(None))
+        .order_by(func.coalesce(Item.occurred_at, Item.created_at).desc(), Item.id.desc()))]
+    page = await create_page(db, user.id, template, client_id=body.client_id or uuid.uuid4(),
+                             title=(body.title or c.title)[:60],
+                             icon=c.icon if c.icon in ICONS else None,
+                             created_by=ScreenCreatedBy.USER)  # fmt: skip
+    ops: list[dict[str, Any]] = [{"op": "add_screen_item", "page": str(page.public_id),
+                                  "item": i, "added_by": "user"} for i in members]
+    ops.append({"op": "restore_collection", "id": str(c.public_id),
+                "state": {"deleted_at": now.isoformat()}})
+    old = await db.get(Screen, c.screen_id) if c.screen_id else None
+    if old is not None:
+        ops += _ungroup_ops(old, c.title, await _grouped_rows(db, c), True)
+    out = await engine.apply(db, user.id, ops, by=Initiator.USER, check=False, now=now)
+    inverse = [*out.inverse, {"op": "delete_entity_soft", "entity": "screens",
+                              "id": str(page.public_id)}]  # fmt: skip
+    n = len(members)
+    sentence = f"Сделал страницу «{page.title}» из стопки"
+    action = await record(db, user_id=user.id, kind=ActionKind.CREATE_SCREEN,
+                          initiated_by=Initiator.USER, summary={"ru": sentence, "kk": None},
+                          changes=[{"item_id": None, "title": page.title, "kind": "create_page",
+                                    "page_id": str(page.public_id),
+                                    "text": f"Новая страница «{page.title}»"}],
+                          inverse=inverse, now=now, screen_id=page.id, client_id=body.client_id,
+                          extra={"created_page_id": str(page.public_id),
+                                 "collection_id": str(c.public_id)})  # fmt: skip
+    await refresh_count(db, c)
+    await db.flush()
+    await db.refresh(page)
+    return {"page": page_out(page).model_dump(mode="json"), "records": n,
+            "action": (await actions_dicts(db, [action], now))[0], "repeated": False}

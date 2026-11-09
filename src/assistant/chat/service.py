@@ -799,8 +799,10 @@ class ChatService:
             env = ToolEnv(self.sessionmaker, self.embedder, turn.user_id, book,
                           self.s.search_embed_timeout_seconds,
                           self.s.search_vector_min_similarity, counts=set(), mut=m)  # fmt: skip
-            run.emit("tool_activity", {"tool": "reorder" if "reorder" in prop["plan"]["tool"]
-                                       else "update", "text": "Делаю…",
+            tool = prop["plan"]["tool"]
+            run.emit("tool_activity", {"tool": "reorder" if "reorder" in tool else
+                                       "set_view" if tool == "set_view" else "update",
+                                       "text": "Делаю…",
                                        "page_id": prop["plan"].get("page")})  # fmt: skip
             await run_plan(env, prop, option)
             if m.action_out is None and m.proposal is None and m.note is None:

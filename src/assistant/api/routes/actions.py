@@ -61,6 +61,7 @@ async def undo_action(action_id: uuid.UUID, user: BaseUser, db: Db,
     now = datetime.now(UTC)
     try:
         res = await undo(db, user.id, action_id, now=now, item_ids=body.item_ids,
+                         keys=body.keys,
                          client_id=body.client_id)  # fmt: skip
     except ActionNotFound as exc:
         raise ApiError(404, "not_found") from exc

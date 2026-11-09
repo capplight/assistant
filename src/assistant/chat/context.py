@@ -253,6 +253,11 @@ async def assemble(
         visible = await _visible(session, turn, book, page)
         selected = await _selected(session, turn, book)
         summary, history = await _history(session, turn, book, ZoneInfo(tz))
+        view_line = None
+        if page is not None and tools is not READ_TOOLS:  # week 11: for set_view
+            from assistant.pages.view import describe
+
+            view_line = await describe(session, page.pk)
     env = ToolEnv(sessionmaker, embedder, turn.user_id, book, embed_timeout_s, min_similarity,
                   counts=set())  # fmt: skip
 
@@ -271,6 +276,8 @@ async def assemble(
                if page else "Текущая страница: не указана")  # fmt: skip
     question = f"Вопрос (язык {turn.lang}): {turn.text}"
     context = [now_line(now, tz), "Страницы:", *index, current]
+    if view_line:
+        context.append(view_line)
     if selected is not None:
         context.append(f"Выбранная запись («это», «здесь»): {selected.ref}")
     if tools is not READ_TOOLS:

@@ -1,4 +1,4 @@
-# Mobile app — week 10 (repeats «37 → 1», «Объединить?», stacks on «Заметки», Telegram import)
+# Mobile app — week 11 (PageFrame + view registry, S38 «Настроить страницу», the notebook, «Простой список»)
 
 Expo SDK 58 (React Native 0.88, New Architecture), TypeScript strict, expo-router.
 Spec: `../docs/spec/SPEC.md`, `../docs/spec/final/2-design.md`, `../docs/spec/final/3-engineering.md` §2.1, §11.2 (week 1, Mobile).
@@ -93,6 +93,43 @@ src/
 modules/alarms/              native Expo module: Android (Kotlin) AlarmManager + S14 + battery-guide, iOS (Swift) AlarmKit
 ```
 
+## Week 11: what works
+
+Contract: `../docs/api/views.md`, `stacks.md` (`to-page`), `duplicates.md` (`POST /duplicates/merge`), `actions.md`
+(`keys`) and `routes/views.py`, `collections.py`, `schemas.py` as of 2026-11-09 03:53. Shapes only in `src/api/types.ts` +
+`src/api/endpoints.ts`, lenient decoders. **Checked by Jest with a fake server only: not against the real server, not on a
+device.** KK strings of this week are drafts.
+
+- **`PageFrame` + registry** (`components/page/`): the same edges on every page (title, ✎ on «Своя страница», «Порядок»,
+  «Настроить», «Найти на странице», search results); the middle comes from `registry.tsx` by `template:layout`. The shared
+  list engine `EntryList` keeps «⋯ Ещё» (now with ≤2 template items on top, `MenuExtra`), S39, drag, ↑ ↓, the 600 ms
+  marker, `visible_item_ids`. Week 11а tools plug in with `registerView('notes:stacks', …)`; until then «Заметки»,
+  «Дела», «Покупки», «Документы», «Расходы» keep their week 3–10 middle (`ClassicView`).
+- **«Простой список»** (Ф-30): `list` on every template → the records in the person's order, task boxes kept, no tool parts.
+- **S38** (`app/page-settings/[id].tsx`, full screen): live example, name, 8 icons, fields (★ locked, 48 pt switches,
+  ↑ ↓), «+ Своё поле» (5 types, ≤5), views (only the tool, «Простой список» and tools that exist), sort, grouping,
+  «Вернуть как было» through S25 («Нет» first). Each change: shown at once, offline too, outbox `page.view` →
+  `POST /pages/{id}/view` with only the keys it touched; strip «Скрыл поле «Дата» [Отменить]» (in the outbox → dropped;
+  sent → undo of its action). Local mirror: SQLite v7 `view_json`, `view_dirty` (kept over /sync until sent).
+- **«Своя страница» = notebook**: [Список | Чек-лист | Таблица] on the page; own field = column; a cell is edited in a sheet
+  (`PATCH /pages/{id}/items/{item_id}` `values`, outbox `page.item_fields`); «+ Колонка»; «Итого» per «Сумма ₸» counted
+  by code in tiyn; grouping by an own field. **≥150%: the table is cards, one field per line, «Вид ▾» instead of the
+  segments**, no sideways scroll. `/sync` `item_facets` fill the values.
+- **The assistant changes a view**: `page_patch.page_view` applied at once; strip «[Что изменилось] [Отменить]»; «Вернуть»
+  on a setting row = undo `keys`; offline «Отменить» puts the old look back at once.
+- **«Сделать страницей»** (S11 and the stack menu): `POST /collections/{id}/to-page` → the new page opens, «Отменить» = its undo.
+- **Week 10 alignment**: «Отметить» on each S26 group → «Объединить все отмеченные (N)» = one `POST /duplicates/merge`, one
+  «Отменить»; «Это разные» shows «Отменить» (`dismiss_group`); S20, S30 and S38 (outside `(main)`) now have their own
+  strip (`StandaloneUndoStrip`) — before, S30's «Отменить» was set but never shown. The late «Сделано» is matched by
+  `event_client_id` (week 10, unchanged, tested).
+
+- **Final backend alignment**: the checklist tick goes as `done` on `PATCH /pages/{id}/items/{item_id}` (outbox, «Отменить»)
+  and comes back from `/sync` `screen_items.done_at`; own fields are named on the phone (`c_` + 32 hex) so values typed
+  offline map to them; a rename sends `client_id` and has «Отменить» (dropped while waiting, else the undo of its action).
+
+Not yet: renaming a field (`rename_fields`), filters, period, colours / pins (11а, same row call), «Категории» (week 12);
+the free board, planner and «В магазине» (11а / 16а).
+
 ## Week 10: what works
 
 Contract: backend routes `duplicates.py`, `collections.py`, `imports.py` and `docs/api/chat.md`, `reminders.md` as of
@@ -131,7 +168,7 @@ device.** The file picker (`expo-document-picker`, new dependency) needs a devel
 - **Week 9 follow-up**: a late «Сделано» finds its action by `event_client_id` (kept on its outbox row), no more matching
   by reminder and time; «Отменить» holds the sync engine, so an event in flight is never dropped half-sent.
 
-Not yet: «Объединить все отмеченные (N)» (no batch endpoint for near groups), «Сделать стопку страницей», the line chip
+Not yet (week 11 did the batch merge and «Сделать стопку страницей»): the line chip
 «Про: <стопка>», stack animation (`motion.stack`), «Войти в Telegram» / «Переслать боту» (Full), a shared `result.json`
 via «Поделиться» opening S21, `/sync` arrays `duplicate_groups` / `imports` (read if present). KK strings are drafts.
 

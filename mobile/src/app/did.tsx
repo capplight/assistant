@@ -8,6 +8,7 @@ import type { ActionOut } from '@/api/types';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
+import { StandaloneUndoStrip } from '@/components/UndoStrip';
 import { getApi, syncBlocked } from '@/services';
 import { useOnboarding } from '@/store/onboarding';
 import { useToast } from '@/store/toast';
@@ -119,52 +120,55 @@ export default function DidScreen() {
   };
 
   return (
-    <Screen testID="page-did">
-      <View style={[styles.row, { marginBottom: theme.space[4] }]}>
-        <Button
-          testID="did-back"
-          label={t('common.back')}
-          variant="text"
-          minHeight={theme.size.minTouch}
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
-        />
-        <AppText variant="title1" accessibilityRole="header" style={styles.flex}>
-          {t('more.did')}
-        </AppText>
-      </View>
-      <View style={[styles.row, { gap: theme.space[2], marginBottom: theme.space[4], flexWrap: 'wrap' }]}>
-        {[false, true].map((on) => (
+    <View style={styles.flex}>
+      <Screen testID="page-did" edges={['top']}>
+        <View style={[styles.row, { marginBottom: theme.space[4] }]}>
           <Button
-            key={String(on)}
-            testID={on ? 'did-important' : 'did-all'}
-            label={on ? t('did.only_important') : t('did.all')}
-            variant={onlyImportant === on ? 'primary' : 'outline'}
+            testID="did-back"
+            label={t('common.back')}
+            variant="text"
             minHeight={theme.size.minTouch}
-            accessibilityState={{ selected: onlyImportant === on }}
-            onPress={() => setOnlyImportant(on)}
+            onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
           />
-        ))}
-      </View>
-      {recent.length === 0 && older.length === 0 ? <AppText testID="did-empty">{t('did.empty')}</AppText> : null}
-      {recent.map((a) => row(a, true))}
-      {older.length > 0 ? (
-        <AppText variant="section" accessibilityRole="header" style={{ marginTop: theme.space[6] }}>
-          {t('did.older')}
-        </AppText>
-      ) : null}
-      {older.map((a) => row(a, false))}
-      <Pressable
-        testID="did-habits"
-        accessibilityRole="button"
-        onPress={() => router.push('/habits')}
-        style={[styles.row, { minHeight: theme.size.primaryTouch, marginTop: theme.space[6], gap: theme.space[2] }]}
-      >
-        <AppText color="accent" style={styles.flex}>
-          {t('habits.title')}
-        </AppText>
-        <ChevronRight size={22} color={theme.colors.accent} />
-      </Pressable>
-    </Screen>
+          <AppText variant="title1" accessibilityRole="header" style={styles.flex}>
+            {t('more.did')}
+          </AppText>
+        </View>
+        <View style={[styles.row, { gap: theme.space[2], marginBottom: theme.space[4], flexWrap: 'wrap' }]}>
+          {[false, true].map((on) => (
+            <Button
+              key={String(on)}
+              testID={on ? 'did-important' : 'did-all'}
+              label={on ? t('did.only_important') : t('did.all')}
+              variant={onlyImportant === on ? 'primary' : 'outline'}
+              minHeight={theme.size.minTouch}
+              accessibilityState={{ selected: onlyImportant === on }}
+              onPress={() => setOnlyImportant(on)}
+            />
+          ))}
+        </View>
+        {recent.length === 0 && older.length === 0 ? <AppText testID="did-empty">{t('did.empty')}</AppText> : null}
+        {recent.map((a) => row(a, true))}
+        {older.length > 0 ? (
+          <AppText variant="section" accessibilityRole="header" style={{ marginTop: theme.space[6] }}>
+            {t('did.older')}
+          </AppText>
+        ) : null}
+        {older.map((a) => row(a, false))}
+        <Pressable
+          testID="did-habits"
+          accessibilityRole="button"
+          onPress={() => router.push('/habits')}
+          style={[styles.row, { minHeight: theme.size.primaryTouch, marginTop: theme.space[6], gap: theme.space[2] }]}
+        >
+          <AppText color="accent" style={styles.flex}>
+            {t('habits.title')}
+          </AppText>
+          <ChevronRight size={22} color={theme.colors.accent} />
+        </Pressable>
+      </Screen>
+      <StandaloneUndoStrip />
+    </View>
   );
 }
 

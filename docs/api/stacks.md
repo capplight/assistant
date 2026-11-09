@@ -63,5 +63,15 @@ back. `404 not_found` when it is not in the stack.
 Записи остались»). Records stay where they are, out of the group. «Отменить» brings the stack and
 its group back.
 
+## `POST /v1/collections/{id}/to-page` (week 11)
+«Сделать стопку страницей» (S11; F-09, R-55). `{"client_id": "uuid", "title": "Ремонт"}`, both
+optional (`title` 1…60, default the stack's name; the icon is the stack's). Makes a «Своя
+страница» with the stack's records (newest first; `added_by: user`), and the stack goes away
+(its records stay on their old page, out of the group). `200 {"page": PageOut, "records": 14,
+"action": Action, "repeated": false}`: `create_screen`, «Сделал страницу «Ремонт» из стопки»,
+`created_page_id` set. «Отменить» removes the new page (records stay in memory) and brings the
+stack and its group back. Repeating a `client_id`: the first result, `repeated: true`. Errors:
+`404 not_found` · `422 pages_limit`. Not offered by the assistant yet (its proposal would need «Да»).
+
 All four take the per-person lock like page moves; each action is undone with
 `POST /v1/actions/{id}/undo` (`actions.md`).

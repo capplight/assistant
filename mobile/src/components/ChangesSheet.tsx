@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { Modal, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { revertChange } from '@/chat/service';
+import { revertChange, revertSetting } from '@/chat/service';
 import type { ChatMessage } from '@/store/assistant';
 import { useTheme } from '@/theme';
 
@@ -59,6 +59,16 @@ export function ChangesSheet({
                   <AppText style={styles.flex}>{line}</AppText>
                   {c.reverted ? (
                     <AppText variant="meta">{t('changes.reverted')}</AppText>
+                  ) : !c.itemId && c.key && action.changes.findIndex((x) => x.key === c.key) === i ? (
+                    <Button
+                      testID={`change-revert-key-${i}`}
+                      label={t('changes.revert')}
+                      accessibilityLabel={t('changes.revert_a11y', { what: line })}
+                      variant="text"
+                      disabled={off}
+                      minHeight={theme.size.minTouch}
+                      onPress={() => message && c.key && void revertSetting(message.id, c.key)}
+                    />
                   ) : !c.itemId ? null : (
                     <Button
                       testID={`change-revert-${c.itemId}`}

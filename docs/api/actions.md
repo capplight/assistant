@@ -39,6 +39,16 @@ Week 10 adds (same shapes): `auto_merge_exact`, `merge_group`, `dismiss_group`, 
 brought to the trash, `import.md`). `changes[].kind` adds `merge` and `keep_apart`. From the
 assistant line every delete now asks «Да» first (`chat.md`, `confirm`).
 
+Week 11 adds (`views.md`): `screen_view_change` (a view setting, by hand or by the assistant),
+`screen_reset` («Вернуть как было»), and `facet_edit` for values of a page's own fields
+(`PATCH /pages/{id}/items/{item_id}`: own field values and the checklist tick `done`, «Отметил:
+…» / «Вернул: …»). `changes[].kind` adds `view`, `field`, `color`, `pin`, `done`. A page rename
+(`PATCH /pages/{id}` or `/view` with `title`) is undoable like any view change: its row has
+`key: "<page>:title"`. A
+view row has `item_id: null` and a **`key`** (the setting); «Вернуть» on it is
+`POST /v1/actions/{id}/undo {"keys": [key]}`. `create_screen` is also written by «Сделать стопку
+страницей» (`stacks.md`).
+
 The pending «Да» endpoints exist from week 10: `GET /v1/pending-actions`,
 `POST /v1/pending-actions/{id}/confirm`, `/reject` (`duplicates.md`; first producer: the cleanup
 plan).
@@ -115,8 +125,9 @@ Newest first. `limit` 1...100 (default 30), `before` = an action id: older ones.
 {"client_id": "0194...", "item_ids": ["0193..."]}
 ```
 
-Both optional. `item_ids`: return only these records («Вернуть» on one row of «Что изменилось»);
-without it: everything («Отменить»). Page-level parts (a page the action made, the page's group
+All optional. `item_ids`: return only these records («Вернуть» on one row of «Что изменилось»);
+`keys` (week 11, ≤100): return only these view settings (rows with `key`); without both:
+everything («Отменить»). `{"client_id": "...", "keys": ["<page>:layout"]}`. Page-level parts (a page the action made, the page's group
 names) go back only with a whole undo.
 
 **Offline.** The phone may show the old order at once (optimistically) and queue this call in its

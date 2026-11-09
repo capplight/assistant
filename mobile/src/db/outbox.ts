@@ -48,6 +48,10 @@ export type OutboxKind =
   | 'task.create'
   /** A box ticked / unticked, or a row taken back (PATCH / DELETE /tasks/{id}). */
   | 'task.update'
+  /** Week 11: a view change by hand (S38, the notebook switcher): PATCH / PUT fields / reset. */
+  | 'page.view'
+  /** Week 11: a value of a field of one record on «Своя страница» (a tick, a table cell). */
+  | 'page.item_fields'
   /** Week 10: a Telegram Desktop export (result.json / zip): upload, then POST /imports/telegram/file. */
   | 'import.telegram';
 
@@ -170,6 +174,9 @@ export const OUTBOX_MIGRATIONS: readonly string[] = [
    ALTER TABLE pages ADD COLUMN position_dirty INTEGER NOT NULL DEFAULT 0;
    ALTER TABLE pages ADD COLUMN removed_dirty INTEGER NOT NULL DEFAULT 0;
    CREATE INDEX IF NOT EXISTS page_links_item ON page_links (item_server_id);`,
+  // v7 (week 11): the page's view (S38, `set_view`) and its changes still in the outbox
+  `ALTER TABLE pages ADD COLUMN view_json TEXT NOT NULL DEFAULT '{}';
+   ALTER TABLE pages ADD COLUMN view_dirty INTEGER NOT NULL DEFAULT 0;`,
 ];
 
 type Row = {

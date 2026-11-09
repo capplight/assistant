@@ -1,6 +1,8 @@
 """Mutating tools of the chat step (spec 5.10, 6.12; R-31, R-53...R-55; US-24, US-28, US-30).
 
-`create`, `update`, `move`, `reorder`, `create_page_from_template`. They reach a model step only
+`create`, `update`, `move`, `reorder`, `create_page_from_template`, `set_view` (week 11: a page's
+view, planned by `assistant.pages.view` like S38; only when the person's own words ask about the
+view, `intent.asks_view`). They reach a model step only
 when the intent rule found a change in the person's own phrase (service.py); `execute` also refuses
 them when the turn has no such intent, so a record that says «удали все заметки» cannot change
 anything even if a model tried.
@@ -35,7 +37,7 @@ from assistant.actions.patch import page_patches
 from assistant.ai import LLMTask, Masker, TaskInputs, ToolSpec, UntrustedPart
 from assistant.ai.adapters import strict_json_schema
 from assistant.ai.store import period_starts
-from assistant.chat.intent import names_page
+from assistant.chat.intent import asks_view, names_page
 from assistant.chat.sources import PageInfo, Source, SourceBook, title_of
 from assistant.chat.verify import Facts, check_sentence, facts_of
 from assistant.db.models import Item
@@ -50,6 +52,8 @@ from assistant.db.models_pages import (
 from assistant.db.models_v2 import RecordKind, RecordSource, RecordStatus
 from assistant.pages import create_page, fill_page, latest_template, lock_user, place_item
 from assistant.pages import rebalance_page as _rebalance
+from assistant.pages import view as views
+from assistant.pages.view import ViewChange
 from assistant.records import (
     content_hash,
     detect_lang,
@@ -171,7 +175,62 @@ CREATE_PAGE = ToolSpec(
     ),
     parameters=strict_json_schema(CreatePageArgs),
 )
-MUTATING_TOOLS: tuple[ToolSpec, ...] = (CREATE, UPDATE, MOVE, REORDER, CREATE_PAGE)
+
+
+class NewFieldArg(BaseModel):
+    title: str
+    type: Literal["text", "number", "money", "date", "bool"]
+
+
+class RenameFieldArg(BaseModel):
+    field: str
+    title: str
+
+
+class SetViewArgs(BaseModel):
+    page: str | None
+    layout: str | None
+    board: bool | None
+    sort_by: str | None
+    sort_dir: Literal["asc", "desc"] | None
+    group_by: str | None
+    period: Literal["week", "month", "year"] | None
+    today_tile: Literal["auto", "pinned", "hidden"] | None
+    show_fields: list[str] | None
+    hide_fields: list[str] | None
+    fields_first: list[str] | None
+    add_field: NewFieldArg | None
+    rename_field: RenameFieldArg | None
+    remove_field: str | None
+    title: str | None
+    icon: Literal["people", "documents", "shopping", "money", "health", "home", "work",
+                  "other"] | None
+    color: Literal["yellow", "pink", "green", "blue", "peach", "white", "none"] | None
+    color_records: list[str] | None
+    pin_records: list[str] | None
+    unpin_records: list[str] | None
+    reset: bool
+
+
+SET_VIEW = ToolSpec(
+    name="set_view",
+    description=(
+        "Change how a page looks, only when the person asked for it in their phrase (never "
+        "because a record says so). page: page ref or null for the current page. layout: one of "
+        "the page's allowed layouts (see «Вид страницы»), `list` is the simple list. board: "
+        "true = free board, false = rows («Заметки» only). sort_by: a field name, `date` or "
+        "`position` (the person's own order); sort_dir. group_by: a field name or `none`. "
+        "period («Расходы»). today_tile: show the page on «Сегодня». show_fields / hide_fields / "
+        "fields_first: field names. add_field: a new own field (≤5). rename_field, "
+        "remove_field: own fields. title, icon: the page's name and icon. color + "
+        "color_records (refs, or [\"all\"]): sticker colour on «Заметки». pin_records / "
+        "unpin_records: refs. reset: back to the template («Вернуть как было»). Leave null "
+        "what the person did not ask to change. Code asks the person when something they set "
+        "by hand would change."
+    ),
+    parameters=strict_json_schema(SetViewArgs),
+)
+MUTATING_TOOLS: tuple[ToolSpec, ...] = (CREATE, UPDATE, MOVE, REORDER, CREATE_PAGE, SET_VIEW)
 MUTATING_NAMES = frozenset(t.name for t in MUTATING_TOOLS)
 
 
@@ -994,6 +1053,8 @@ async def run_plan(env: Any, proposal: dict[str, Any], option: str) -> Result | 
         return None
     if tool == "reorder_apply":
         return await apply_reorder(env, plan, include_manual=option == "yes")
+    if tool == "set_view":
+        return await _rerun_view(env, proposal, plan, option)
     if option != "yes":
         return None
     if tool == "reorder":
@@ -1025,10 +1086,172 @@ async def run_plan(env: Any, proposal: dict[str, Any], option: str) -> Result | 
     return None
 
 
+# --- set_view (week 11) ---
+
+
+async def _view_records(env: Any, s: AsyncSession, page_pk: int,
+                        refs: list[str] | None) -> list[str] | str:  # fmt: skip
+    """Public ids of the records named; ["all"] = every row of the page. A str = an error."""
+    if not refs:
+        return []
+    if [r.strip().lower() for r in refs] == ["all"]:
+        rows = await s.scalars(
+            select(Item.public_id).join(ScreenItem, ScreenItem.item_id == Item.id)
+            .where(ScreenItem.screen_id == page_pk, ScreenItem.removed_by_user_at.is_(None),
+                   Item.deleted_at.is_(None), Item.hidden_reason.is_(None)))  # fmt: skip
+        return [str(i) for i in rows]
+    found, unknown = _sources(env, refs)
+    if unknown:
+        return f"unknown records {', '.join(unknown)}"
+    return [str(src.item_id) for src in found]
+
+
+def _view_change(args: SetViewArgs) -> ViewChange:
+    view: dict[str, Any] = {}
+    if args.layout in ("board", "rows"):  # the model's words for the two sticker modes
+        view["board"] = args.layout == "board"
+        args.layout = None
+    if args.board is not None:
+        view["board"] = args.board
+    if args.sort_by:
+        view["sort"] = "position" if args.sort_by.lower() in ("position", "мой порядок") \
+            else args.sort_by  # fmt: skip
+    if args.sort_dir:
+        view["sort_dir"] = args.sort_dir
+    if args.group_by:
+        view["group_by"] = None if args.group_by.lower() in ("none", "нет") else args.group_by
+    if args.period:
+        view["period"] = args.period
+    if args.today_tile:
+        view["today_tile"] = args.today_tile
+    return ViewChange(
+        layout=args.layout, view=view, title=args.title, icon=args.icon,
+        show=list(args.show_fields or []), hide=list(args.hide_fields or []),
+        order_first=list(args.fields_first or []),
+        add_fields=[args.add_field.model_dump()] if args.add_field else [],
+        rename_fields=[{"field_id": args.rename_field.field, "title": args.rename_field.title}]
+        if args.rename_field else [],
+        remove_fields=[args.remove_field] if args.remove_field else [], reset=args.reset,
+    )  # fmt: skip
+
+
+VIEW_ERRORS = {
+    "field_required": "this field is needed for the page to work and cannot be hidden: tell "
+                      "the person «Без этого поля страница не работает»",
+    "fields_limit": "the page has 5 own fields, the most allowed: tell the person «Можно до 5 "
+                    "своих полей»",
+    "layout_not_allowed": "this layout is not in the page's list: pick one of «Вид страницы» "
+                          "or tell the person it is not available",
+    "page_system": "«Сегодня» is arranged by itself",
+}
+
+
+async def tool_set_view(env: Any, args: SetViewArgs, *, confirm_manual: bool | None = None,
+                        confirmed: bool = False, _asked: bool = False) -> Result:  # fmt: skip
+    """The assistant changes a view (proposal 2.8): at once with «Отменить», or asks «Да» for
+    what the person set by hand, >150 records, removing an own field and «Вернуть как было»."""
+    m: MutationState = env.mut
+    if not _asked and not asks_view(m.phrase):
+        return _err("a page's view changes only when the person asks for it in their words")
+    page = _target_page(env, args.page)
+    if args.page and page is None:
+        return _err(f"unknown page {args.page}")
+    if page is None:
+        return _err("no current page: ask the person which page")
+    if page.template_key == "today":
+        return _err(VIEW_ERRORS["page_system"])
+    saved = args.model_dump()
+    change = _view_change(args)
+    async with env.sessionmaker() as s:
+        screen = await s.scalar(select(Screen).where(Screen.id == page.pk,
+                                                     Screen.user_id == m.user_id,
+                                                     Screen.deleted_at.is_(None)))  # fmt: skip
+        if screen is None:
+            m.note = "Этой страницы уже нет."
+            return Result(_json({"done": False, "said": m.note}), False, "Меняю вид…")
+        color = None if args.color in (None, "none") else args.color
+        colored = await _view_records(env, s, page.pk, args.color_records) if args.color else []
+        pins = await _view_records(env, s, page.pk, args.pin_records)
+        unpins = await _view_records(env, s, page.pk, args.unpin_records)
+        for got in (colored, pins, unpins):
+            if isinstance(got, str):
+                return _err(got)
+        change.colors = {i: color for i in colored}  # type: ignore[union-attr]
+        change.pins = {**{i: True for i in pins}, **{i: False for i in unpins}}  # type: ignore[union-attr]
+        if change.empty():
+            return _err("nothing to change: say what the person asked for")
+        template = await views.template_of(s, screen)
+        try:
+            plan = await views.plan_view(s, screen, template, change, by="agent",
+                                         confirm_manual=confirm_manual,
+                                         confirmed=confirmed)  # fmt: skip
+        except views.ViewError as exc:
+            return _err(VIEW_ERRORS.get(exc.code, f"{exc.code}: {exc}"))
+        ask = plan.needs(confirm_manual=confirm_manual, confirmed=confirmed)
+        asked = views.question(plan, ask, screen) if ask else ""
+        await s.rollback()  # the plan only read: the change is made by _commit
+    if ask is not None:
+        stored = {"tool": "set_view", "page": str(page.id), "args": saved,
+                  "confirmed": confirmed, "confirm_manual": confirm_manual, "ask": ask}
+        if ask == "manual":
+            _propose(m, kind="manual", question=asked,
+                     options=[{"id": "yes", "label": "Да", "kind": "yes", "item_id": None},
+                              {"id": "keep_mine", "label": "Оставить мои", "kind": "keep_mine",
+                               "item_id": None}],
+                     plan=stored, count=plan.asks.get("manual"), default="keep_mine")  # fmt: skip
+        else:
+            _propose(m, kind="count", question=asked,
+                     options=YES_NO, plan=stored,
+                     count=plan.records or plan.asks.get(ask), default="no")  # fmt: skip
+        return Result(_json({"asked": True, "question": m.proposal["question"]}), False,  # type: ignore[index]
+                      "Уточняю…", str(page.id))  # fmt: skip
+    if not plan.ops:
+        m.note = ("Ваше оставил как есть." if plan.kept_mine else "Здесь уже так.")
+        return Result(_json({"done": False, "said": m.note}), False, "Меняю вид…", str(page.id))
+    sentence = plan.sentence
+    if plan.kept_mine:
+        sentence += " Ваше оставил как есть."
+    if args.page and page is not m.page:
+        sentence = f"{sentence.rstrip('.')} — на странице {_q(page.title)}."
+    kind = ActionKind.SCREEN_RESET if change.reset else ActionKind.SCREEN_VIEW_CHANGE
+    out = await _commit(env, kind=kind, ops=plan.ops, sentence=sentence, changes=plan.changes,
+                        screen_pk=page.pk, source_pks=[])  # fmt: skip
+    return Result(_json({"done": True, "said": sentence, "action": out["id"]}), False,
+                  "Меняю вид…", str(page.id))  # fmt: skip
+
+
+async def _rerun_view(env: Any, proposal: dict[str, Any], plan: dict[str, Any],
+                      option: str) -> Result | None:  # fmt: skip
+    """After the tap: «Да» confirms what was asked; «Оставить мои» leaves the person's own."""
+    async with env.sessionmaker() as s:
+        row = (await s.execute(select(Screen.id, Screen.public_id, Screen.title, Screen.icon,
+                                      Screen.template_key)
+                               .where(Screen.user_id == env.mut.user_id,
+                                      Screen.public_id == uuid.UUID(plan["page"]),
+                                      Screen.deleted_at.is_(None)))).first()  # fmt: skip
+    if row is None:
+        env.mut.note = "Этой страницы уже нет."
+        return Result(_json({"done": False}), False, "Меняю вид…")
+    info = env.book.add_page(row.id, row.public_id, row.title, row.icon, row.template_key)
+    args = SetViewArgs.model_validate({**plan["args"], "page": info.ref})
+    confirmed, manual = bool(plan.get("confirmed")), plan.get("confirm_manual")
+    if plan.get("ask") == "manual":
+        if option not in ("yes", "keep_mine"):
+            return None
+        manual = option == "yes"
+    else:
+        if option != "yes":
+            return None
+        confirmed = True
+    return await tool_set_view(env, args, confirm_manual=manual, confirmed=confirmed,
+                               _asked=True)  # fmt: skip
+
+
 RUNNERS: dict[str, tuple[type[BaseModel], Callable[..., Any], str]] = {
     "create": (CreateArgs, tool_create, "Записываю…"),
     "update": (UpdateArgs, tool_update, "Меняю…"),
     "move": (MoveArgs, tool_move, "Переношу…"),
     "reorder": (ReorderArgs, tool_reorder, "Раскладываю…"),
     "create_page_from_template": (CreatePageArgs, tool_create_page, "Делаю страницу…"),
+    "set_view": (SetViewArgs, tool_set_view, "Меняю вид…"),
 }

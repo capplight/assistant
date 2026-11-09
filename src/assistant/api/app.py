@@ -31,6 +31,7 @@ from assistant.api.routes import (
     tasks,
     today,
     uploads,
+    views,
 )
 from assistant.api.sms import SmsSender, make_sms_sender
 from assistant.api.storage import LocalObjectStorage, ObjectStorage, make_storage
@@ -112,8 +113,9 @@ def create_app(
     for router in (memory.router, memory.pages_router, memory.items_router):
         v1.include_router(router)
     for router in (auth.router, consents.router, devices.router, uploads.router, items.router,
-                   pages.items_router, pages.habits_router, pages.router, pages.templates_router,
-                   sync.router, me.router, misc.ai, chat.router, chat.feedback_router,
+                   pages.items_router, pages.habits_router, views.router, pages.router,
+                   pages.templates_router, sync.router, me.router, misc.ai, chat.router,
+                   chat.feedback_router,
                    actions.router, reminders.router, tasks.router, today.router,
                    today.suggestions_router, duplicates.router, duplicates.pending_router,
                    imports.router, collections.router, events.router):

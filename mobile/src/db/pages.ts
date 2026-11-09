@@ -1,6 +1,7 @@
 import { groupTitles } from '@/api/endpoints';
 import type { PageItemOut, PageOut } from '@/api/types';
 import { TEMPLATE_DEFAULT_TITLE, type IconKey, type Layout, type TemplateKey } from '@/pages/templates';
+import { parseView, viewFromServer, type PageView } from '@/pages/viewModel';
 import type { Page, PageCreatedBy } from '@/store/pages';
 
 import type { SqlDb } from './outbox';
@@ -19,7 +20,12 @@ export type LocalPage = Page & {
   positionDirty?: number;
   /** «Убрать» / its undo still in the outbox: /sync keeps the local `deletedAt` meanwhile. */
   removedDirty?: number;
+  /** Week 11: view changes still in the outbox: /sync keeps the local layout, icon and view meanwhile. */
+  viewDirty?: number;
 };
+
+/** What a view change touches on the page (S38, `set_view`). */
+export type PageLook = { layout: Layout; icon: IconKey; view: PageView };
 
 export type PageLink = {
   id: string;
@@ -110,7 +116,9 @@ export interface PagesRepository {
   /** S34 «Убрать» (ms) or its undo (null), kept over /sync until sent. */
   setRemoved(id: string, deletedAt: number | null, pending?: boolean): Promise<void>;
   /** One pending change of the page is done. */
-  settlePage(id: string, what: 'position' | 'removed'): Promise<void>;
+  settlePage(id: string, what: 'position' | 'removed' | 'view'): Promise<void>;
+  /** S38 / the switcher / «Отменить»: shown at once; `pending` keeps it over /sync until sent. */
+  setLook(id: string, look: PageLook, pending?: boolean): Promise<void>;
   /** `page_patch` arrived: the page's version and group headings. */
   setView(pageServerId: string, viewVersion: number, groups: { key: string; title: string }[] | null): Promise<void>;
   /**
@@ -132,14 +140,15 @@ function fromServer(out: PageOut, now: number, base: LocalPage | null): LocalPag
   const dirty = base?.titleDirty ?? false;
   const posDirty = (base?.positionDirty ?? 0) > 0;
   const remDirty = (base?.removedDirty ?? 0) > 0;
+  const lookDirty = (base?.viewDirty ?? 0) > 0 && !!base;
   return {
     id: base?.id ?? out.client_id ?? out.id,
     serverId: out.id,
     templateKey: key,
     title: dirty ? (base?.title ?? null) : isDefault ? null : out.title,
     titleKk: dirty || isDefault ? null : (out.title_kk ?? null),
-    icon: out.icon as IconKey,
-    layout: out.layout as Layout,
+    icon: lookDirty ? base.icon : (out.icon as IconKey),
+    layout: lookDirty ? base.layout : (out.layout as Layout),
     position: posDirty && base ? base.position : out.position,
     createdBy: (base?.createdBy ?? out.created_by) as PageCreatedBy,
     createdAt: out.created_at,
@@ -150,8 +159,10 @@ function fromServer(out: PageOut, now: number, base: LocalPage | null): LocalPag
     titleDirty: dirty,
     positionDirty: base?.positionDirty ?? 0,
     removedDirty: base?.removedDirty ?? 0,
+    viewDirty: base?.viewDirty ?? 0,
     viewVersion: Math.max(out.view_version ?? 0, base?.viewVersion ?? 0),
     groups: titlesToGroups(groupTitles(out.view_state)) ?? base?.groups ?? [],
+    view: lookDirty ? base.view : viewFromServer(out),
   };
 }
 
@@ -300,11 +311,17 @@ export class InMemoryPagesRepository implements PagesRepository {
     if (row) this.rows.set(id, { ...row, deletedAt, removedDirty: (row.removedDirty ?? 0) + (pending ? 1 : 0) });
   }
 
-  async settlePage(id: string, what: 'position' | 'removed') {
+  async settlePage(id: string, what: 'position' | 'removed' | 'view') {
     const row = this.rows.get(id);
     if (!row) return;
     if (what === 'position') this.rows.set(id, { ...row, positionDirty: Math.max(0, (row.positionDirty ?? 0) - 1) });
+    else if (what === 'view') this.rows.set(id, { ...row, viewDirty: Math.max(0, (row.viewDirty ?? 0) - 1) });
     else this.rows.set(id, { ...row, removedDirty: Math.max(0, (row.removedDirty ?? 0) - 1) });
+  }
+
+  async setLook(id: string, look: PageLook, pending = true) {
+    const row = this.rows.get(id);
+    if (row) this.rows.set(id, { ...row, ...look, viewDirty: (row.viewDirty ?? 0) + (pending ? 1 : 0) });
   }
 
   async linksFor(pageServerId: string) {
@@ -330,7 +347,7 @@ export class InMemoryPagesRepository implements PagesRepository {
 
   async detachFromAccount() {
     for (const [k, p] of this.rows) {
-      const clean = { ...p, positionDirty: 0, removedDirty: 0 };
+      const clean = { ...p, positionDirty: 0, removedDirty: 0, viewDirty: 0 };
       this.rows.set(k, p.serverId ? { ...clean, serverId: null, syncState: 'pending', seq: 0 } : clean);
     }
     this.links.clear();
@@ -358,6 +375,8 @@ type PageRow = {
   view_groups?: string;
   position_dirty?: number;
   removed_dirty?: number;
+  view_json?: string;
+  view_dirty?: number;
 };
 
 function parseGroups(json: string | undefined): { key: string; title: string }[] {
@@ -393,6 +412,8 @@ const pageFromRow = (r: PageRow): LocalPage => ({
   groups: parseGroups(r.view_groups),
   positionDirty: r.position_dirty ?? 0,
   removedDirty: r.removed_dirty ?? 0,
+  viewDirty: r.view_dirty ?? 0,
+  ...(r.view_json && r.view_json !== '{}' ? { view: parseView(r.view_json) } : {}),
 });
 
 type LinkRow = {
@@ -433,7 +454,7 @@ function parseLink(json: string | null | undefined): PageLink | null {
 }
 
 const PAGE_COLS =
-  'id, server_id, template_key, title, title_kk, title_dirty, icon, layout, position, created_by, created_at, sync_state, seq, deleted_at, hidden_at, view_version, view_groups, position_dirty, removed_dirty';
+  'id, server_id, template_key, title, title_kk, title_dirty, icon, layout, position, created_by, created_at, sync_state, seq, deleted_at, hidden_at, view_version, view_groups, position_dirty, removed_dirty, view_json, view_dirty';
 
 export class SqlitePagesRepository implements PagesRepository {
   constructor(
@@ -443,7 +464,7 @@ export class SqlitePagesRepository implements PagesRepository {
 
   private async write(p: LocalPage, mode: 'INSERT OR IGNORE' | 'INSERT OR REPLACE') {
     await this.db.runAsync(
-      `${mode} INTO pages (${PAGE_COLS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `${mode} INTO pages (${PAGE_COLS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       p.id,
       p.serverId,
       p.templateKey,
@@ -463,6 +484,8 @@ export class SqlitePagesRepository implements PagesRepository {
       JSON.stringify(p.groups ?? []),
       p.positionDirty ?? 0,
       p.removedDirty ?? 0,
+      p.view ? JSON.stringify(p.view) : '{}',
+      p.viewDirty ?? 0,
     );
   }
 
@@ -614,9 +637,20 @@ export class SqlitePagesRepository implements PagesRepository {
     );
   }
 
-  async settlePage(id: string, what: 'position' | 'removed') {
-    const col = what === 'position' ? 'position_dirty' : 'removed_dirty';
+  async settlePage(id: string, what: 'position' | 'removed' | 'view') {
+    const col = what === 'position' ? 'position_dirty' : what === 'view' ? 'view_dirty' : 'removed_dirty';
     await this.db.runAsync(`UPDATE pages SET ${col} = MAX(0, ${col} - 1) WHERE id = ?`, id);
+  }
+
+  async setLook(id: string, look: PageLook, pending = true) {
+    await this.db.runAsync(
+      'UPDATE pages SET layout = ?, icon = ?, view_json = ?, view_dirty = view_dirty + ? WHERE id = ?',
+      look.layout,
+      look.icon,
+      JSON.stringify(look.view),
+      pending ? 1 : 0,
+      id,
+    );
   }
 
   async setView(pageServerId: string, viewVersion: number, groups: { key: string; title: string }[] | null) {
@@ -648,7 +682,7 @@ export class SqlitePagesRepository implements PagesRepository {
     await this.db.runAsync(
       "UPDATE pages SET server_id = NULL, sync_state = 'pending', seq = 0 WHERE server_id IS NOT NULL",
     );
-    await this.db.runAsync('UPDATE pages SET position_dirty = 0, removed_dirty = 0');
+    await this.db.runAsync('UPDATE pages SET position_dirty = 0, removed_dirty = 0, view_dirty = 0');
     await this.db.runAsync('DELETE FROM page_links');
   }
 }

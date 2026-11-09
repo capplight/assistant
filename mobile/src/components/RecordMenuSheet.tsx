@@ -8,6 +8,9 @@ import { useTheme } from '@/theme';
 import { AppText } from './AppText';
 import { Button } from './Button';
 
+/** An item of the template on top of the shared menu (≤2: Цвет · Приколоть, Категория…). */
+export type MenuExtra = { testID: string; label: string; onPress: () => void; hint?: string };
+
 /**
  * «⋯ Ещё» of a record on a page (2-design 4.7 п. 2, S39 step 1): «Выше» / «Ниже» (they do not
  * close the sheet, press again and again), «Переместить на страницу…», «Показать ещё на…»,
@@ -26,6 +29,7 @@ export function RecordMenuSheet({
   onRemove,
   onDelete,
   onClose,
+  extra,
 }: {
   title: string;
   /** «Вы поставили эту запись сюда сами». */
@@ -39,6 +43,8 @@ export function RecordMenuSheet({
   onRemove: () => void;
   onDelete: () => void;
   onClose: () => void;
+  /** Template-screens 3: the template's own items go first, the shared ones stay where they are. */
+  extra?: MenuExtra[];
 }) {
   const theme = useTheme();
   const { t } = useTranslation();
@@ -85,6 +91,7 @@ export function RecordMenuSheet({
                 {t('move.mine')}
               </AppText>
             ) : null}
+            {(extra ?? []).slice(0, 2).map((x) => row(x.testID, x.label, x.onPress, x.hint))}
             <View style={[styles.pair, { gap: theme.space[2], flexDirection: theme.largeFont ? 'column' : 'row' }]}>
               <Button
                 testID="record-menu-up"

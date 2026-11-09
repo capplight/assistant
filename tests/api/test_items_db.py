@@ -357,7 +357,7 @@ async def test_sync_order_pagination_and_tombstones(db_app):
         assert empty == {"items": [], "screens": [], "screen_items": [], "screen_summaries": [],
                          "actions": [], "conversation_messages": [],
                          "reminders": [], "reminder_fires": [], "tasks": [], "suggestions": [],
-                         "pending_actions": [], "habits": [],
+                         "pending_actions": [], "habits": [], "item_facets": [],
                          "tombstones": [], "next_since": full["next_since"],
                          "has_more": False, "full_resync": False}  # fmt: skip
 

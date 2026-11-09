@@ -39,6 +39,14 @@ Changes happen on the page the line is on (`page_id`) unless the phrase names an
 answer then says where («Добавил в «Покупки»»). Records placed by hand (`manual_order`) are never
 moved without the person's «Да» (`confirm_manual`).
 
+**The view of a page (week 11, `views.md`).** «покажи таблицей», «включи доску», «сделай простым
+списком», «сгруппируй по магазинам», «добавь поле телефон мастера», «спрячь источник», «сделай
+жёлтой», «приколи код домофона», «назови страницу Дача», «верни страницу как было»: tool
+`set_view`, the same planner as «Настроить страницу». Done at once with «Отменить» (`action`
+`screen_view_change` + `page_patch` with `page_view`), or asked first: `confirm` for «Вернуть как
+было», removing an own field and >150 records; `confirm_manual` for what the person set by hand.
+A ★ field is never hidden. Only when the person's own words are about the view.
+
 ## Consent and «Без ИИ»
 
 - `POST /chat/messages` and the resume stream need `pd_processing` + `terms` + `ai_cross_border`
@@ -100,7 +108,7 @@ data: {"text":"Плитка стоила 48 000 ₸. "}
 |---|---|---|
 | `accepted` | always first | `{"message_id", "reply_id", "created_at"}` — `message_id` is the person's message, `reply_id` the answer being written. Store `reply_id`: resume and «Открыть ответ» use it. |
 | `status` | 0...n | `{"stage": "thinking" \| "searching" \| "writing" \| "arranging", "text": "Смотрю записи…"}` — show `text` in the line (`arranging`: «Раскладываю… 40 записей»). |
-| `tool_activity` | 0...n | `{"tool": "search" \| "list_page" \| "create" \| "update" \| "move" \| "reorder" \| "create_page_from_template", "text": "Раскладываю…", "page_id": uuid \| null}` |
+| `tool_activity` | 0...n | `{"tool": "search" \| "list_page" \| "create" \| "update" \| "move" \| "reorder" \| "create_page_from_template" \| "set_view", "text": "Раскладываю…", "page_id": uuid \| null}` |
 | `sources` | 0...n, before the first `token` of the text that uses them | `{"sources": [Source]}` — **new** sources only; append by `ref`. Show as «Нашёл…» cards while the answer is written. |
 | `token` | 0...n | `{"text": "..."}` — append to the answer. Pieces are whole sentences: each sentence is checked (numbers and dates) before it is sent, so nothing shown is taken back. |
 | `citations` | once | `{"citations": [Citation]}` — the chips under the answer. Only records the answer is based on. May be empty. |

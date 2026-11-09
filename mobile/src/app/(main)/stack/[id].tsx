@@ -11,6 +11,7 @@ import { RecordRow } from '@/components/RecordRow';
 import { Screen } from '@/components/Screen';
 import { beforeAfterText, stackCount, stackIcon, stackTitle } from '@/components/StackCards';
 import { removeFromStack, renameStack, takeApartStack } from '@/dedup/service';
+import { stackToPage } from '@/pages/viewService';
 import { useDedup } from '@/dedup/store';
 import { recordTitle } from '@/records/format';
 import { usePageEntries } from '@/records/useRecords';
@@ -22,7 +23,9 @@ import { useTheme } from '@/theme';
  * «было → стало»; [Переименовать], [Разобрать стопку] (the records stay); the records with their
  * sources and «Убрать из стопки» (the assistant does not put it back, R-54). Every change has
  * «Отменить» (the undo of the server's action). Changes need the internet; reading works offline.
- * Not here yet: «Сделать отдельной страницей», the line chip «Про: <стопка>», the summary (P1).
+ * Week 11: «Сделать страницей» (founder addition) — a «Своя страница» with these records, with
+ * «Отменить»; the records stay here too (a page is a view). Not here yet: the line chip
+ * «Про: <стопка>», the summary (P1).
  */
 export default function StackScreen() {
   const theme = useTheme();
@@ -75,6 +78,18 @@ export default function StackScreen() {
             {ba ? <AppText variant="meta">{ba}</AppText> : null}
             <View style={[styles.row, { gap: theme.space[2], flexWrap: 'wrap' }]}>
               <Button testID="stack-rename" label={t('stack.rename')} variant="outline" minHeight={theme.size.minTouch} onPress={() => setRenaming(true)} />
+              <Button
+                testID="stack-to-page"
+                label={t('stack.to_page')}
+                accessibilityHint={t('stack.to_page_hint')}
+                variant="outline"
+                minHeight={theme.size.minTouch}
+                onPress={() =>
+                  void stackToPage(stack).then((pageId) => {
+                    if (pageId) router.navigate({ pathname: '/page/[id]', params: { id: pageId } });
+                  })
+                }
+              />
               <Button
                 testID="stack-take-apart"
                 label={t('stack.take_apart')}

@@ -1,7 +1,8 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, View } from 'react-native';
+import { Check } from 'lucide-react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { DuplicateGroupOut, DuplicateMemberOut } from '@/api/types';
@@ -14,6 +15,7 @@ import {
   dismissGroup,
   liveCleanup,
   mergeGroup,
+  mergeMarked,
   planCleanup,
   refreshGroups,
   rejectCleanup,
@@ -34,7 +36,9 @@ const SHOWN_MEMBERS = 3;
  * by group: «Оставлю эту (самая полная)» ↔ «Уберу: N» with [Объединить] (that tap is the «Да» for
  * this group) and [Это разные]. The person may choose another record to keep. The text is joined
  * by code on the server; every merge has «Отменить». Needs the internet to change anything.
- * Not here: «Объединить все отмеченные (N)» (no batch endpoint for near groups yet).
+ * Week 11 (week 10 alignment): each group can be marked; «Объединить все отмеченные (N)» is the
+ * one «Да» for all of them (`POST /duplicates/merge`), one action and one «Отменить». [Это разные]
+ * has «Отменить» too (`dismiss_group`).
  */
 export default function DuplicatesScreen() {
   const theme = useTheme();
@@ -42,7 +46,11 @@ export default function DuplicatesScreen() {
   const src = useDedup(useShallow((s) => ({ groups: s.groups, decided: s.decided, cleanup: s.cleanup })));
   const online = useConnectivity((s) => s.online);
   const [loaded, setLoaded] = useState(false);
+  /** Marked groups → the record the person keeps in each («Объединить все отмеченные»). */
+  const [marked, setMarked] = useState<Record<string, string | null>>({});
+  const [busyAll, setBusyAll] = useState(false);
   const groups = visibleGroups(src.groups, src.decided);
+  const markedList = groups.filter((g) => g.id in marked).map((group) => ({ group, keepItemId: marked[group.id] ?? null }));
   const cleanup = liveCleanup(src.cleanup);
   const preview = cleanupPreview(cleanup);
 
@@ -98,8 +106,36 @@ export default function DuplicatesScreen() {
         <AppText testID="dup-empty">{online ? t('dup.empty') : t('dup.offline_list')}</AppText>
       ) : null}
 
+      {markedList.length > 0 ? (
+        <Button
+          testID="dup-merge-marked"
+          label={t('dup.merge_marked', { count: markedList.length })}
+          disabled={busyAll}
+          style={{ marginBottom: theme.space[4] }}
+          onPress={() => {
+            setBusyAll(true);
+            void mergeMarked(markedList).then((ok) => {
+              setBusyAll(false);
+              if (ok) setMarked({});
+            });
+          }}
+        />
+      ) : null}
+
       {groups.map((g) => (
-        <GroupCard key={g.id} group={g} />
+        <GroupCard
+          key={g.id}
+          group={g}
+          marked={g.id in marked}
+          onMark={(keep) =>
+            setMarked((m) => {
+              const next = { ...m };
+              if (keep === undefined) delete next[g.id];
+              else next[g.id] = keep;
+              return next;
+            })
+          }
+        />
       ))}
     </Screen>
   );
@@ -110,7 +146,16 @@ function memberTitle(m: DuplicateMemberOut, t: (k: string) => string): string {
   return s ? s.split('\n')[0]!.slice(0, 120) : t('dup.untitled');
 }
 
-function GroupCard({ group }: { group: DuplicateGroupOut }) {
+function GroupCard({
+  group,
+  marked,
+  onMark,
+}: {
+  group: DuplicateGroupOut;
+  marked: boolean;
+  /** The record kept when marked; undefined = not marked. */
+  onMark: (keepItemId: string | null | undefined) => void;
+}) {
   const theme = useTheme();
   const { t, i18n } = useTranslation();
   const [keepId, setKeepId] = useState(group.keep_item_id ?? group.members[0]?.item_id ?? null);
@@ -160,12 +205,39 @@ function GroupCard({ group }: { group: DuplicateGroupOut }) {
               accessibilityLabel={t('dup.keep_this_a11y', { title })}
               variant="text"
               minHeight={theme.size.minTouch}
-              onPress={() => setKeepId(m.item_id)}
+              onPress={() => {
+                setKeepId(m.item_id);
+                if (marked) onMark(m.item_id);
+              }}
             />
           </View>
         );
       })}
       {others.length > SHOWN_MEMBERS ? <AppText variant="meta">{t('dup.more', { count: others.length - SHOWN_MEMBERS })}</AppText> : null}
+      <Pressable
+        testID={`dup-mark-${group.id}`}
+        accessibilityRole="checkbox"
+        accessibilityLabel={t('dup.mark_a11y', { title: keepTitle })}
+        accessibilityState={{ checked: marked }}
+        onPress={() => onMark(marked ? undefined : keep.item_id)}
+        style={[styles.row, { minHeight: theme.size.primaryTouch, gap: theme.space[2], marginTop: theme.space[2] }]}
+      >
+        <View
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 6,
+            borderWidth: 2,
+            borderColor: theme.colors.accent,
+            backgroundColor: marked ? theme.colors.accent : 'transparent',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {marked ? <Check size={22} color={theme.colors.onAccent} /> : null}
+        </View>
+        <AppText>{t('dup.mark')}</AppText>
+      </Pressable>
       <View style={{ gap: theme.space[2], marginTop: theme.space[2] }}>
         <Button
           testID={`dup-merge-${group.id}`}

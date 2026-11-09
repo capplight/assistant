@@ -147,7 +147,10 @@ describe('pages through the outbox', () => {
     await outbox.enqueue('pages.update', { pageId: 'p1', title: 'Дача' });
     await outbox.enqueue('pages.update', { pageId: 'p1', title: null });
     await engine.push();
-    expect(s.callsTo('PATCH /pages/srv-1').map((c) => c.body)).toEqual([{ title: 'Дача' }, { title: 'Моя страница' }]);
+    expect(s.callsTo('PATCH /pages/srv-1').map((c) => c.body)).toEqual([
+      { title: 'Дача', client_id: expect.any(String) },
+      { title: 'Моя страница', client_id: expect.any(String) },
+    ]);
     expect((await pages.get('p1'))?.title).toBeNull();
   });
 

@@ -43,6 +43,8 @@ class ActionKind(enum.StrEnum):
     STACK_ADD = "stack_add"
     STACK_REMOVE = "stack_remove"
     DELETE_STACK = "delete_stack"
+    SCREEN_VIEW_CHANGE = "screen_view_change"  # week 11: set_view (S38 or the assistant)
+    SCREEN_RESET = "screen_reset"  # week 11: «Вернуть как было»
 
 
 class Initiator(enum.StrEnum):

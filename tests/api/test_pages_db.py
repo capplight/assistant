@@ -138,12 +138,15 @@ async def test_catalogue_with_etag(db_app):
                                                  "documents", "expenses"]  # fmt: skip
         notes = templates[1]
         assert notes["title"] == {"ru": "Заметки", "kk": "Жазбалар"}
-        assert notes["version"] == 2 and notes["auto_rule"] == {
+        # v3 (0016, week 11): + «Стикеры» (builtin:notes_board); «Простой список» everywhere
+        assert notes["version"] == 3 and notes["auto_rule"] == {
             "any": [{"always": True}],
             "none": [{"task_record": True}, {"envelope_types": ["task", "reminder_request",
                                                                 "shopping_list", "receipt"]}]}
         assert {"id": "text", "required": True}.items() <= notes["fields"][0].items()
         assert "ai_hints_ref" not in notes
+        assert notes["layouts"] == ["stacks", "list", "builtin:notes_board"]
+        assert all("list" in t["layouts"] for t in templates)  # Ф-30
 
         etag = r.headers["etag"]
         again = await c.get("/v1/page-templates", headers={**h, "If-None-Match": etag})
@@ -848,7 +851,7 @@ async def test_sync_carries_pages_links_and_removals_in_seq_order(db_app):
         assert none == {"items": [], "screens": [], "screen_items": [], "screen_summaries": [],
                         "actions": [], "conversation_messages": [],
                         "reminders": [], "reminder_fires": [], "tasks": [], "suggestions": [],
-                         "pending_actions": [], "habits": [],
+                         "pending_actions": [], "habits": [], "item_facets": [],
                         "tombstones": [], "next_since": delta["next_since"],
                         "has_more": False, "full_resync": False}  # fmt: skip
 

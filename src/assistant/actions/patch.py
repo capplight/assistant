@@ -21,6 +21,9 @@ def link_dict(link: ScreenItem, page_id: uuid.UUID, item_id: uuid.UUID) -> dict[
         "pinned": link.pinned, "added_by": link.added_by,
         "removed_at": link.removed_by_user_at.isoformat() if link.removed_by_user_at else None,
         "seq": link.seq, "updated_at": link.updated_at.isoformat(), "updated_by": link.updated_by,
+        "appearance": dict(link.appearance or {}), "board_x": link.board_x,
+        "board_y": link.board_y, "board_z": link.board_z, "board_manual": link.board_manual,
+        "done_at": link.done_at.isoformat() if link.done_at else None,
     }  # fmt: skip
 
 
@@ -53,6 +56,11 @@ async def page_patches(session: AsyncSession, user_id: int, screen_pks: set[int]
         out.append({
             "page_id": str(page.public_id), "view_version": page.view_version,
             "view_state": page.view_state or {}, "rows": rows,
+            # week 11: the page's view settings as they are now (set_view)
+            "page_view": {"title": page.title, "title_kk": page.title_kk, "icon": page.icon,
+                          "layout": page.layout, "field_prefs": page.field_prefs or [],
+                          "custom_fields": page.custom_fields or [],
+                          "customized": page.customized},
             "removed_item_ids": sorted(str(pid) for pid, pk in pk_of.items() if pk not in found),
         })  # fmt: skip
     return out

@@ -59,7 +59,8 @@ export type ChatAction = {
   pageTitle: string | null;
   changedItemIds: string[];
   /** «Что изменилось»: ready `text` per record; `reverted` after «Вернуть». */
-  changes: { itemId: string | null; title: string | null; text: string; reverted: boolean }[];
+  /** `key`: a view setting's row (views.md); «Вернуть» returns every row with that key. */
+  changes: { itemId: string | null; title: string | null; text: string; reverted: boolean; key?: string | null }[];
   createdPageId: string | null;
   undoable: boolean;
   undone?: boolean;

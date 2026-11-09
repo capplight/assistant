@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+import type { PageView } from '@/pages/viewModel';
 import { between, compareRank, sequence } from '@/pages/lexorank';
 import { getTemplate, MAX_PAGES, type IconKey, type Layout, type TemplateKey } from '@/pages/templates';
 import { newId } from '@/utils/id';
@@ -33,6 +34,8 @@ export type Page = {
   viewVersion?: number;
   /** Group headings after «Разложи» (`group_key` → title). */
   groups?: PageGroup[];
+  /** Week 11 (S38, `set_view`): sort, grouping, fields, own fields, who set what. Absent = the template's. */
+  view?: PageView;
 };
 
 export type PageGroup = { key: string; title: string };
@@ -98,6 +101,8 @@ type PagesState = {
   createFromOnboarding: (keys: TemplateKey[], createdBy: PageCreatedBy, customTitle?: string) => Page[];
   addPage: (key: TemplateKey, title?: string) => Page | null;
   renamePage: (id: string, title: string | null) => void;
+  /** A view change shown at once (S38, the notebook switcher, «Отменить»). */
+  setLook: (id: string, look: { layout: Layout; icon: IconKey; view: PageView }) => void;
   reset: () => void;
 };
 
@@ -126,6 +131,7 @@ export const usePages = create<PagesState>()(
       },
       renamePage: (id, title) =>
         set({ pages: get().pages.map((p) => (p.id === id ? { ...p, title, titleKk: null } : p)) }),
+      setLook: (id, look) => set({ pages: get().pages.map((p) => (p.id === id ? { ...p, ...look } : p)) }),
       reset: () => set({ pages: seedPages() }),
     }),
     {

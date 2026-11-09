@@ -57,6 +57,7 @@ from assistant.db.models_habits import HabitKind, HabitStatus, UserHabit
 from assistant.db.models_pages import (
     MAX_PAGES,
     AddedBy,
+    ItemFacet,
     Screen,
     ScreenCreatedBy,
     ScreenItem,
@@ -73,6 +74,7 @@ from assistant.pages import (
     latest_template,
     latest_templates,
     lock_user,
+    view,
 )
 from assistant.tasks import service as tasks_service
 
@@ -104,6 +106,8 @@ def page_item_out(link: ScreenItem, page_id: uuid.UUID, item_id: uuid.UUID) -> P
         group_key=link.group_key, manual_order=link.manual_order, manual_at=link.manual_at,
         pinned=link.pinned, added_by=str(link.added_by), removed_at=link.removed_by_user_at,
         seq=link.seq, updated_at=link.updated_at, updated_by=str(link.updated_by),
+        appearance=dict(link.appearance or {}), board_x=link.board_x, board_y=link.board_y,
+        board_z=link.board_z, board_manual=bool(link.board_manual), done_at=link.done_at,
     )  # fmt: skip
 
 
@@ -310,40 +314,35 @@ async def get_page(page_id: uuid.UUID, user: GatedUser, db: Db) -> PageOut:
 @router.patch("/{page_id}", response_model=PageWithActionOut)
 async def patch_page(page_id: uuid.UUID, body: PagePatchIn, user: GatedUser,
                      db: Db) -> PageWithActionOut:  # fmt: skip
+    """Name, icon, layout. Week 11: planned by `set_view` (pages/view.py), like S38."""
+    from assistant.api.routes.views import apply_by_hand  # views imports this module
+
     await lock_user(db, user.id)  # all writers of a user's pages: this lock, then the rows
     page = await _get(db, user, page_id)
     _editable(page)
-    before = engine.screen_state(page)
-    if body.title is not None:
-        title = body.title.strip()
-        if not title:
-            raise ApiError(422, "validation_error")
-        page.title, page.title_kk = title, None
-    if body.icon is not None:
-        page.icon = body.icon
-    if body.layout is not None and body.layout != page.layout:
-        if body.base_view_version is not None and body.base_view_version != page.view_version:
-            raise ApiError(409, "conflict", details={"view_version": page.view_version})
-        allowed = await db.scalar(
-            select(ScreenTemplate.layouts).where(ScreenTemplate.key == page.template_key,
-                                                 ScreenTemplate.version == page.template_version)
-        )  # fmt: skip
-        if body.layout not in (allowed or []):
-            raise ApiError(422, "layout_not_allowed")
-        page.layout = body.layout
-        page.customized = True
-        page.view_version += 1
-    await db.flush()
-    after = engine.screen_state(page)
-    changed = {k: v for k, v in after.items() if before[k] != v}
-    inverse = [{"op": "restore_screen_config", "page": str(page.public_id),
-                **{k: before[k] for k in changed}, "expect": changed}] if changed else []
-    if "title" in changed:
-        sentence = f"Переименовал страницу в «{page.title}»"
-    else:
-        sentence = f"Изменил вид страницы «{page.title}»"
-    return _with_action(page, await _record(db, user.id, ActionKind.SCREEN_CUSTOMIZE, sentence,
-                                            page, inverse))
+    if body.client_id is not None:  # an outbox repeat: the first result
+        first = await db.scalar(select(Action).where(Action.user_id == user.id,
+                                                     Action.client_id == body.client_id))
+        if first is not None:
+            return _with_action(page, ActionOut.model_validate(
+                (await actions_dicts(db, [first], datetime.now(UTC)))[0]))
+    stale = body.base_view_version is not None and body.base_view_version != page.view_version
+    if body.layout is not None and body.layout != page.layout and stale:
+        raise ApiError(409, "conflict", details={"view_version": page.view_version})
+    title = body.title.strip() if body.title is not None else None
+    if body.title is not None and not title:
+        raise ApiError(422, "validation_error")
+    change = view.ViewChange(title=title, icon=body.icon, layout=body.layout)
+    sentence = (f"Переименовал страницу в «{title}»" if title and title != page.title
+                else f"Изменил вид страницы «{page.title}»")  # fmt: skip
+    action, _, _ = await apply_by_hand(db, user, page, change, kind=ActionKind.SCREEN_CUSTOMIZE,
+                                       client_id=body.client_id, now=datetime.now(UTC),
+                                       sentence=sentence)  # fmt: skip
+    await db.refresh(page)
+    out = None
+    if action is not None:
+        out = ActionOut.model_validate((await actions_dicts(db, [action], datetime.now(UTC)))[0])
+    return _with_action(page, out)
 
 
 @router.delete("/{page_id}", response_model=PageWithActionOut)
@@ -387,6 +386,73 @@ def _sort_columns():  # type: ignore[no-untyped-def]
             func.coalesce(Item.occurred_at, Item.created_at), Item.public_id)  # fmt: skip
 
 
+VIEW_SORT_CAP = 5000  # rows a page sorted or filtered by a field is read in full (week 11)
+
+
+def _cell(value: Any) -> Any:
+    if isinstance(value, list):
+        return [str(v).lower() for v in value]
+    return str(value).lower() if value is not None else None
+
+
+def _passes(fields: dict[str, Any], filters: list[dict[str, Any]]) -> bool:
+    for f in filters:
+        value = fields.get(f.get("field", ""))
+        empty = value in (None, "", [])
+        if f.get("op") == "empty" and not empty:
+            return False
+        if f.get("op") == "not_empty" and empty:
+            return False
+        if f.get("op", "eq") == "eq":
+            want, have = _cell(f.get("value")), _cell(value)
+            if (want not in have) if isinstance(have, list) else have != want:
+                return False
+    return True
+
+
+def _sort_value(entry: tuple[Any, Any, dict[str, Any]], sort: str) -> Any:
+    _link, item, fields = entry
+    if sort == "date":
+        return (item.occurred_at or item.created_at).timestamp()
+    v = fields.get(sort)
+    if isinstance(v, bool | int | float):
+        return float(v)
+    if isinstance(v, list):
+        v = ", ".join(map(str, v))
+    if isinstance(v, str):
+        try:
+            return float(v.replace(" ", "").replace(",", "."))
+        except ValueError:
+            return v.lower()
+    return v
+
+
+def _sorted_by_field(entries: list[tuple[Any, Any, dict[str, Any]]], sort: str,
+                     direction: str | None) -> list[tuple[Any, Any, dict[str, Any]]]:  # fmt: skip
+    """Pinned first; then by the field (empty last whatever the direction); ties keep page
+    order. `date` sorts by the record's date, newest first unless `sort_dir: asc`."""
+    desc = (direction or ("desc" if sort == "date" else "asc")) == "desc"
+    present = [e for e in entries if _sort_value(e, sort) is not None]
+    missing = [e for e in entries if _sort_value(e, sort) is None]
+    try:
+        present.sort(key=lambda e: _sort_value(e, sort), reverse=desc)
+    except TypeError:  # numbers and words in one field: compare as text
+        present.sort(key=lambda e: str(_sort_value(e, sort)), reverse=desc)
+    out = present + missing
+    return [e for e in out if e[0].pinned] + [e for e in out if not e[0].pinned]
+
+
+async def _own_values(db: AsyncSession, page: Screen, item_pks: list[int]) -> dict[int, dict]:
+    """Values of the page's own fields that are live now (a removed field's values stay
+    stored but are not shown)."""
+    live = {str(c["id"]) for c in page.custom_fields or []}
+    if not live or not item_pks:
+        return {}
+    rows = await db.execute(select(ItemFacet.item_id, ItemFacet.data).where(
+        ItemFacet.screen_id == page.id, ItemFacet.item_id.in_(item_pks)))  # fmt: skip
+    return {pk: {k: v for k, v in (data or {}).items() if k in live} for pk, data in rows}
+
+
 @router.get("/{page_id}/items", response_model=PageItemsOut)
 async def page_items(
     page_id: uuid.UUID, user: GatedUser, db: Db,
@@ -404,49 +470,73 @@ async def page_items(
     )  # fmt: skip
     if group is not None:
         stmt = stmt.where(ScreenItem.group_key == group)
-    if cursor is not None:
-        after = (
-            await db.execute(
-                select(rank, when, public)
-                .select_from(ScreenItem)
-                .join(Item, Item.id == ScreenItem.item_id)
-                .where(ScreenItem.screen_id == page.id, ScreenItem.public_id == cursor)
-            )
-        ).first()
-        if after is None:
-            raise ApiError(404, "not_found")
-        stmt = stmt.where(or_(
-            rank > after[0],
-            and_(rank == after[0], when < after[1]),
-            and_(rank == after[0], when == after[1], public > after[2]),
-        ))  # fmt: skip
-    rows = (
-        await db.execute(stmt.order_by(rank.asc(), when.desc(), public.asc()).limit(limit + 1))
-    ).all()
-    shown = rows[:limit]
+    vs = page.view_state or {}
+    sort = vs.get("sort")
+    filters = vs.get("filters") or []
+    by_field = sort not in (None, "position") or bool(filters)
     template_fields = await db.scalar(
         select(ScreenTemplate.fields).where(ScreenTemplate.key == page.template_key,
                                             ScreenTemplate.version == page.template_version)
     ) or []  # fmt: skip
-    items = await items_out(db, [item for _, item in shown])
+    if by_field:
+        rows = (await db.execute(stmt.order_by(rank.asc(), when.desc(), public.asc())
+                                 .limit(VIEW_SORT_CAP))).all()  # fmt: skip
+    else:
+        if cursor is not None:
+            after = (
+                await db.execute(
+                    select(rank, when, public)
+                    .select_from(ScreenItem)
+                    .join(Item, Item.id == ScreenItem.item_id)
+                    .where(ScreenItem.screen_id == page.id, ScreenItem.public_id == cursor)
+                )
+            ).first()
+            if after is None:
+                raise ApiError(404, "not_found")
+            stmt = stmt.where(or_(
+                rank > after[0],
+                and_(rank == after[0], when < after[1]),
+                and_(rank == after[0], when == after[1], public > after[2]),
+            ))  # fmt: skip
+        rows = (await db.execute(stmt.order_by(rank.asc(), when.desc(), public.asc())
+                                 .limit(limit + 1))).all()  # fmt: skip
+    candidates = rows if by_field else rows[:limit]
     task_of: dict[int, Task] = {}
-    task_out: dict[int, TaskOut] = {}
-    if page.template_key in tasks_service.LIST_OF_TEMPLATE and shown:
+    if page.template_key in tasks_service.LIST_OF_TEMPLATE and candidates:
         rows_t = list(await db.scalars(select(Task).where(
-            Task.user_id == user.id, Task.item_id.in_([item.id for _, item in shown]))))
+            Task.user_id == user.id, Task.item_id.in_([item.id for _, item in candidates]))))
         task_of = {t.item_id: t for t in rows_t}
-        task_out = {t.item_id: TaskOut.model_validate(d) for t, d in
-                    zip(rows_t, await tasks_service.tasks_dicts(db, rows_t), strict=True)}
-    entries = [
-        PageEntryOut(link=page_item_out(link, page.public_id, item.public_id), item=out,
-                     fields={**field_values(template_fields, item),
+    own = await _own_values(db, page, [item.id for _, item in candidates])
+    entries = [(link, item, {**field_values(template_fields, item),
                              **(tasks_service.field_values(page.template_key, task_of[item.id])
-                                if item.id in task_of else {})},
-                     task=task_out.get(item.id))
-        for (link, item), out in zip(shown, items, strict=True)
+                                if item.id in task_of else {}),
+                             **own.get(item.id, {})})
+               for link, item in candidates]  # fmt: skip
+    more = len(rows) > limit
+    if by_field:
+        entries = [e for e in entries if _passes(e[2], filters)]
+        if sort not in (None, "position"):
+            entries = _sorted_by_field(entries, str(sort), vs.get("sort_dir"))
+        if cursor is not None:
+            at = next((i for i, e in enumerate(entries) if e[0].public_id == cursor), None)
+            if at is None:
+                raise ApiError(404, "not_found")
+            entries = entries[at + 1:]
+        more = len(entries) > limit
+        entries = entries[:limit]
+    task_out: dict[int, TaskOut] = {}
+    shown_tasks = [task_of[item.id] for _, item, _ in entries if item.id in task_of]
+    if shown_tasks:
+        task_out = {t.item_id: TaskOut.model_validate(d) for t, d in
+                    zip(shown_tasks, await tasks_service.tasks_dicts(db, shown_tasks),
+                        strict=True)}  # fmt: skip
+    items = await items_out(db, [item for _, item, _ in entries])
+    out = [
+        PageEntryOut(link=page_item_out(link, page.public_id, item.public_id), item=io,
+                     fields=fields, task=task_out.get(item.id))
+        for (link, item, fields), io in zip(entries, items, strict=True)
     ]  # fmt: skip
-    return PageItemsOut(entries=entries,
-                        next_cursor=entries[-1].link.id if len(rows) > limit else None)  # fmt: skip
+    return PageItemsOut(entries=out, next_cursor=out[-1].link.id if more and out else None)
 
 
 @router.post("/{page_id}/items", response_model=PageItemAddOut, status_code=201)

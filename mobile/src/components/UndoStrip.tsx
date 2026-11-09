@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AccessibilityInfo, StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { actionText, undoAction } from '@/chat/service';
 import { undoManual } from '@/pages/manual';
@@ -183,3 +184,16 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
   text: { flex: 1 },
 });
+
+/**
+ * The strip on a screen outside the main area (S20 «Что я сделал», S30 «Что я для вас настроил»,
+ * S38): the same «Отменить» at the same bottom edge, over the safe area.
+ */
+export function StandaloneUndoStrip() {
+  const theme = useTheme();
+  return (
+    <SafeAreaView edges={['bottom']} style={{ backgroundColor: theme.colors.surface }}>
+      <UndoStrip />
+    </SafeAreaView>
+  );
+}

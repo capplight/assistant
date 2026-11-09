@@ -28,6 +28,7 @@ from assistant.api.schemas import (
     ChatMessageOut,
     FireOut,
     HabitSyncOut,
+    ItemFacetOut,
     PageItemOut,
     PageRefOut,
     PageSummaryOut,
@@ -43,7 +44,7 @@ from assistant.db.models import Item, Reminder, User
 from assistant.db.models_actions import Action
 from assistant.db.models_chat import ConversationMessage, MessageRole
 from assistant.db.models_habits import HabitKind, UserHabit
-from assistant.db.models_pages import Screen, ScreenItem
+from assistant.db.models_pages import ItemFacet, Screen, ScreenItem
 from assistant.db.models_reminders import APP_KINDS, ReminderFire
 from assistant.db.models_search import ScreenSummary
 from assistant.db.models_tasks import PendingAction, Suggestion, Task
@@ -158,13 +159,26 @@ async def sync(
             .limit(limit + 1)
         )
     )
+    facets = [
+        ItemFacetOut(id=f.public_id, page_id=page_id, item_id=item_id, data=dict(f.data or {}),
+                     updated_by=f.updated_by, seq=f.seq, updated_at=f.updated_at)
+        for f, page_id, item_id in await db.execute(
+            select(ItemFacet, Screen.public_id, Item.public_id)
+            .join(Screen, Screen.id == ItemFacet.screen_id)
+            .join(Item, Item.id == ItemFacet.item_id)
+            .where(ItemFacet.user_id == user.id, ItemFacet.seq > since)
+            .order_by(ItemFacet.seq)
+            .limit(limit + 1)
+        )
+    ]  # fmt: skip
     extra: list[object] = []
     for model in (Task, Suggestion, PendingAction, UserHabit):
         extra.extend(await db.scalars(
             select(model).where(model.user_id == user.id, model.seq > since)  # type: ignore[attr-defined]
             .order_by(model.seq).limit(limit + 1)))  # type: ignore[attr-defined]  # fmt: skip
     merged = sorted([(row.seq, row) for row in (*items, *tombs, *screens, *links, *summaries,  # type: ignore[attr-defined]
-                                                *actions, *messages, *reminders, *fires, *extra)],
+                                                *actions, *messages, *reminders, *fires, *facets,
+                                                *extra)],
                     key=lambda pair: pair[0])  # fmt: skip
     page = merged[:limit]
     has_more = len(merged) > limit
@@ -181,6 +195,7 @@ async def sync(
     page_suggestions = [row for _, row in page if isinstance(row, Suggestion)]
     page_pending = [row for _, row in page if isinstance(row, PendingAction)]
     page_habits = [row for _, row in page if isinstance(row, UserHabit)]
+    page_facets = [row for _, row in page if isinstance(row, ItemFacetOut)]
     next_since = page[-1][0] if page else since
     if not has_more:  # nothing older than the floor is left to see
         next_since = max(next_since, floor)
@@ -210,6 +225,7 @@ async def sync(
                      for d in await suggestions.views(db, page_suggestions)],
         pending_actions=await pending_out(db, page_pending),
         habits=await habits_out(db, user.id, page_habits),
+        item_facets=page_facets,
         tombstones=[
             TombstoneOut(entity=t.entity, id=t.public_id, seq=t.seq, deleted_at=t.deleted_at)
             for t in page_tombs

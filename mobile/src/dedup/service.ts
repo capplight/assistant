@@ -186,6 +186,46 @@ export async function mergeGroup(group: DuplicateGroupOut, keepItemId?: string):
   }
 }
 
+/**
+ * «Объединить все отмеченные (N)» (duplicates.md `POST /duplicates/merge`): one tap is the «Да»
+ * for every marked group, one action, one «Отменить». A group decided elsewhere meanwhile is
+ * skipped (not an error) and shown again as the server has it.
+ */
+export async function mergeMarked(marked: { group: DuplicateGroupOut; keepItemId: string | null }[]): Promise<boolean> {
+  if (marked.length === 0) return false;
+  for (const m of marked) decide(m.group.id, true);
+  try {
+    const out = await getApi().mergeGroups({
+      client_id: newId(),
+      groups: marked.map(({ group, keepItemId }) => ({
+        id: group.id,
+        ...(keepItemId && keepItemId !== group.keep_item_id ? { keep_item_id: keepItemId } : {}),
+      })),
+    });
+    if (out.groups.length > 0) putGroups(out.groups);
+    for (const id of out.skipped_group_ids) decide(id, false);
+    if (out.skipped_group_ids.length > 0) {
+      toast('dup.some_skipped', { count: out.skipped_group_ids.length });
+      void refreshGroups();
+    }
+    kickSync();
+    const action = out.action;
+    if (action) {
+      rememberActions([action]);
+      useUndo.getState().showCustom(summaryOf(action), () => void undoServerAction(action.id).then(afterUndo));
+    }
+    return true;
+  } catch (e) {
+    for (const m of marked) decide(m.group.id, false);
+    if (offline(e)) toast('dup.offline');
+    else if (e instanceof ApiError && e.status === 422) {
+      toast('dup.changed');
+      void refreshGroups();
+    } else toast('errors.generic');
+    return false;
+  }
+}
+
 /** [Это разные]: not offered again. «Отменить» when the server gave an action for it. */
 export async function dismissGroup(group: DuplicateGroupOut): Promise<boolean> {
   decide(group.id, true);

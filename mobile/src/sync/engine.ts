@@ -5,6 +5,7 @@ import {
   firesOf,
   habitsOf,
   importsOf,
+  itemFacetsOf,
   pendingActionsOf,
   remindersOf,
   suggestionsOf,
@@ -37,6 +38,7 @@ import type {
   ItemSource,
   ManualOut,
   PageCreateIn,
+  ItemFacetOut,
 } from '@/api/types';
 import type { OutboxEntry, OutboxRepository } from '@/db/outbox';
 import type { PagesRepository } from '@/db/pages';
@@ -119,6 +121,10 @@ export type ActionUndoPayload = {
   pageId?: string;
   /** Week 9: «Отменить» of «Убрать страницу» — the page shown again here settles when it answers. */
   restoredPageId?: string;
+  /** Week 11: «Отменить» of a view change — the old look shown here settles when it answers. */
+  viewPageId?: string;
+  /** Week 11: «Вернуть» one view setting (`keys` of views.md). */
+  settingKeys?: string[];
 };
 
 const NOTHING: ManualOut = {
@@ -218,6 +224,8 @@ export type SyncDeps = {
   extras?: (x: { suggestions: SuggestionOut[]; habits: HabitOut[]; pendingActions: number }) => void;
   /** Week 10: «Объединить?» groups, stacks, imports, things waiting for «Да» (/sync arrays). */
   dedup?: DedupSink;
+  /** Week 11: view changes by hand (`page.view`) and field values of «Своя страница» (`page.item_fields`). */
+  views?: { send(e: OutboxEntry): Promise<void>; facets?: (list: ItemFacetOut[]) => Promise<void> };
 };
 
 export type PushResult = { sent: number; retried: number; failed: number; offline: boolean };
@@ -239,6 +247,8 @@ const IN_TAP_ORDER = new Set<string>([
   'action.undo',
   'task.create',
   'task.update',
+  'page.view',
+  'page.item_fields',
 ]);
 
 /**
@@ -429,6 +439,15 @@ export class SyncEngine {
         this.d.dedup?.apply(dedup);
         applied += dedup.groups.length + dedup.collections.length + dedup.imports.length;
       }
+      // Week 11 (views.md «Sync»): own field values and checklist ticks (`screen_items.done_at`).
+      const ticks = (out.screen_items ?? [])
+        .filter((l) => l.done_at !== undefined)
+        .map((l) => ({ id: l.id, page_id: l.page_id, item_id: l.item_id, data: { done: !!l.done_at }, seq: l.seq }));
+      const facets = [...itemFacetsOf(out.item_facets), ...ticks];
+      if (facets.length > 0 && this.d.views?.facets) {
+        await this.d.views.facets(facets);
+        applied += facets.length;
+      }
       const acts = Array.isArray(out.actions) ? actionsOf(out.actions) : [];
       if (acts.length > 0) {
         this.d.actions?.(acts);
@@ -505,6 +524,11 @@ export class SyncEngine {
         return (e) => this.sendTaskUpdate(e);
       case 'import.telegram':
         return (e) => this.sendImport(e);
+      case 'page.view':
+      case 'page.item_fields': {
+        const views = this.d.views;
+        return views ? (e) => views.send(e) : null;
+      }
       default:
         return null;
     }
@@ -518,10 +542,12 @@ export class SyncEngine {
       const out = await this.d.api.undoAction(p.actionId, {
         client_id: p.clientId ?? e.id,
         ...(p.itemIds ? { item_ids: p.itemIds } : {}),
+        ...(p.settingKeys ? { keys: p.settingKeys } : {}),
       });
       // The tab's place comes back in /sync (`page_patches` carry rows only, pages.md).
       if (p.pageId) await this.d.pages.settlePage(p.pageId, 'position');
       if (p.restoredPageId) await this.d.pages.settlePage(p.restoredPageId, 'removed');
+      if (p.viewPageId) await this.d.pages.settlePage(p.viewPageId, 'view');
       if (out.action || out.undo) this.d.actions?.([...(out.action ? [out.action] : []), ...(out.undo ? [out.undo] : [])]);
       if (out.partial && out.message_ru) this.d.onNotice?.(out.message_ru);
       if (!p.keys) return;
@@ -535,6 +561,7 @@ export class SyncEngine {
         for (const k of p.keys ?? []) await this.d.pages.settleLink(k.page, k.item);
         if (p.pageId) await this.d.pages.settlePage(p.pageId, 'position');
         if (p.restoredPageId) await this.d.pages.settlePage(p.restoredPageId, 'removed');
+        if (p.viewPageId) await this.d.pages.settlePage(p.viewPageId, 'view');
       }
       throw err;
     }
@@ -1091,9 +1118,12 @@ export class SyncEngine {
     if (!page.serverId) throw new Error('page_not_synced');
     try {
       // The API has no "no name": an emptied name goes back to the template's default.
-      const out = await this.d.api.patchPage(page.serverId, { title: p.title ?? TEMPLATE_DEFAULT_TITLE[page.templateKey] });
+      const res = await this.d.api.renamePage(page.serverId, p.title ?? TEMPLATE_DEFAULT_TITLE[page.templateKey], p.clientId ?? e.id);
       await this.d.pages.clearTitleDirty(p.pageId);
-      await this.d.pages.applyRemote(out);
+      if (res.page) await this.d.pages.applyRemote(res.page);
+      if (res.action) this.d.actions?.([res.action]);
+      // Week 11: «Отменить» of a rename already sent = the undo of its action.
+      await this.d.outbox.updatePayload(e.id, { ...p, actionId: res.action?.id ?? null } satisfies RenamePayload);
     } catch (err) {
       if (!isRetryable(err)) await this.d.pages.clearTitleDirty(p.pageId);
       throw err;

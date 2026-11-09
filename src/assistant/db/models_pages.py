@@ -8,7 +8,17 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, FetchedValue, ForeignKey, Integer, Text, Uuid
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    FetchedValue,
+    Float,
+    ForeignKey,
+    Integer,
+    Text,
+    Uuid,
+)
 from sqlalchemy import func as sa_func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -17,6 +27,8 @@ from assistant.db.ids import uuid7
 from assistant.db.models import Base
 
 TODAY_KEY = "today"
+NOTE_COLORS = ("yellow", "pink", "green", "blue", "peach", "white")  # color.note.* (0016 CHECK)
+MAX_CUSTOM_FIELDS = 5  # R-51 (0007 CHECK)
 MAX_PAGES = 20  # pages.max_per_user, including «Сегодня»
 
 
@@ -160,4 +172,38 @@ class ScreenItem(Base):
     moved_client_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     moved_from_screen_id: Mapped[int | None] = mapped_column(
         ForeignKey("screens.id", ondelete="SET NULL")
+    )
+    # 0016: the sticker's colour on this page and who set it ({color, color_set_by,
+    # pinned_set_by}); its place on the free board (Ф-28, UI in weeks 16а–16б)
+    appearance: Mapped[dict] = mapped_column(JSONB, default=dict)
+    board_x: Mapped[float | None] = mapped_column(Float)
+    board_y: Mapped[float | None] = mapped_column(Float)
+    board_z: Mapped[int | None] = mapped_column(Integer)
+    board_manual: Mapped[bool] = mapped_column(Boolean, default=False)
+    done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # checklist tick
+
+
+class ItemFacet(Base):
+    """Values of a page's own fields (`screens.custom_fields`) for one record (migration 0016).
+    `data` = {field_id: value}; a removed field keeps its values here."""
+
+    __tablename__ = "item_facets"
+    __mapper_args__ = {"eager_defaults": True}
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(Uuid, default=uuid7, unique=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"))
+    screen_id: Mapped[int] = mapped_column(ForeignKey("screens.id", ondelete="CASCADE"))
+    data: Mapped[dict] = mapped_column(JSONB, default=dict)
+    review_fields: Mapped[list] = mapped_column(JSONB, default=list)
+    updated_by: Mapped[str] = mapped_column(Text, default=UpdatedBy.USER)
+    seq: Mapped[int] = mapped_column(
+        BigInteger, server_default=FetchedValue(), server_onupdate=FetchedValue()
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=sa_func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=sa_func.now(), onupdate=sa_func.now()
     )

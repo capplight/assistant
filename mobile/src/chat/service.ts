@@ -41,6 +41,7 @@ import { useToast } from '@/store/toast';
 import { useUndo } from '@/store/undo';
 import { useView } from '@/store/view';
 import type { ActionUndoPayload } from '@/sync/engine';
+import { applyAssistantView, lookBefore, restoreLook, type SavedLook } from '@/pages/viewService';
 import { addTask, listForPage, rememberActions, taskSink } from '@/tasks/service';
 import { newId } from '@/utils/id';
 
@@ -116,7 +117,7 @@ export function fromAction(a: ActionOut): ChatAction {
     pageServerId: a.page?.id ?? null,
     pageTitle: a.page?.title ?? null,
     changedItemIds: a.changed_item_ids,
-    changes: a.changes.map((c) => ({ itemId: c.item_id, title: c.title, text: c.text, reverted: c.reverted })),
+    changes: a.changes.map((c) => ({ itemId: c.item_id, title: c.title, text: c.text, reverted: c.reverted, key: c.key ?? null })),
     createdPageId: a.created_page_id,
     undoable: a.undoable,
     undone: !!a.undone_at,
@@ -294,6 +295,8 @@ export function pageContext(pageId: string): Omit<ChatAskContext, 'guess'> {
 /** Rows as they were before this message's patches: «Отменить» puts them back at once, offline too. */
 type Before = { itemId: string; linkId: string; old: PageLink | null };
 const before = new Map<string, Before[]>();
+/** Week 11: the page's look before the assistant changed its view (`set_view`), for «Отменить» offline. */
+const looks = new Map<string, SavedLook[]>();
 const patching = new Set<string>();
 let patchChain: Promise<void> = Promise.resolve();
 
@@ -345,6 +348,9 @@ async function applyPatch(patch: PagePatchOut, answerId?: string): Promise<void>
   if (answerId) before.set(answerId, saved);
   const groups = patch.view_state ? (titlesToGroups(patch.view_state.groups ?? null) ?? []) : null;
   await repo.setView(patch.page_id, patch.view_version, groups);
+  // Week 11: the assistant changed the view («покажи таблицей», «сгруппируй по магазинам»).
+  const was = answerId && !(looks.get(answerId) ?? []).some((l) => l.pageServerId === patch.page_id) ? await lookBefore(patch.page_id) : null;
+  if ((await applyAssistantView(patch)) && answerId && was) looks.set(answerId, [...(looks.get(answerId) ?? []), was]);
   notifyDataChanged();
   const action = answerId ? find(answerId)?.action : undefined;
   useView.getState().showHighlight(action ? action.changedItemIds : patch.rows.map((l) => l.item_id));
@@ -361,6 +367,10 @@ async function restoreBefore(answerId: string, itemIds: string[] | null): Promis
   const saved = before.get(answerId);
   if (!saved) return [];
   const repo = await getPagesRepo();
+  if (!itemIds) {
+    for (const l of looks.get(answerId) ?? []) await restoreLook(l);
+    looks.delete(answerId);
+  }
   const take = saved.filter((b) => !itemIds || itemIds.includes(b.itemId));
   for (const b of take) {
     if (b.old) await repo.restoreLinks([b.old]);
@@ -673,11 +683,15 @@ const pageOf = (m: ChatMessage): AskPage => {
  * are now (`page_patches`). Without a connection the page goes back at once from the rows the phone
  * kept, and the undo waits in the outbox with the same `client_id` (a repeat returns the first result).
  */
-async function runUndo(messageId: string, a: ChatAction, itemIds: string[] | null): Promise<void> {
+async function runUndo(messageId: string, a: ChatAction, itemIds: string[] | null, keys?: string[]): Promise<void> {
   const clientId = newId();
   const t = i18n.t.bind(i18n);
   try {
-    const out = await getApi().undoAction(a.id, { client_id: clientId, ...(itemIds ? { item_ids: itemIds } : {}) });
+    const out = await getApi().undoAction(a.id, {
+      client_id: clientId,
+      ...(itemIds ? { item_ids: itemIds } : {}),
+      ...(keys ? { keys } : {}),
+    });
     for (const patch of out.page_patches) await applyPatch(patch);
     if (out.action) {
       const now = fromAction(out.action);
@@ -689,8 +703,8 @@ async function runUndo(messageId: string, a: ChatAction, itemIds: string[] | nul
     kickSync();
   } catch (e) {
     if (e instanceof NetworkError || e instanceof SignInRequiredError) {
-      await restoreBefore(messageId, itemIds);
-      const payload: ActionUndoPayload = { actionId: a.id, clientId, ...(itemIds ? { itemIds } : {}) };
+      if (!keys) await restoreBefore(messageId, itemIds);
+      const payload: ActionUndoPayload = { actionId: a.id, clientId, ...(itemIds ? { itemIds } : {}), ...(keys ? { settingKeys: keys } : {}) };
       await (await getOutbox()).enqueue('action.undo', payload);
       return;
     }
@@ -721,6 +735,16 @@ export async function revertChange(messageId: string, itemId: string): Promise<v
   store().updateMessage(messageId, { action: { ...a, changes, undone: changes.every((c) => c.reverted) } });
   useView.getState().showHighlight([itemId]);
   await runUndo(messageId, a, [itemId]);
+}
+
+/** «Что изменилось → Вернуть» on a view setting («Вид: Список → Таблица»): `keys` (views.md). */
+export async function revertSetting(messageId: string, key: string): Promise<void> {
+  const a = find(messageId)?.action;
+  if (!a || a.undone || !a.undoable || useOnboarding.getState().consent === null) return;
+  const changes = a.changes.map((c) => (c.key === key ? { ...c, reverted: true } : c));
+  store().updateMessage(messageId, { action: { ...a, changes, undone: changes.every((c) => c.reverted) } });
+  // Without `itemIds` the record rows stay; with `[]` nothing local is put back (the look comes back from the server).
+  await runUndo(messageId, a, [], [key]);
 }
 
 /** The phrase the assistant asked about. */

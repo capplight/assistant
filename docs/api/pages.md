@@ -1,4 +1,4 @@
-# Pages API (sprint 3, part B; manual order: week 7)
+# Pages API (sprint 3, part B; manual order: week 7; views: week 11 → `views.md`)
 
 Spec: `docs/spec/final/3-engineering.md` 3.10, 4.10, 6.12; R-46...R-51, R-54. Base path `/v1`.
 All endpoints need `Authorization: Bearer` and the base consents (`pd_processing` + `terms`);
@@ -90,7 +90,12 @@ order (`custom` first). Sends `ETag`; send `If-None-Match` and get `304` with no
 - Show `title_kk` in Kazakh when it is not null, else `title`. Renaming clears `title_kk`.
 - `icon`: `people | documents | shopping | money | health | home | work | other`, plus the system
   `today` and `tasks`.
-- `field_prefs` / `custom_fields`: empty means "as in the template" (edited from week 11).
+- `field_prefs` / `custom_fields`: empty means "as in the template". Edited from week 11 by
+  «Настроить страницу» and the assistant: shapes, `set_by` and the field order rule in `views.md`.
+- `layout` (week 11, 0016): also `builtin:notes_board` («Стикеры»), `builtin:planner`
+  («Ежедневник»), `builtin:shopping`; `list` («Простой список») is allowed on every template.
+  Catalogue versions: notes 3, tasks 2, shopping 2, expenses 2 (pages follow them, keeping their
+  layout).
 - **Tab order**: `system_today` first, then `position` ascending by bytes, tie-break `id`.
 
 ### `GET /v1/pages`
@@ -131,9 +136,11 @@ instead) · `422 pages_limit` (20 pages including «Сегодня»; also when 
 
 ### `PATCH /v1/pages/{id}`
 ```json
-{"title": "Дача", "icon": "home", "layout": "table", "base_view_version": 3}
+{"title": "Дача", "icon": "home", "layout": "table", "base_view_version": 3,
+ "client_id": "uuid"}
 ```
-All optional. `layout` raises `view_version`; `title` / `icon` do not. If `layout` is sent with a
+All optional. `client_id` (week 11): send it from the outbox; a repeat returns the first action. Week 11: planned by the same code as `POST /pages/{id}/view` (`views.md`), so it
+writes `set_by: user`; the wire shape is unchanged. `layout` raises `view_version`; `title` / `icon` do not. If `layout` is sent with a
 `base_view_version` that is not current: `409 conflict`, `details.view_version`. A stale base does
 not block a rename. Returns `PageOut` plus `"action": Action | null` (week 9: `screen_customize`,
 «Переименовал страницу в «Дача»», «Отменить» = the old name, icon and layout; null when nothing
@@ -175,7 +182,10 @@ Items on the page in page order; trashed, merged and removed-from-page ones are 
         "removed_at": null,
         "seq": 1240,
         "updated_at": "2026-11-07T10:00:00Z",
-        "updated_by": "agent"
+        "updated_by": "agent",
+        "appearance": {},
+        "board_x": null, "board_y": null, "board_z": null, "board_manual": false,
+        "done_at": null
       },
       "item": {"id": "uuid", "...": "the same ItemOut as GET /v1/items/{id}"},
       "fields": {"text": "...", "title": "...", "date": "2026-11-07T10:00:00+00:00"}
@@ -184,7 +194,11 @@ Items on the page in page order; trashed, merged and removed-from-page ones are 
   "next_cursor": null
 }
 ```
-`fields`: values by template field id, only those that have a value. «Сегодня» has no links: its
+`fields`: values by template field id, only those that have a value; week 11: also the page's own
+fields (`custom_fields`, from `item_facets`). `link.appearance` / `board_*` / `done_at` (the checklist tick, `PATCH
+/pages/{id}/items/{item_id}` `{"done"}`): `views.md`. A page sorted
+or filtered by a field (`view_state.sort` / `filters`) comes sorted and filtered that way, pinned first
+(`views.md`); otherwise in page order below. «Сегодня» has no links: its
 content comes from `/today` (week 9).
 
 **Page order** (the phone must sort the same way): `position` ascending by bytes, `null` last; then
@@ -474,7 +488,7 @@ page is live). Exclusions travel as `screen_items` rows with `removed_at`. `200 
 
 | What | When |
 |---|---|
-| `PUT /pages/{id}/fields`, `POST /pages/{id}/reset`, sorting and grouping by field | week 11 |
 | `POST /pages/batch` (use one `POST /pages` per page) | week 16 |
+| `POST /pages/{id}/items/place` (free board) | weeks 16а–16б |
 | Other kinds of habit (`alias`, `default_time`, `never_do`, ...) | later |
 | `expense.*`, `document.*` field values (`task.*` and the shopping `facet.*` fields are filled from tasks since week 9, see `today.md`) | weeks 10-14 |

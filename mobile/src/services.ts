@@ -14,6 +14,7 @@ import { useDataVersion } from '@/store/data';
 import { useConnectivity } from '@/store/connectivity';
 import { useOnboarding } from '@/store/onboarding';
 import { syncPagesStore } from '@/store/pagesSync';
+import { viewSink } from '@/pages/viewService';
 import { useSession } from '@/store/session';
 import { useToast } from '@/store/toast';
 import { useUndo } from '@/store/undo';
@@ -175,6 +176,7 @@ export function getSyncEngine(): Promise<SyncEngine> {
         actions: rememberActions,
         extras: applySyncExtras,
         dedup: dedupSink,
+        views: viewSink,
       }))();
   }
   return engine;

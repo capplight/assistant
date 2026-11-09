@@ -25,7 +25,11 @@ export type Layout =
   | 'builtin:tasks'
   | 'builtin:kp'
   | 'builtin:expenses'
-  | 'stacks';
+  | 'stacks'
+  /** Week 11а / 16а tools (template-screens 4): the server's catalogue may name them already. */
+  | 'builtin:notes_board'
+  | 'builtin:shopping'
+  | 'builtin:planner';
 
 export type PageTemplate = {
   key: TemplateKey;

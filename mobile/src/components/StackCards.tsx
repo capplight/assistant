@@ -10,6 +10,7 @@ import { repeatsCount, stacksOf, takeApartStack, visibleGroups } from '@/dedup/s
 import { useDedup } from '@/dedup/store';
 import type { PageEntry } from '@/pages/contents';
 import type { Page } from '@/store/pages';
+import { stackToPage } from '@/pages/viewService';
 import { useTheme } from '@/theme';
 
 import { AppText } from './AppText';
@@ -174,6 +175,19 @@ export function StackCards({ page, entries }: { page: Page; entries: PageEntry[]
                     const c = menu;
                     setMenu(null);
                     open(c);
+                  }}
+                />
+                <Button
+                  testID="stack-menu-to-page"
+                  label={t('stack.to_page')}
+                  accessibilityHint={t('stack.to_page_hint')}
+                  variant="outline"
+                  onPress={() => {
+                    const c = menu;
+                    setMenu(null);
+                    void stackToPage(c).then((pageId) => {
+                      if (pageId) router.navigate({ pathname: '/page/[id]', params: { id: pageId } });
+                    });
                   }}
                 />
                 <Button
