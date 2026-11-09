@@ -138,14 +138,19 @@ async def test_catalogue_with_etag(db_app):
                                                  "documents", "expenses"]  # fmt: skip
         notes = templates[1]
         assert notes["title"] == {"ru": "Заметки", "kk": "Жазбалар"}
-        # v3 (0016, week 11): + «Стикеры» (builtin:notes_board); «Простой список» everywhere
-        assert notes["version"] == 3 and notes["auto_rule"] == {
+        # v3 (0016, week 11): + «Стикеры» (builtin:notes_board); «Простой список» everywhere.
+        # v4 (0017, week 11а): the sticker wall is the default
+        assert notes["version"] == 4 and notes["auto_rule"] == {
             "any": [{"always": True}],
             "none": [{"task_record": True}, {"envelope_types": ["task", "reminder_request",
                                                                 "shopping_list", "receipt"]}]}
         assert {"id": "text", "required": True}.items() <= notes["fields"][0].items()
         assert "ai_hints_ref" not in notes
-        assert notes["layouts"] == ["stacks", "list", "builtin:notes_board"]
+        assert notes["layouts"] == ["builtin:notes_board", "list", "stacks"]
+        assert notes["default_layout"] == "builtin:notes_board"
+        by_key = {t["key"]: t for t in templates}
+        assert by_key["tasks"]["default_layout"] == "builtin:planner"
+        assert by_key["shopping"]["default_layout"] == "builtin:shopping"
         assert all("list" in t["layouts"] for t in templates)  # Ф-30
 
         etag = r.headers["etag"]
@@ -233,7 +238,7 @@ async def test_create_is_idempotent_by_client_id(db_app):
         assert first.status_code == 201 and first.json()["created"] is True
         page = first.json()["page"]
         assert page["title"] == "Заметки" and page["title_kk"] == "Жазбалар"
-        assert page["layout"] == "stacks" and page["icon"] == "documents"
+        assert page["layout"] == "builtin:notes_board" and page["icon"] == "documents"
         assert page["view_version"] == 1 and page["created_by"] == "user"
         again = await c.post("/v1/pages", json=body, headers=h)
         assert again.status_code == 200 and again.json()["created"] is False

@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useColorScheme, useWindowDimensions } from 'react-native';
 
-import { darkColors, lightColors, type ColorTokens } from './colors';
+import { darkColors, darkNoteColors, lightColors, lightNoteColors, type ColorTokens, type NoteColorKey } from './colors';
 import { elevation, motion, radius, size, space } from './layout';
 import { LARGE_FONT_SCALE, MAX_FONT_SCALE, type } from './typography';
 
@@ -12,6 +12,8 @@ export * from './typography';
 export type Theme = {
   scheme: 'light' | 'dark';
   colors: ColorTokens;
+  /** Week 11а: sticker colours (`color.note.*`) of this scheme. */
+  notes: Record<NoteColorKey, string>;
   type: typeof type;
   space: typeof space;
   size: typeof size;
@@ -36,6 +38,7 @@ export function useTheme(): Theme {
     return {
       scheme,
       colors: scheme === 'dark' ? darkColors : lightColors,
+      notes: scheme === 'dark' ? darkNoteColors : lightNoteColors,
       type,
       space,
       size,

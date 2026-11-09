@@ -20,6 +20,8 @@ import { useToast } from '@/store/toast';
 import { useUndo } from '@/store/undo';
 import { SyncEngine, type DeviceInfo } from '@/sync/engine';
 import { rememberActions, taskSink } from '@/tasks/service';
+import { taskPatchSink } from '@/tasks/edit';
+import i18n from '@/i18n';
 import { applySyncExtras } from '@/today/service';
 import { dedupSink } from '@/dedup/service';
 
@@ -169,10 +171,11 @@ export function getSyncEngine(): Promise<SyncEngine> {
           if (!useUndo.getState().noteLearned(outboxId, text)) useToast.getState().show(text, 5000);
         },
         onNotice: (text) => useToast.getState().show(text, 5000),
+        onTimedRefused: () => useToast.getState().show(i18n.t('planner.timed_refused'), 5000),
         onAccountConsentRejected: () =>
           useOnboarding.getState().requireAccountConsent({ userId: '', switched: false }),
         reminders: reminderSink,
-        tasks: taskSink,
+        tasks: { ...taskSink, ...taskPatchSink },
         actions: rememberActions,
         extras: applySyncExtras,
         dedup: dedupSink,

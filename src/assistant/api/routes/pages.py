@@ -478,14 +478,16 @@ async def page_items(
         select(ScreenTemplate.fields).where(ScreenTemplate.key == page.template_key,
                                             ScreenTemplate.version == page.template_version)
     ) or []  # fmt: skip
+    # week 11а: pinned rows first («Приколотые всегда идут первыми»), then page order
+    pinned = ScreenItem.pinned
     if by_field:
-        rows = (await db.execute(stmt.order_by(rank.asc(), when.desc(), public.asc())
-                                 .limit(VIEW_SORT_CAP))).all()  # fmt: skip
+        ordered = stmt.order_by(pinned.desc(), rank.asc(), when.desc(), public.asc())
+        rows = (await db.execute(ordered.limit(VIEW_SORT_CAP))).all()
     else:
         if cursor is not None:
             after = (
                 await db.execute(
-                    select(rank, when, public)
+                    select(pinned, rank, when, public)
                     .select_from(ScreenItem)
                     .join(Item, Item.id == ScreenItem.item_id)
                     .where(ScreenItem.screen_id == page.id, ScreenItem.public_id == cursor)
@@ -493,13 +495,15 @@ async def page_items(
             ).first()
             if after is None:
                 raise ApiError(404, "not_found")
+            same = pinned.is_(True) if after[0] else pinned.is_(False)
             stmt = stmt.where(or_(
-                rank > after[0],
-                and_(rank == after[0], when < after[1]),
-                and_(rank == after[0], when == after[1], public > after[2]),
+                *([pinned.is_(False)] if after[0] else []),
+                and_(same, rank > after[1]),
+                and_(same, rank == after[1], when < after[2]),
+                and_(same, rank == after[1], when == after[2], public > after[3]),
             ))  # fmt: skip
-        rows = (await db.execute(stmt.order_by(rank.asc(), when.desc(), public.asc())
-                                 .limit(limit + 1))).all()  # fmt: skip
+        rows = (await db.execute(stmt.order_by(pinned.desc(), rank.asc(), when.desc(),
+                                               public.asc()).limit(limit + 1))).all()  # fmt: skip
     candidates = rows if by_field else rows[:limit]
     task_of: dict[int, Task] = {}
     if page.template_key in tasks_service.LIST_OF_TEMPLATE and candidates:

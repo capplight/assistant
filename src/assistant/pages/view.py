@@ -43,7 +43,10 @@ from assistant.db.models_pages import (
 )
 
 COUNT_ASK_ABOVE = 150
-VIEW_KEYS = ("board", "sort", "sort_dir", "group_by", "filters", "period", "today_tile")
+VIEW_KEYS = ("board", "sort", "sort_dir", "group_by", "group_order", "filters", "period",
+             "today_tile")
+MAX_GROUP_ORDER = 30  # week 11а: the person's order of groups («Покупки» by shop)
+GROUP_VALUE_CHARS = 60
 CUSTOM_TYPES = ("text", "number", "money", "date", "bool")
 SORT_DIRS = ("asc", "desc")
 PERIODS = ("week", "month", "year")
@@ -235,6 +238,21 @@ def _check_view_value(name: str, value: Any, template: ScreenTemplate, layout: s
         if f["type"] in NOT_GROUPABLE:
             raise ViewError("validation_error", "group_by: this field cannot group")
         return f["id"]
+    if name == "group_order":
+        if not isinstance(value, list) or len(value) > MAX_GROUP_ORDER:
+            raise ViewError("validation_error", "group_order: a list of at most 30 names")
+        out_names: list[str] = []
+        seen: set[str] = set()
+        for v in value:
+            if not isinstance(v, str):
+                raise ViewError("validation_error", "group_order: names")
+            name_ = " ".join(v.split())
+            if not name_ or len(name_) > GROUP_VALUE_CHARS:
+                raise ViewError("validation_error", "group_order: 1-60 characters each")
+            if _norm(name_) not in seen:
+                seen.add(_norm(name_))
+                out_names.append(name_)
+        return out_names or None
     if name == "filters":
         if not isinstance(value, list) or len(value) > MAX_FILTERS:
             raise ViewError("validation_error", "filters: a list of at most 5")
@@ -276,6 +294,9 @@ def _view_text(name: str, old: Any, new: Any, fields: list[dict[str, Any]]) -> s
         return f"Порядок сортировки: {word.get(old, old)} → {word.get(new, new)}"
     if name == "group_by":
         return f"Группировка: {_group_ru(old, fields)} → {_group_ru(new, fields)}"
+    if name == "group_order":
+        return ("Порядок групп: " + " → ".join(new[:5]) + (" …" if len(new) > 5 else "")
+                if new else "Порядок групп — как было")  # fmt: skip
     if name == "filters":
         return "Фильтр убран" if not new else "Фильтр изменён"
     if name == "period":

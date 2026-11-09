@@ -62,6 +62,8 @@ def test_model_reading_needs_confidence():
     ("отсортируй сначала новые", "reorder", "newest"),
     ("отсортируй, старые сверху", "reorder", "oldest"),
     ("удали это", "trash_selected", None),
+    ("Раскрась по темам", "color_topics", None),  # week 11а
+    ("раскрась заметки по темам, пожалуйста", "color_topics", None),
 ])  # fmt: skip
 def test_fast_path(phrase, tool, how):
     fp = fast_path(phrase)
@@ -69,7 +71,8 @@ def test_fast_path(phrase, tool, how):
 
 
 @pytest.mark.parametrize("phrase", ["разложи чеки Magnum в Расходы", "удали все заметки",
-                                    "удали чек Magnum", "отсортируй по сумме"])
+                                    "удали чек Magnum", "отсортируй по сумме",
+                                    "раскрась жёлтым", "раскрась по темам чеки Magnum"])
 def test_no_fast_path_for_specific_phrases(phrase):
     assert fast_path(phrase) is None
 
@@ -138,3 +141,13 @@ def test_quiet_hours():
     assert not in_quiet_hours(datetime(2026, 11, 7, 6, 0, tzinfo=UTC), tz, time(22), time(8))
     assert in_quiet_hours(datetime(2026, 11, 7, 7, 30, tzinfo=UTC), tz, time(12), time(13))
     assert not in_quiet_hours(at, tz, time(8), time(8))
+
+
+def test_topic_palette_week_11a():
+    from assistant.chat.mutate import topic_palette
+
+    got = topic_palette(["Ремонт", "Остальное", "Дача", "Врачи", "Дети", "Рецепты", "Работа"])
+    assert got["Остальное"] is None  # no topic: no colour
+    assert [got[t] for t in ("Ремонт", "Дача", "Врачи", "Дети", "Рецепты")] == \
+        ["yellow", "green", "blue", "pink", "peach"]  # fmt: skip
+    assert got["Работа"] == "yellow"  # the five colours in turn; white is never a topic

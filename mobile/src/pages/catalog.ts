@@ -61,8 +61,8 @@ const LOCAL: Record<TemplateKey, CatalogTemplate> = {
       f('date', 'Дата', 'Күні', 'date', 'item.occurred_at'),
       f('source', 'Источник', 'Дереккөз', 'text', 'item.source'),
     ],
-    layouts: ['stacks', 'list', 'builtin:notes_board'],
-    defaultLayout: 'stacks',
+    layouts: ['builtin:notes_board', 'list', 'stacks'],
+    defaultLayout: 'builtin:notes_board',
   },
   tasks: {
     key: 'tasks',
@@ -73,8 +73,8 @@ const LOCAL: Record<TemplateKey, CatalogTemplate> = {
       f('remind_how', 'Как напомнить', 'Қалай еске салу', 'enum', 'task.level', { options: ['alarm', 'notification'] }),
       f('done', 'Сделано', 'Орындалды', 'bool', 'task.done', { required: true }),
     ],
-    layouts: ['builtin:tasks', 'builtin:planner', 'list'],
-    defaultLayout: 'builtin:tasks',
+    layouts: ['builtin:planner', 'builtin:tasks', 'list'],
+    defaultLayout: 'builtin:planner',
   },
   shopping: {
     key: 'shopping',
@@ -84,8 +84,8 @@ const LOCAL: Record<TemplateKey, CatalogTemplate> = {
       f('bought', 'Куплено', 'Сатып алынды', 'bool', 'facet.bought', { required: true }),
       f('where', 'Где купить', 'Қайдан алу', 'text', 'facet.where'),
     ],
-    layouts: ['checklist', 'list', 'builtin:shopping'],
-    defaultLayout: 'checklist',
+    layouts: ['builtin:shopping', 'checklist', 'list'],
+    defaultLayout: 'builtin:shopping',
   },
   documents: {
     key: 'documents',

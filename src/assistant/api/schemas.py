@@ -508,6 +508,7 @@ class ViewIn(BaseModel):
     sort: str | None = Field(default=None, max_length=40)
     sort_dir: Literal["asc", "desc"] | None = None
     group_by: str | None = Field(default=None, max_length=40)
+    group_order: list[str] | None = Field(default=None, max_length=30)
     filters: list[FilterIn] | None = Field(default=None, max_length=5)
     period: Literal["week", "month", "year"] | None = None
     today_tile: Literal["auto", "pinned", "hidden"] | None = None
@@ -795,7 +796,7 @@ class UndoOut(BaseModel):
 # --- manual order (week 7, docs/api/pages.md "Manual order") ---
 
 RankKey = Annotated[str, Field(min_length=1, max_length=128)]
-MoveReason = Literal["newer_move", "anchor_gone", "nothing_to_do", "page_removed"]
+MoveReason = Literal["newer_move", "anchor_gone", "nothing_to_do", "page_removed", "timed"]
 
 
 class _Anchored(BaseModel):
@@ -1180,6 +1181,21 @@ class TaskPatchIn(BaseModel):
 class TaskDoneIn(BaseModel):
     client_id: uuid.UUID
     done: bool = True
+
+
+class TasksClearDoneIn(BaseModel):
+    """`POST /v1/tasks/clear-done` («Убрать все купленные», week 11а)."""
+
+    client_id: uuid.UUID
+    list_key: ListKeyStr = "shopping"
+    task_ids: list[uuid.UUID] | None = Field(default=None, max_length=500)
+
+
+class TasksClearedOut(BaseModel):
+    tasks: list[TaskOut]
+    action: "ActionOut | None"
+    page_patches: list[dict[str, Any]] = []
+    repeated: bool = False
 
 
 class TaskCreatedOut(BaseModel):

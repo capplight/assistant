@@ -90,6 +90,11 @@ import type {
   SuggestionOut,
   TaskCreateIn,
   TaskDoneIn,
+  TaskPatchIn,
+  TasksClearDoneIn,
+  TasksClearDoneOut,
+  NoteColor,
+  AppearanceOut,
   TaskOut,
   TaskWriteOut,
   TodayOut,
@@ -262,6 +267,23 @@ function linkOut(v: unknown): PageItemOut | null {
     updated_at: str(o.updated_at) ?? new Date().toISOString(),
     updated_by: str(o.updated_by) ?? 'agent',
     ...('done_at' in o ? { done_at: str(o.done_at) } : {}),
+    ...(obj(o.appearance) ? { appearance: appearanceOut(o.appearance) } : {}),
+  };
+}
+
+const NOTE_COLOR_SET = new Set<string>(['yellow', 'pink', 'green', 'blue', 'peach', 'white']);
+const setByOf = (v: unknown) => (v === 'user' || v === 'agent' || v === 'template' ? v : null);
+
+/** `link.appearance` (views.md): an unknown colour reads as none. */
+export function appearanceOut(v: unknown): AppearanceOut {
+  const o = obj(v) ?? {};
+  const c = str(o.color);
+  const colorBy = setByOf(o.color_set_by);
+  const pinnedBy = setByOf(o.pinned_set_by);
+  return {
+    color: c && NOTE_COLOR_SET.has(c) ? (c as NoteColor) : null,
+    ...(colorBy ? { color_set_by: colorBy } : {}),
+    ...(pinnedBy ? { pinned_set_by: pinnedBy } : {}),
   };
 }
 
@@ -414,7 +436,7 @@ function pageOutOf(v: unknown): PageOut | null {
   };
 }
 
-const MOVE_REASONS = new Set<string>(['newer_move', 'anchor_gone', 'nothing_to_do', 'page_removed']);
+const MOVE_REASONS = new Set<string>(['newer_move', 'anchor_gone', 'nothing_to_do', 'page_removed', 'timed']);
 
 /**
  * Week 7 answers (pages.md «Manual order»): `link` (move, DELETE) or `links` (move-to-page), and the
@@ -1133,7 +1155,7 @@ export class Api {
           idempotencyKey: body.client_id,
         }),
       ) ?? {};
-    return { values: obj(o.values) ?? {}, action: actionOut(o.action) };
+    return { values: obj(o.values) ?? {}, action: actionOut(o.action), link: linkOut(o.link) };
   }
 
   /** Show an existing item on this page too. Idempotent by page + item. */
@@ -1345,6 +1367,22 @@ export class Api {
     return taskWrite(
       await this.client.request<unknown>('POST', `/tasks/${encodeURIComponent(id)}/done`, { body, idempotencyKey: body.client_id }),
     );
+  }
+
+  /** «− 2 +», «На завтра» (today.md): `version` + the keys that change; `409 conflict` on a stale version. */
+  async patchTask(id: string, body: TaskPatchIn): Promise<TaskWriteOut> {
+    return taskWrite(await this.client.request<unknown>('PATCH', `/tasks/${encodeURIComponent(id)}`, { body }));
+  }
+
+  /** «Убрать все купленные»: one action, one «Отменить»; a repeat of `client_id` returns the first result. */
+  async clearDoneTasks(body: TasksClearDoneIn): Promise<TasksClearDoneOut> {
+    const o = obj(await this.client.request<unknown>('POST', '/tasks/clear-done', { body, idempotencyKey: body.client_id })) ?? {};
+    return {
+      tasks: arr(o.tasks).map(taskOut).filter((x): x is TaskOut => x !== null),
+      action: actionOut(o.action),
+      page_patches: arr(o.page_patches).map(pagePatchOut).filter((x): x is PagePatchOut => x !== null),
+      repeated: o.repeated === true,
+    };
   }
 
   /** The task and its record go to the trash. */

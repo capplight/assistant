@@ -52,6 +52,12 @@ export type OutboxKind =
   | 'page.view'
   /** Week 11: a value of a field of one record on «Своя страница» (a tick, a table cell). */
   | 'page.item_fields'
+  /** Week 11а: a sticker's colour or «Приколоть» by hand (PATCH /pages/{id}/items/{item_id}). */
+  | 'page.item_look'
+  /** Week 11а: «− 2 +» on «Покупки», «На завтра» on «Дела» (PATCH /tasks/{id} with `version`). */
+  | 'task.patch'
+  /** Week 11а: «Убрать все купленные» (POST /tasks/clear-done, one action). */
+  | 'task.clear_done'
   /** Week 10: a Telegram Desktop export (result.json / zip): upload, then POST /imports/telegram/file. */
   | 'import.telegram';
 
@@ -177,6 +183,8 @@ export const OUTBOX_MIGRATIONS: readonly string[] = [
   // v7 (week 11): the page's view (S38, `set_view`) and its changes still in the outbox
   `ALTER TABLE pages ADD COLUMN view_json TEXT NOT NULL DEFAULT '{}';
    ALTER TABLE pages ADD COLUMN view_dirty INTEGER NOT NULL DEFAULT 0;`,
+  // v8 (week 11а): the sticker's colour on this page (`link.appearance.color`)
+  `ALTER TABLE page_links ADD COLUMN color TEXT;`,
 ];
 
 type Row = {

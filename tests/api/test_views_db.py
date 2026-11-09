@@ -136,27 +136,28 @@ async def test_layouts_set_by_one_row_back_and_offline_repeat(env):  # noqa: F81
         assert r.status_code == 403
 
         notes = await new_page(c, h, "notes")
+        assert notes["layout"] == "builtin:notes_board"  # week 11а: the sticker wall
         cid = str(uuid.uuid4())
-        out = await view(c, h, notes["id"], client_id=cid, layout="builtin:notes_board",
+        out = await view(c, h, notes["id"], client_id=cid, layout="stacks",
                          board=True, hide_fields=["source"])
         keys = {ch["key"] for ch in out["action"]["changes"]}
         assert {f"{notes['id']}:layout", f"{notes['id']}:view.board",
                 f"{notes['id']}:fields"} == keys
         rep = await view(c, h, notes["id"], client_id=cid, layout="list")
-        assert rep["repeated"] is True and rep["page"]["layout"] == "builtin:notes_board"
+        assert rep["repeated"] is True and rep["page"]["layout"] == "stacks"
         # «Вернуть» on one row: only the board goes back
         u = await c.post(f"/v1/actions/{out['action']['id']}/undo", headers=h,
                          json={"keys": [f"{notes['id']}:view.board"]})
         assert u.status_code == 200, u.text
         assert u.json()["page_patches"][0]["view_state"].get("board") is None
         got = (await c.get(f"/v1/pages/{notes['id']}", headers=h)).json()
-        assert got["layout"] == "builtin:notes_board"
+        assert got["layout"] == "stacks"
         rows = {r_["key"]: r_["reverted"] for r_ in u.json()["action"]["changes"]}
         assert rows[f"{notes['id']}:view.board"] is True
         assert rows[f"{notes['id']}:layout"] is False
 
         # PATCH /pages goes through the same planner: set_by user, old wire shape
-        r = await c.patch(f"/v1/pages/{notes['id']}", json={"layout": "stacks"}, headers=h)
+        r = await c.patch(f"/v1/pages/{notes['id']}", json={"layout": "list"}, headers=h)
         assert r.status_code == 200 and r.json()["action"]["kind"] == "screen_customize"
 
 
@@ -247,7 +248,8 @@ def sv(**kw: Any) -> dict[str, Any]:
     base = {k: None for k in ("page", "layout", "board", "sort_by", "sort_dir", "group_by",
                               "period", "today_tile", "show_fields", "hide_fields",
                               "fields_first", "add_field", "rename_field", "remove_field",
-                              "title", "icon", "color", "color_records", "pin_records",
+                              "title", "icon", "color", "color_records", "color_by", "group_order",
+                              "pin_records",
                               "unpin_records")}  # fmt: skip
     return {**base, "reset": False, **kw}
 

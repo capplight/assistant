@@ -74,9 +74,11 @@ from assistant.chat.mutate import (
     MutationState,
     UpdateArgs,
     bump_counter,
+    color_topics_args,
     run_plan,
     start_reorder,
     tool_create,
+    tool_set_view,
     tool_update,
 )
 from assistant.chat.push import LogPushSender, PushSender, maybe_push
@@ -624,6 +626,10 @@ class ChatService:
             run.emit("tool_activity", {"tool": "reorder", "text": "Раскладываю…",
                                        "page_id": str(m.page.id)})  # fmt: skip
             await start_reorder(env, m.page, fp.how, None)
+        elif fp.tool == "color_topics" and m.page is not None and m.page.template_key == "notes":
+            run.emit("tool_activity", {"tool": "set_view", "text": "Раскрашиваю…",
+                                       "page_id": str(m.page.id)})  # fmt: skip
+            await tool_set_view(env, color_topics_args())
         elif fp.tool == "trash_selected" and m.selected is not None:
             run.emit("tool_activity", {"tool": "update", "text": "Убираю в корзину…",
                                        "page_id": str(m.page.id) if m.page else None})

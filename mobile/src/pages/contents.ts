@@ -54,7 +54,9 @@ const dateOf = (r: LocalRecord): number => Date.parse(r.occurredAt) || r.created
 
 /** The page order from docs/api/pages.md: position by bytes (null last), newest first, item id. */
 export function comparePageEntries(a: PageEntry, b: PageEntry): number {
+  // Week 11а (pages.md «Page order»): pinned rows first on every page, then the person's order.
   return (
+    Number(!!b.link?.pinned) - Number(!!a.link?.pinned) ||
     compareRank(a.link?.position ?? null, b.link?.position ?? null) ||
     dateOf(b.record) - dateOf(a.record) ||
     ((a.record.serverId ?? a.record.id) < (b.record.serverId ?? b.record.id) ? -1 : 1)

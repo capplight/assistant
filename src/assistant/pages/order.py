@@ -9,6 +9,10 @@ No DB here (the pattern of `pipeline/core.py`); `assistant.actions.manual` runs 
   short enough, computed against the current key space): two phones moving different rows then
   give the same result whatever the arrival order. Otherwise the key goes right after the row the
   person saw above (or right before the one below) among the rows as they are now.
+- `TIMED_TEMPLATES` (week 11а, proposal 2.3): on «Дела» a row with a time (its record has a live
+  reminder) stands where its time puts it. Neither the person («Выше / Ниже», drag) nor the
+  assistant («Разложи») moves it by `position`; «Перенести время» is the way. Rows without a
+  time keep the person's order. `pages.service.timed_items` finds such rows.
 """
 
 import uuid
@@ -17,6 +21,8 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from assistant.pages import lexorank
+
+TIMED_TEMPLATES = ("tasks",)  # pages whose rows with a time are ordered by the time
 
 
 @dataclass(frozen=True, order=True)

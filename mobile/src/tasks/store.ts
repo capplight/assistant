@@ -15,6 +15,9 @@ import { persistStorage } from '@/store/storage';
 /** `clientId`: the outbox row that carries it (only that row's answer settles it). */
 export type Tick = { done: boolean; at: string; clientId?: string };
 
+/** Week 11а: a change of «Сколько» / «Когда» by hand not confirmed yet (it wins over /sync meanwhile). */
+export type TaskEdit = { qty?: string | null; due_date?: string | null; clientId: string };
+
 type State = {
   /** By server id, or `local:<client_id>` until POST /tasks answers. */
   tasks: Record<string, TaskOut>;
@@ -30,11 +33,13 @@ type State = {
   habits: Record<string, HabitOut>;
   /** Missed fires the person already answered with «Перенести» (they leave «Сегодня»). */
   handledMissed: string[];
+  /** Week 11а: by the server id (or local key): the person's «− 2 +» / «На завтра» still on its way. */
+  edits: Record<string, TaskEdit>;
   set: (p: Partial<Omit<State, 'set' | 'reset'>>) => void;
   reset: () => void;
 };
 
-const initial = { tasks: {}, ticks: {}, aliases: {}, createdBy: {}, actions: {}, habits: {}, handledMissed: [] };
+const initial = { tasks: {}, ticks: {}, aliases: {}, createdBy: {}, actions: {}, habits: {}, handledMissed: [], edits: {} };
 
 export const useTasks = create<State>()(
   persist(

@@ -24,6 +24,8 @@ from assistant.api.schemas import (
     TaskIn,
     TaskOut,
     TaskPatchIn,
+    TasksClearDoneIn,
+    TasksClearedOut,
     TasksOut,
 )
 from assistant.db.models import Item
@@ -204,6 +206,59 @@ async def tick_task(task_id: uuid.UUID, body: TaskDoneIn, user: GatedUser,
         )  # fmt: skip
     await db.flush()
     return TaskChangedOut(task=await _task_out(db, task), action=await _action_out(db, action, now))
+
+
+CLEARED_RU = {"shopping": "Убрал купленное", "todo": "Убрал сделанное"}
+
+
+@router.post("/clear-done", response_model=TasksClearedOut)
+async def clear_done(body: TasksClearDoneIn, user: GatedUser, db: Db) -> TasksClearedOut:
+    """«Убрать все купленные» (proposal 2.4): the done tasks of a list and their records go to
+    the trash in one action with one «Отменить». `task_ids`: only these (what the phone showed,
+    so a line ticked on another phone meanwhile stays)."""
+    now = _now()
+    await lock_user(db, user.id)
+    first = await _by_client(db, user.id, body.client_id)
+    if first is not None:
+        ids = [int(i) for i in first.source_item_ids or []]
+        done = list(await db.scalars(select(Task).where(Task.user_id == user.id,
+                                                        Task.item_id.in_(ids))))  # fmt: skip
+        return TasksClearedOut(
+            tasks=[TaskOut.model_validate(d) for d in await service.tasks_dicts(db, done)],
+            action=await _action_out(db, first, now), repeated=True)  # fmt: skip
+    q = (select(Task).join(Item, Item.id == Task.item_id)
+         .where(Task.user_id == user.id, Task.list_key == body.list_key,
+                Task.done_at.is_not(None), Task.deleted_at.is_(None),
+                Item.deleted_at.is_(None)))  # fmt: skip
+    if body.task_ids is not None:
+        q = q.where(Task.public_id.in_(body.task_ids))
+    done = list(await db.scalars(q.order_by(Task.id).limit(500)))
+    if not done:
+        return TasksClearedOut(tasks=[], action=None)
+    pids = {t.id: await service.item_public_id(db, t) for t in done}
+    ops = [{"op": "delete_entity_soft", "entity": "tasks", "id": str(t.public_id),
+            "item": str(pids[t.id])} for t in done]  # fmt: skip
+    out = await engine.apply(db, user.id, ops, by=Initiator.USER, check=False, now=now)
+    action = None
+    if out.inverse:
+        titles = ", ".join(service.lower_first(t.title) for t in done[:5])
+        more = f" и ещё {len(done) - 5}" if len(done) > 5 else ""
+        sentence = f"{CLEARED_RU.get(body.list_key, 'Убрал')}: {titles}{more}."
+        action = await record(
+            db, user_id=user.id, kind=ActionKind.DELETE_ITEM, initiated_by=Initiator.USER,
+            summary={"ru": sentence, "kk": None},
+            changes=[_change_row(t, pids[t.id], "trash", f"«{t.title}» — в корзине")
+                     for t in done],
+            inverse=out.inverse, now=now, source_item_ids=[t.item_id for t in done],
+            client_id=body.client_id,
+        )  # fmt: skip
+    await db.flush()
+    page = await service.list_page(db, user.id, body.list_key)
+    pages = out.pages | ({page.id} if page is not None else set())
+    return TasksClearedOut(
+        tasks=[TaskOut.model_validate(d) for d in await service.tasks_dicts(db, done)],
+        action=await _action_out(db, action, now),
+        page_patches=await page_patches(db, user.id, pages, out.items))  # fmt: skip
 
 
 @router.delete("/{task_id}", response_model=TaskChangedOut)

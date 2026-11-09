@@ -56,9 +56,10 @@ export const TEMPLATE_DEFAULT_TITLE: Record<TemplateKey, string> = {
 };
 
 export const TEMPLATES: readonly PageTemplate[] = [
-  { key: 'notes', icon: 'documents', singleton: true, defaultLayout: 'stacks', placeAll: true },
-  { key: 'tasks', icon: 'tasks', singleton: true, defaultLayout: 'builtin:tasks', placeAll: false },
-  { key: 'shopping', icon: 'shopping', singleton: true, defaultLayout: 'checklist', placeAll: false },
+  // Week 11а (views.md «Tool layouts», catalogue notes v4 / tasks v3 / shopping v3): the tools are the defaults.
+  { key: 'notes', icon: 'documents', singleton: true, defaultLayout: 'builtin:notes_board', placeAll: true },
+  { key: 'tasks', icon: 'tasks', singleton: true, defaultLayout: 'builtin:planner', placeAll: false },
+  { key: 'shopping', icon: 'shopping', singleton: true, defaultLayout: 'builtin:shopping', placeAll: false },
   { key: 'documents', icon: 'work', singleton: true, defaultLayout: 'builtin:kp', placeAll: false },
   { key: 'expenses', icon: 'money', singleton: true, defaultLayout: 'builtin:expenses', placeAll: false },
   { key: 'custom', icon: 'other', singleton: false, defaultLayout: 'list', placeAll: false },

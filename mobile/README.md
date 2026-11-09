@@ -1,4 +1,4 @@
-# Mobile app — week 11 (PageFrame + view registry, S38 «Настроить страницу», the notebook, «Простой список»)
+# Mobile app — week 11а (stickers, the planner, the fridge list with «Я в магазине») on week 11's PageFrame + view registry
 
 Expo SDK 58 (React Native 0.88, New Architecture), TypeScript strict, expo-router.
 Spec: `../docs/spec/SPEC.md`, `../docs/spec/final/2-design.md`, `../docs/spec/final/3-engineering.md` §2.1, §11.2 (week 1, Mobile).
@@ -92,6 +92,43 @@ src/
   alarms/                    week 8: port (FakeAlarms), native + notification adapters, planner, S15 steps, service
 modules/alarms/              native Expo module: Android (Kotlin) AlarmManager + S14 + battery-guide, iOS (Swift) AlarmKit
 ```
+
+## Week 11а: what works
+
+Contract: `../docs/api/views.md` («Tool layouts», `group_order`, pinned first, «Раскрась по темам»), `pages.md` (page order,
+`reason: "timed"`), `today.md` («Ежедневник», «Покупки», `POST /tasks/clear-done`) and `schemas.py` / `routes/tasks.py` as of
+2026-11-09 (final). Shapes only in `src/api/types.ts` + `src/api/endpoints.ts`. **Checked by Jest with a fake server only: not
+against the real server, not on a device. The grid's smoothness on a low-end Redmi must be checked on a real phone.** KK strings
+of this week are drafts. New dependency: `expo-keep-awake` (in Expo Go; needs nothing native of its own).
+
+- **Defaults follow the catalogue** (notes v4, tasks v3, shopping v3): the tools are registered under `builtin:notes_board`,
+  `builtin:planner`, `builtin:shopping`; the older middles stay as the other allowed views (`stacks`, `builtin:tasks`,
+  `checklist`, all `ClassicView`), «Простой список» on all. Same `PageFrame` edges.
+- **«Заметки» — stickers, «Ряды»** (`components/page/StickersView.tsx`): 2 columns (1 at ≥150%: the colour as an 8 pt band on
+  paper), ≤5 lines, the date, status, «проверьте», the generated-content label; piles for stacks (`StackCards piles`: colour
+  and two lines of the top sticker, two sheets under); «Разложи» headings kept. «⋯» has «Цвет» (6 named 48 pt circles) and
+  «Приколоть наверх / Открепить» on top: at once, offline and in «Без ИИ», outbox `page.item_look` → `PATCH
+  /pages/{id}/items/{item_id}`, «Отменить» like any change of a row. Pinned first everywhere (page order, pages.md). Screen
+  readers: «Стикер 2 из 5. жёлтый. приколот. …», Выше / Ниже / Переместить / Ещё as actions. The grid is the shared
+  `EntryList` with `columns` (virtualised by line); **no drag in the grid** — «⋯» Выше / Ниже and «Порядок» ↑ ↓.
+  «Раскрась по темам» is the server's (`page_patch.rows` with `appearance`), with «Что изменилось» / «Отменить».
+  `view.mode === 'board'` shows rows with a line «Доска появится позже» — the board plugs in there (16а).
+- **«Дела» — the planner** (`PlannerView.tsx`, `tasks/sheet.ts`): the sheet of today.md — occurrences at their hours (main
+  fire by `occurrence_at`), «Отложено до …», acked ones under «Сделано (N)», «Сейчас 11:20» (words, plus the line below
+  150%), a row whose record has a live reminder in its hour with its 40 pt box (not among «Без времени», no Выше / Ниже).
+  «⋯» of an hour: +15 мин / +1 час / Завтра / Выбрать (`PATCH /reminders`, «Отменить» moves it back) and «Удалить».
+  «Пропущено»: missed fires and overdue to-dos in red with words. «Перенести на завтра» for to-dos (`PATCH /tasks` via outbox
+  `task.patch`). A refused move (`reason: "timed"`) says why. ≥150%: «10:00 · Будильник» above the row.
+- **«Покупки» — the fridge list** (`ShoppingView.tsx`): «Осталось 5 из 8» + bar, «− 2 +» (48 pt, plain counts only; `PATCH
+  /tasks` with `version`, a `409` goes once more with the server's version), groups by «Где купить» when `group_by: "where"`
+  with `group_order` (↑ ↓ on shop headings in «Порядок» → `/view` `group_order`), «Куплено (N)», «Убрать все купленные» = one
+  `POST /tasks/clear-done` (outbox `task.clear_done`), one «Отменить». **«Я в магазине»**: rows `title1` (≤56 pt), ≥72 pt,
+  the whole row ticks (offline at once), «Выйти», screen kept on (`useKeepAwake`), «Ещё в магазине?» after 30 min without a
+  touch; tabs hidden, the assistant line folded to its chip and the mic («Написать» in «Без ИИ» unfolds it).
+- SQLite v8: `page_links.color`.
+
+Not yet: drag inside the sticker grid, the free board (16а), the 30-minute question checked only by code (not on a phone), a
+filter «Показать: Жёлтые», the «как на странице» block on S09.
 
 ## Week 11: what works
 

@@ -44,6 +44,7 @@ import type { OutboxEntry, OutboxRepository } from '@/db/outbox';
 import type { PagesRepository } from '@/db/pages';
 import type { RecordFile, RecordsRepository } from '@/db/records';
 import type {
+  ItemLookPayload,
   ItemMovePayload,
   ItemRemovePayload,
   LinkKey,
@@ -55,6 +56,7 @@ import type {
 import type { RenamePayload } from '@/pages/service';
 import type { CorrectPayload, TrashPayload, UnmergePayload, VerifyPayload } from '@/records/actions';
 import type { TaskCreatePayload, TaskUpdatePayload } from '@/tasks/service';
+import type { ClearDonePayload, TaskPatchPayload } from '@/tasks/edit';
 import type { ReminderUpdatePayload } from '@/alarms/service';
 import { TEMPLATE_DEFAULT_TITLE } from '@/pages/templates';
 import { newId } from '@/utils/id';
@@ -192,6 +194,10 @@ export type TaskSink = {
   serverId(key: string): string | null;
   updated(key: string, out: TaskWriteOut, clientId: string): void;
   updateFailed(key: string, clientId: string): void;
+  /** Week 11а (`task.patch`): the version the server last gave, and the answer of a change. */
+  version?(key: string): number | null;
+  patched?(key: string, out: TaskWriteOut, clientId: string): void;
+  patchFailed?(key: string, clientId: string): void;
 };
 
 export type SyncDeps = {
@@ -213,6 +219,8 @@ export type SyncDeps = {
   onAccountConsentRejected?: () => void;
   /** «Похожие положу туда же»: the move of this outbox row taught the server a placement rule. */
   onLearned?: (outboxId: string, text: string) => void;
+  /** Week 11а: a move of a row with a time was refused (`reason: "timed"`). */
+  onTimedRefused?: () => void;
   /** A line from the server for the person («Часть уже изменена вами — вернул остальное»). */
   onNotice?: (text: string) => void;
   /** Week 8: reminders and fires (sync arrays, POST /reminders, events). */
@@ -249,6 +257,9 @@ const IN_TAP_ORDER = new Set<string>([
   'task.update',
   'page.view',
   'page.item_fields',
+  'page.item_look',
+  'task.patch',
+  'task.clear_done',
 ]);
 
 /**
@@ -522,6 +533,12 @@ export class SyncEngine {
         return (e) => this.sendTaskCreate(e);
       case 'task.update':
         return (e) => this.sendTaskUpdate(e);
+      case 'task.patch':
+        return (e) => this.sendTaskPatch(e);
+      case 'task.clear_done':
+        return (e) => this.sendClearDone(e);
+      case 'page.item_look':
+        return (e) => this.sendItemLook(e);
       case 'import.telegram':
         return (e) => this.sendImport(e);
       case 'page.view':
@@ -655,6 +672,8 @@ export class SyncEngine {
     await this.settleKeys(p.keys, res.real, res.out);
     await this.d.outbox.updatePayload(e.id, { ...p, actionId: res.out.action?.id ?? null, realKeys: res.real });
     if (res.out.learned_ru) this.d.onLearned?.(e.id, res.out.learned_ru);
+    // Week 11а: a row with a time on «Дела» keeps its place (pages.md `timed`); the row is already back.
+    if (!res.out.moved && res.out.reason === 'timed') this.d.onTimedRefused?.();
   }
 
   private sendItemMove(e: OutboxEntry): Promise<void> {
@@ -720,6 +739,22 @@ export class SyncEngine {
       if (!page || !item) return null;
       const out = await this.d.api.removeFromPage(page, item, p.clientId);
       return { out, real: [{ page, item }] };
+    });
+  }
+
+  /** Week 11а: colour / «Приколоть» of a sticker — the row call of views.md; its row comes back. */
+  private sendItemLook(e: OutboxEntry): Promise<void> {
+    return this.sendLink(e, async () => {
+      const p = e.payload as ItemLookPayload;
+      const page = await this.pageServerId(p.pageId);
+      const item = await this.itemServerId(p.recordId);
+      if (!page || !item) return null;
+      const out = await this.d.api.setItemFields(page, item, {
+        client_id: p.clientId,
+        ...('color' in p ? { color: p.color ?? null } : {}),
+        ...(typeof p.pinned === 'boolean' ? { pinned: p.pinned } : {}),
+      });
+      return { out: { ...NOTHING, moved: true, rows: out.link ? [out.link] : [], action: out.action }, real: [{ page, item }] };
     });
   }
 
@@ -1231,6 +1266,64 @@ export class SyncEngine {
       this.d.tasks?.updated(p.key, out, p.clientId);
     } catch (err) {
       if (!isRetryable(err)) this.d.tasks?.updateFailed(p.key, p.clientId);
+      throw err;
+    }
+  }
+
+  /** Week 11а: «Убрать все купленные»; the ids are the server's (rows the phone made wait for theirs). */
+  private async sendClearDone(e: OutboxEntry): Promise<void> {
+    const p = e.payload as ClearDonePayload;
+    const sink = this.d.tasks;
+    const ids: string[] = [];
+    for (const k of p.keys) {
+      const id = sink?.serverId(k) ?? null;
+      if (id) ids.push(id);
+      else if (
+        (await this.d.outbox.listPending(500)).some(
+          (row) => row.kind === 'task.create' && (row.payload as TaskCreatePayload).body.client_id === k.replace(/^local:/, ''),
+        )
+      )
+        throw new Error('task_not_synced');
+    }
+    if (ids.length === 0) return;
+    const out = await this.d.api.clearDoneTasks({ client_id: p.clientId, list_key: p.listKey, task_ids: ids });
+    if (out.tasks.length > 0) sink?.applyServer(out.tasks);
+    if (out.action) this.d.actions?.([out.action]);
+    await this.d.outbox.updatePayload(e.id, { ...p, actionId: out.action?.id ?? null } satisfies ClearDonePayload);
+  }
+
+  /**
+   * Week 11а: «− 2 +» / «На завтра» (PATCH /tasks/{id}). The version is the one the phone has now;
+   * `409 conflict` (another phone, or a retry after a lost answer) goes once more with the server's
+   * version: the person's change wins, as with every change by hand.
+   */
+  private async sendTaskPatch(e: OutboxEntry): Promise<void> {
+    const p = e.payload as TaskPatchPayload;
+    const sink = this.d.tasks;
+    const id = sink?.serverId(p.key) ?? null;
+    if (!id) {
+      const clientId = p.key.replace(/^local:/, '');
+      const waiting = (await this.d.outbox.listPending(500)).some(
+        (row) => row.kind === 'task.create' && (row.payload as TaskCreatePayload).body.client_id === clientId,
+      );
+      if (waiting) throw new Error('task_not_synced');
+      sink?.patchFailed?.(p.key, p.clientId);
+      return; // lives on this phone only
+    }
+    const call = (version: number) => this.d.api.patchTask(id, { version, ...p.body });
+    try {
+      let out: TaskWriteOut;
+      try {
+        out = await call(sink?.version?.(p.key) ?? 0);
+      } catch (err) {
+        const v = err instanceof ApiError && err.status === 409 ? Number(err.details?.version) : NaN;
+        if (!Number.isFinite(v)) throw err;
+        out = await call(v);
+      }
+      await this.d.outbox.updatePayload(e.id, { ...p, actionId: out.action?.id ?? null } satisfies TaskPatchPayload);
+      sink?.patched?.(p.key, out, p.clientId);
+    } catch (err) {
+      if (!isRetryable(err)) sink?.patchFailed?.(p.key, p.clientId);
       throw err;
     }
   }

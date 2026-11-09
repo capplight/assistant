@@ -26,6 +26,9 @@ type ViewState = {
   picking: { messageId: string; pageId: string } | null;
   /** Week 9, a tip's [Да]: put a phrase in the line (the person sends it) or open the mic. */
   lineRequest: { id: number; kind: 'text'; text: string } | { id: number; kind: 'mic' } | null;
+  /** Week 11а «Я в магазине»: the page in that mode (the footer folds the line to chip + mic, no tabs). */
+  shopMode: string | null;
+  setShopMode: (pageId: string | null) => void;
   requestLine: (r: { kind: 'text'; text: string } | { kind: 'mic' } | null) => void;
   setVisible: (pageId: string, ids: string[]) => void;
   setSelected: (id: string | null) => void;
@@ -36,7 +39,7 @@ type ViewState = {
   reset: () => void;
 };
 
-const empty = { visible: {}, selected: null, touching: false, highlight: null, picking: null, lineRequest: null };
+const empty = { visible: {}, selected: null, touching: false, highlight: null, picking: null, lineRequest: null, shopMode: null };
 let lineSeq = 0;
 
 export const useView = create<ViewState>()((set) => ({
@@ -53,6 +56,7 @@ export const useView = create<ViewState>()((set) => ({
   showHighlight: (ids, now = Date.now()) => set({ highlight: ids.length > 0 ? { ids, until: now + HIGHLIGHT_MS } : null }),
   clearHighlight: () => set({ highlight: null }),
   setPicking: (picking) => set({ picking }),
+  setShopMode: (shopMode) => set({ shopMode }),
   requestLine: (r) => set({ lineRequest: r ? { ...r, id: ++lineSeq } : null }),
   reset: () => set(empty),
 }));

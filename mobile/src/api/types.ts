@@ -389,6 +389,8 @@ export type PageViewIn = {
   sort?: string | null;
   sort_dir?: 'asc' | 'desc' | null;
   group_by?: string | null;
+  /** Week 11а: the whole order of the groups («Покупки»: the shop walk), ≤30 names; null = none. */
+  group_order?: string[] | null;
   title?: string;
   icon?: string;
   /** The whole order the person sees, with the switches. */
@@ -409,10 +411,19 @@ export type PageItemFieldsIn = {
   values?: Record<string, string | number | boolean | null>;
   /** The checklist tick (`link.done_at`). */
   done?: boolean;
-  color?: string | null;
+  /** «Заметки» only (views.md): the sticker's colour; `null` = no colour. */
+  color?: NoteColor | null;
+  /** «Приколоть наверх / Открепить». */
   pinned?: boolean;
 };
-export type PageItemFieldsOut = { values: Record<string, unknown>; action: ActionOut | null };
+/** `link`: the row as it is now (colour, pin, tick); null from an older server. */
+export type PageItemFieldsOut = { values: Record<string, unknown>; action: ActionOut | null; link: PageItemOut | null };
+
+/** Week 11а: the six sticker colours (`color.note.*`, template-screens 3; views.md `link.appearance.color`). */
+export type NoteColor = 'yellow' | 'pink' | 'green' | 'blue' | 'peach' | 'white';
+
+/** `link.appearance` (views.md «Rows and contents»): who set it decides when the assistant asks «Да». */
+export type AppearanceOut = { color: NoteColor | null; color_set_by?: SetBy | null; pinned_set_by?: SetBy | null };
 
 /** `/v1/sync` `item_facets`: own field values of one record on one page. */
 export type ItemFacetOut = { id: string; page_id: string; item_id: string; data: Record<string, unknown>; seq: number };
@@ -450,6 +461,8 @@ export type PageItemOut = {
   updated_by: string;
   /** Week 11 (views.md): the checklist tick of a `checklist` page; undefined = an older server. */
   done_at?: string | null;
+  /** Week 11а: the sticker's colour on this page; undefined = an older server. */
+  appearance?: AppearanceOut;
 };
 
 export type PageLinkCreateOut = { link: PageItemOut; created: boolean };
@@ -493,7 +506,8 @@ export type PagesReorderIn = {
 };
 
 /** Why a call did nothing: a later move on another phone won, the neighbours or pages are gone. */
-export type MoveReason = 'newer_move' | 'anchor_gone' | 'nothing_to_do' | 'page_removed';
+/** `timed` (week 11а): on «Дела» the row's record has a live reminder, its time sets its place. */
+export type MoveReason = 'newer_move' | 'anchor_gone' | 'nothing_to_do' | 'page_removed' | 'timed';
 
 /**
  * The answer of every call above, in one shape: `moved` (`removed` for DELETE), the rows as they
@@ -960,6 +974,24 @@ export type TaskCreateIn = {
   where?: string | null;
   due_date?: string | null;
 };
+
+/**
+ * PATCH /tasks/{id} (today.md): `version` + only the keys that change. Week 11а sends `qty` («− 2 +»
+ * on «Покупки») and `due_date` («На завтра» on «Дела»). No `client_id` on the server: a retry after a
+ * lost answer gets `409 conflict`, and the phone compares values.
+ */
+export type TaskPatchIn = {
+  version: number;
+  title?: string;
+  qty?: string | null;
+  where?: string | null;
+  due_date?: string | null;
+  list_key?: TaskListKey;
+};
+
+/** Week 11а `POST /tasks/clear-done` (today.md): the bought lines the person saw, one action. */
+export type TasksClearDoneIn = { client_id: string; list_key: TaskListKey; task_ids: string[] };
+export type TasksClearDoneOut = { tasks: TaskOut[]; action: ActionOut | null; page_patches: PagePatchOut[]; repeated: boolean };
 
 /** POST /tasks/{id}/done: one tap = one call. `done: false` = «Вернуть». */
 export type TaskDoneIn = { client_id: string; done: boolean };

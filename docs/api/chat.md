@@ -46,6 +46,9 @@ moved without the person's «Да» (`confirm_manual`).
 `screen_view_change` + `page_patch` with `page_view`), or asked first: `confirm` for «Вернуть как
 было», removing an own field and >150 records; `confirm_manual` for what the person set by hand.
 A ★ field is never hidden. Only when the person's own words are about the view.
+Week 11а: «раскрась по темам» on «Заметки» colours the stickers by topic (`views.md` →
+«Раскрась по темам»; `status` `arranging` «Раскрашиваю… 12 заметок» while topics are found) and
+«сначала аптека, потом Магнум» sets the group order (`view_state.group_order`).
 
 ## Consent and «Без ИИ»
 

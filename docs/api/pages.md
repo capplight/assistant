@@ -201,7 +201,7 @@ or filtered by a field (`view_state.sort` / `filters`) comes sorted and filtered
 (`views.md`); otherwise in page order below. «Сегодня» has no links: its
 content comes from `/today` (week 9).
 
-**Page order** (the phone must sort the same way): `position` ascending by bytes, `null` last; then
+**Page order** (the phone must sort the same way): week 11а: rows with `link.pinned: true` first, then the rest; within each, `position` ascending by bytes, `null` last; then
 item `occurred_at` newest first (`created_at` if absent); then `item_id` ascending as a lowercase
 string. Today `position` is always set; `null` is reserved for pages sorted by a field.
 
@@ -366,7 +366,7 @@ outbox instead: there is nothing to undo on the server. A call that changed noth
 {"moved": true, "reason": null, "repeated": false, "rebased": false,
  "link": PageItemOut, "action": Action, "page_patch": PagePatch}
 ```
-- `reason` when `moved: false`: `newer_move` (a later move of this row won; `link` is where it
+- `reason` when `moved: false`: `timed` (week 11а: on «Дела» the row has a time — its record has a live reminder — so its time sets its place; nothing changed, drop the outbox entry; offer «Перенести время» instead of «Выше / Ниже»), `newer_move` (a later move of this row won; `link` is where it
   is), `anchor_gone` (neither neighbour is on the page any more and no usable `position`; nothing
   changed).
 - `page_patch` (shape of `chat.md`): the moved row; after a re-key, every row of the page.

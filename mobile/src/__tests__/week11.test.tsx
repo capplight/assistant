@@ -184,11 +184,12 @@ describe('PageFrame and the registry', () => {
     await renderRouter(APP_DIR, { initialUrl: `/page/${notes.id}` });
     await settle(() => screen.queryByTestId('record-n1') !== null);
     for (const id of ['page-title', 'page-order', 'page-settings', 'page-find']) expect(screen.getByTestId(id)).toBeTruthy();
-    expect(screen.getByTestId('page-view-notes:stacks')).toBeTruthy();
-    expect(screen.getByText('Последние')).toBeTruthy();
+    // Week 11а: the sticker wall is the default of «Заметки».
+    expect(screen.getByTestId('page-view-notes:builtin:notes_board')).toBeTruthy();
+    expect(screen.getByTestId('sticker-n1')).toBeTruthy();
     await act(async () => usePages.getState().setLook(notes.id, { layout: 'list', icon: notes.icon, view: EMPTY_VIEW }));
     await settle(() => screen.queryByTestId('page-view-notes:list') !== null);
-    expect(screen.queryByText('Последние')).toBeNull();
+    expect(screen.queryByTestId('sticker-n1')).toBeNull();
     expect(screen.getByTestId('record-n1')).toBeTruthy();
   });
 });
@@ -264,15 +265,16 @@ describe('S38 «Настроить страницу»', () => {
     expect(pageNow(page.id).layout).toBe('list');
   });
 
-  it('the views offered: the tool, «Простой список»; tools not built yet are not offered', async () => {
+  it('the views offered: the tool (week 11а: the planner), the older view, «Простой список»', async () => {
     const s = server();
     await online(s);
     const tasks = usePages.getState().pages.find((p) => p.templateKey === 'tasks')!;
     await renderRouter(APP_DIR, { initialUrl: `/page-settings/${tasks.id}` });
     await settle(() => screen.queryByTestId('settings-layout-list') !== null);
+    expect(screen.getByTestId('settings-layout-builtin:planner')).toHaveTextContent(/Ежедневник/);
+    expect(screen.getByTestId('settings-layout-builtin:planner').props.accessibilityState).toMatchObject({ checked: true });
     expect(screen.getByTestId('settings-layout-builtin:tasks')).toBeTruthy();
     expect(screen.getByTestId('settings-layout-list')).toHaveTextContent(/Простой список/);
-    expect(screen.queryByTestId('settings-layout-builtin:planner')).toBeNull();
   });
 });
 

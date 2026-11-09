@@ -5,6 +5,7 @@ Public surface for other modules:
   envelope written). Adds it to the pages whose rule matches; never moves an existing row.
 - `rescue_moved(session, page)`: call when a page is removed: records moved onto it by hand go
   back to where they came from.
+- `timed_items(session, page)`: rows of «Дела» that have a time (ordered by it, not moved).
 - `lexorank`, `rules`, `order`: pure code, no DB. `habits`: learned placement (`placement_rule`).
 The API is in `assistant.api.routes.pages`.
 """
@@ -21,9 +22,10 @@ from assistant.pages.service import (
     place_item,
     rebalance_page,
     rescue_moved,
+    timed_items,
 )
 
 __all__ = ["add_link", "create_page", "fill_page", "habits", "latest_template",
            "latest_templates", "lexorank", "lock_user", "mark_rekeyed", "order", "place_item",
            "rebalance_page",
-           "rescue_moved", "rules"]  # fmt: skip
+           "rescue_moved", "rules", "timed_items"]  # fmt: skip

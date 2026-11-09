@@ -28,13 +28,13 @@ describe('S37 page', () => {
   it('offline: empty state, then what is typed shows on the page at once, «Ждёт связи»', async () => {
     await renderRouter(APP_DIR, { initialUrl: `/page/${notes().id}` });
     await settle(() => screen.queryByTestId('page-empty') !== null);
-    expect(screen.getByText('Скажите или напишите что угодно — я сохраню')).toBeTruthy();
+    // Week 11а: the sticker wall's own empty sheet (template-screens 2.1).
+    expect(screen.getByText('Здесь будут ваши заметки. Скажите: «Запиши код домофона 4512»')).toBeTruthy();
 
     await fireEvent.changeText(screen.getByTestId('assistant-input'), 'Код домофона 4512');
     await fireEvent.press(screen.getByTestId('assistant-send'));
     await settle(() => screen.queryByText('Код домофона 4512') !== null);
     expect(screen.getByText('Ждёт связи')).toBeTruthy();
-    expect(screen.getByText('Последние')).toBeTruthy();
     expect(screen.queryByTestId('page-empty')).toBeNull();
     expect((await outbox.listPending()).map((e) => e.kind)).toEqual(['item.create']);
   });

@@ -24,6 +24,30 @@ import { TaskRow } from '../TaskRow';
 import { useDrag } from '../useDrag';
 import { dueText, shownEntries, type EntryRow, type Row } from './rows';
 
+/** What the list draws per line: a row, or (grid) up to `columns` records side by side. */
+type Line = Row | { type: 'line'; items: EntryRow[] };
+
+/** Records packed into lines of `columns`; a heading or a task row always starts a new line. */
+export function toLines(rows: Row[], columns: number): Line[] {
+  const out: Line[] = [];
+  let cur: EntryRow[] = [];
+  const flush = () => {
+    if (cur.length > 0) out.push({ type: 'line', items: cur });
+    cur = [];
+  };
+  for (const r of rows) {
+    if (r.type !== 'entry') {
+      flush();
+      out.push(r);
+      continue;
+    }
+    cur.push(r);
+    if (cur.length === columns) flush();
+  }
+  flush();
+  return out;
+}
+
 /** What a tool gets to draw one record its own way (a notebook card, a table row, later a sticker). */
 export type EntryCtx = {
   index: number;
@@ -54,7 +78,9 @@ export function EntryList({
   renderEntry,
   menuExtra,
   groupTitle,
+  renderGroup,
   today,
+  columns = 1,
 }: {
   page: Page;
   rows: Row[];
@@ -68,8 +94,16 @@ export function EntryList({
   /** ≤2 items of the template on top of «⋯ Ещё» (template-screens 3). */
   menuExtra?: (record: LocalRecord) => MenuExtra[];
   groupTitle?: (row: Extract<Row, { type: 'group' }>) => string;
+  /** Week 11а: a heading drawn by the tool (the shop with ↑ ↓ in «Порядок»); null = the plain one. */
+  renderGroup?: (row: Extract<Row, { type: 'group' }>) => ReactElement | null;
   /** «Дела»: the day the due dates are counted from. */
   today?: string;
+  /**
+   * Week 11а: a grid («Заметки» rows of stickers). Records go left to right, top to bottom in the
+   * same one-line order (`position`), still virtualised by line. In a grid there is no drag: «⋯»
+   * Выше / Ниже and «Порядок» ↑ ↓ move a sticker one place (template-screens 2.1). Needs `renderEntry`.
+   */
+  columns?: number;
 }) {
   const theme = useTheme();
   const { t } = useTranslation();
@@ -86,9 +120,10 @@ export function EntryList({
   useEffect(() => {
     currentId.current = page.id;
   }, [page.id]);
-  const [onViewable] = useState(() => ({ viewableItems }: { viewableItems: { item: Row }[] }) => {
+  const [onViewable] = useState(() => ({ viewableItems }: { viewableItems: { item: Line }[] }) => {
     const ids = viewableItems
-      .map((v) => (v.item.type === 'entry' ? v.item.entry.record.serverId : null))
+      .flatMap((v) => (v.item.type === 'entry' ? [v.item] : v.item.type === 'line' ? v.item.items : []))
+      .map((r) => r.entry.record.serverId)
       .filter((x): x is string => !!x);
     if (ids.length > 0 && currentId.current) useView.getState().setVisible(currentId.current, ids);
   });
@@ -109,13 +144,94 @@ export function EntryList({
     router.navigate({ pathname: '/record/[id]', params: { id: rec.id, from: page.id } });
   };
 
+  const grid = columns > 1 && !!renderEntry;
+  const lines: Line[] = grid ? toLines(rows, columns) : rows;
+
+  /** One record: the template's own drawing, a row with a box, or the plain card. */
+  const renderRecord = (item: EntryRow, index: number, style: object | undefined, canDrag: boolean) => {
+    const rec = item.entry.record;
+    const at = shown.findIndex((e) => e.record.id === rec.id);
+    const highlighted = !!rec.serverId && !!hl?.has(rec.serverId);
+    const moves: RowMoves | undefined = canMove
+      ? {
+          onMenu: () => setMenuFor(rec.id),
+          onUp: at > 0 ? () => void stepRecord(page, rec.id, -1) : undefined,
+          onDown: at >= 0 && at < shown.length - 1 ? () => void stepRecord(page, rec.id, 1) : undefined,
+          onMoveTo: () => setMoveSheet({ recordId: rec.id, mode: 'move' }),
+          onDragStart: canDrag
+            ? () =>
+                drag.start(index, (to) => {
+                  const target = entryIndexAfterDrop(
+                    rows.map((r) => r.type === 'entry'),
+                    index,
+                    to,
+                  );
+                  if (target !== at) void dropRecord(page, rec.id, target);
+                })
+            : undefined,
+          showArrows: ordering,
+        }
+      : undefined;
+    if (renderEntry) {
+      const own = renderEntry(item, {
+        index,
+        at,
+        moves,
+        highlighted,
+        lifted: canDrag && drag.isDragged(index),
+        onPress: () => open(rec),
+        onLayout: (e) => {
+          if (canDrag) drag.measure(index, e.nativeEvent.layout.height + theme.space[3]);
+        },
+      });
+      if (own) return <View style={style}>{own}</View>;
+    }
+    if (item.task) {
+      const task = item.task;
+      return (
+        <View style={style} onLayout={(e) => drag.measure(index, e.nativeEvent.layout.height)}>
+          <TaskRow
+            task={task}
+            done={item.done}
+            showReturn={task.list_key === 'shopping'}
+            meta={task.due_date && task.list_key === 'todo' && today ? dueText(task.due_date, today, t) : null}
+            highlighted={highlighted}
+            onToggle={() => void setDone(task.id, !item.done)}
+            onMenu={canMove ? () => setMenuFor(rec.id) : undefined}
+          />
+        </View>
+      );
+    }
+    return (
+      <View style={style}>
+        <RecordRow
+          record={rec}
+          snippet={searching && searchQuery ? snippetFor(rec, searchQuery) : null}
+          highlighted={highlighted}
+          lifted={drag.isDragged(index)}
+          onLayout={(e) => drag.measure(index, e.nativeEvent.layout.height + theme.space[3])}
+          moves={moves}
+          onPress={() => open(rec)}
+        />
+      </View>
+    );
+  };
+
   return (
     <>
       <View style={{ flex: 1 }} {...drag.handlers}>
-        <FlatList
+        <FlatList<Line>
           testID="page-records"
-          data={rows}
-          keyExtractor={(r) => (r.type === 'entry' ? r.entry.record.id : r.type === 'task' ? `task-${r.task.id}` : `group-${r.key}`)}
+          data={lines}
+          keyExtractor={(r) =>
+            r.type === 'entry'
+              ? r.entry.record.id
+              : r.type === 'task'
+                ? `task-${r.task.id}`
+                : r.type === 'line'
+                  ? `line-${r.items[0]?.entry.record.id ?? ''}`
+                  : `group-${r.key}`
+          }
           onViewableItemsChanged={onViewable}
           scrollEnabled={!drag.active}
           onTouchStart={() => setTouching(true)}
@@ -133,6 +249,14 @@ export function EntryList({
             const style = shift ? { transform: [{ translateY: shift }], zIndex: drag.isDragged(index) ? 10 : 0 } : undefined;
             const measure = (e: LayoutChangeEvent) => drag.measure(index, e.nativeEvent.layout.height);
             if (item.type === 'group') {
+              const own = renderGroup?.(item);
+              if (own) {
+                return (
+                  <View style={style} onLayout={measure}>
+                    {own}
+                  </View>
+                );
+              }
               return (
                 <View style={style} onLayout={measure}>
                   <AppText
@@ -160,68 +284,22 @@ export function EntryList({
                 </View>
               );
             }
-            const rec = item.entry.record;
-            const at = shown.findIndex((e) => e.record.id === rec.id);
-            const highlighted = !!rec.serverId && !!hl?.has(rec.serverId);
-            const moves: RowMoves | undefined = canMove
-              ? {
-                  onMenu: () => setMenuFor(rec.id),
-                  onUp: at > 0 ? () => void stepRecord(page, rec.id, -1) : undefined,
-                  onDown: at >= 0 && at < shown.length - 1 ? () => void stepRecord(page, rec.id, 1) : undefined,
-                  onMoveTo: () => setMoveSheet({ recordId: rec.id, mode: 'move' }),
-                  onDragStart: () =>
-                    drag.start(index, (to) => {
-                      const target = entryIndexAfterDrop(
-                        rows.map((r) => r.type === 'entry'),
-                        index,
-                        to,
-                      );
-                      if (target !== at) void dropRecord(page, rec.id, target);
-                    }),
-                  showArrows: ordering,
-                }
-              : undefined;
-            if (renderEntry) {
-              const own = renderEntry(item, {
-                index,
-                at,
-                moves,
-                highlighted,
-                lifted: drag.isDragged(index),
-                onPress: () => open(rec),
-                onLayout: (e) => drag.measure(index, e.nativeEvent.layout.height + theme.space[3]),
-              });
-              if (own) return <View style={style}>{own}</View>;
-            }
-            if (item.task) {
-              const task = item.task;
+            if (item.type === 'line') {
+              // A row of the grid: each cell is one record, in the page order (left to right).
               return (
-                <View style={style} onLayout={measure}>
-                  <TaskRow
-                    task={task}
-                    done={item.done}
-                    showReturn={task.list_key === 'shopping'}
-                    meta={task.due_date && task.list_key === 'todo' && today ? dueText(task.due_date, today, t) : null}
-                    highlighted={highlighted}
-                    onToggle={() => void setDone(task.id, !item.done)}
-                    onMenu={canMove ? () => setMenuFor(rec.id) : undefined}
-                  />
+                <View style={{ flexDirection: 'row', gap: theme.space[3], marginBottom: theme.space[3] }}>
+                  {item.items.map((cell) => (
+                    <View key={cell.entry.record.id} style={{ flex: 1 }}>
+                      {renderRecord(cell, -1, undefined, false)}
+                    </View>
+                  ))}
+                  {Array.from({ length: columns - item.items.length }, (_, i) => (
+                    <View key={`gap-${i}`} style={{ flex: 1 }} />
+                  ))}
                 </View>
               );
             }
-            return (
-              <View style={style}>
-                <RecordRow
-                  record={rec}
-                  snippet={searching && searchQuery ? snippetFor(rec, searchQuery) : null}
-                  highlighted={highlighted}
-                  lifted={drag.isDragged(index)}
-                  onLayout={(e) => drag.measure(index, e.nativeEvent.layout.height + theme.space[3])}
-                  moves={moves}
-                  onPress={() => open(rec)}
-                />
-              </View>
-            );
+            return renderRecord(item, index, style, true);
           }}
         />
       </View>
@@ -231,7 +309,14 @@ export function EntryList({
           mine={!!menuEntry.link?.manualOrder}
           canUp={menuIndex > 0}
           canDown={menuIndex < shown.length - 1}
-          extra={menuExtra?.(menuEntry.record)}
+          extra={menuExtra?.(menuEntry.record).map((x) => ({
+            ...x,
+            // The template's item (Цвет, Приколоть…) closes the menu first: it may open its own sheet.
+            onPress: () => {
+              setMenuFor(null);
+              x.onPress();
+            },
+          }))}
           onUp={() => void stepRecord(page, menuEntry.record.id, -1)}
           onDown={() => void stepRecord(page, menuEntry.record.id, 1)}
           onMoveTo={() => {

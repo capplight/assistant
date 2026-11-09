@@ -25,8 +25,24 @@ from assistant.db.models_pages import (
     ScreenTemplate,
 )
 from assistant.db.models_v2 import HiddenReason
-from assistant.pages import habits, lexorank
+from assistant.pages import habits, lexorank, order
 from assistant.pages.rules import ItemFacts, excluded, matches
+
+
+async def timed_items(session: AsyncSession, page: Screen,
+                      item_pks: list[int] | None = None) -> set[int]:  # fmt: skip
+    """Item pks of the page's rows that have a time («Дела»: a live reminder of the record;
+    `order.TIMED_TEMPLATES`). Such rows are ordered by their time, never by `position`."""
+    if page.template_key not in order.TIMED_TEMPLATES:
+        return set()
+    rows = await session.execute(text("""
+        SELECT DISTINCT r.item_id FROM reminders r
+        JOIN screen_items si ON si.item_id = r.item_id AND si.screen_id = :s
+        WHERE r.user_id = :u AND r.kind = 'normal' AND r.deleted_at IS NULL
+          AND r.status <> 'cancelled' AND (CAST(:pks AS BIGINT[]) IS NULL
+                                           OR r.item_id = ANY(CAST(:pks AS BIGINT[])))
+    """), {"s": page.id, "u": page.user_id, "pks": item_pks})  # fmt: skip
+    return {int(r[0]) for r in rows}
 
 
 async def lock_user(session: AsyncSession, user_id: int) -> None:

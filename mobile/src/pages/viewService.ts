@@ -76,6 +76,8 @@ export function changeText(page: Page, change: ViewChange, lang = i18n.language)
       return t('view.changed_sort', { what: t(`view.sort_${change.sort ?? 'position'}`) });
     case 'group':
       return change.groupBy ? t('view.changed_group', { field: field(change.groupBy) }) : t('view.changed_ungroup');
+    case 'group_order':
+      return t('view.changed_group_order', { group: change.moved });
     case 'icon':
       return t('view.changed_icon');
     case 'field_visible':
@@ -325,6 +327,7 @@ export async function applyAssistantView(patch: PagePatchOut): Promise<boolean> 
       ...view,
       ...('sort' in vs ? { sort: sortFromServer(vs.sort, vs.sort_dir) } : {}),
       ...('group_by' in vs ? { groupBy: typeof vs.group_by === 'string' ? vs.group_by : null } : {}),
+      ...('group_order' in vs ? { groupOrder: Array.isArray(vs.group_order) ? vs.group_order.filter((x): x is string => typeof x === 'string') : [] } : {}),
       ...('board' in vs ? { mode: vs.board === true ? 'board' : null } : {}),
       ...(patch.field_prefs ? { fieldPrefs: patch.field_prefs } : {}),
       ...(patch.custom_fields ? { customFields: patch.custom_fields } : {}),
@@ -356,7 +359,7 @@ export async function restoreLook(saved: SavedLook): Promise<void> {
 
 const hasViewKeys = (patch: PagePatchOut) => {
   const vs = patch.view_state;
-  return !!vs && ('group_by' in vs || 'board' in vs || ('sort' in vs && !Array.isArray(vs.groups)));
+  return !!vs && ('group_by' in vs || 'group_order' in vs || 'board' in vs || ('sort' in vs && !Array.isArray(vs.groups)));
 };
 
 // --- «Сделать стопку страницей» (founder addition) ---

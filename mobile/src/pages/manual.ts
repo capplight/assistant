@@ -1,3 +1,4 @@
+import type { NoteColor } from '@/api/types';
 import { getOutbox, getPagesRepo, getRecords, placeholderLinkId, type LocalRecord, type PageLink } from '@/db';
 import { getSyncEngine, kickSync, notifyDataChanged } from '@/services';
 import { comparePages, usePages, type Page } from '@/store/pages';
@@ -85,7 +86,18 @@ export type PagesReorderPayload = Base & {
 
 export type PageRemovePayload = Base & { pageId: string };
 
-export type LinkPayload = ItemMovePayload | MoveToPagePayload | ItemRemovePayload;
+/** Week 11а: a sticker's colour or «Приколоть наверх / Открепить» by hand (views.md row call). */
+export type ItemLookPayload = Base & {
+  pageId: string;
+  recordId: string;
+  /** Absent: the colour stays. null: no colour. */
+  color?: NoteColor | null;
+  pinned?: boolean;
+  keys: [LinkKey];
+  before: [PageLink | null];
+};
+
+export type LinkPayload = ItemMovePayload | MoveToPagePayload | ItemRemovePayload | ItemLookPayload;
 
 const nowIso = () => new Date().toISOString();
 
@@ -327,6 +339,39 @@ export function removeFromPage(record: LocalRecord, page: Page): Promise<string>
   });
 }
 
+/**
+ * Week 11а, «Заметки» (template-screens 2.1): «Цвет» and «Приколоть наверх / Открепить» from
+ * «⋯ Ещё». Shown at once (offline and in «Без ИИ» too), one outbox row (`page.item_look` → PATCH
+ * /pages/{id}/items/{item_id}), «Отменить» like every change of a row by hand. What the person set
+ * is theirs: the server marks it `set_by: user`, and the assistant asks before changing it.
+ */
+export function setRowLook(
+  record: LocalRecord,
+  page: Page,
+  change: { color: NoteColor | null } | { pinned: boolean },
+  stripText: string,
+): Promise<string> {
+  return serial(async () => {
+    const old = await currentLink(page, record);
+    const key = old ? keyOf(old) : { page: pageKey(page), item: itemKey(record) };
+    await (await getPagesRepo()).writeLocal({ ...(old ?? blankLink(key)), ...change });
+    const payload: ItemLookPayload = {
+      clientId: newId(),
+      at: nowIso(),
+      pageId: page.id,
+      recordId: record.id,
+      ...change,
+      keys: [key],
+      before: [old],
+    };
+    const row = await (await getOutbox()).enqueue('page.item_look', payload);
+    notifyDataChanged();
+    useUndo.getState().showCustom(stripText, () => void undoManual([row.id]));
+    kickSync();
+    return row.id;
+  });
+}
+
 // --- S34: the page order and «Убрать страницу» ---
 
 const sorted = () => [...usePages.getState().pages].sort(comparePages);
@@ -442,7 +487,8 @@ async function takeBack(outboxId: string): Promise<void> {
   switch (row.kind) {
     case 'page.item_move':
     case 'item.move_to_page':
-    case 'page.item_remove': {
+    case 'page.item_remove':
+    case 'page.item_look': {
       const p = row.payload as LinkPayload;
       // Still waiting, or it stays on this phone only (no answer ever came): only local rows to put back.
       if (pending || !p.realKeys) {

@@ -98,6 +98,26 @@ One tap = one call (outbox-safe: same `client_id` on retry). `done: false` = «�
 `facet_edit`, «Купил: хлеб» / «Сделал: позвонить маме» / «Вернул: хлеб», with «Отменить» (US-10:
 the tick is in «Что я сделал»). Already in that state: `action: null`. Errors: `404 not_found`.
 
+### `POST /v1/tasks/clear-done` → `200` (week 11а, «Убрать все купленные»)
+
+```json
+{"client_id": "uuid", "list_key": "shopping", "task_ids": ["0194...", "..."]}
+```
+
+`client_id` required (outbox-safe: a repeat returns the first result with `repeated: true`).
+`list_key` default `shopping` (`todo` = «Убрать сделанное»). `task_ids` (optional, ≤500): only these,
+send the ones the person saw as bought, so a line ticked on another phone meanwhile stays. Only
+tasks that are done are taken. Response:
+
+```json
+{"tasks": [Task], "action": Action, "page_patches": [PagePatch], "repeated": false}
+```
+
+The tasks and their records go to the trash in **one** action (`delete_item`, «Убрал купленное:
+хлеб, молоко.», up to 5 names then «и ещё N»), one `changes[]` row per task (`kind: "trash"`).
+One «Отменить» brings all back; «Вернуть» on a row brings one. Nothing done: `action: null`,
+`tasks: []`.
+
 ### `DELETE /v1/tasks/{id}?client_id=` → `200 {task, action}`
 
 The task and its record go to the trash (`action.kind` `delete_item`, «Убрал в корзину: хлеб»).
@@ -128,6 +148,36 @@ page), `page_patch` for that page, and the `action` event has `"tasks": [Task]` 
 display. `action.page` = the list page: show [Открыть] when it is not the page the person is on
 (design 4.4: «Добавил в Покупки: молоко [Открыть] [Отменить]»). One «Отменить» takes all of them
 back; «Вернуть» on one row of «Что изменилось» takes back one.
+
+## «Ежедневник» — the planner on «Дела» (week 11а, proposal 2.3)
+
+Layout `builtin:planner` (the default of `tasks` v3). **No new endpoint**: the sheet is built on
+the phone from what `/v1/sync` already brings (`reminders`, `reminder_fires`, `tasks`,
+`screen_items`), so it works offline the same way. Rules (dates and times on the person's clock,
+`users.tz`; a reminder's own `local` is shown as is):
+
+| Part of the sheet | What goes there |
+|---|---|
+| **Hours** (timed rows) | Occurrences of live normal reminders (`kind: normal`, `deleted_at` null, `status` not `cancelled`) on that date: the fire with `offset_min: 0`, `snooze_n: 0`, by `occurrence_at` → local `HH:MM`, sorted by time. Repeating reminders: the server keeps fires 14 days ahead. A snoozed occurrence keeps its row at its own time and shows «Отложено до HH:MM» (the newest snooze fire). Level: «Будильник» / «Уведомление» from `level`. |
+| A page row with a time | A row whose record has such a reminder (`reminder.item_id` = the row's item) is drawn **in its hour** (once — not also among the rows without time). It cannot be dragged and has no «Выше / Ниже»: its menu has «Перенести время» (`PATCH /v1/reminders/{id}`; +15 мин / +1 час / Завтра / Выбрать). The server refuses such a move with `moved: false, reason: "timed"` and «Разложи» leaves these rows in place. |
+| **Без времени** (all-day) | To-dos (`list_key: todo`, not done) with `due_date` = that date, and on «Сегодня» also those with no `due_date` and the page's plain rows (`task: null`); in page order — the person's manual order holds here (`POST /pages/{id}/items/move`). |
+| **Пропущено** | To-dos not done with `due_date` < today (overdue, oldest first), and `missed` fires of the last 24 h not acked since (as `/v1/today` `missed`: [Сделано] [Перенести]). |
+| **Сделано (N)** | To-dos done today (`done_at` on today's date) and occurrences acked today; grey, «Вернуть» (`POST /v1/tasks/{id}/done {"done": false}`). |
+| «Сейчас» line | Between the hour rows at the device's current time on today's sheet only; also as text «Сейчас 11:20». |
+
+«Скоро» is the same sheet for the next days (headers «Завтра, среда» / «Пт, 13 ноя»; dates with
+nothing are left out). `GET /v1/today` is unchanged (its `today.tasks` lists only to-dos with
+`due_date` ≤ today; undated ones are the planner's own «Без времени»).
+
+## «Покупки» — the fridge list and «Я в магазине» (week 11а, proposal 2.4)
+
+Layout `builtin:shopping` (the default of `shopping` v3). Server side it is the existing calls:
+tick `POST /v1/tasks/{id}/done`, «− 2 +» `PATCH /v1/tasks/{id} {qty, version}`, groups by
+«Где купить» = `view_state.group_by: "where"` («Сгруппируй по магазинам» from the line, or S38),
+the person's order of the groups = `view_state.group_order` (`views.md`; the shop walk order),
+«Убрать все купленные» = `POST /v1/tasks/clear-done`. Bought lines always at the bottom, in
+«Куплено (N)». «Я в магазине» is a phone-only mode (no server state): it works offline from the
+local copy, every tick goes through the outbox as usual.
 
 ## «Сегодня»: `GET /v1/today` (S06, F-16, 6.9)
 

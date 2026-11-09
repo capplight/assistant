@@ -47,7 +47,7 @@ export function beforeAfterText(c: CollectionOut, t: (k: string, o?: Record<stri
  * «Похожие записи: N [Посмотреть]» when there are groups to decide. The page's own list below is
  * unchanged: the person's order stays as it is.
  */
-export function StackCards({ page, entries }: { page: Page; entries: PageEntry[] | null }) {
+export function StackCards({ page, entries, piles = false }: { page: Page; entries: PageEntry[] | null; piles?: boolean }) {
   const theme = useTheme();
   const { t, i18n } = useTranslation();
   const src = useDedup(useShallow((s) => ({ collections: s.collections, gone: s.goneCollections, groups: s.groups, decided: s.decided })));
@@ -55,8 +55,12 @@ export function StackCards({ page, entries }: { page: Page; entries: PageEntry[]
   const stacks = stacksOf(src.collections, src.gone, page.serverId, (page.groups ?? []).map((g) => g.title));
   const repeats = page.templateKey === 'notes' ? repeatsCount(visibleGroups(src.groups, src.decided)) : 0;
   if (stacks.length === 0 && repeats === 0) return null;
-  const bigCount = theme.largeFont ? stacks.length : 3;
+  // Week 11а piles (template-screens 2.1): two side by side, the rest as chips; one column at ≥150%.
+  const bigCount = theme.largeFont ? stacks.length : piles ? 2 : 3;
   const big = stacks.slice(0, bigCount);
+  const grid = piles && !theme.largeFont;
+  // A pile shows its top sticker: its colour and two lines of it.
+  const topOf = (c: CollectionOut) => (entries ?? []).find((e) => e.link?.groupKey === c.title) ?? null;
   const chips = stacks.slice(bigCount);
   const open = (c: CollectionOut) => router.navigate({ pathname: '/stack/[id]', params: { id: c.id, from: page.id } });
 
@@ -83,19 +87,24 @@ export function StackCards({ page, entries }: { page: Page; entries: PageEntry[]
           {t('stack.section')}
         </AppText>
       ) : null}
+      <View style={grid ? [styles.row, { alignItems: 'stretch', gap: theme.space[3] }] : { gap: theme.space[3] }}>
       {big.map((c) => {
         const name = stackTitle(c, i18n.language);
         const count = stackCount(c, entries);
         const ba = beforeAfterText(c, t);
+        const top = piles ? topOf(c) : null;
+        const bg = piles ? theme.notes[top?.link?.color ?? 'white'] : theme.colors.surface;
+        const preview = top ? (top.record.text ?? top.record.title ?? '').trim() : '';
         return (
-          <View key={c.id} style={{ paddingBottom: theme.space[1] }}>
+          <View key={c.id} testID={piles ? `pile-${c.id}` : undefined} style={[{ paddingBottom: theme.space[1] }, grid ? styles.flex : null]}>
             <View
               style={[
                 styles.card,
+                grid ? styles.flex : null,
                 {
                   borderColor: theme.colors.line,
-                  backgroundColor: theme.colors.surface,
-                  borderRadius: theme.radius.card,
+                  backgroundColor: bg,
+                  borderRadius: piles ? theme.radius.note : theme.radius.card,
                   padding: theme.space[3],
                   gap: theme.space[1],
                 },
@@ -116,6 +125,7 @@ export function StackCards({ page, entries }: { page: Page; entries: PageEntry[]
                   <AppText variant="title2">{String(count)}</AppText>
                 </View>
                 {ba ? <AppText variant="meta">{ba}</AppText> : null}
+                {preview ? <AppText numberOfLines={2}>{preview}</AppText> : null}
               </Pressable>
               <View style={[styles.row, { justifyContent: 'flex-end' }]}>
                 <Button
@@ -128,11 +138,13 @@ export function StackCards({ page, entries }: { page: Page; entries: PageEntry[]
                 />
               </View>
             </View>
-            {/* the sheet under it (+4): a stack, not a folder */}
-            <View style={[styles.under, { borderColor: theme.colors.line, borderRadius: theme.radius.card, backgroundColor: theme.colors.bg }]} />
+            {/* the sheet under it (+4): a stack, not a folder; a pile of stickers has two */}
+            <View style={[styles.under, { borderColor: theme.colors.line, borderRadius: piles ? theme.radius.note : theme.radius.card, backgroundColor: piles ? bg : theme.colors.bg }]} />
+            {piles ? <View style={[styles.under2, { borderColor: theme.colors.line, borderRadius: theme.radius.note, backgroundColor: bg }]} /> : null}
           </View>
         );
       })}
+      </View>
       {chips.length > 0 ? (
         <View style={[styles.row, { flexWrap: 'wrap', gap: theme.space[2] }]}>
           {chips.map((c) => {
@@ -217,6 +229,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   card: { borderWidth: 1 },
   under: { position: 'absolute', left: 4, right: -4, top: 4, bottom: -2, borderWidth: 1, zIndex: -1 },
+  under2: { position: 'absolute', left: 8, right: -8, top: 8, bottom: -6, borderWidth: 1, zIndex: -2 },
   chip: { borderWidth: 1, justifyContent: 'center' },
   scrim: { flex: 1, justifyContent: 'flex-end' },
 });

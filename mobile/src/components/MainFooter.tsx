@@ -1,6 +1,7 @@
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useView } from '@/store/view';
 import { useTheme } from '@/theme';
 
 import { AnswerBanner } from './AnswerBanner';
@@ -13,6 +14,8 @@ import { UndoStrip } from './UndoStrip';
 export function MainFooter() {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
+  // «Я в магазине» (template-screens 3): the line folds to its chip and the mic but stays; no tabs.
+  const shop = useView((s) => s.shopMode !== null);
   return (
     <View style={{ backgroundColor: theme.colors.surface, paddingBottom: insets.bottom }}>
       <View style={{ backgroundColor: theme.colors.bg }}>
@@ -20,8 +23,8 @@ export function MainFooter() {
       </View>
       <ReminderDraftStrip />
       <UndoStrip />
-      <AssistantLine />
-      <BottomTabs />
+      <AssistantLine compact={shop} />
+      {shop ? null : <BottomTabs />}
     </View>
   );
 }

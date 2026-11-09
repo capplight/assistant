@@ -28,7 +28,7 @@ import { VoiceListening } from './VoiceListening';
  * server a note is saved here (offline-first). Voice is still a local record + outbox entry. Voice: fragments ≤3 min, no live transcription (R-17). «Без ИИ»: no mic —
  * «Написать» focuses the field (R-05) — and questions are a search by words, no AI call.
  */
-export function AssistantLine({ scope }: { scope?: 'all' } = {}) {
+export function AssistantLine({ scope, compact = false }: { scope?: 'all'; compact?: boolean } = {}) {
   const theme = useTheme();
   const { t } = useTranslation();
   const current = useCurrentPage();
@@ -42,6 +42,15 @@ export function AssistantLine({ scope }: { scope?: 'all' } = {}) {
   const aboutAll = scope === 'all' || store.aboutAll;
   const [text, setText] = useState('');
   const [addOpen, setAddOpen] = useState(false);
+  // «Я в магазине»: only the chip and the mic until the person starts writing.
+  const [opened, setOpened] = useState(false);
+  const folded = compact && !opened && text.trim().length === 0;
+  // Leaving the mode folds it again next time (state from the prop, no effect).
+  const [wasCompact, setWasCompact] = useState(compact);
+  if (wasCompact !== compact) {
+    setWasCompact(compact);
+    setOpened(false);
+  }
   const inputRef = useRef<React.ComponentRef<typeof TextInput>>(null);
 
   // S04b follows the first result, once (R-60); later it is in «Ещё».
@@ -197,7 +206,10 @@ export function AssistantLine({ scope }: { scope?: 'all' } = {}) {
         testID="assistant-write"
         accessibilityRole="button"
         accessibilityLabel={t('line.write')}
-        onPress={() => inputRef.current?.focus()}
+        onPress={() => {
+          if (folded) setOpened(true);
+          inputRef.current?.focus();
+        }}
         style={[styles.round, roundBtn, { borderWidth: 2, borderColor: theme.colors.accent }]}
       >
         <PencilLine size={26} color={theme.colors.accent} />
@@ -280,6 +292,11 @@ export function AssistantLine({ scope }: { scope?: 'all' } = {}) {
             void voice.cancel();
           }}
         />
+      ) : folded ? (
+        <View testID="assistant-line-folded" style={[styles.row, { gap: theme.space[2], justifyContent: 'space-between' }]}>
+          <View style={styles.shrink}>{chip}</View>
+          {right}
+        </View>
       ) : theme.largeFont ? (
         // ≥150%: two rows — chip, then [+] field (mic)
         <>

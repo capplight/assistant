@@ -38,7 +38,8 @@ from assistant.pages import view as views
 router = APIRouter(prefix="/pages", tags=["pages"])
 GatedUser = Annotated[CurrentUser, Depends(require_base_consent)]
 
-VIEW_FIELDS = ("board", "sort", "sort_dir", "group_by", "filters", "period", "today_tile")
+VIEW_FIELDS = ("board", "sort", "sort_dir", "group_by", "group_order", "filters", "period",
+               "today_tile")
 
 
 def view_error(exc: views.ViewError) -> ApiError:

@@ -110,3 +110,11 @@ jest.mock('expo-file-system', () => ({
   File: jest.fn(),
   Directory: jest.fn(),
 }));
+
+// --- week 11а: «Я в магазине» keeps the screen on ---
+jest.mock('expo-keep-awake', () => ({
+  __esModule: true,
+  useKeepAwake: jest.fn(),
+  activateKeepAwakeAsync: jest.fn(async () => undefined),
+  deactivateKeepAwake: jest.fn(async () => undefined),
+}));

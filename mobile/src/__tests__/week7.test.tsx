@@ -6,6 +6,7 @@ import type { PageItemOut } from '@/api/types';
 import { InMemoryPagesRepository, type InMemoryOutboxRepository } from '@/db';
 import { dropIndex, entryIndexAfterDrop, shiftFor } from '@/pages/drag';
 import { between } from '@/pages/lexorank';
+import { EMPTY_VIEW } from '@/pages/viewModel';
 import {
   loadEntries,
   movePage,
@@ -735,6 +736,10 @@ describe('on screen', () => {
 
   it('long press lifts the card; let go without moving: nothing moves', async () => {
     await setup({ offline: true });
+    // Week 11а: the sticker grid has no drag (template-screens 2.1); the list engine's drag is checked on the list view.
+    const look = { layout: 'stacks' as const, icon: page('notes').icon, view: EMPTY_VIEW };
+    await testPages.setLook(page('notes').id, look, false);
+    await act(async () => usePages.getState().setLook(page('notes').id, look));
     await open();
     await fireEvent(screen.getByTestId('record-n2'), 'longPress');
     expect(useView.getState().touching).toBe(true); // the assistant's changes wait meanwhile

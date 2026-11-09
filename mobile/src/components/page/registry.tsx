@@ -7,6 +7,9 @@ import type { Page } from '@/store/pages';
 
 import { ClassicView, SimpleListView } from './ClassicView';
 import { NotebookView } from './NotebookView';
+import { PlannerView } from './PlannerView';
+import { ShoppingView } from './ShoppingView';
+import { StickersView } from './StickersView';
 
 /**
  * What a tool gets from the frame (template-screens 3, «по краям всё одинаковое, в середине —
@@ -24,15 +27,22 @@ export type ViewProps = {
 export type ViewDef = { key: string; Component: ComponentType<ViewProps> };
 
 /**
- * Tools by `template:layout` (or just `layout`). Week 11 has «Своя страница» (the notebook) and
- * «Простой список» for all; the other tools keep their week 3–10 middle until their weeks
- * (11а: `notes:stacks`, `tasks:builtin:tasks`, `shopping:checklist`; 12–14: expenses, documents).
+ * Tools by `template:layout` (or just `layout`). Week 11: «Своя страница» (the notebook) and
+ * «Простой список» for all. Week 11а: the sticker wall, the day planner and the fridge list are the
+ * defaults (catalogue notes v4, tasks v3, shopping v3); the older middles stay as the other allowed
+ * views (`stacks`, `builtin:tasks`, `checklist`). Weeks 12–14: expenses, documents.
  * A new tool registers itself here and nothing around it changes.
  */
 const registry = new Map<string, ComponentType<ViewProps>>([
   ['custom:list', NotebookView],
   ['custom:checklist', NotebookView],
   ['custom:table', NotebookView],
+  ['notes:builtin:notes_board', StickersView],
+  ['tasks:builtin:planner', PlannerView],
+  ['shopping:builtin:shopping', ShoppingView],
+  ['notes:stacks', ClassicView],
+  ['tasks:builtin:tasks', ClassicView],
+  ['shopping:checklist', ClassicView],
   ['list', SimpleListView],
 ]);
 

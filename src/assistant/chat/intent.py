@@ -143,7 +143,7 @@ def save_text(text: str) -> str | None:
 class FastPath:
     """A phrase code handles without the chat model."""
 
-    tool: str  # reorder | trash_selected
+    tool: str  # reorder | trash_selected | color_topics
     how: str | None = None  # topics | newest | oldest
 
 
@@ -158,6 +158,13 @@ _TOPIC_FILLER = {"по", "темам", "теме", "группам", "запис
 _SORT_FILLER = {"по", "дате", "сначала", "новые", "старые", "сверху", "вверху", "наверху",
                 "первыми", "от", "новых", "старых", "к", "записи", "заметки", "все", "их",
                 "пожалуйста", "здесь", "тут", "на", "этой", "странице"}  # fmt: skip
+# week 11а: «раскрась по темам» on «Заметки» (set_view color_by=topic; proposal 2.1, 2.8)
+_PAINT = re.compile(_W + r"(?:раскрас(?:ь|ьте|ить)|покрас(?:ь|ьте|ить)|перекрас(?:ь|ьте|ить))"
+                    + _E, re.IGNORECASE)  # fmt: skip
+_BY_TOPIC = re.compile(r"по\s+тем(?:ам|е)" + _E, re.IGNORECASE)
+_PAINT_FILLER = {"по", "темам", "теме", "заметки", "стикеры", "все", "всё", "их", "пожалуйста",
+                 "мне", "здесь", "тут", "на", "этой", "странице", "разными", "цветами", "в",
+                 "цвета"}  # fmt: skip
 _DELETE_FILLER = {"это", "эту", "этот", "эти", "его", "ее", "пожалуйста", "запись", "заметку",
                   "осы", "мұны"}  # fmt: skip
 
@@ -171,6 +178,9 @@ def fast_path(text: str) -> FastPath | None:
             return FastPath("reorder", "oldest")
         if _NEWEST.search(norm):
             return FastPath("reorder", "newest")
+    if _PAINT.search(norm) and _BY_TOPIC.search(norm) and _only_words(norm, _PAINT,
+                                                                       _PAINT_FILLER):
+        return FastPath("color_topics")
     if _DELETE.search(norm) and _only_words(norm, _DELETE, _DELETE_FILLER):
         return FastPath("trash_selected")
     return None

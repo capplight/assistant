@@ -1,5 +1,5 @@
 import { groupTitles } from '@/api/endpoints';
-import type { PageItemOut, PageOut } from '@/api/types';
+import type { NoteColor, PageItemOut, PageOut } from '@/api/types';
 import { TEMPLATE_DEFAULT_TITLE, type IconKey, type Layout, type TemplateKey } from '@/pages/templates';
 import { parseView, viewFromServer, type PageView } from '@/pages/viewModel';
 import type { Page, PageCreatedBy } from '@/store/pages';
@@ -36,6 +36,8 @@ export type PageLink = {
   groupKey?: string | null;
   manualOrder: boolean;
   pinned: boolean;
+  /** Week 11а: the sticker's colour on this page («Заметки»); null/absent = none (white). */
+  color?: NoteColor | null;
   removedAt: string | null;
   seq: number;
   /**
@@ -184,6 +186,7 @@ export function linkFrom(out: PageItemOut): PageLink {
     groupKey: out.group_key ?? null,
     manualOrder: out.manual_order,
     pinned: out.pinned,
+    color: out.appearance?.color ?? null,
     removedAt: out.removed_at,
     seq: out.seq,
   };
@@ -424,6 +427,7 @@ type LinkRow = {
   group_key?: string | null;
   manual_order: number;
   pinned: number;
+  color?: string | null;
   removed_at: string | null;
   seq: number;
   pending?: number;
@@ -438,6 +442,7 @@ const linkFromRow = (r: LinkRow): PageLink => ({
   groupKey: r.group_key ?? null,
   manualOrder: !!r.manual_order,
   pinned: !!r.pinned,
+  color: (r.color as NoteColor | null | undefined) ?? null,
   removedAt: r.removed_at,
   seq: r.seq,
   pending: r.pending ?? 0,
@@ -572,8 +577,8 @@ export class SqlitePagesRepository implements PagesRepository {
     // The UNIQUE (page, item) index makes this an upsert by either key.
     await this.db.runAsync(
       `INSERT OR REPLACE INTO page_links
-         (id, page_server_id, item_server_id, position, group_key, manual_order, pinned, removed_at, seq, pending, server_row)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, page_server_id, item_server_id, position, group_key, manual_order, pinned, color, removed_at, seq, pending, server_row)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       l.id,
       l.pageServerId,
       l.itemServerId,
@@ -581,6 +586,7 @@ export class SqlitePagesRepository implements PagesRepository {
       l.groupKey ?? null,
       l.manualOrder ? 1 : 0,
       l.pinned ? 1 : 0,
+      l.color ?? null,
       l.removedAt,
       l.seq,
       pending,

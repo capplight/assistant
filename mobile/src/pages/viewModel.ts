@@ -16,6 +16,8 @@ export type PageView = {
    */
   sort: string | null;
   groupBy: string | null;
+  /** Week 11а `view_state.group_order`: the person's order of the groups («Покупки»: the shop walk). */
+  groupOrder?: string[];
   /** «Заметки» `view_state.board` → `board` (drawn from week 16а); null = the tool's default. */
   mode: string | null;
   /** Who set each setting: what the person set is theirs (the server decides «Да» with it). */
@@ -62,6 +64,7 @@ export function viewFromServer(out: PageOut): PageView {
   return {
     sort: sortFromServer(vs.sort, vs.sort_dir),
     groupBy: s(vs.group_by),
+    groupOrder: Array.isArray(vs.group_order) ? vs.group_order.filter((x): x is string => typeof x === 'string') : [],
     mode: vs.board === true ? 'board' : null,
     setBy,
     fieldPrefs: out.field_prefs ?? [],
@@ -139,6 +142,8 @@ export type ViewChange =
   | { kind: 'layout'; layout: Layout }
   | { kind: 'sort'; sort: string | null }
   | { kind: 'group'; groupBy: string | null }
+  /** Week 11а: the whole order of the groups after one moved (↑ ↓). */
+  | { kind: 'group_order'; order: string[]; moved: string }
   | { kind: 'icon'; icon: IconKey }
   | { kind: 'field_visible'; fieldId: string; visible: boolean }
   | { kind: 'field_move'; fieldId: string; step: -1 | 1 }
@@ -188,6 +193,11 @@ export function applyChange(
     case 'group':
       if (change.groupBy === view.groupBy) return { error: 'nothing' };
       return { look: { ...look, view: { ...view, groupBy: change.groupBy, setBy: mine('group_by'), customized: true } } };
+    case 'group_order': {
+      const was = view.groupOrder ?? [];
+      if (was.length === change.order.length && was.every((x, i) => x === change.order[i])) return { error: 'nothing' };
+      return { look: { ...look, view: { ...view, groupOrder: change.order, setBy: mine('group_order'), customized: true } } };
+    }
     case 'icon':
       if (change.icon === look.icon) return { error: 'nothing' };
       return { look: { ...look, icon: change.icon, view: { ...view, setBy: mine('icon') } } };
@@ -251,6 +261,8 @@ export function viewBody(change: ViewChange, after: Look): Record<string, unknow
       return sortToServer(after.view.sort);
     case 'group':
       return { group_by: after.view.groupBy };
+    case 'group_order':
+      return { group_order: after.view.groupOrder ?? [] };
     case 'field_visible':
     case 'field_move':
       return { fields: prefsBody(after.view) };
@@ -270,6 +282,7 @@ export function restoreBody(look: Look): Record<string, unknown> {
     icon: look.icon,
     ...sortToServer(look.view.sort),
     group_by: look.view.groupBy,
+    group_order: (look.view.groupOrder ?? []).length > 0 ? look.view.groupOrder : null,
     ...(look.view.fieldPrefs.length > 0 ? { fields: prefsBody(look.view) } : {}),
   };
 }

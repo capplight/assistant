@@ -50,7 +50,14 @@ from assistant.db.models_pages import (
     ScreenItem,
 )
 from assistant.db.models_v2 import RecordKind, RecordSource, RecordStatus
-from assistant.pages import create_page, fill_page, latest_template, lock_user, place_item
+from assistant.pages import (
+    create_page,
+    fill_page,
+    latest_template,
+    lock_user,
+    place_item,
+    timed_items,
+)
 from assistant.pages import rebalance_page as _rebalance
 from assistant.pages import view as views
 from assistant.pages.view import ViewChange
@@ -207,6 +214,8 @@ class SetViewArgs(BaseModel):
                   "other"] | None
     color: Literal["yellow", "pink", "green", "blue", "peach", "white", "none"] | None
     color_records: list[str] | None
+    color_by: Literal["topic"] | None
+    group_order: list[str] | None
     pin_records: list[str] | None
     unpin_records: list[str] | None
     reset: bool
@@ -223,7 +232,10 @@ SET_VIEW = ToolSpec(
         "period («Расходы»). today_tile: show the page on «Сегодня». show_fields / hide_fields / "
         "fields_first: field names. add_field: a new own field (≤5). rename_field, "
         "remove_field: own fields. title, icon: the page's name and icon. color + "
-        "color_records (refs, or [\"all\"]): sticker colour on «Заметки». pin_records / "
+        "color_records (refs, or [\"all\"]): sticker colour on «Заметки». color_by: `topic` = "
+        "«раскрась по темам» on «Заметки» (code finds the topics and picks the colours; leave "
+        "color null). group_order: names of groups in the order the person said («сначала "
+        "аптека, потом Магнум»). pin_records / "
         "unpin_records: refs. reset: back to the template («Вернуть как было»). Leave null "
         "what the person did not ask to change. Code asks the person when something they set "
         "by hand would change."
@@ -905,6 +917,7 @@ async def apply_reorder(env: Any, plan: dict[str, Any], *, include_manual: bool)
             await _rebalance(s, page.id)
             await s.commit()
             rows = await _page_rows(s, m.user_id, page.id)
+        timed = await timed_items(s, page)  # «Дела»: rows with a time stand by it (week 11а)
     planned_at = datetime.fromisoformat(plan["planned_at"])
     order: list[int] = [int(pk) for pk in plan["order"]]
     by_pk = {r.pk: r for r in rows}
@@ -919,6 +932,8 @@ async def apply_reorder(env: Any, plan: dict[str, Any], *, include_manual: bool)
             continue
         if r.updated_by == "user" and r.updated_at > planned_at:
             moved_since += 1  # the person moved it while we were thinking: theirs wins
+            continue
+        if r.pk in timed:
             continue
         if r.pinned or (r.manual and not include_manual):
             kept_mine.append(r)
@@ -1124,6 +1139,8 @@ def _view_change(args: SetViewArgs) -> ViewChange:
         view["period"] = args.period
     if args.today_tile:
         view["today_tile"] = args.today_tile
+    if args.group_order:
+        view["group_order"] = list(args.group_order)
     return ViewChange(
         layout=args.layout, view=view, title=args.title, icon=args.icon,
         show=list(args.show_fields or []), hide=list(args.hide_fields or []),
@@ -1147,9 +1164,12 @@ VIEW_ERRORS = {
 
 
 async def tool_set_view(env: Any, args: SetViewArgs, *, confirm_manual: bool | None = None,
-                        confirmed: bool = False, _asked: bool = False) -> Result:  # fmt: skip
+                        confirmed: bool = False, _asked: bool = False,
+                        _topics: dict[str, Any] | None = None) -> Result:  # fmt: skip
     """The assistant changes a view (proposal 2.8): at once with «Отменить», or asks «Да» for
-    what the person set by hand, >150 records, removing an own field and «Вернуть как было»."""
+    what the person set by hand, >150 records, removing an own field and «Вернуть как было».
+    `_topics`: the colours «раскрась по темам» already chose (after a «Да»: no second model
+    call)."""
     m: MutationState = env.mut
     if not _asked and not asks_view(m.phrase):
         return _err("a page's view changes only when the person asks for it in their words")
@@ -1161,6 +1181,14 @@ async def tool_set_view(env: Any, args: SetViewArgs, *, confirm_manual: bool | N
     if page.template_key == "today":
         return _err(VIEW_ERRORS["page_system"])
     saved = args.model_dump()
+    topics = _topics
+    if args.color_by == "topic" and topics is None:
+        if page.template_key != "notes":
+            return _err("colours are for «Заметки» only: tell the person")
+        got = await _topic_colors(env, page, confirmed=confirmed, saved=saved)
+        if isinstance(got, Result):
+            return got
+        topics = got
     change = _view_change(args)
     async with env.sessionmaker() as s:
         screen = await s.scalar(select(Screen).where(Screen.id == page.pk,
@@ -1177,6 +1205,12 @@ async def tool_set_view(env: Any, args: SetViewArgs, *, confirm_manual: bool | N
             if isinstance(got, str):
                 return _err(got)
         change.colors = {i: color for i in colored}  # type: ignore[union-attr]
+        if topics is not None:
+            change.colors = dict(topics["colors"])
+            if not change.colors and change.empty():
+                m.note = "Здесь уже так раскрашено."
+                return Result(_json({"done": False, "said": m.note}), False, "Раскрашиваю…",
+                              str(page.id))  # fmt: skip
         change.pins = {**{i: True for i in pins}, **{i: False for i in unpins}}  # type: ignore[union-attr]
         if change.empty():
             return _err("nothing to change: say what the person asked for")
@@ -1192,7 +1226,8 @@ async def tool_set_view(env: Any, args: SetViewArgs, *, confirm_manual: bool | N
         await s.rollback()  # the plan only read: the change is made by _commit
     if ask is not None:
         stored = {"tool": "set_view", "page": str(page.id), "args": saved,
-                  "confirmed": confirmed, "confirm_manual": confirm_manual, "ask": ask}
+                  "confirmed": confirmed, "confirm_manual": confirm_manual, "ask": ask,
+                  **({"topics": topics} if topics is not None else {})}
         if ask == "manual":
             _propose(m, kind="manual", question=asked,
                      options=[{"id": "yes", "label": "Да", "kind": "yes", "item_id": None},
@@ -1209,6 +1244,8 @@ async def tool_set_view(env: Any, args: SetViewArgs, *, confirm_manual: bool | N
         m.note = ("Ваше оставил как есть." if plan.kept_mine else "Здесь уже так.")
         return Result(_json({"done": False, "said": m.note}), False, "Меняю вид…", str(page.id))
     sentence = plan.sentence
+    if topics is not None:
+        sentence = _topics_sentence(topics, plan.records)
     if plan.kept_mine:
         sentence += " Ваше оставил как есть."
     if args.page and page is not m.page:
@@ -1244,7 +1281,101 @@ async def _rerun_view(env: Any, proposal: dict[str, Any], plan: dict[str, Any],
             return None
         confirmed = True
     return await tool_set_view(env, args, confirm_manual=manual, confirmed=confirmed,
-                               _asked=True)  # fmt: skip
+                               _asked=True, _topics=plan.get("topics"))  # fmt: skip
+
+
+# --- «раскрась по темам» (week 11а, proposal 2.1, 2.8) ---
+
+TOPIC_COLORS = ("yellow", "green", "blue", "pink", "peach")  # white = no colour, never a topic
+COLOR_WORDS = {"yellow": "жёлтый", "green": "зелёный", "blue": "голубой", "pink": "розовый",
+               "peach": "персиковый"}  # fmt: skip
+LEGEND_TOPICS = 5
+RU_STICKERS = ("стикер", "стикера", "стикеров")
+
+
+def color_topics_args() -> SetViewArgs:
+    """The fast path «раскрась по темам» on the current page."""
+    return SetViewArgs.model_validate({**{k: None for k in SetViewArgs.model_fields},
+                                       "color_by": "topic", "reset": False})  # fmt: skip
+
+
+def topic_palette(titles: list[str]) -> dict[str, str | None]:
+    """Topic -> colour: in the given order (biggest first), the five colours in turn;
+    «Остальное» gets none."""
+    out: dict[str, str | None] = {}
+    i = 0
+    for t in titles:
+        if t == OTHER_GROUP:
+            out[t] = None
+            continue
+        out[t] = TOPIC_COLORS[i % len(TOPIC_COLORS)]
+        i += 1
+    return out
+
+
+async def _topic_colors(env: Any, page: PageInfo, *, confirmed: bool,
+                        saved: dict[str, Any]) -> dict[str, Any] | Result:  # fmt: skip
+    """The colour of every sticker by its topic. Topics are the page's piles / groups when it
+    has them («Разложи», stacks: a pile is one colour), else the light model groups the notes
+    (PAGE_GROUP; the record lines are untrusted data). Code picks the colours. A sticker with no
+    topic loses only a colour the assistant gave it; the plan asks «Да» for colours set by hand.
+    No DB session is open during the model call."""
+    m: MutationState = env.mut
+    async with env.sessionmaker() as s:
+        rows = await _page_rows(s, m.user_id, page.pk)
+        vs = await s.scalar(select(Screen.view_state).where(Screen.id == page.pk)) or {}
+        appear = {pk: a for pk, a in (await s.execute(
+            select(ScreenItem.item_id, ScreenItem.appearance)
+            .where(ScreenItem.screen_id == page.pk))).all()}  # fmt: skip
+    if len(rows) < 2:
+        m.note = "Здесь пока нечего раскрашивать."
+        return Result(_json({"done": False, "said": m.note}), False, "Раскрашиваю…", str(page.id))
+    n = len(rows)
+    if n > REORDER_ASK_ABOVE and not confirmed:
+        args = {**saved, "page": None}
+        _propose(m, kind="count", question=f"Раскрасить {count_words(n, RU_NOTES)}?",
+                 options=YES_NO, count=n,
+                 plan={"tool": "set_view", "page": str(page.id), "args": args,
+                       "confirmed": False, "confirm_manual": None, "ask": "count"})  # fmt: skip
+        return Result(_json({"asked": True, "question": m.proposal["question"]}), False,  # type: ignore[index]
+                      "Уточняю…", str(page.id))  # fmt: skip
+    grouped = {r.pk: r.group_key for r in rows if r.group_key}
+    group_of: dict[int, str]
+    if grouped:
+        size: dict[str, int] = {}
+        for g in grouped.values():
+            size[g] = size.get(g, 0) + 1
+        named = [g for g in vs.get("groups") or [] if g in size]
+        rest = sorted((g for g in size if g not in named), key=lambda g: -size[g])
+        titles = [*named, *rest]
+        group_of = {pk: g for pk, g in grouped.items() if g is not None}
+    else:
+        if n > REORDER_ASK_ABOVE and await _big_reorders_today(env) >= m.big_reorders_per_day:
+            m.note = "На сегодня больших перестановок достаточно — завтра смогу ещё."
+            return Result(_json({"done": False, "said": m.note}), False, "Раскрашиваю…")
+        m.emit("status", {"stage": "arranging",
+                          "text": f"Раскрашиваю… {count_words(n, RU_NOTES)}"})  # fmt: skip
+        grouping = await page_group(env, rows)
+        if n > REORDER_ASK_ABOVE:
+            await _count_big_reorder(env)
+        titles, group_of = grouping.titles, grouping.group_of
+    palette = topic_palette(titles)
+    colors: dict[str, str | None] = {}
+    for r in rows:
+        topic = group_of.get(r.pk)
+        color = palette.get(topic) if topic is not None else None
+        app = appear.get(r.pk) or {}
+        if color is None and app.get("color_set_by") != "agent":
+            continue  # no topic: a colour the person (or nobody) set stays
+        colors[str(r.item_id)] = color
+    legend = [[t, palette[t]] for t in titles if palette.get(t)][:LEGEND_TOPICS]
+    return {"colors": colors, "legend": legend}
+
+
+def _topics_sentence(topics: dict[str, Any], records: int) -> str:
+    legend = ", ".join(f"{t} — {COLOR_WORDS.get(c, c)}" for t, c in topics.get("legend") or [])
+    head = f"Раскрасил {count_words(records, RU_STICKERS)} по темам"
+    return head + (f": {legend}." if legend else ".")
 
 
 RUNNERS: dict[str, tuple[type[BaseModel], Callable[..., Any], str]] = {

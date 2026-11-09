@@ -42,6 +42,8 @@ export const radius = {
   input: 12,
   chip: 12,
   sheet: 20,
+  /** Week 11а: a sticker (template-screens 2.1). */
+  note: 4,
   round: 9999,
 } as const;
 

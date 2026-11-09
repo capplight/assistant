@@ -125,7 +125,7 @@ export function MissedList({ rows, now }: { rows: MissedRow[]; now: number }) {
   );
 }
 
-async function removeReminder(
+export async function removeReminder(
   id: string,
   title: string,
   t: (k: string, o?: Record<string, unknown>) => string,

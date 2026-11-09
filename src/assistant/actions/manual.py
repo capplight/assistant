@@ -27,7 +27,7 @@ from assistant.db.models import Item
 from assistant.db.models_actions import Action, ActionKind, Initiator
 from assistant.db.models_habits import HabitKind, HabitStatus, UserHabit
 from assistant.db.models_pages import Screen, ScreenItem, ScreenKind, UpdatedBy
-from assistant.pages import habits, lexorank, lock_user, order, rebalance_page
+from assistant.pages import habits, lexorank, lock_user, order, rebalance_page, timed_items
 
 KEEP = object()  # "leave group_key as it is"
 
@@ -162,6 +162,9 @@ async def move_row(session: AsyncSession, user_id: int, *, page_id: uuid.UUID,
                   touched=[page.id])  # fmt: skip
     if (prior := await _repeat(session, user_id, client_id)) is not None:
         base.done, base.repeated, base.action = True, True, prior
+        return base
+    if await timed_items(session, page, [item_pk]):  # type: ignore[list-item]
+        base.reason = "timed"  # «Дела»: its time sets its place (week 11а, proposal 2.3)
         return base
     stamp = order.Stamp.of(client_ts or now, client_id, now)
     current = order.stamp_of(link.moved_ts, link.moved_client_id)

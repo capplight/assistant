@@ -265,7 +265,7 @@ describe('screens', () => {
     expect(screen.getByTestId(`task-${t.id}`).props.accessibilityState).toEqual({ checked: false });
     await fireEvent.press(screen.getByTestId(`task-${t.id}`));
     await settle(() => screen.queryByTestId(`task-return-${t.id}`) !== null);
-    expect(screen.getByTestId('group-done')).toHaveTextContent('Куплено');
+    expect(screen.getByTestId('group-done')).toHaveTextContent('Куплено (1)'); // week 11а: «Куплено (N)»
     await fireEvent.press(screen.getByTestId(`task-return-${t.id}`));
     await settle(() => screen.queryByTestId(`task-return-${t.id}`) === null);
   });
@@ -486,6 +486,9 @@ describe('final contract (week 9 backend)', () => {
     const f = fireOut({ id: 'f8', reminder_id: 'r8', key: 'r8:k:0:0', occurrence_at: iso(due), fire_at: iso(due), offset_min: 0, snooze_n: 0, state: 'planned' })!;
     useAlarms.setState({ reminders: { r8: r }, fires: { [f.key]: f } });
     await renderRouter(APP_DIR, { initialUrl: `/page/${page('tasks').id}` });
+    // Week 11а planner: «Удалить» is in the reminder's «⋯» (with «Перенести время»).
+    await settle(() => screen.queryByTestId(`rem-menu-${f.key}`) !== null);
+    await fireEvent.press(screen.getByTestId(`rem-menu-${f.key}`));
     await settle(() => screen.queryByTestId(`rem-delete-${f.key}`) !== null);
     await fireEvent.press(screen.getByTestId(`rem-delete-${f.key}`));
     await settle(() => screen.queryByTestId(`rem-${f.key}`) === null);
