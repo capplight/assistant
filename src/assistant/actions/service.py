@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from assistant.actions import engine
@@ -134,6 +134,12 @@ async def undo(session: AsyncSession, user_id: int, action_id: uuid.UUID, *, now
         action.payload = {**action.payload, "reverted": sorted(reverted)}
         if all_items and all_items <= reverted:
             action.undone_at = now
+    if action.undone_at is not None:
+        # rows whose status is read from this action («undone»): a new `seq`, so /v1/sync
+        # brings them again (week 13 statement plans and expense repeats, 0020)
+        for table in ("statement_imports", "expense_duplicates"):
+            await session.execute(text(f"UPDATE {table} SET user_id = user_id "
+                                       "WHERE action_id = :a"), {"a": action.id})  # fmt: skip
     return UndoResult(action, undo_action, out.skipped > 0, False, out.pages, out.items)
 
 

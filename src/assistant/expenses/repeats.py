@@ -154,7 +154,7 @@ async def dup_dicts(session: AsyncSession, rows: list[ExpenseDuplicate]) -> list
     return [{"id": r.public_id, "status": await status_of(session, r), "keep": dicts[r.keep_id],
              "other": dicts[r.other_id], "text_ru": TEXT.get(r.reason, TEXT["same_day"]),
              "action_id": actions.get(r.action_id or 0), "created_at": r.created_at,
-             "decided_at": r.decided_at} for r in rows]  # fmt: skip
+             "decided_at": r.decided_at, "seq": r.seq} for r in rows]  # fmt: skip
 
 
 async def is_live(session: AsyncSession, entry: ExpenseEntry) -> bool:
@@ -269,13 +269,41 @@ async def merge(session: AsyncSession, user_id: int, dup: ExpenseDuplicate, *,
     return Merged(dup, a, action)
 
 
-async def dismiss(session: AsyncSession, dup: ExpenseDuplicate, now: datetime) -> None:
+async def dismiss(session: AsyncSession, user_id: int, dup: ExpenseDuplicate, *, now: datetime,
+                  client_id: uuid.UUID | None = None) -> tuple[Action | None, bool]:  # fmt: skip
+    """«Это разные»: one action (`dismiss_expenses`) with «Отменить» (the pair is suggested
+    again). Returns (action, repeated)."""
+    from assistant.expenses.service import label
+
+    if client_id is not None:
+        first = await session.scalar(select(Action).where(Action.user_id == user_id,
+                                                          Action.client_id == client_id))
+        if first is not None:
+            return first, True
     if dup.status == DuplicateStatus.DISMISSED:
-        return
+        act = await session.get(Action, dup.action_id) if dup.action_id else None
+        return act, True
     if dup.status != DuplicateStatus.SUGGESTED:
         raise RepeatError(409, "duplicate_closed")
-    dup.status, dup.decided_at = DuplicateStatus.DISMISSED, now
+    op = {"op": "set_status", "entity": "expense_duplicates", "id": str(dup.public_id),
+          "value": DuplicateStatus.DISMISSED}
+    out = await engine.apply(session, user_id, [op], by=Initiator.USER, check=False, now=now)
+    a = await session.get(ExpenseEntry, dup.keep_id)
+    item = await session.get(Item, a.item_id) if a else None
+    changes = []
+    if a is not None and item is not None:
+        cat = await session.get(ExpenseCategory, a.category_id) if a.category_id else None
+        changes.append({"item_id": str(item.public_id), "expense_id": str(a.public_id),
+                        "title": label(a.note, a.payee, cat), "kind": "keep_apart",
+                        "page_id": None, "text": "Оставил траты отдельно"})  # fmt: skip
+    action = await record(
+        session, user_id=user_id, kind=ActionKind.DISMISS_EXPENSES, initiated_by=Initiator.USER,
+        summary={"ru": "Оставил траты отдельно", "kk": None}, changes=changes,
+        inverse=out.inverse, now=now, client_id=client_id,
+    )  # fmt: skip
+    dup.action_id = action.id
     await session.flush()
+    return action, False
 
 
 __all__ = ["Merged", "RepeatError", "dismiss", "dup_dicts", "get", "is_pair", "merge",

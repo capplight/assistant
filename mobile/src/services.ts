@@ -25,6 +25,7 @@ import i18n from '@/i18n';
 import { applySyncExtras } from '@/today/service';
 import { dedupSink } from '@/dedup/service';
 import { expensesSink } from '@/expenses/sink';
+import { kpSink } from '@/kp/service';
 
 /**
  * Composition root: one API client, one sync engine, one capture service per app process.
@@ -182,6 +183,7 @@ export function getSyncEngine(): Promise<SyncEngine> {
         dedup: dedupSink,
         views: viewSink,
         expenses: expensesSink,
+        kp: kpSink,
       }))();
   }
   return engine;

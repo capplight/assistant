@@ -214,6 +214,37 @@ class Settings(BaseSettings):
     # The single label on generated content (R-06, spec 5.9), until the lawyer's opinion.
     label_ai_generated: str = "Подготовил помощник (ИИ) по вашим записям — проверьте"
 
+    # КП (week 14, spec 6.7, contract docs/api/kp.md). Sums, VAT and the sum in words are code
+    # only (kp/calc.py, kp/words.py). VAT rate by date (Ф-18, founder 2026-11-10: 16% confirmed;
+    # the rules for an ИП without VAT are still open, so «без НДС» stays a mode). A new rate is a
+    # new row with its own `from`. Env KP_VAT_RATES='[{"rate": "16.00", "from": "2026-01-01"}]'.
+    kp_vat_rates: list[dict[str, str]] = [{"rate": "16.00", "from": "2026-01-01"}]
+    kp_vat_default_mode: str = "included"  # included («в сумме») | on_top («сверху») | none
+    kp_vat_rounding: str = "on_total"  # on_total | per_line
+    # Ф-17 (proposal, pending the founder): the PDF is not made while one of these is empty.
+    # Keys: number, date, validity, seller.name, seller.bin_iin, seller.address, seller.bank,
+    # buyer.name, buyer.bin, items.unit, total, vat, amount_words, signature_stamp (= printed when
+    # uploaded; never blocks). Env KP_REQUIRED_FIELDS='["number", ...]'.
+    kp_required_fields: list[str] = ["number", "date", "validity", "seller.name", "seller.bin_iin",
+                                     "buyer.name", "items.unit", "total", "vat", "amount_words",
+                                     "signature_stamp"]  # fmt: skip
+    kp_words_langs: list[str] = ["ru"]  # the sum in words on the PDF: ru, kk or both
+    kp_number_prefix: str = "КП"  # «КП-2026-014»
+    kp_validity_days: int = 10
+    # Spec 5.9: the visible «ИИ» line on the PDF waits for the lawyer; metadata always carry it.
+    kp_visible_ai_label: bool = False
+    kp_ai_metadata: str = "Подготовлено с помощью ИИ"
+    kp_keep_sent_render: bool = True  # week 15 (Ф-5, R-25): the sent version's PDF is kept
+    # US-12: <= 5 new КП a day on the strong model, then «продолжу завтра» before a new one starts.
+    kp_per_day: int = 5
+    kp_single_pass_positions: int = 60  # spec 6.7 step 1: up to 60 positions in one pass
+    kp_single_pass_chars: int = 60_000  # ~20 pages of text
+    kp_chunk_positions: int = 40  # bigger ТЗ: parts of 40 with «Обработал 120 из 240»
+    kp_max_positions: int = 600
+    kp_match_candidates: int = 5  # price candidates per position the model may choose from
+    # AES-256-GCM key for БИН/ИИН and bank details of the company profile (base64 of 32 bytes).
+    kp_field_key: SecretStr = Field(default=SecretStr(""))
+
 
 @lru_cache
 def get_settings() -> Settings:

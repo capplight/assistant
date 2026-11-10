@@ -137,6 +137,32 @@ import type {
   ImportStatus,
   PendingActionOut,
   PendingConfirmOut,
+  CompanyBankOut,
+  CompanyProfileIn,
+  CompanyProfileOut,
+  CompanyProfileWriteOut,
+  DocumentOut,
+  DocumentStatus,
+  DocumentStatusIn,
+  KpCreateIn,
+  KpFullOut,
+  DocumentStatusOut,
+  DealStatus,
+  KpDataOut,
+  KpItemOut,
+  KpPatchIn,
+  KpRenderOut,
+  KpTotalsOut,
+  KpVatMode,
+  KpVersionOut,
+  PriceItemOut,
+  PriceItemPatchIn,
+  PriceItemsIn,
+  PriceItemsOut,
+  PastPriceOut,
+  PriceItemWriteOut,
+  PriceSearchOut,
+  UploadRole,
 } from './types';
 
 /** Reads a local file and PUTs it to a presigned URL. Injected so tests don't touch the filesystem. */
@@ -1043,6 +1069,233 @@ export function importOut(v: unknown): ImportOut | null {
 
 export const importsOf = (v: unknown) => arr(v).map(importOut).filter((x): x is ImportOut => x !== null);
 
+// --- week 14: КП (docs/api/kp.md) ---
+
+const VAT_MODES = new Set<string>(['included', 'on_top', 'none']);
+const DOC_STATES = new Set<string>(['extracting', 'draft', 'ready', 'sent', 'accepted', 'declined', 'archived', 'failed']);
+const vatMode = (v: unknown, d: KpVatMode = 'included'): KpVatMode => (typeof v === 'string' && VAT_MODES.has(v) ? (v as KpVatMode) : d);
+/** A decimal as text; a JSON number is taken as its plain text (never rounded here). */
+const decText = (v: unknown): string | null =>
+  typeof v === 'string' && v.trim() !== '' ? v.trim() : typeof v === 'number' && Number.isFinite(v) ? String(v) : null;
+
+function bankOut(v: unknown): CompanyBankOut {
+  const o = obj(v) ?? {};
+  return { iban: str(o.iban), bik: str(o.bik), bank: str(o.bank), kbe: str(o.kbe) };
+}
+
+export function companyProfileOut(v: unknown): CompanyProfileOut {
+  const o = obj(obj(v)?.profile ?? v) ?? {};
+  const c = obj(o.contacts) ?? {};
+  const name = str(o.name);
+  const bin = str(o.bin_iin);
+  return {
+    name,
+    legal_form: str(o.legal_form),
+    bin_iin: bin,
+    address: str(o.address),
+    bank: bankOut(o.bank),
+    contacts: { phone: str(c.phone), email: str(c.email), website: str(c.website) },
+    vat_payer: typeof o.vat_payer === 'boolean' ? o.vat_payer : null,
+    logo_file_id: str(o.logo_file_id),
+    signature_file_id: str(o.signature_file_id),
+    stamp_file_id: str(o.stamp_file_id),
+    review_fields: strs(o.review_fields),
+    version: num(o.version, 0),
+    complete: typeof o.complete === 'boolean' ? o.complete : !!(name && bin),
+    updated_at: str(o.updated_at),
+  };
+}
+
+export function priceItemOut(v: unknown): PriceItemOut | null {
+  const o = obj(v);
+  const id = o && str(o.id);
+  const name = o && str(o.name);
+  const price = o && decText(o.price);
+  if (!o || !id || !name || !price) return null;
+  return {
+    id,
+    client_id: str(o.client_id),
+    price_list_id: str(o.price_list_id),
+    name,
+    unit: str(o.unit),
+    price,
+    currency: (str(o.currency) ?? 'KZT').toUpperCase(),
+    review: strs(o.review_fields).length > 0,
+    source_ref: str(o.source_ref),
+    updated_at: str(o.updated_at),
+    deleted_at: str(o.deleted_at),
+  };
+}
+
+export const priceItemsOf = (v: unknown) => arr(v).map(priceItemOut).filter((x): x is PriceItemOut => x !== null);
+
+export function pastPriceOut(v: unknown): PastPriceOut | null {
+  const o = obj(v);
+  const name = o && str(o.name);
+  const price = o && decText(o.price);
+  if (!o || !name || !price) return null;
+  return {
+    name,
+    unit: str(o.unit),
+    price,
+    currency: (str(o.currency) ?? 'KZT').toUpperCase(),
+    price_source: str(o.price_source) ?? '',
+    client: str(o.client),
+    created_at: str(o.created_at),
+  };
+}
+
+function kpItemOut(v: unknown, i: number): KpItemOut | null {
+  const o = obj(v);
+  const name = o && str(o.name);
+  if (!o || !name) return null;
+  const price = decText(o.unit_price);
+  return {
+    id: str(o.id) ?? `i${i + 1}`,
+    name,
+    unit: str(o.unit),
+    qty: decText(o.qty),
+    unit_price: price,
+    discount_pct: decText(o.discount_pct) ?? '0',
+    price_source: str(o.price_source) ?? (price ? 'manual' : 'missing'),
+    price_label: str(o.price_label) || null,
+    price_review: o.price_review === true,
+    matched_name: str(o.matched_name),
+    source_ref: str(o.source_ref),
+    review_fields: strs(o.review_fields),
+    amount: decText(o.amount),
+  };
+}
+
+function kpTotalsOut(v: unknown): KpTotalsOut | null {
+  const o = obj(v);
+  const total = o && decText(o.total);
+  if (!o || !total) return null;
+  return {
+    lines_sum: decText(o.lines_sum) ?? total,
+    discount_total: decText(o.discount_total) ?? '0.00',
+    amount: decText(o.amount) ?? total,
+    net: decText(o.net) ?? total,
+    vat: decText(o.vat) ?? '0.00',
+    total,
+    vat_rate: decText(o.vat_rate),
+    rounding: o.rounding === 'per_line' ? 'per_line' : 'on_total',
+    priced: num(o.priced),
+    missing: num(o.missing),
+    complete: o.complete === true,
+    calc_version: str(o.calc_version),
+  };
+}
+
+/** `version_dict`: `data` (no client, no items), `client`, `items`, `totals`, `vat_rate`, `vat_mode`. */
+export function kpVersionOut(v: unknown): KpVersionOut | null {
+  const o = obj(v);
+  if (!o) return null;
+  const d = obj(o.data) ?? {};
+  const client = obj(o.client) ?? obj(d.client) ?? {};
+  const vat = obj(d.vat) ?? {};
+  const terms = obj(d.terms) ?? {};
+  const totals = kpTotalsOut(o.totals);
+  const ps = obj(o.price_summary) ?? {};
+  const data: KpDataOut = {
+    number: str(d.number),
+    date: str(d.date),
+    currency: (str(d.currency) ?? 'KZT').toUpperCase(),
+    client: { name: str(client.name), bin: str(client.bin), contact: str(client.contact), review: strs(client.review) },
+    vat: {
+      mode: vatMode(vat.mode ?? o.vat_mode),
+      rate: decText(vat.rate) ?? decText(o.vat_rate) ?? totals?.vat_rate ?? null,
+      rounding: (vat.rounding ?? totals?.rounding) === 'per_line' ? 'per_line' : 'on_total',
+    },
+    items: arr(o.items ?? d.items)
+      .map(kpItemOut)
+      .filter((x): x is KpItemOut => x !== null),
+    discount_total_pct: decText(d.discount_total_pct) ?? '0',
+    terms: Object.fromEntries(
+      Object.entries(terms).filter(([, x]) => typeof x === 'string' || typeof x === 'number' || x === null),
+    ) as KpDataOut['terms'],
+  };
+  return {
+    n: num(o.n, 1),
+    author: str(o.author) ?? 'initial',
+    created_at: str(o.created_at),
+    data,
+    totals,
+    changed_paths: strs(o.changed_paths),
+    valid_until: str(o.valid_until),
+    price_summary: { price_list: num(ps.price_list), past_kp: num(ps.past_kp), manual: num(ps.manual), missing: num(ps.missing) },
+    missing_required: strs(o.missing_required),
+    sent_at: str(o.sent_at),
+    ai_generated: o.ai_generated !== false,
+  };
+}
+
+const DEALS = new Set<string>(['draft', 'sent', 'seen', 'accepted', 'declined']);
+
+export function documentOut(v: unknown): DocumentOut | null {
+  const o = obj(v);
+  const id = o && str(o.id);
+  if (!o || !id) return null;
+  const status = str(o.status);
+  const deal = str(o.deal_status);
+  const progress = obj(o.progress);
+  const client = obj(o.client);
+  return {
+    id,
+    client_id: str(o.client_id),
+    item_id: str(o.item_id),
+    kind: str(o.kind) ?? 'kp',
+    title: str(o.title),
+    number: str(o.number),
+    date: str(o.date),
+    client_name: str(client?.name),
+    currency: (str(o.currency) ?? 'KZT').toUpperCase(),
+    total: decText(o.total),
+    missing_prices: num(o.missing_prices),
+    lines: num(o.lines),
+    status: (status && DOC_STATES.has(status) ? status : 'draft') as DocumentStatus,
+    deal_status: (deal && DEALS.has(deal) ? deal : 'draft') as DealStatus,
+    current_version_n: typeof o.current_version_n === 'number' ? o.current_version_n : null,
+    sent_version_n: typeof o.sent_version_n === 'number' ? o.sent_version_n : null,
+    progress:
+      progress && Object.keys(progress).length > 0
+        ? { state: str(progress.state), done: num(progress.done), total: num(progress.total), message: str(progress.message), partial: progress.partial === true }
+        : null,
+    error: str(o.error),
+    ai_generated: o.ai_generated !== false,
+    row_version: num(o.version, 1),
+    seq: num(o.seq),
+    created_at: str(o.created_at),
+    updated_at: str(o.updated_at),
+    deleted_at: str(o.deleted_at),
+  };
+}
+
+export const documentsOf = (v: unknown) => arr(v).map(documentOut).filter((x): x is DocumentOut => x !== null);
+
+export function kpFullOut(v: unknown): KpFullOut {
+  const o = obj(v) ?? {};
+  const document = documentOut(o.document);
+  if (!document) throw new ApiError(502, { code: 'bad_answer' });
+  const offers = arr(o.price_offers).flatMap((x) => {
+    const p = obj(x);
+    const name = p && str(p.name);
+    const price = p && decText(p.price);
+    return p && name && price
+      ? [{ line_id: str(p.line_id) ?? '', name, unit: str(p.unit), price, price_item_id: str(p.price_item_id), old_price: decText(p.old_price) }]
+      : [];
+  });
+  return {
+    document,
+    version: kpVersionOut(o.version),
+    needs_profile: o.needs_profile === true,
+    action: actionOut(o.action),
+    change_text: str(o.change_text),
+    price_offers: offers,
+    repeated: o.repeated === true,
+  };
+}
+
 /** Typed /v1 endpoints. The ONLY place that knows paths and request bodies. */
 // --- week 12: «Расходы» (docs/api/expenses.md) ---
 
@@ -1350,14 +1603,31 @@ export class Api {
    * Full upload of one local file. Safe to repeat after any failure: the same `clientId` returns
    * the same upload (fresh URL while pending; `put: null` once completed).
    */
-  async uploadFile(f: { clientId: string; uri: string; mime: string; bytes: number; sha256: string }): Promise<string> {
-    const up = await this.createUpload({ client_id: f.clientId, mime: f.mime, bytes: f.bytes, sha256: f.sha256 });
-    if (up.state === 'completed' || !up.put) return up.id;
+  async uploadFile(f: { clientId: string; uri: string; mime: string; bytes: number; sha256: string; role?: UploadRole }): Promise<string> {
+    return (await this.uploadFull(f)).id;
+  }
+
+  /** Week 14: a logo / signature / stamp is named on PUT /company-profile by its `file_id`. */
+  async uploadFileId(f: { clientId: string; uri: string; mime: string; bytes: number; sha256: string; role?: UploadRole }): Promise<string> {
+    const out = await this.uploadFull(f);
+    if (!out.file_id) throw new ApiError(409, { code: 'upload_mismatch' });
+    return out.file_id;
+  }
+
+  private async uploadFull(f: { clientId: string; uri: string; mime: string; bytes: number; sha256: string; role?: UploadRole }): Promise<UploadOut> {
+    const up = await this.createUpload({
+      client_id: f.clientId,
+      mime: f.mime,
+      bytes: f.bytes,
+      sha256: f.sha256,
+      ...(f.role && f.role !== 'original' ? { role: f.role } : {}),
+    });
+    if (up.state === 'completed' || !up.put) return up;
     if (!this.putFile) throw new Error('putFile not configured');
     await this.putFile(f.uri, up.put);
     const done = await this.completeUpload(up.id);
     if (done.state !== 'completed') throw new ApiError(409, { code: 'upload_mismatch' });
-    return done.id;
+    return done;
   }
 
   // items / sync — spec §4.3/§4.4 (server still in progress), see types.ts
@@ -1990,6 +2260,100 @@ export class Api {
         }),
       ) ?? {};
     return expenseDuplicateOut(o.duplicate);
+  }
+
+  // week 14 — КП (docs/api/kp.md). Money and quantities are decimal strings both ways.
+
+  async companyProfile(): Promise<CompanyProfileOut> {
+    return companyProfileOut(await this.client.request<unknown>('GET', '/company-profile'));
+  }
+
+  /** Only the keys that changed; `409 conflict` (with `details.profile`) on a stale `base_version`. */
+  async putCompanyProfile(body: CompanyProfileIn): Promise<CompanyProfileWriteOut> {
+    const o = obj(await this.client.request<unknown>('PUT', '/company-profile', { body, idempotencyKey: body.client_id })) ?? {};
+    return { profile: companyProfileOut(o.profile), action: actionOut(o.action), repeated: o.repeated === true };
+  }
+
+  /** «Мой прайс», 200 at a time (`next_offset` for more). */
+  async priceItems(o: { q?: string; limit?: number; offset?: number } = {}): Promise<PriceSearchOut> {
+    const query: Record<string, string> = { limit: String(o.limit ?? 200) };
+    if (o.q) query.q = o.q;
+    if (o.offset) query.offset = String(o.offset);
+    const r = obj(await this.client.request<unknown>('GET', '/price-lists/items', { query })) ?? {};
+    return { items: priceItemsOf(r.items), next_offset: typeof r.next_offset === 'number' ? r.next_offset : null };
+  }
+
+  /** S28 «Из прошлых КП»: prices of past КП that are not in the price list. */
+  async pastPrices(limit = 50): Promise<PastPriceOut[]> {
+    const o = obj(await this.client.request<unknown>('GET', '/price-lists/history', { query: { limit: String(limit) } })) ?? {};
+    return arr(o.items).map(pastPriceOut).filter((x): x is PastPriceOut => x !== null);
+  }
+
+  async addPriceItems(body: PriceItemsIn): Promise<PriceItemsOut> {
+    const o = obj(await this.client.request<unknown>('POST', '/price-lists/items', { body, idempotencyKey: body.client_id })) ?? {};
+    return { items: priceItemsOf(o.items), action: actionOut(o.action), repeated: o.repeated === true };
+  }
+
+  async patchPriceItem(id: string, body: PriceItemPatchIn): Promise<PriceItemWriteOut> {
+    const o =
+      obj(await this.client.request<unknown>('PATCH', `/price-lists/items/${encodeURIComponent(id)}`, { body, idempotencyKey: body.client_id })) ?? {};
+    return { item: priceItemOut(o.item), action: actionOut(o.action), repeated: o.repeated === true };
+  }
+
+  async deletePriceItem(id: string, clientId: string): Promise<PriceItemWriteOut> {
+    const o =
+      obj(
+        await this.client.request<unknown>('DELETE', `/price-lists/items/${encodeURIComponent(id)}`, {
+          query: { client_id: clientId },
+          idempotencyKey: clientId,
+        }),
+      ) ?? {};
+    return { item: null, action: actionOut(o.action), repeated: o.repeated === true };
+  }
+
+  /** The ТЗ records → `kp:extract` (202, `document.status: extracting`). Idempotent by `client_id`. */
+  async createKp(body: KpCreateIn): Promise<KpFullOut> {
+    return kpFullOut(await this.client.request<unknown>('POST', '/documents/kp', { body, idempotencyKey: body.client_id }));
+  }
+
+  async getDocument(id: string): Promise<KpFullOut> {
+    return kpFullOut(await this.client.request<unknown>('GET', `/documents/${encodeURIComponent(id)}`));
+  }
+
+  /** The card file's КП, newest first. */
+  async documents(limit = 200): Promise<DocumentOut[]> {
+    const o = obj(await this.client.request<unknown>('GET', '/documents', { query: { limit: String(limit) } })) ?? {};
+    return documentsOf(o.documents);
+  }
+
+  /** Tap-edits (no model): a new version; the action's «Отменить» is the revert to the one before. */
+  async patchKp(id: string, body: KpPatchIn): Promise<KpFullOut> {
+    return kpFullOut(await this.client.request<unknown>('POST', `/documents/${encodeURIComponent(id)}/patch`, { body, idempotencyKey: body.client_id }));
+  }
+
+  /** The step of the status strip («Клиент принял?» [Да] [Нет]). */
+  async setDocumentStatus(id: string, body: DocumentStatusIn): Promise<DocumentStatusOut> {
+    const o =
+      obj(await this.client.request<unknown>('POST', `/documents/${encodeURIComponent(id)}/status`, { body, idempotencyKey: body.client_id })) ?? {};
+    return { document: documentOut(o.document), action: actionOut(o.action), repeated: o.repeated === true };
+  }
+
+  /**
+   * The PDF of the current version (the server renders; never on the phone). `422
+   * kp_prices_missing` / `kp_fields_missing`, `503 kp_render_unavailable`.
+   */
+  async renderKp(id: string): Promise<KpRenderOut> {
+    const o = obj(await this.client.request<unknown>('POST', `/documents/${encodeURIComponent(id)}/render`, { query: { format: 'pdf' } })) ?? {};
+    const file = obj(o.file) ?? {};
+    const url = str(file.url);
+    if (!url) throw new ApiError(502, { code: 'bad_answer' });
+    return { url, file_name: str(file.name) ?? 'КП.pdf', version_n: num(o.version_n), total: decText(o.total), document: documentOut(o.document) };
+  }
+
+  /** A file of the API (`/v1/…`) as an absolute URL with the session's header, for the file system's download. */
+  async authedFile(path: string): Promise<{ url: string; headers: Record<string, string> }> {
+    const session = await this.client.tokens.getSession();
+    return { url: this.client.url(path.replace(/^\/v1(?=\/)/, '')), headers: session ? { Authorization: `Bearer ${session.accessToken}` } : {} };
   }
 
   // feedback («Сообщить о проблеме», R-41)

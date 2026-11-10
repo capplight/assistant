@@ -263,8 +263,8 @@ EXPENSES_TEMPLATE = "expenses"
 
 async def _owners(session: AsyncSession, user_id: int,
                   item_ids: list[int] | None) -> dict[int, frozenset[str]]:  # fmt: skip
-    """Records that are a tool row's own record (a task, an expense, week 12) → the templates
-    whose page takes them. `item_ids=None`: all of the person's."""
+    """Records that are a tool row's own record (a task; an expense, week 12; a КП, week 14) → the
+    templates whose page takes them. `item_ids=None`: all of the person's."""
     where = "user_id = :u" + (" AND item_id = ANY(:i)" if item_ids is not None else "")
     params = {"u": user_id, "i": item_ids or []}
     out: dict[int, set[str]] = {}
@@ -274,6 +274,9 @@ async def _owners(session: AsyncSession, user_id: int,
     for (item_id,) in await session.execute(
             text(f"SELECT item_id FROM expense_entries WHERE {where}"), params):  # fmt: skip
         out.setdefault(item_id, set()).add(EXPENSES_TEMPLATE)
+    for (item_id,) in await session.execute(  # week 14: a КП's own record
+            text(f"SELECT item_id FROM documents WHERE {where}"), params):  # fmt: skip
+        out.setdefault(item_id, set()).add("documents")
     return {k: frozenset(v) for k, v in out.items()}
 
 

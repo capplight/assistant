@@ -30,6 +30,9 @@ An op is a JSON object with ids as public uuids (strings), never database ids:
   reminder's status back (the undo of a late «Сделано»). `restore_habit` may carry `state.key`
   (a rule moved to another page).
 - Week 11 (`ops_view`): `set_view_key`, `set_appearance`, `set_facet` (page views, own fields).
+- Week 14 (`ops_kp`): `delete_entity_soft` / `restore_entity` take `entity: documents` (a КП and
+  its record); `revert_document`, `set_document`, `set_company_profile`, `set_price_list`,
+  `set_price_item`; `set_status` takes `entity: expense_duplicates` («Это разные», week 13).
 - Week 12 (`ops_expenses`): `delete_entity_soft` / `restore_entity` take `entity: expenses` (the
   expense and its own record together); `set_expense` {id, item, values, expect?};
   `set_expense_category` {id, values, expect?} (name, icon, hidden, pinned, order).
@@ -71,10 +74,13 @@ OPS = frozenset({"restore_positions", "restore_view_state", "add_screen_item",
                  # week 12 (actions/ops_expenses.py): «Расходы»
                  "set_expense", "set_expense_category",
                  # week 13: an expense leaves while its record (a receipt photo) stays
-                 "set_expense_live"})  # fmt: skip
+                 "set_expense_live",
+                 # week 14 (actions/ops_kp.py): КП, company profile, price list
+                 "revert_document", "set_document", "set_company_profile", "set_price_list",
+                 "set_price_item"})  # fmt: skip
 HABIT_STATUSES = frozenset({"candidate", "active", "disabled"})
-ENTITIES = frozenset({"items", "screens", "tasks", "expenses"})
-OWNED = frozenset({"tasks", "expenses"})  # a row with its own record: trash / back together
+ENTITIES = frozenset({"items", "screens", "tasks", "expenses", "documents"})
+OWNED = frozenset({"tasks", "expenses", "documents"})  # a row with its own record
 TASK_FIELDS = frozenset({"title", "qty", "where_text", "due_date", "done_at", "list_key"})
 REMINDER_FIELDS = ("title", "body", "due_at", "tz", "rrule", "offsets", "level", "sensitivity")
 SCREEN_FIELDS = ("title", "title_kk", "icon", "layout")
@@ -424,9 +430,20 @@ async def _habit_evidence(session: AsyncSession, user_id: int, op: dict, out: Ou
 
 async def _owned(session: AsyncSession, user_id: int, entity: str,
                  rid: Any) -> tuple[Any, Item | None]:  # fmt: skip
-    """A task or an expense (week 12) and its own record, both locked."""
+    """A task, an expense (week 12) or a КП (week 14) and its own record, both locked."""
     if entity == "tasks":
         return await _task(session, user_id, rid)
+    if entity == "documents":
+        from assistant.db.models_kp import Document
+
+        doc = await session.scalar(
+            select(Document).where(Document.user_id == user_id,
+                                   Document.public_id == _uuid(rid)).with_for_update()
+        )  # fmt: skip
+        if doc is None:
+            return None, None
+        return doc, await session.scalar(select(Item).where(Item.id == doc.item_id)
+                                         .with_for_update())  # fmt: skip
     from assistant.db.models_expenses import ExpenseEntry
 
     row = await session.scalar(
@@ -643,12 +660,14 @@ def _register_week10() -> None:
     from assistant.actions import (  # need Outcome and the helpers above
         ops_dedup,
         ops_expenses,
+        ops_kp,
         ops_view,
     )
 
     _HANDLERS.update(ops_dedup.HANDLERS)
     _HANDLERS.update(ops_view.HANDLERS)
     _HANDLERS.update(ops_expenses.HANDLERS)
+    _HANDLERS.update(ops_kp.HANDLERS)
 
 
 _register_week10()

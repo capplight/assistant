@@ -46,6 +46,15 @@ USER_TABLES: dict[str, Mode] = {
     "public.expense_categories": "cascade",
     "public.statement_imports": "cascade",  # week 13: a statement plan (rows wait until «Да»)
     "public.expense_duplicates": "cascade",  # week 13: «Похоже, эта трата уже есть»
+    # КП (week 14): user rows cascade; the system КП layout (`doc_templates.user_id` NULL) has
+    # no personal data
+    "public.company_profiles": "cascade",
+    "public.doc_templates": "cascade",
+    "public.price_lists": "cascade",
+    "public.price_list_items": "cascade",
+    "public.documents": "cascade",
+    "public.document_versions": "cascade",
+    "public.kp_price_history": "cascade",
     "public.user_habits": "cascade",
     # chat and actions
     "public.conversations": "cascade",

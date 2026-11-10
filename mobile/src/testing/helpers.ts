@@ -24,6 +24,8 @@ import { setFilePickerForTests } from '@/dedup/pickFile';
 import { useCatalog } from '@/pages/catalog';
 import { useFacets } from '@/pages/facets';
 import { useExpenses } from '@/expenses/store';
+import { useKp } from '@/kp/store';
+import { setSharePortForTests } from '@/kp/share';
 
 export const APP_DIR = path.resolve(__dirname, '../app');
 
@@ -62,6 +64,8 @@ export function resetApp(o: { fetch?: FetchLike; push?: FakePush; alarms?: FakeA
   useAlarms.getState().reset();
   useTasks.getState().reset();
   useExpenses.getState().reset();
+  useKp.getState().reset();
+  setSharePortForTests(null);
   useDedup.getState().reset();
   useCatalog.getState().reset();
   useFacets.getState().reset();

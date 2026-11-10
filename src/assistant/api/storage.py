@@ -38,6 +38,8 @@ class ObjectStorage(Protocol):
 
     async def get(self, key: str) -> bytes | None: ...  # ingest reads originals
 
+    async def put(self, key: str, data: bytes) -> None: ...  # week 14: rendered КП files
+
     async def delete(self, key: str) -> None: ...
 
 

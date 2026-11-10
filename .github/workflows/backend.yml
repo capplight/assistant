@@ -32,6 +32,8 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
+      # WeasyPrint (КП PDF, week 14) needs Pango; with CI set, the real-render test must run
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq libpango-1.0-0 libpangoft2-1.0-0
       - run: pip install -e ".[dev]"
       - run: pytest -q -m "not db"
 

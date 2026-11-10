@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from assistant.ai.adapters import FakeAdapter, ProviderAdapter, build_adapters
 from assistant.ai.breaker import BreakerState, CircuitBreaker
 from assistant.ai.consent import ai_consent_providers
-from assistant.ai.masking import Masker
+from assistant.ai.masking import Masker, iban_ok, iin_bin_ok
 from assistant.ai.policy import BatchMode, StrongReason, StrongRequest
 from assistant.ai.prompting import TaskInputs, UntrustedPart, neutralize
 from assistant.ai.router import PreparedBatchRequest, Router
@@ -66,5 +66,6 @@ __all__ = [
     "ProviderError", "Result", "RouteTable", "Router", "StaleBatchResult", "StreamInterrupted",
     "StrongReason", "StrongRequest", "TaskInputs", "ToolCall", "ToolSpec", "UntrustedPart",
     "ai_consent_providers", "build_adapters", "build_router", "ensure_usage_partitions",
+    "iban_ok", "iin_bin_ok",
     "load_routes", "neutralize", "next_month_start", "period_starts",
 ]  # fmt: skip

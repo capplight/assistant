@@ -48,6 +48,15 @@ services:
     depends_on: { migrate: { condition: service_completed_successfully } }
     restart: unless-stopped
 
+  # КП (week 14): KP_EXTRACT jobs `kp:extract`
+  worker-kp:
+    build: .
+    command: python -m assistant.kp
+    env_file: .env
+    environment: *dburl
+    depends_on: { migrate: { condition: service_completed_successfully } }
+    restart: unless-stopped
+
   scheduler:
     build: .
     command: python -m assistant.scheduler

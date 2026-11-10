@@ -7,8 +7,10 @@ order per user and a client that stores `next_since` never misses a change.
 Soft-deleted records come back as items with `deleted_at` (trash); records purged after 30 days
 come back as tombstones. Pages (`screens`, `screen_items`) and app reminders (`reminders`,
 `reminder_fires`, week 8) are in the same stream; week 9 adds `tasks`, `suggestions`,
-`pending_actions` and learned `habits`; week 12 adds `expenses` and `expense_categories`. Other
-synced entities join the same response.
+`pending_actions` and learned `habits`; week 12 adds `expenses` and `expense_categories`; week 14
+adds week 13's `statement_imports` and `expense_duplicates` (offline «Объединить?» and the plan's
+state) and `documents` (the КП card file, offline per template-screens §2.5). Other synced
+entities join the same response.
 """
 
 import uuid
@@ -27,6 +29,7 @@ from assistant.api.routes.pages import page_item_out, page_out
 from assistant.api.schemas import (
     ActionOut,
     ChatMessageOut,
+    DocumentRowOut,
     ExpenseCategoryOut,
     ExpenseOut,
     FireOut,
@@ -46,20 +49,35 @@ from assistant.chat import store as chat_store
 from assistant.db.models import Item, Reminder, User
 from assistant.db.models_actions import Action
 from assistant.db.models_chat import ConversationMessage, MessageRole
-from assistant.db.models_expenses import ExpenseCategory, ExpenseEntry
+from assistant.db.models_expenses import (
+    ExpenseCategory,
+    ExpenseDuplicate,
+    ExpenseEntry,
+    StatementImport,
+)
 from assistant.db.models_habits import HabitKind, UserHabit
+from assistant.db.models_kp import Document
 from assistant.db.models_pages import ItemFacet, Screen, ScreenItem
 from assistant.db.models_reminders import APP_KINDS, ReminderFire
 from assistant.db.models_search import ScreenSummary
 from assistant.db.models_tasks import PendingAction, Suggestion, Task
 from assistant.db.models_v2 import Device, HiddenReason, SyncTombstone
+from assistant.expenses import imports as statement_plans
+from assistant.expenses import repeats as expense_repeats
 from assistant.expenses import service as expenses
+from assistant.kp import service as kp_service
 from assistant.pages import habits as page_habits
 from assistant.reminders import service as reminder_service
 from assistant.suggestions import engine as suggestions
 from assistant.tasks import service as tasks
 
 router = APIRouter(prefix="/sync", tags=["sync"])
+
+
+def jsonable(value: object) -> dict:
+    from fastapi.encoders import jsonable_encoder
+
+    return jsonable_encoder(value)
 CHAT_KEEP = 50  # the phone keeps the newest 50 messages for offline «Переписка» (spec 6.11)
 GatedUser = Annotated[CurrentUser, Depends(require_base_consent)]
 
@@ -177,7 +195,8 @@ async def sync(
         )
     ]  # fmt: skip
     extra: list[object] = []
-    for model in (Task, Suggestion, PendingAction, UserHabit, ExpenseEntry, ExpenseCategory):
+    for model in (Task, Suggestion, PendingAction, UserHabit, ExpenseEntry, ExpenseCategory,
+                  StatementImport, ExpenseDuplicate, Document):
         extra.extend(await db.scalars(
             select(model).where(model.user_id == user.id, model.seq > since)  # type: ignore[attr-defined]
             .order_by(model.seq).limit(limit + 1)))  # type: ignore[attr-defined]  # fmt: skip
@@ -203,6 +222,9 @@ async def sync(
     page_facets = [row for _, row in page if isinstance(row, ItemFacetOut)]
     page_expenses = [row for _, row in page if isinstance(row, ExpenseEntry)]
     page_categories = [row for _, row in page if isinstance(row, ExpenseCategory)]
+    page_statements = [row for _, row in page if isinstance(row, StatementImport)]
+    page_dups = [row for _, row in page if isinstance(row, ExpenseDuplicate)]
+    page_documents = [row for _, row in page if isinstance(row, Document)]
     next_since = page[-1][0] if page else since
     if not has_more:  # nothing older than the floor is left to see
         next_since = max(next_since, floor)
@@ -237,6 +259,11 @@ async def sync(
                   for d in await expenses.expenses_dicts(db, page_expenses)],
         expense_categories=[ExpenseCategoryOut.model_validate(expenses.category_dict(c))
                             for c in page_categories],
+        statement_imports=[jsonable(await statement_plans.statement_dict(db, st))
+                           for st in page_statements],
+        expense_duplicates=[jsonable(d) for d in await expense_repeats.dup_dicts(db, page_dups)],
+        documents=[DocumentRowOut.model_validate(d)
+                   for d in await kp_service.rows_dicts(db, page_documents)],
         tombstones=[
             TombstoneOut(entity=t.entity, id=t.public_id, seq=t.seq, deleted_at=t.deleted_at)
             for t in page_tombs

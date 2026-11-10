@@ -516,7 +516,7 @@ describe('copy', () => {
     usePages.getState().addPage('documents');
     const doc = usePages.getState().pages.find((p) => p.templateKey === 'documents')!;
     await renderRouter(APP_DIR, { initialUrl: `/page/${doc.id}` });
-    await settle(() => screen.queryByTestId('page-empty') !== null);
+    await settle(() => screen.queryByTestId('docs-empty') !== null);
     expect(screen.queryByText('Например: сделай КП по этому ТЗ')).toBeNull();
     const input = screen.getByTestId('assistant-input');
     expect(input.props.accessibilityHint).toBe('Например: что я обещал ТОО Арман?');

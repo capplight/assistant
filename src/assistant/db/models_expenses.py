@@ -1,5 +1,5 @@
 """«Расходы» (migrations 0018, 0019, frozen SQL; spec 3.12): expenses, categories, statement
-imports and expense repeats (week 13). Allowed values are
+imports and expense repeats (week 13; `seq` on both since 0020). Allowed values are
 the StrEnums below and must match the CHECKs in the migration. `seq` is set by the `sync_seq_bump`
 trigger."""
 
@@ -190,6 +190,7 @@ class StatementImport(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    seq: Mapped[int] = _seq()  # 0020: /v1/sync
 
 
 class DuplicateStatus(enum.StrEnum):
@@ -214,3 +215,4 @@ class ExpenseDuplicate(Base):
     action_id: Mapped[int | None] = mapped_column(ForeignKey("actions.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    seq: Mapped[int] = _seq()  # 0020: /v1/sync

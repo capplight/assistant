@@ -24,6 +24,10 @@ dependencies = [
     "python-docx>=1.1",
     "python-calamine>=0.3",
     "trafilatura>=2",  # main text of a shared link (spec 2.2)
+    # КП (week 14, spec 6.7): Jinja2 → WeasyPrint (needs Pango, see Dockerfile); БИН/IBAN AES-GCM
+    "jinja2>=3.1",
+    "weasyprint>=62",
+    "cryptography>=42",
 ]
 
 [project.optional-dependencies]
@@ -51,6 +55,7 @@ where = ["src"]
 "assistant.ai" = ["routes.yaml"]
 "assistant.records" = ["prompts/*.md"]
 "assistant.chat" = ["prompts/*.md"]
+"assistant.kp" = ["templates/*.j2", "fonts/*.ttf", "fonts/LICENSE_DEJAVU"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

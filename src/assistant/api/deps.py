@@ -38,6 +38,8 @@ class ApiContext:
     chat: "ChatService | None" = None  # the assistant line (assistant.chat)
     ai_router: "Router | None" = None  # the same router chat uses (reminder_parse, week 8)
     ofd: Any = None  # week 13: the OFD page reader (expenses.ofd.OfdReader); tests set a fake
+    kp_renderer: Any = None  # week 14: kp.render.PdfRenderer (WeasyPrint); tests set a fake
+    kp_cipher: Any = None  # week 14: kp.secret.FieldCipher (БИН/ИИН, bank details)
 
     def hash(self, value: str, *, purpose: str) -> str:
         return keyed_hash(self.hash_key, value, purpose=purpose)

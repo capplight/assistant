@@ -6,6 +6,7 @@ import type { Layout, TemplateKey } from '@/pages/templates';
 import type { Page } from '@/store/pages';
 
 import { ClassicView, SimpleListView } from './ClassicView';
+import { DocumentsView } from './DocumentsView';
 import { ExpensesView } from './ExpensesView';
 import { NotebookView } from './NotebookView';
 import { PlannerView } from './PlannerView';
@@ -43,6 +44,8 @@ const registry = new Map<string, ComponentType<ViewProps>>([
   ['shopping:builtin:shopping', ShoppingView],
   // Week 12: «Расходы» — the expense calculator (template-screens 2.2).
   ['expenses:builtin:expenses', ExpensesView],
+  // Week 14: «Документы и КП» — the card file (template-screens 2.5).
+  ['documents:builtin:kp', DocumentsView],
   ['notes:stacks', ClassicView],
   ['tasks:builtin:tasks', ClassicView],
   ['shopping:checklist', ClassicView],

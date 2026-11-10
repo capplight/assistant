@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="{{ doc.lang }}">
+<head>
+<meta charset="utf-8">
+<title>{{ doc.title }}</title>
+<meta name="author" content="{{ seller.name or '' }}">
+<meta name="description" content="{{ meta.ai }}">
+<meta name="keywords" content="{{ meta.ai }}">
+<meta name="generator" content="{{ meta.generator }}">
+<meta name="dcterms.created" content="{{ meta.created }}">
+<meta name="dcterms.modified" content="{{ meta.created }}">
+<style>
+@font-face { font-family: "KP Sans"; src: url("DejaVuSans.ttf"); font-weight: normal; }
+@font-face { font-family: "KP Sans"; src: url("DejaVuSans-Bold.ttf"); font-weight: bold; }
+@page {
+  size: A4;
+  margin: 16mm 14mm 18mm 16mm;
+  @bottom-right { content: counter(page) " / " counter(pages); font: 7.5pt "KP Sans"; color: #666; }
+}
+* { box-sizing: border-box; }
+body { font-family: "KP Sans"; font-size: 9.5pt; line-height: 1.35; color: #111; margin: 0; }
+.head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8mm; }
+.seller { flex: 1; }
+.seller .name { font-weight: bold; font-size: 11pt; }
+.logo { max-width: 45mm; max-height: 22mm; }
+.muted { color: #555; }
+h1 { font-size: 14pt; margin: 8mm 0 1mm; }
+.sub { margin-bottom: 5mm; }
+.parties td { vertical-align: top; padding: 0 4mm 2mm 0; }
+.parties .label { color: #555; width: 22mm; }
+table.lines { width: 100%; border-collapse: collapse; margin-top: 4mm; }
+table.lines th, table.lines td { border: 0.4pt solid #999; padding: 1.4mm 1.6mm; }
+table.lines th { background: #f0f0f0; font-weight: bold; text-align: center; font-size: 8.5pt; }
+table.lines td.num { text-align: right; white-space: nowrap; }
+table.lines td.c { text-align: center; }
+table.lines tr { page-break-inside: avoid; }
+table.totals { margin: 3mm 0 0 auto; border-collapse: collapse; }
+table.totals td { padding: 0.8mm 1.6mm; }
+table.totals td.num { text-align: right; white-space: nowrap; min-width: 32mm; }
+table.totals tr.grand td { font-weight: bold; font-size: 11pt; border-top: 0.6pt solid #111; }
+.words { margin-top: 3mm; }
+.terms { margin-top: 5mm; }
+.terms div { margin-bottom: 1mm; }
+.block { margin-top: 4mm; white-space: pre-line; }
+.sign { margin-top: 10mm; display: flex; align-items: center; gap: 6mm; position: relative; }
+.sign .line { border-bottom: 0.4pt solid #111; width: 45mm; height: 14mm; position: relative; }
+.sign img.signature { position: absolute; bottom: 0; left: 4mm; max-height: 16mm; max-width: 40mm; }
+.sign img.stamp { max-height: 34mm; max-width: 34mm; opacity: 0.9; }
+.ai { margin-top: 8mm; font-size: 7.5pt; color: #666; }
+</style>
+</head>
+<body>
+<div class="head">
+  <div class="seller">
+    <div class="name">{{ seller.name or '' }}</div>
+    {% if seller.bin_iin %}<div>{{ seller.bin_label }}: {{ seller.bin_iin }}</div>{% endif %}
+    {% if seller.address %}<div>{{ seller.address }}</div>{% endif %}
+    {% if seller.bank.iban %}<div>ИИК: {{ seller.bank.iban }}{% if seller.bank.bank %}, {{ seller.bank.bank }}{% endif %}{% if seller.bank.bik %}, БИК {{ seller.bank.bik }}{% endif %}{% if seller.bank.kbe %}, Кбе {{ seller.bank.kbe }}{% endif %}</div>{% endif %}
+    {% if seller.contacts %}<div class="muted">{{ seller.contacts }}</div>{% endif %}
+  </div>
+  {% if images.logo %}<img class="logo" src="{{ images.logo }}" alt="">{% endif %}
+</div>
+
+<h1>Коммерческое предложение{% if doc.number %} № {{ doc.number }}{% endif %}</h1>
+<div class="sub muted">{% if doc.date %}от {{ doc.date }}{% endif %}{% if doc.valid_until %} · действительно до {{ doc.valid_until }}{% endif %}</div>
+
+<table class="parties">
+  <tr><td class="label">Кому:</td><td><b>{{ buyer.name or '' }}</b>{% if buyer.bin %}, БИН/ИИН {{ buyer.bin }}{% endif %}{% if buyer.contact %}<br>{{ buyer.contact }}{% endif %}</td></tr>
+</table>
+
+{% if blocks.intro %}<div class="block">{{ blocks.intro }}</div>{% endif %}
+
+<table class="lines">
+  <thead><tr>
+    <th>№</th><th>Наименование</th><th>Ед.</th><th>Кол-во</th><th>Цена, {{ doc.currency_sign }}</th>
+    {% if has_discounts %}<th>Скидка</th>{% endif %}<th>Сумма, {{ doc.currency_sign }}</th>
+  </tr></thead>
+  <tbody>
+  {% for ln in lines %}
+    <tr>
+      <td class="c">{{ ln.n }}</td><td>{{ ln.name }}</td><td class="c">{{ ln.unit or '' }}</td>
+      <td class="num">{{ ln.qty }}</td><td class="num">{{ ln.price }}</td>
+      {% if has_discounts %}<td class="num">{{ ln.discount or '' }}</td>{% endif %}<td class="num">{{ ln.amount }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<table class="totals">
+  {% if totals.discount_total %}<tr><td>Сумма по позициям:</td><td class="num">{{ totals.lines_sum }}</td></tr>
+  <tr><td>Скидка {{ totals.discount_pct }}%:</td><td class="num">−{{ totals.discount_total }}</td></tr>{% endif %}
+  {% if totals.vat_mode == 'on_top' %}<tr><td>Итого без НДС:</td><td class="num">{{ totals.net }}</td></tr>
+  <tr><td>НДС {{ totals.vat_rate }}%:</td><td class="num">{{ totals.vat }}</td></tr>{% endif %}
+  <tr class="grand"><td>Итого{% if totals.vat_mode == 'none' %} (без НДС){% endif %}:</td><td class="num">{{ totals.total }} {{ doc.currency_sign }}</td></tr>
+  {% if totals.vat_mode == 'included' %}<tr><td>в том числе НДС {{ totals.vat_rate }}%:</td><td class="num">{{ totals.vat }}</td></tr>{% endif %}
+</table>
+
+<div class="words">{% for w in words %}<div>Всего к оплате: <b>{{ w }}</b></div>{% endfor %}</div>
+
+<div class="terms">
+  {% if terms.payment %}<div>Оплата: {{ terms.payment }}</div>{% endif %}
+  {% if terms.delivery %}<div>Срок поставки: {{ terms.delivery }}</div>{% endif %}
+  {% if terms.warranty %}<div>Гарантия: {{ terms.warranty }}</div>{% endif %}
+  {% if terms.validity %}<div>Предложение действительно {{ terms.validity }}.</div>{% endif %}
+</div>
+
+{% if blocks.outro %}<div class="block">{{ blocks.outro }}</div>{% endif %}
+
+<div class="sign">
+  <div>{{ seller.signer_title or 'Руководитель' }}{% if seller.signer_name %}<br>{{ seller.signer_name }}{% endif %}</div>
+  <div class="line">{% if images.signature %}<img class="signature" src="{{ images.signature }}" alt="">{% endif %}</div>
+  {% if images.stamp %}<img class="stamp" src="{{ images.stamp }}" alt="">{% endif %}
+</div>
+
+{% if meta.visible_label %}<div class="ai">{{ meta.visible_label }}</div>{% endif %}
+</body>
+</html>

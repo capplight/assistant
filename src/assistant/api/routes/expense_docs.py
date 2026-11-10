@@ -489,12 +489,16 @@ async def merge_duplicate(dup_id: uuid.UUID, user: GatedUser, db: Db,
 @router.post("/duplicates/{dup_id}/dismiss")
 async def dismiss_duplicate(dup_id: uuid.UUID, user: GatedUser, db: Db,
                             body: DecideIn | None = None) -> dict[str, Any]:  # fmt: skip
+    body = body or DecideIn()
+    await service.lock_user(db, user.id)
     try:
         dup = await repeats.get(db, user.id, dup_id, lock=True)
-        await repeats.dismiss(db, dup, _now())
+        action, repeated = await repeats.dismiss(db, user.id, dup, now=_now(),
+                                                 client_id=body.client_id)  # fmt: skip
     except repeats.RepeatError as exc:
         raise ApiError(exc.status, exc.code) from exc
-    return {"duplicate": await _dup_out(db, dup)}
+    return {"duplicate": await _dup_out(db, dup), "action": await _action_out(db, action),
+            "repeated": repeated}  # fmt: skip
 
 
 __all__ = ["confirm_statement", "router"]

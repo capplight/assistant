@@ -23,6 +23,7 @@ from assistant.api.errors import ApiError
 from assistant.api.routes.items import items_out
 from assistant.api.schemas import (
     ActionOut,
+    DocumentRowOut,
     ExpenseOut,
     HabitOffOut,
     HabitOut,
@@ -56,6 +57,7 @@ from assistant.db.models import Item
 from assistant.db.models_actions import Action, ActionKind, Initiator
 from assistant.db.models_expenses import ExpenseCategory, ExpenseEntry
 from assistant.db.models_habits import HabitKind, HabitStatus, UserHabit
+from assistant.db.models_kp import Document
 from assistant.db.models_pages import (
     MAX_PAGES,
     AddedBy,
@@ -69,6 +71,7 @@ from assistant.db.models_pages import (
 )
 from assistant.db.models_tasks import Task
 from assistant.expenses import service as expenses_service
+from assistant.kp import service as kp_service
 from assistant.pages import (
     add_link,
     create_page,
@@ -520,8 +523,18 @@ async def page_items(
             .outerjoin(ExpenseCategory, ExpenseCategory.id == ExpenseEntry.category_id)
             .where(ExpenseEntry.user_id == user.id,
                    ExpenseEntry.item_id.in_([item.id for _, item in candidates])))}  # fmt: skip
+    doc_of: dict[int, dict[str, Any]] = {}
+    if page.template_key == kp_service.PAGE_TEMPLATE and candidates:  # week 14: КП cards
+        docs = list(await db.scalars(select(Document).where(
+            Document.user_id == user.id,
+            Document.item_id.in_([item.id for _, item in candidates]))))  # fmt: skip
+        doc_of = {d.item_id: r for d, r in zip(docs, await kp_service.rows_dicts(db, docs),
+                                               strict=True)}  # fmt: skip
     own = await _own_values(db, page, [item.id for _, item in candidates])
     entries = [(link, item, {**field_values(template_fields, item),
+                             **(kp_service.field_values(doc_of[item.id]) if item.id in doc_of
+                                else kp_service.other_field_values(item)
+                                if page.template_key == kp_service.PAGE_TEMPLATE else {}),
                              **(tasks_service.field_values(page.template_key, task_of[item.id])
                                 if item.id in task_of else {}),
                              **(expenses_service.field_values(*expense_of[item.id])
@@ -556,7 +569,9 @@ async def page_items(
     out = [
         PageEntryOut(link=page_item_out(link, page.public_id, item.public_id), item=io,
                      fields=fields, task=task_out.get(item.id),
-                     expense=expense_out.get(item.id))
+                     expense=expense_out.get(item.id),
+                     document=DocumentRowOut.model_validate(doc_of[item.id])
+                     if item.id in doc_of else None)
         for (link, item, fields), io in zip(entries, items, strict=True)
     ]  # fmt: skip
     return PageItemsOut(entries=out, next_cursor=out[-1].link.id if more and out else None)

@@ -337,6 +337,7 @@ async def statement_dict(session: AsyncSession, st: StatementImport) -> dict[str
         "rows_similar": st.rows_similar, "check": st.check, "adds": st.adds,
         "summary_ru": summary_ru(st), "error": st.error, "pending_action_id": pending_pid,
         "action_id": action_pid, "created_at": st.created_at, "decided_at": st.decided_at,
+        "seq": st.seq,
     }  # fmt: skip
 
 

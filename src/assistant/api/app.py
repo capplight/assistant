@@ -18,12 +18,14 @@ from assistant.api.routes import (
     collections,
     consents,
     devices,
+    documents,
     duplicates,
     events,
     expense_docs,
     expenses,
     imports,
     items,
+    kp,
     me,
     memory,
     misc,
@@ -98,6 +100,11 @@ def create_app(
     from assistant.expenses.ofd import HttpOfdReader
 
     ctx.ofd = HttpOfdReader(settings.expenses_ofd_domains)  # tests replace it with a fake
+    from assistant.kp.render import WeasyPdfRenderer
+    from assistant.kp.secret import FieldCipher
+
+    ctx.kp_renderer = WeasyPdfRenderer()  # tests replace it with kp.render.FakePdfRenderer
+    ctx.kp_cipher = FieldCipher.from_settings(settings)
     ctx.chat = ChatService(settings, sessionmaker, ctx.ai_router, ctx.embedder,
                            push=push)  # fmt: skip
 
@@ -124,7 +131,8 @@ def create_app(
                    actions.router, reminders.router, tasks.router, today.router,
                    today.suggestions_router, duplicates.router, duplicates.pending_router,
                    imports.router, collections.router, events.router, expense_docs.router,
-                   expenses.router, expenses.categories_router):
+                   expenses.router, expenses.categories_router, kp.profile_router,
+                   kp.prices_router, documents.router):
         v1.include_router(router)
     if isinstance(storage, LocalObjectStorage):
         v1.include_router(misc.dev_storage)

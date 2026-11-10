@@ -1,6 +1,7 @@
 import {
   actionsOf,
   collectionsOf,
+  documentsOf,
   duplicateGroupsOf,
   expenseCategoriesOf,
   expensesOf,
@@ -9,6 +10,7 @@ import {
   importsOf,
   itemFacetsOf,
   pendingActionsOf,
+  priceItemsOf,
   remindersOf,
   suggestionsOf,
   tasksOf,
@@ -16,6 +18,8 @@ import {
 } from '@/api/endpoints';
 import { ApiError, isOfflineError, isRetryable, SignInRequiredError } from '@/api/errors';
 import type {
+  DocumentOut,
+  PriceItemOut,
   ConsentsIn,
   DeviceIn,
   DeviceOut,
@@ -244,6 +248,12 @@ export type SyncDeps = {
     apply(x: { entries: ExpenseOut[]; categories: ExpenseCategoryOut[]; pending?: PendingActionOut[] }): void;
     tombstone?(id: string): void;
   };
+  /** Week 14: КП — profile, «Мой прайс», tap-edits, status (`kp.*`), /sync `documents` / `price_list_items` (src/kp/service.ts). */
+  kp?: {
+    send(e: OutboxEntry): Promise<void>;
+    apply(x: { documents: DocumentOut[]; prices: PriceItemOut[] }): void;
+    tombstone?(entity: string, id: string): void;
+  };
 };
 
 export type PushResult = { sent: number; retried: number; failed: number; offline: boolean };
@@ -274,6 +284,13 @@ const IN_TAP_ORDER = new Set<string>([
   'expense.patch',
   'expense.delete',
   'expense.categories',
+  'kp.profile',
+  'kp.image',
+  'kp.prices',
+  'kp.price',
+  'kp.price_delete',
+  'kp.patch',
+  'kp.status',
 ]);
 
 /**
@@ -482,6 +499,12 @@ export class SyncEngine {
         this.d.expenses?.apply(spent);
         applied += nSpent;
       }
+      // Week 14 (docs/api/kp.md «Sync»): the КП and «Мой прайс» changed on another phone or by the server.
+      const kp = { documents: documentsOf(out.documents), prices: priceItemsOf(out.price_list_items) };
+      if (kp.documents.length + kp.prices.length > 0) {
+        this.d.kp?.apply(kp);
+        applied += kp.documents.length + kp.prices.length;
+      }
       const acts = Array.isArray(out.actions) ? actionsOf(out.actions) : [];
       if (acts.length > 0) {
         this.d.actions?.(acts);
@@ -492,6 +515,7 @@ export class SyncEngine {
         else if (t.entity === 'screen') await this.d.pages.applyTombstone(t.id);
         else if (t.entity === 'screen_item') await this.d.pages.removeLink(t.id);
         else if (t.entity === 'expense_entry' || t.entity === 'expense') this.d.expenses?.tombstone?.(t.id);
+        else if (t.entity === 'document' || t.entity === 'price_list_item') this.d.kp?.tombstone?.(t.entity, t.id);
         applied++;
       }
       if (typeof out.next_since === 'number' && out.next_since >= since) {
@@ -573,6 +597,16 @@ export class SyncEngine {
       case 'expense.statement': {
         const expenses = this.d.expenses;
         return expenses ? (e) => expenses.send(e) : null;
+      }
+      case 'kp.profile':
+      case 'kp.image':
+      case 'kp.prices':
+      case 'kp.price':
+      case 'kp.price_delete':
+      case 'kp.patch':
+      case 'kp.status': {
+        const kp = this.d.kp;
+        return kp ? (e) => kp.send(e) : null;
       }
       case 'page.view':
       case 'page.item_fields': {

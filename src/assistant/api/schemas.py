@@ -325,9 +325,10 @@ class ItemListOut(BaseModel):
 
 
 class TombstoneOut(BaseModel):
-    # 0014 added `task`, 0018 `expense` (a record purged with its tool row)
+    # 0014 added `task`, 0018 `expense` (a record purged with its tool row), 0020 `document` (a КП
+    # purged with its record) and `expense_duplicate` (a pair gone with one of its expenses)
     entity: Literal["item", "screen", "screen_item", "conversation_message", "action", "task",
-                    "expense"]
+                    "expense", "document", "expense_duplicate"]
     id: uuid.UUID
     seq: int
     deleted_at: datetime
@@ -444,6 +445,7 @@ class PageEntryOut(BaseModel):
     fields: dict[str, Any]
     task: "TaskOut | None" = None  # week 9: on «Дела» / «Покупки»
     expense: "ExpenseOut | None" = None  # week 12: on «Расходы»
+    document: "DocumentRowOut | None" = None  # week 14: a КП on «Документы и КП»
 
 
 class PageItemsOut(BaseModel):
@@ -639,6 +641,10 @@ class SyncOut(BaseModel):
     item_facets: list[ItemFacetOut] = []  # week 11: values of the pages' own fields (views.md)
     expenses: list["ExpenseOut"] = []  # week 12 (expenses.md), incl. trashed ones
     expense_categories: list["ExpenseCategoryOut"] = []  # week 12, hidden ones too
+    # week 13 (0020): statement plans and «Похоже, эта трата уже есть» pairs (expenses.md)
+    statement_imports: list[dict[str, Any]] = []
+    expense_duplicates: list[dict[str, Any]] = []
+    documents: list["DocumentRowOut"] = []  # week 14: КП rows of the card file (kp.md)
     tombstones: list[TombstoneOut]  # purged for good: drop locally
     next_since: int  # pass as `since` next time
     has_more: bool  # true: call again right away with next_since
@@ -1519,6 +1525,44 @@ class CategoriesChangedOut(BaseModel):
     repeated: bool = False
 
 
+# --- КП (week 14, docs/api/kp.md) ---
+
+
+class DocumentClientOut(BaseModel):
+    name: str | None = None
+
+
+class DocumentRowOut(BaseModel):
+    """A КП as a card in «Документы и КП» (sync, page rows, lists): no lines, no requisites."""
+
+    id: uuid.UUID
+    client_id: uuid.UUID | None
+    item_id: uuid.UUID | None
+    kind: str
+    title: str
+    number: str | None
+    date: str | None
+    client: DocumentClientOut
+    currency: str | None
+    total: str | None  # code's total, decimal text; null while it is being made
+    vat_mode: str | None
+    missing_prices: int
+    lines: int
+    status: str  # extracting | draft | ready | sent | archived | failed
+    deal_status: str  # draft | sent | seen | accepted | declined
+    deal_status_text: str
+    current_version_n: int | None
+    sent_version_n: int | None
+    progress: dict[str, Any]
+    error: str | None
+    ai_generated: bool
+    version: int
+    seq: int
+    created_at: datetime
+    updated_at: datetime
+    deleted_at: datetime | None
+
+
 for _m in (ExpenseCreatedOut, ExpenseChangedOut, CategoryChangedOut, CategoriesChangedOut):
     _m.model_rebuild()
 
@@ -1527,3 +1571,4 @@ for _m in (ReminderEventsOut, HabitPatchOut, PageCreateOut, PageEntryOut, PageIt
            TaskCreatedOut, TaskChangedOut, SuggestionAcceptOut, DoneForYouOut, TodayOut):
     _m.model_rebuild()
 SyncOut.model_rebuild()  # after the reminder shapes it refers to
+

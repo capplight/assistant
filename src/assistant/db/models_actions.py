@@ -49,6 +49,11 @@ class ActionKind(enum.StrEnum):
     EDIT_EXPENSE = "edit_expense"
     BULK_CREATE_EXPENSES = "bulk_create_expenses"  # week 13: a bank statement after «Да»
     MERGE_EXPENSES = "merge_expenses"  # week 13: «Объединить?» of two expenses (0019)
+    DISMISS_EXPENSES = "dismiss_expenses"  # week 13 «Это разные» of two expenses (0020)
+    CREATE_KP = "create_kp"  # week 14: a КП made from a ТЗ (in the 0011 CHECK)
+    EDIT_KP = "edit_kp"  # week 14: tap edits, «Вернуть версию», the status strip, «Убрать»
+    COMPANY_PROFILE_EDIT = "company_profile_edit"  # week 14: «Моя компания» (0020)
+    PRICE_LIST_EDIT = "price_list_edit"  # week 14: «Мой прайс» (0020)
 
 
 class Initiator(enum.StrEnum):

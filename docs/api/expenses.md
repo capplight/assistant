@@ -253,8 +253,13 @@ Query: `period` = `week` (Mon–Sun) | `month` (default) | `year` | `all` | `cus
 
 - `expenses`: Expense (including trashed ones, `deleted_at` set).
 - `expense_categories`: Category.
+- `statement_imports` (week 14, 0020): Statement (the plan's state; `rows` are not in sync, read
+  them with `GET /v1/expenses/statements/{id}` while `proposed`).
+- `expense_duplicates` (week 14, 0020): ExpenseDuplicate (+ `seq`), so «Объединить?» shows offline
+  too. An undo of the import / merge brings the row again (`status: "undone"`).
 
-A record purged after 30 days in the trash takes its expense with it: tombstone `entity: "expense"`.
+A record purged after 30 days in the trash takes its expense with it: tombstone `entity: "expense"`
+(and a pair of repeats it was in: `entity: "expense_duplicate"`).
 Categories are hidden, never deleted (no tombstone). `tombstones[].entity` can now also be `task`
 (that value was missing from the response schema before week 12).
 
@@ -324,10 +329,12 @@ method); the other goes to the trash with its record. `action.kind` `merge_expen
 one's fields. Errors: `404`, `409 duplicate_closed`, `409 duplicate_stale` (one of them is gone),
 `422 validation_error` (`keep_id` not in the pair).
 
-### `POST /v1/expenses/duplicates/{id}/dismiss` → `200 {duplicate}`
+### `POST /v1/expenses/duplicates/{id}/dismiss` → `200 {duplicate, action, repeated}`
 
-«Это разные». `{"client_id": "..."}` optional. These two are never suggested together again.
-`409 duplicate_closed` when not `suggested`.
+«Это разные». `{"client_id": "..."}` optional. These two are not suggested together again. Since
+week 14 (0020) it is one action `dismiss_expenses` («Оставил траты отдельно») with «Отменить»:
+the undo makes the pair `suggested` again. Same `client_id` (or an already dismissed pair) → the
+first action, `repeated: true`. `409 duplicate_closed` when merged.
 
 ## Receipt photo, screenshot, shared Kaspi receipt
 

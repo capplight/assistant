@@ -71,7 +71,15 @@ export type OutboxKind =
   /** Week 13: a receipt photo / shared receipt (POST /expenses/from-item) or a fiscal QR (POST /expenses/from-qr). */
   | 'expense.receipt'
   /** Week 13: a statement PDF → its plan (POST /expenses/statements); nothing is added before «Да». */
-  | 'expense.statement';
+  | 'expense.statement'
+  // week 14: КП (src/kp/service.ts)
+  | 'kp.profile'
+  | 'kp.image'
+  | 'kp.prices'
+  | 'kp.price'
+  | 'kp.price_delete'
+  | 'kp.patch'
+  | 'kp.status';
 
 export type OutboxStatus = 'pending' | 'sent' | 'failed';
 

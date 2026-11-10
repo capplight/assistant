@@ -133,7 +133,7 @@ export type UploadIn = {
   mime: string;
   bytes: number;
   sha256: string;
-  role?: 'original';
+  role?: UploadRole;
 };
 
 export type PresignedPutOut = { url: string; method: string; headers: Record<string, string>; expires_at: string };
@@ -1439,3 +1439,227 @@ export type StatementConfirmOut = { statement: StatementOut | null; action: Acti
 /** POST /expenses/duplicates/{id}/merge: `keep_id` only to keep the other one. */
 export type ExpenseMergeIn = { client_id: string; keep_id?: string };
 export type ExpenseMergeOut = { duplicate: ExpenseDuplicateOut | null; expense: ExpenseOut | null; action: ActionOut | null; repeated: boolean };
+
+// --- week 14: КП — company profile, «Мой прайс», documents (docs/api/kp.md; 3-engineering 3.6, 4.7, 6.7) ---
+
+/** Roles of a file the phone uploads (schemas.py `ClientFileRole`): logo, signature and stamp are always kept (R-34). */
+export type UploadRole = 'original' | 'company_logo' | 'company_template' | 'signature' | 'stamp' | 'price_list';
+
+export type KpVatMode = 'included' | 'on_top' | 'none';
+
+/** `bank` is the bank's name. The server replaces the whole `bank` / `contacts` object on PUT. */
+export type CompanyBankOut = { iban: string | null; bik: string | null; bank: string | null; kbe: string | null };
+export type CompanyContactsOut = { phone: string | null; email: string | null; website: string | null };
+
+/** `ip` ИП · `too` ТОО · `ao` АО · `other` (models_kp.LegalForm). */
+export type LegalForm = 'ip' | 'too' | 'ao' | 'other';
+
+/**
+ * GET/PUT /company-profile (routes/kp.py, kp/profile.py `profile_dict`). Numbers to check after a
+ * photo are in `review_fields` (`bin_iin`, `bank.iban`, …). Files by their public id.
+ */
+export type CompanyProfileOut = {
+  name: string | null;
+  legal_form: string | null;
+  bin_iin: string | null;
+  address: string | null;
+  bank: CompanyBankOut;
+  contacts: CompanyContactsOut;
+  /** null: not said yet (the КП then uses «в сумме»; `false` → «без НДС»). */
+  vat_payer: boolean | null;
+  logo_file_id: string | null;
+  signature_file_id: string | null;
+  stamp_file_id: string | null;
+  review_fields: string[];
+  version: number;
+  /** A name and a БИН/ИИН: enough for a КП. */
+  complete: boolean;
+  updated_at: string | null;
+};
+
+/**
+ * PUT /company-profile: only the keys that changed (a `bank` / `contacts` object goes whole);
+ * `review_fields` set = «Верно» on the rest. A stale `base_version` → 409 `conflict` with
+ * `details.profile`. Logo / signature / stamp: the `file_id` of an upload with that role.
+ */
+export type CompanyProfileIn = {
+  client_id: string;
+  base_version?: number;
+  name?: string | null;
+  legal_form?: LegalForm | null;
+  bin_iin?: string | null;
+  address?: string | null;
+  bank?: Partial<CompanyBankOut>;
+  contacts?: Partial<CompanyContactsOut>;
+  vat_payer?: boolean | null;
+  logo_file_id?: string | null;
+  signature_file_id?: string | null;
+  stamp_file_id?: string | null;
+  review_fields?: string[];
+};
+
+export type CompanyProfileWriteOut = { profile: CompanyProfileOut; action: ActionOut | null; repeated: boolean };
+
+/** One price of «Мой прайс» (kp/pricelist.py `item_dict`). `price` is a decimal string «450.00». */
+export type PriceItemOut = {
+  id: string;
+  client_id: string | null;
+  price_list_id: string | null;
+  name: string;
+  unit: string | null;
+  price: string;
+  currency: string;
+  /** «проверьте» on the price (read from a photo / a file). */
+  review: boolean;
+  source_ref: string | null;
+  updated_at: string | null;
+  /** Phone-only: removed here, not answered yet. */
+  deleted_at: string | null;
+};
+
+/** A price of a past КП not in the price list (GET /price-lists/history). */
+export type PastPriceOut = { name: string; unit: string | null; price: string; currency: string; price_source: string; client: string | null; created_at: string | null };
+
+export type PriceRowIn = { name: string; unit?: string | null; price: string };
+/** POST /price-lists/items: the answer's `items` are in the order of the rows (a known name gets the new price). */
+export type PriceItemsIn = { client_id: string; items: PriceRowIn[]; source?: 'typed_sequence' | 'voice' };
+export type PriceItemsOut = { items: PriceItemOut[]; action: ActionOut | null; repeated: boolean };
+/** PATCH /price-lists/items/{id}; `checked: true` = «Верно». */
+export type PriceItemPatchIn = { client_id: string; name?: string; unit?: string | null; price?: string; checked?: boolean };
+export type PriceItemWriteOut = { item: PriceItemOut | null; action: ActionOut | null; repeated: boolean };
+/** GET /price-lists/items?q=&limit=&offset=. */
+export type PriceSearchOut = { items: PriceItemOut[]; next_offset: number | null };
+
+/** `price_list:<id>#<item>` | `past_kp:<document_id>#v<n>` | `manual` | `missing` (kp/prices.py). */
+export type PriceSource = string;
+
+/** One line of a КП version (kp/service.py `items_dicts`). Money and quantities are decimal strings. */
+export type KpItemOut = {
+  id: string;
+  name: string;
+  unit: string | null;
+  qty: string | null;
+  /** null = no price: «укажите цену» (never guessed). */
+  unit_price: string | null;
+  discount_pct: string;
+  price_source: PriceSource;
+  /** The server's caption by `price_source` («из прайса», «из КП ТОО Арман, 3 окт»); with «— та ли позиция?» when `price_review`. */
+  price_label: string | null;
+  /** The price list's position is not the same words: «та ли позиция?». */
+  price_review: boolean;
+  matched_name: string | null;
+  source_ref: string | null;
+  /** Fields the model read to check («проверьте»): `qty`, `name`… */
+  review_fields: string[];
+  /** The server's line amount (`kp/calc.py`), null without a price. */
+  amount: string | null;
+};
+
+/** The data of a version as the phone uses it (the server's `version.data` + `client` + `items`). */
+export type KpDataOut = {
+  number: string | null;
+  date: string | null;
+  currency: string;
+  /** `review`: «проверьте» marks (`client.bin`). */
+  client: { name: string | null; bin: string | null; contact: string | null; review: string[] };
+  vat: { mode: KpVatMode; rate: string | null; rounding: 'per_line' | 'on_total' };
+  items: KpItemOut[];
+  discount_total_pct: string;
+  terms: Record<string, string | number | null>;
+};
+
+/** `document_versions.totals` (kp/calc.py `Totals.as_json`): money as text with two places. */
+export type KpTotalsOut = {
+  lines_sum: string;
+  discount_total: string;
+  amount: string;
+  net: string;
+  vat: string;
+  total: string;
+  vat_rate: string | null;
+  rounding: 'per_line' | 'on_total';
+  priced: number;
+  missing: number;
+  complete: boolean;
+  calc_version: string | null;
+};
+
+/** GET /documents/{id} `version` (kp/service.py `version_dict`). */
+export type KpVersionOut = {
+  n: number;
+  author: 'initial' | 'tap_edit' | 'agent_request' | 'revert' | string;
+  created_at: string | null;
+  data: KpDataOut;
+  totals: KpTotalsOut | null;
+  changed_paths: string[];
+  valid_until: string | null;
+  price_summary: { price_list: number; past_kp: number; manual: number; missing: number };
+  /** Required fields (Ф-17, `kp.required_fields`) still empty: the PDF waits for them. */
+  missing_required: string[];
+  sent_at: string | null;
+  ai_generated: boolean;
+};
+
+/** `extracting`: KP_EXTRACT reads the ТЗ; `ready`: a PDF of the current version exists; `failed`: `error` says why. */
+export type DocumentStatus = 'extracting' | 'draft' | 'ready' | 'sent' | 'archived' | 'failed';
+/** The card file's status strip, set by the person (models_kp.DealStatus). */
+export type DealStatus = 'draft' | 'sent' | 'seen' | 'accepted' | 'declined';
+
+/** A КП as a row of the card file (kp/service.py `rows_dicts`; also /sync `documents`). */
+export type DocumentOut = {
+  id: string;
+  client_id: string | null;
+  /** The record that is this КП on «Документы и КП» (`items.kind = kp`). */
+  item_id: string | null;
+  kind: 'kp' | 'letter' | string;
+  title: string | null;
+  number: string | null;
+  date: string | null;
+  client_name: string | null;
+  currency: string;
+  total: string | null;
+  missing_prices: number;
+  lines: number;
+  status: DocumentStatus;
+  deal_status: DealStatus;
+  current_version_n: number | null;
+  sent_version_n: number | null;
+  progress: { state: string | null; done: number; total: number; message: string | null; partial: boolean } | null;
+  error: string | null;
+  ai_generated: boolean;
+  /** The row's own version (optimistic lock), not a КП version. */
+  row_version: number;
+  seq: number;
+  created_at: string | null;
+  updated_at: string | null;
+  deleted_at: string | null;
+};
+
+/** GET /documents/{id}, POST /documents/kp, /patch, /revert: the row, its current version, whether S19 is needed first. */
+export type KpFullOut = {
+  document: DocumentOut;
+  version: KpVersionOut | null;
+  needs_profile: boolean;
+  action: ActionOut | null;
+  /** «Итого: 1 240 000 → 1 218 500 ₸». */
+  change_text: string | null;
+  /** US-21 «Обновить в прайсе?»: typed prices «Мой прайс» does not have. */
+  price_offers: { line_id: string; name: string; unit: string | null; price: string; price_item_id: string | null; old_price: string | null }[];
+  repeated: boolean;
+};
+
+/** POST /documents/kp (202): the ТЗ records (≤10) → `kp:extract`. `409 kp_source_not_ready` while a record is still read. */
+export type KpCreateIn = { client_id: string; item_ids: string[]; wishes?: string | null };
+
+/** One RFC 6902 op on the whitelist (kp/patch.py): lines by id, `/items/<id>/unit_price|qty|…`, `/vat/mode`, `/discount_total_pct`. */
+export type JsonPatchOp = { op: 'replace' | 'add' | 'remove'; path: string; value?: unknown };
+
+/** POST /documents/{id}/patch — tap-edits, no model; a stale `base_version` → 409 `conflict` with the full document. */
+export type KpPatchIn = { client_id: string; base_version: number; ops: JsonPatchOp[]; save_prices?: boolean };
+
+/** POST /documents/{id}/status. */
+export type DocumentStatusIn = { client_id: string; deal_status: DealStatus };
+export type DocumentStatusOut = { document: DocumentOut | null; action: ActionOut | null; repeated: boolean };
+
+/** POST /documents/{id}/render?format=pdf: `file.url` is an API path (`/v1/documents/{id}/files/{fid}`), fetched with the session. */
+export type KpRenderOut = { url: string; file_name: string; version_n: number; total: string | null; document: DocumentOut | null };

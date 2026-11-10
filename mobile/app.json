@@ -94,7 +94,8 @@
           "microphonePermission": "Микрофон нужен, чтобы записывать то, что вы говорите помощнику."
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      "expo-sharing"
     ]
   }
 }

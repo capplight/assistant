@@ -184,6 +184,11 @@ async def _relink(session: AsyncSession, user_id: int, op: dict, out: Outcome, *
 
 async def _set_status(session: AsyncSession, user_id: int, op: dict, out: Outcome, *,
                       by: str, check: bool, now: datetime) -> None:  # fmt: skip
+    if op.get("entity") == "expense_duplicates":  # week 13 «Это разные» (actions/ops_kp.py)
+        from assistant.actions.ops_kp import set_dup_status
+
+        await set_dup_status(session, user_id, op, out, check=check, now=now)
+        return
     if op.get("entity") != "duplicate_groups" or op.get("value") not in GROUP_STATUSES:
         raise ValueError("set_status: entity/value not allowed")
     g = await session.scalar(select(DuplicateGroup).where(
