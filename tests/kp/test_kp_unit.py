@@ -299,7 +299,9 @@ async def test_real_pdf_has_the_total_words_and_embedded_fonts():
         text = "\n".join(p.extract_text() or "" for p in doc.pages)
         meta = doc.metadata
         fonts = {ch["fontname"] for p in doc.pages for ch in p.chars}
-    assert fonts and all("DejaVuSans" in f for f in fonts)  # the packaged font, embedded
+    # The packaged DejaVu files, embedded as subsets under the @font-face family «KP Sans»
+    # (WeasyPrint names them like «ABCDEF+KP-Sans-Bold»); never a system fallback font.
+    assert fonts and all("KP-Sans" in f or "DejaVuSans" in f for f in fonts)
     flat = text.replace(" ", " ")
     assert "22 075,00" in flat and "Қазақ Құрылыс" in flat
     assert "Двадцать две тысячи семьдесят пять тенге 00 тиын" in flat
