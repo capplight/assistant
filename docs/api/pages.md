@@ -108,7 +108,9 @@ order (`custom` first). Sends `ETag`; send `If-None-Match` and get `304` with no
 ```
 Only `client_id` and `template_key` are required. `title` is 1-60 chars; default is the template
 title (`custom`: «Моя страница»). `created_by`: `user` (default) | `onboarding_gallery` |
-`onboarding_blank` | `onboarding_phrase`.
+`onboarding_blank` | `onboarding_phrase` (`onboarding_skipped` and `agent` only come from
+`POST /pages/batch` and page proposals, `onboarding.md`). Week 16: `POST /pages/batch` (several
+pages, one action) and `PUT /pages/{id}/today-tile` are in `onboarding.md`.
 
 `201 {"page": PageOut, "created": true, "revived": false, "action": Action}`; repeating a
 `client_id` gives `200` and `created: false` (`action: null`). `action` (week 9): `create_screen`,
@@ -488,7 +490,6 @@ page is live). Exclusions travel as `screen_items` rows with `removed_at`. `200 
 
 | What | When |
 |---|---|
-| `POST /pages/batch` (use one `POST /pages` per page) | week 16 |
 | `POST /pages/{id}/items/place` (free board) | weeks 16а–16б |
 | Other kinds of habit (`alias`, `default_time`, `never_do`, ...) | later |
 | `expense.*`, `document.*` field values (`task.*` and the shopping `facet.*` fields are filled from tasks since week 9, see `today.md`) | weeks 10-14 |

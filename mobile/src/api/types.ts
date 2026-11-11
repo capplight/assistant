@@ -1023,6 +1023,8 @@ export type SuggestionAcceptOut = {
   action: ActionOut | null;
   task: TaskOut | null;
   reminder_draft: ReminderParseOut | null;
+  /** Week 16 (R-55): the page a page proposal made («Сделать страницу «Ремонт»?» [Да]). */
+  page: PageOut | null;
 };
 
 /** An occurrence on «Сегодня»: the reminder, its own fire (`offset_min: 0`), its state. */
@@ -1054,6 +1056,8 @@ export type TodayOut = {
   tip: SuggestionOut | null;
   empty: boolean;
   example: string | null;
+  /** Week 16: ≤2 tiles of other pages, by the server's rule (none in the first 7 days). */
+  page_tiles: TodayTileOut[];
 };
 
 /** S30 «Что я для вас настроил» (pages.md `GET /habits`). */
@@ -1844,3 +1848,98 @@ export type DraftCreateIn = { client_id: string; request: string; channel: 'what
 export type DraftPatchIn = { text?: string; subject?: string | null; recipient_name?: string | null; channel?: 'whatsapp' | 'email' };
 
 export type DraftWriteOut = { draft: DraftOut | null; pending_action: PendingActionOut | null; repeated: boolean };
+
+// --- week 16: first launch, «Сегодня» tiles, «Скачать мои данные», account deletion ---
+// Contract: routes/onboarding.py, routes/account.py, routes/today.py (see README «Week 16»).
+
+/** 3-engineering 6.14: the three ways to start. */
+export type StartPath = 'gallery' | 'blank' | 'phrase_first';
+
+/** `GET /onboarding` (needs the base consents): the team's flags and the account's own state. */
+export type OnboardingConfigOut = {
+  default_path: StartPath;
+  paths_enabled: StartPath[];
+  /** What the account chose (another phone may have finished the first launch). */
+  path: string | null;
+  done_at: string | null;
+  /** The set «Пропустить» gives (Заметки + Дела и напоминания). */
+  default_templates: string[];
+  max_marked: number;
+};
+
+/** `POST /pages/batch`: the S35 choice in one request → one action (one «Отменить»). `catalog` = S35 later. */
+export type PagesBatchIn = {
+  client_id: string;
+  path: StartPath | 'skipped' | 'catalog';
+  template_keys: string[];
+  /** «Своя страница»'s name (path `blank`). */
+  title?: string;
+};
+
+export type PagesBatchOut = {
+  /** The pages made (or brought back), in the order of `template_keys`. */
+  pages: PageOut[];
+  /** Topic pages the account had already: nothing made for them. */
+  existing: { template_key: string; page_id: string }[];
+  action: ActionOut | null;
+  repeated: boolean;
+};
+
+/** `PUT /pages/{id}/today-tile`: «Показывать на Сегодня / Не показывать» (`auto` = the rule). */
+export type TodayTileIn = { mode: 'auto' | 'pinned' | 'hidden'; client_id: string };
+/** The page as it is now, and the action for «Отменить» (null when nothing changed). */
+export type TodayTileWriteOut = { page: PageOut | null; action: ActionOut | null };
+
+/** `POST /onboarding/suggested-pages`: S35 ticks after the first phrase, by code. */
+export type SuggestedPagesOut = { template_keys: string[]; reasons: Record<string, string> };
+
+/** `POST /events` (events.md). Only with the `analytics` consent. */
+export type EventIn = { client_id: string; name: string; props: Record<string, string | number | boolean>; client_ts: string };
+export type EventsIn = { platform: 'ios' | 'android' | 'web'; app_version: string; events: EventIn[] };
+
+/** `/today` week 16: one tile of another page (≤2, by the server's rule, template-screens 2.7). */
+export type TodayTileOut = {
+  page_id: string;
+  template_key: string;
+  title: string;
+  icon: string | null;
+  /** «Осталось 5», «Сегодня 7 500 ₸», «КП ждут ответа: 2»; a pinned page with nothing: «Всё куплено». */
+  text_ru: string;
+  pinned: boolean;
+};
+
+/** «Скачать мои данные» (3-engineering 4.9, 7.2): a ZIP made in the background, its link lives 24 h. */
+export type ExportStatus = 'queued' | 'running' | 'ready' | 'failed' | 'expired';
+export type ExportOut = {
+  id: string;
+  status: ExportStatus;
+  requested_at: string | null;
+  ready_at: string | null;
+  expires_at: string | null;
+  bytes: number | null;
+  /** Ready: the link itself is the permission (no session needed), until `expires_at`. */
+  download_url: string | null;
+  error: string | null;
+};
+
+/** `GET /me/deletion`: what S32 says. `needs_sms`: the account has a number, the SMS code confirms. */
+export type DeletionStateOut = {
+  status: string;
+  needs_sms: boolean;
+  grace_days: number;
+  delete_after: string | null;
+  /** «Вход закроется сразу.», «7 дней можно передумать — …», … (the server's words). */
+  points_ru: string[];
+};
+
+/** `POST /me/deletion`: number → `challenge_id` + `code`; anonymous → `confirm: true`. */
+export type DeletionIn = { challenge_id?: string; code?: string; confirm?: boolean };
+
+/** 202: sign-in is closed from now; `message_ru` «Аккаунт удаляется. До 18 ноября можно передумать: …». */
+export type DeletionOut = {
+  status: 'deletion_pending';
+  requested_at: string | null;
+  delete_after: string | null;
+  grace_days: number;
+  message_ru: string;
+};

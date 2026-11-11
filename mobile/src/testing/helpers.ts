@@ -35,7 +35,13 @@ export const offlineFetch: FetchLike = async () => {
 };
 
 /** Files "persisted" in memory: size = path length, sha256 = fixed fake. */
+/** How many times the phone's files were wiped (week 16, account deletion). */
+export const fileWipes = { count: 0 };
+
 export const fakeFiles: FileOps = {
+  wipeAll: async () => {
+    fileWipes.count += 1;
+  },
   persist: async (_src, name) => `file:///doc/records/${name}`,
   size: async (uri) => uri.length,
   sha256: async () => 'a'.repeat(64),

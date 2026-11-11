@@ -19,6 +19,10 @@ const INTEREST_TEMPLATES: Record<TourInterest, TemplateKey[]> = {
   money: ['expenses'],
 };
 
+/** The server's names of the welcome ticks (`intro_marks`, onboarding.md). */
+const INTRO_MARK: Record<TourInterest, string> = { voice: 'remind', photo: 'photo_receipt', find: 'find', kp: 'kp', money: 'expenses' };
+export const introMarks = (interests: TourInterest[]) => interests.map((i) => INTRO_MARK[i]);
+
 export function premarksFor(interests: TourInterest[], base: readonly TemplateKey[]): TemplateKey[] {
   const out = new Set<TemplateKey>(base);
   for (const i of interests) for (const k of INTEREST_TEMPLATES[i]) out.add(k);
@@ -74,6 +78,19 @@ type OnboardingState = {
   /** «Как к вам обращаться?». The server's name wins after a sign-in. */
   displayName: string | null;
   accountConsent: AccountConsent | null;
+  /** US-14 clocks (week 16): the first launch, the path chosen on S41, the first result. */
+  openedAt: string | null;
+  pathAt: string | null;
+  firstValueAt: string | null;
+  /** S41 was shown: when the app is opened again without a choice, the default set is made (US-33). */
+  startShownAt: string | null;
+  /** `GET /onboarding`: which path is the big one on S41 (team flag, default `phrase_first`). */
+  defaultPath: 'gallery' | 'blank' | 'phrase_first';
+  pathsEnabled: ('gallery' | 'blank' | 'phrase_first')[];
+  markOpened: () => void;
+  markStartShown: () => void;
+  markFirstValue: () => string | null;
+  setStartConfig: (c: { defaultPath: OnboardingState['defaultPath']; pathsEnabled: OnboardingState['pathsEnabled'] }) => void;
   setLanguage: (lang: Language) => void;
   toggleInterest: (key: TourInterest) => void;
   markWelcomeSeen: (skipped: boolean) => void;
@@ -101,6 +118,12 @@ const initial = {
   phoneLinkedAt: null,
   displayName: null,
   accountConsent: null,
+  openedAt: null,
+  pathAt: null,
+  firstValueAt: null,
+  startShownAt: null,
+  defaultPath: 'phrase_first' as const,
+  pathsEnabled: ['phrase_first', 'gallery', 'blank'] as ('gallery' | 'blank' | 'phrase_first')[],
 };
 
 export const useOnboarding = create<OnboardingState>()(
@@ -132,7 +155,17 @@ export const useOnboarding = create<OnboardingState>()(
             synced: false,
           },
         }),
-      setPath: (path) => set({ path }),
+      setPath: (path) => set((s) => ({ path, pathAt: path === 'skipped' ? s.pathAt : new Date().toISOString() })),
+      markOpened: () => set((s) => (s.openedAt ? s : { openedAt: new Date().toISOString() })),
+      markStartShown: () => set((s) => (s.startShownAt ? s : { startShownAt: new Date().toISOString() })),
+      markFirstValue: () => {
+        const s = useOnboarding.getState();
+        if (s.firstValueAt) return null;
+        const at = new Date().toISOString();
+        set({ firstValueAt: at });
+        return at;
+      },
+      setStartConfig: ({ defaultPath, pathsEnabled }) => set({ defaultPath, pathsEnabled }),
       complete: () => set({ doneAt: new Date().toISOString() }),
       markPhoneAsked: () => set((s) => ({ phoneAskedAt: s.phoneAskedAt ?? new Date().toISOString() })),
       markPhoneLinked: () => set({ phoneLinkedAt: new Date().toISOString() }),
@@ -169,7 +202,19 @@ export const useOnboarding = create<OnboardingState>()(
         phoneLinkedAt,
         displayName,
         accountConsent,
+        openedAt,
+        pathAt,
+        firstValueAt,
+        startShownAt,
+        defaultPath,
+        pathsEnabled,
       }) => ({
+        openedAt,
+        pathAt,
+        firstValueAt,
+        startShownAt,
+        defaultPath,
+        pathsEnabled,
         accountConsent,
         phoneAskedAt,
         phoneLinkedAt,

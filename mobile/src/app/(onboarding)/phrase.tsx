@@ -6,10 +6,10 @@ import { Pressable, TextInput, View } from 'react-native';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
-import { premarksFromPhrase } from '@/pages/premarks';
+import { suggestedPages } from '@/pages/premarks';
 import { useAlarms } from '@/alarms/store';
 import { getCapture } from '@/services';
-import { selectNoAi, useOnboarding } from '@/store/onboarding';
+import { introMarks, selectNoAi, useOnboarding } from '@/store/onboarding';
 import { MAX_FONT_SCALE, useTheme } from '@/theme';
 
 /**
@@ -34,7 +34,8 @@ export default function PhraseScreen() {
     if (!phrase) return;
     const capture = await getCapture();
     await capture.saveText({ text: phrase, source: 'typed', pageId: 'today' });
-    const mark = premarksFromPhrase(phrase).join(',');
+    // S35 ticks: the server's rule, run here (same vectors), so offline it is the same.
+    const mark = suggestedPages(phrase, introMarks(interests)).join(',');
     const a = useAlarms.getState();
     if (a.caps?.notifications !== 'granted' && !a.notifyAskedAt) {
       router.push({ pathname: '/notify', params: { saved: phrase, next: 'gallery', mark } });

@@ -153,7 +153,9 @@ export function getApi(): Api {
  * another account than the phone's records), or a linked account has to sign in first.
  */
 export function syncBlocked(): boolean {
-  return useOnboarding.getState().accountConsent !== null || useSession.getState().needsSignIn;
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const deleting = (require('@/account/data') as typeof import('@/account/data')).useAccount.getState().deleting !== null;
+  return deleting || useOnboarding.getState().accountConsent !== null || useSession.getState().needsSignIn;
 }
 
 export function getSyncEngine(): Promise<SyncEngine> {
@@ -209,6 +211,9 @@ export function getCapture(): Promise<Capture> {
         files: overrides.files ?? nativeFiles(),
         onSaved: () => {
           useDataVersion.getState().bump();
+          // US-14: the first saved record after S41 stops both clocks (week 16).
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          void (require('@/onboarding/service') as typeof import('@/onboarding/service')).noteFirstValue('record');
           // Until this save's own attempt says otherwise, do not tell an online person to wait.
           useConnectivity.getState().setOnline(true);
           kickSync();

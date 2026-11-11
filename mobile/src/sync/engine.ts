@@ -50,6 +50,9 @@ import type {
   ItemSource,
   ManualOut,
   PageCreateIn,
+  PageOut,
+  PagesBatchIn,
+  EventIn,
   ItemFacetOut,
   ExpenseCategoryOut,
   ExpenseOut,
@@ -100,6 +103,23 @@ export type ProfilePayload = { displayName: string | null };
 
 /** `pages.create`. Rows queued in weeks 1-2 have the same shape, with integer positions. */
 export type PagesCreatePayload = { pages: (Omit<Page, 'position'> & { position: string | number })[] };
+
+/** `page.today_tile` (week 16): `before` for «Отменить» while it waits; `actionId` once sent. */
+export type TodayTilePayload = {
+  pageId: string;
+  mode: 'auto' | 'pinned' | 'hidden';
+  before: 'auto' | 'pinned' | 'hidden';
+  clientId: string;
+  actionId?: string | null;
+};
+
+/** `pages.batch` (week 16): S35 «Подходит» / «Добавить (N)». `actionId` is kept for «Отменить». */
+export type PagesBatchPayload = {
+  clientId: string;
+  path: PagesBatchIn['path'];
+  pages: Page[];
+  actionId?: string | null;
+};
 
 /**
  * An event the server refused (`invalid`). The phone keeps its own alarm either way. A snooze whose
@@ -571,6 +591,14 @@ export class SyncEngine {
         return (e) => this.sendProfile(e);
       case 'pages.create':
         return (e) => this.sendPages(e);
+      case 'pages.batch':
+        return (e) => this.sendPagesBatch(e);
+      case 'events.send':
+        return (e) => this.sendEvents(e);
+      case 'page.today_tile':
+        return (e) => this.sendTodayTile(e);
+      case 'onboarding.welcome_seen':
+        return () => this.sendWelcomeSeen();
       case 'pages.update':
         return (e) => this.sendRename(e);
       case 'capture.text':
@@ -1195,6 +1223,87 @@ export class SyncEngine {
 
   private async sendProfile(e: OutboxEntry): Promise<void> {
     await this.d.api.patchProfile({ display_name: (e.payload as ProfilePayload).displayName });
+  }
+
+  /**
+   * Week 16: one POST /pages/batch for the S35 choice (one action). A server without the batch
+   * route (404) gets one POST /pages per page, as before.
+   */
+  private async sendPagesBatch(e: OutboxEntry): Promise<void> {
+    const p = e.payload as PagesBatchPayload;
+    const todo: Page[] = [];
+    for (const page of p.pages) {
+      const local = await this.d.pages.insertLocal(page);
+      if (!local.serverId) todo.push(page);
+    }
+    if (todo.length === 0) return;
+    const custom = todo.find((x) => x.templateKey === 'custom' && x.title);
+    let out;
+    try {
+      out = await this.d.api.createPagesBatch({
+        client_id: p.clientId,
+        path: p.path,
+        template_keys: [...new Set(todo.map((x) => x.templateKey))],
+        ...(custom?.title ? { title: custom.title } : {}),
+      });
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404 && err.code === 'not_found') {
+        await this.sendPages({ ...e, payload: { pages: todo } satisfies PagesCreatePayload });
+        return;
+      }
+      if (!isRetryable(err)) for (const x of todo) await this.d.pages.markFailed(x.id);
+      throw err;
+    }
+    // The server answers by template: made pages in the order sent, and the topic pages it had.
+    const made = new Map<string, PageOut[]>();
+    for (const page of out.pages) made.set(page.template_key, [...(made.get(page.template_key) ?? []), page]);
+    const had = new Map(out.existing.map((x) => [x.template_key, x.page_id]));
+    for (const local of todo) {
+      const page = made.get(local.templateKey)?.shift();
+      if (page) {
+        await this.d.pages.markSynced(local.id, page);
+        continue;
+      }
+      const existing = had.get(local.templateKey);
+      if (existing) {
+        // One topic, one page: this local page simply is the one the account already has.
+        await this.d.pages.adopt(local.id, existing);
+        await this.d.pages.applyRemote(await this.d.api.getPage(existing));
+      }
+    }
+    if (out.action) this.d.actions?.([out.action]);
+    await this.d.outbox.updatePayload(e.id, { ...p, actionId: out.action?.id ?? null } satisfies PagesBatchPayload);
+  }
+
+  /** Week 16: a tile pinned / hidden by hand. The page must be on the server first. */
+  private async sendTodayTile(e: OutboxEntry): Promise<void> {
+    const p = e.payload as TodayTilePayload;
+    const page = await this.d.pages.get(p.pageId);
+    if (!page || page.syncState === 'failed') return; // lives on this phone only
+    if (!page.serverId) throw new Error('page_not_synced');
+    const out = await this.d.api.setTodayTile(page.serverId, { mode: p.mode, client_id: p.clientId });
+    if (out.page) await this.d.pages.applyRemote(out.page);
+    if (out.action) this.d.actions?.([out.action]);
+    await this.d.outbox.updatePayload(e.id, { ...p, actionId: out.action?.id ?? null } satisfies TodayTilePayload);
+  }
+
+  /** Metrics only: a refusal is dropped. */
+  private async sendWelcomeSeen(): Promise<void> {
+    try {
+      await this.d.api.patchOnboarding({ welcome_seen: true });
+    } catch (err) {
+      if (isRetryable(err)) throw err;
+    }
+  }
+
+  /** Product events (events.md). Refused or unknown: dropped, they are only a measure. */
+  private async sendEvents(e: OutboxEntry): Promise<void> {
+    const info = this.d.deviceInfo();
+    try {
+      await this.d.api.sendEvents({ platform: info.platform, app_version: info.app_version ?? '0', events: (e.payload as { events: EventIn[] }).events });
+    } catch (err) {
+      if (isRetryable(err)) throw err;
+    }
   }
 
   /** One POST /pages per page; idempotent by client_id, so a retry of the row is safe. */

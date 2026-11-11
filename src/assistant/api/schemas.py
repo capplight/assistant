@@ -1260,6 +1260,7 @@ class SuggestionAcceptOut(BaseModel):
     action: "ActionOut | None" = None
     task: TaskOut | None = None
     reminder_draft: dict[str, Any] | None = None
+    page: "PageOut | None" = None  # week 16 (R-55): the page a page proposal made
 
 
 class SuggestionDismissOut(BaseModel):
@@ -1317,6 +1318,16 @@ class TodayOut(BaseModel):
     tip: SuggestionOut | None
     empty: bool
     example: str | None
+    page_tiles: list["PageTileOut"] = []  # week 16 (Ф-32): ≤2, by code, none in the first 7 days
+
+
+class PageTileOut(BaseModel):
+    page_id: uuid.UUID
+    template_key: str
+    title: str
+    icon: str
+    text_ru: str
+    pinned: bool
 
 
 class HabitPatchIn(BaseModel):

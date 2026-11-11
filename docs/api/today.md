@@ -268,6 +268,11 @@ Week 9 keys and what [Да] does (`do.type` — the phone does it, then calls `a
 | `task_from_item` (data_proposal) | a new record (≤3 days) proposes a to-do | «Добавить в дела: «Оплатить свет»?» | `accept` adds the task at once (`action` with «Отменить») |
 | `reminder_from_item` (data_proposal) | a new record proposes a reminder | «Напомнить: «Оплатить свет» — в пятницу?» | `accept` returns `reminder_draft` (S13, nothing saved; [Сохранить] → `POST /v1/reminders` with `created_via: "agent_suggestion"`) |
 
+Week 16 adds `page_from_stack`, `add_documents_page` (page proposals, R-55), the tip
+`add_ready_pages` (`do.type: "open_gallery"`) and `page_tiles` on «Сегодня» (≤2, by a code rule;
+the rule shows none in the account's first 7 days, but a tile pinned by hand with
+`PUT /pages/{id}/today-tile` shows from day one, and a hidden one never): see `onboarding.md`.
+
 Unknown `key` / `do.type`: show `text_ru` with [Не сейчас] only.
 
 ### `GET /v1/suggestions` → `{"proposals": [Suggestion], "tip": Suggestion | null}`

@@ -19,6 +19,8 @@ export type SharePort = {
   mail?(draft: MailDraft): Promise<MailResult>;
   /** Opens a link (WhatsApp's `wa.me`); false when nothing on the phone can open it. */
   openUrl?(url: string): Promise<boolean>;
+  /** Week 16: a link (the archive of «Скачать мои данные») into the system share sheet. */
+  shareLink?(url: string, message: string): Promise<void>;
 };
 
 const safeName = (n: string) => n.replace(/[\\/:*?"<>|]+/g, '_').slice(-120) || 'KP.pdf';
@@ -47,6 +49,13 @@ const nativeShare: SharePort = {
     const r = await Mail.composeAsync(draft);
     // Android does not say what happened: «Отправили?» asks the person.
     return r.status === 'sent' || r.status === 'saved' || r.status === 'cancelled' ? r.status : 'unknown';
+  },
+  async shareLink(url, message) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Share } = require('react-native') as typeof import('react-native');
+    // iOS shows `url` as the link; Android only sends `message`, so the link is in it too.
+    await Share.share({ message: `${message}
+${url}`, url });
   },
   async openUrl(url) {
     // eslint-disable-next-line @typescript-eslint/no-require-imports

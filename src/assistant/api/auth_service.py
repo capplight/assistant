@@ -71,6 +71,26 @@ def ensure_active(user: User) -> None:
         raise ApiError(403, "account_blocked")
 
 
+async def ensure_signin_allowed(db: AsyncSession, ctx: ApiContext, user: User) -> None:
+    """Sign-in to an account being deleted (week 16, docs/api/account.md): no tokens, but a short
+    «Восстановить» token for `POST /me/deletion/cancel`. Committed before raising (the request's
+    transaction is rolled back on the error)."""
+    if user.status == UserStatus.DELETION_PENDING:
+        from assistant.account import issue_restore, new_restore_token, pending_deletion
+
+        deletion = await pending_deletion(db, user.id)
+        if deletion is not None:
+            token = new_restore_token()
+            until = await issue_restore(db, deletion, ctx.hash(token, purpose="restore"),
+                                        minutes=ctx.settings.account_restore_token_minutes,
+                                        now=_now())  # fmt: skip
+            await db.commit()
+            raise ApiError(403, "account_deletion_pending", details={
+                "delete_after": deletion.cancel_until.isoformat(), "restore_token": token,
+                "restore_expires_at": until.isoformat()})  # fmt: skip
+    ensure_active(user)
+
+
 async def find_identity_user(
     db: AsyncSession, provider: AuthProvider, subject_hash: str
 ) -> User | None:
@@ -88,7 +108,7 @@ async def anonymous_sign_in(
     subject = ctx.hash(device_key, purpose="anon_device")
     user = await find_identity_user(db, AuthProvider.ANON_DEVICE, subject)
     if user is not None:
-        ensure_active(user)
+        await ensure_signin_allowed(db, ctx, user)
         return user, False
     try:
         async with db.begin_nested():
@@ -102,7 +122,7 @@ async def anonymous_sign_in(
         user = await find_identity_user(db, AuthProvider.ANON_DEVICE, subject)
         if user is None:
             raise
-        ensure_active(user)
+        await ensure_signin_allowed(db, ctx, user)
         return user, False
     return user, True
 

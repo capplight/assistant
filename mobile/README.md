@@ -1,4 +1,4 @@
-# Mobile app — week 15 (КП: phrase edits, versions, Word, sending, drafts) on week 14 («Документы и КП»: the card file and the КП wizard) on week 13 («Расходы 2»: receipts, QR, statements) on week 12 («Расходы» — the expense calculator) on week 11's PageFrame + view registry
+# Mobile app — week 16 (first launch, «Сегодня» tear-off sheet, «Мои данные», account deletion) on week 15 (КП: phrase edits, versions, Word, sending, drafts) on week 14 («Документы и КП»: the card file and the КП wizard) on week 13 («Расходы 2»: receipts, QR, statements) on week 12 («Расходы» — the expense calculator) on week 11's PageFrame + view registry
 
 Expo SDK 58 (React Native 0.88, New Architecture), TypeScript strict, expo-router.
 Spec: `../docs/spec/SPEC.md`, `../docs/spec/final/2-design.md`, `../docs/spec/final/3-engineering.md` §2.1, §11.2 (week 1, Mobile).
@@ -92,6 +92,48 @@ src/
   alarms/                    week 8: port (FakeAlarms), native + notification adapters, planner, S15 steps, service
 modules/alarms/              native Expo module: Android (Kotlin) AlarmManager + S14 + battery-guide, iOS (Swift) AlarmKit
 ```
+
+## Week 16: what works
+
+Contract: `../docs/api/onboarding.md`, `account.md`, `today.md` «Week 16» and `routes/onboarding.py`, `routes/account.py`,
+`routes/today.py` as of 2026-11-12. Shapes only in `src/api/types.ts` + `src/api/endpoints.ts`. **Checked by Jest with a
+fake server and synthetic data only: not against the real server, not on a device (share sheet with the archive link,
+push «Архив готов», SMS code untested on a phone).** KK strings of this week are drafts. No new dependency.
+
+- **First launch** (S01–S02 → S05 unchanged → S41): the big accent card on S41 is the team flag `GET /onboarding`
+  `default_path` (cached; bundled default «сначала фраза»), a path not in `paths_enabled` is not shown. S35 (shared
+  `components/Gallery.tsx`): «Сегодня» shown on and locked, «Подходит» needs ≥1 page, «Пропустить» (path 3 = the ticked
+  set, path 1 = Заметки + Дела), ≥150% one column. The choice is one outbox row `pages.batch` → `POST /pages/batch`
+  (one action; «Добавил 3 страницы [Отменить]»: waiting → dropped, sent → the action's undo); a server without the route
+  gets one `POST /pages` per page. Path 3 ticks come from `pages/premarks.ts`, a port of `onboarding/marks.py`; all 36
+  vectors of `docs/spec/vectors/onboarding-marks.json` run in Jest. US-33: closed on S41 or later without a choice →
+  the next launch makes the default set (`path: skipped`) and opens «Сегодня».
+- **`welcome_seen`**: after S05 an outbox row `onboarding.welcome_seen` → `PATCH /onboarding {welcome_seen: true}`.
+- **US-14 clocks**: first open, path chosen, first result (a saved record or reminder) kept in the onboarding store;
+  `first_value` / `onboarding_path_chosen` events go to `POST /events` only with the `analytics` consent — S05 does not
+  ask for it, so today nothing is sent.
+- **«+ Добавить страницу»** still makes one «Своя страница»; «Готовые страницы» under it opens S35 «Добавить (N)»
+  («Уже есть ✓», `path: catalog`). Page proposals (R-55, `page_from_stack`, `add_documents_page`) take «Да» and open the
+  page; the tip `add_ready_pages` (`open_gallery`) opens the gallery.
+- **«Сегодня» tear-off sheet**: the day's number on a «листок» (one line «Вторник, 12 ноября» at ≥150%), «Дальше» first
+  (nearest ring today with [Сделано] [Отложить на 10 минут], else the first open to-do with [Сделано]), «Сегодня
+  свободно. Скажите: …», ≤2 tiles from `page_tiles` (offline the phone counts «Покупки» and «Расходы» by the same rule;
+  the rule gives none in the first 7 days; a tile pinned by hand shows from day one, a hidden one never), «⋯» on a tile
+  pins / hides it (outbox `page.today_tile` → `PUT /pages/{id}/today-tile`, «Отменить»: waiting → dropped, sent → its
+  action's undo). «Без ИИ»: no
+  proposals or tips.
+- **«Мои данные»** (`app/my-data.tsx`, «Ещё»): «Скачать мои данные» → «Готовлю архив…» (polled every 5 s; push
+  `export_ready` opens it) → «Скачать (до …)» hands the 24-hour link to the system share sheet.
+- **Deletion** (`app/delete-account.tsx`, S32): «Скачать мои данные» first, the server's points (bundled offline / in
+  KK), a line saying what cannot be undone, SMS code (account with a number, `POST /me/deletion/otp`) or «Да, удалить
+  всё» (anonymous); [Отмена] first. After 202: alarms cancelled, records / pages / outbox / session wiped, the files on
+  disk too (`Documents/records` — shares, photos, voice, documents — and the app's cache: КП / Word files, receipt
+  photos, unsaved recordings), the name forgotten; only the restore token and the install's device key stay; «Аккаунт
+  удаляется…» (`app/account-deleting.tsx`); «Восстановить» = device-key sign-in → `403 account_deletion_pending` →
+  `POST /me/deletion/cancel`; a phone sign-in that meets a deleting account shows the same screen.
+
+Not yet: S35 «Открыть» on «Уже есть», «Документы и КП» tile offline, the Kazakh points of S32 are the phone's own
+draft. The on-disk wipe (`expo-file-system` `Directory.delete` / `list`) is tested only through a fake.
 
 ## Week 15: what works
 

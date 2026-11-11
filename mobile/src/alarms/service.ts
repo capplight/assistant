@@ -594,6 +594,8 @@ export async function saveReminder(i: ReminderInput): Promise<ReminderOut> {
   };
   await (await getOutbox()).enqueue('reminder.create', { body });
   d().kickSync();
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  void (require('@/onboarding/service') as typeof import('@/onboarding/service')).noteFirstValue('reminder');
   return r;
 }
 

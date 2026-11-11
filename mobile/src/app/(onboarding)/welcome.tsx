@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { Camera, FileText, Mic, Search, Wallet } from 'lucide-react-native';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, View } from 'react-native';
 
@@ -28,7 +28,10 @@ export default function WelcomeScreen() {
   const theme = useTheme();
   const { t } = useTranslation();
   const [frame, setFrame] = useState(0);
-  const { language, setLanguage, interests, toggleInterest, markWelcomeSeen } = useOnboarding();
+  const { language, setLanguage, interests, toggleInterest, markWelcomeSeen, markOpened } = useOnboarding();
+  useEffect(() => {
+    markOpened(); // US-14 criterion A starts here
+  }, [markOpened]);
 
   const finish = (skipped: boolean) => {
     markWelcomeSeen(skipped);

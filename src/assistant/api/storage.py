@@ -133,6 +133,21 @@ class LocalObjectStorage:
     async def delete(self, key: str) -> None:
         await asyncio.to_thread(self._path(key).unlink, missing_ok=True)
 
+    async def delete_prefix(self, prefix: str) -> None:
+        """Account purge (spec 7.2): everything under `u/<user public id>/`. S3 does the same
+        with a listing + batch delete."""
+        if not prefix.startswith("u/") or not prefix.endswith("/") or len(prefix) < 5:
+            raise StorageTokenError("only a user prefix can be swept")
+        path = self._path(prefix.rstrip("/"))
+
+        def sweep() -> None:
+            import shutil
+
+            if path.is_dir():
+                shutil.rmtree(path)
+
+        await asyncio.to_thread(sweep)
+
 
 def make_storage(
     backend: str, *, local_dir: str, public_base_url: str, secret: bytes

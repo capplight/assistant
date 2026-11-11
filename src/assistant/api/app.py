@@ -12,6 +12,7 @@ from assistant.ai import Router, build_router
 from assistant.api.deps import ApiContext
 from assistant.api.errors import install_error_handlers
 from assistant.api.routes import (
+    account,
     actions,
     auth,
     chat,
@@ -30,6 +31,7 @@ from assistant.api.routes import (
     me,
     memory,
     misc,
+    onboarding,
     pages,
     reminders,
     sync,
@@ -37,6 +39,7 @@ from assistant.api.routes import (
     today,
     uploads,
     views,
+    web_delete,
 )
 from assistant.api.sms import SmsSender, make_sms_sender
 from assistant.api.storage import LocalObjectStorage, ObjectStorage, make_storage
@@ -125,6 +128,9 @@ def create_app(
     # memory's /pages/{id}/summary, /items/{id}/original/pin: more specific, so before the others.
     for router in (memory.router, memory.pages_router, memory.items_router):
         v1.include_router(router)
+    # week 16: /pages/batch and /pages/{id}/today-tile before the pages router's /{page_id}
+    for router in (onboarding.router, onboarding.pages_router, account.router):
+        v1.include_router(router)
     for router in (auth.router, consents.router, devices.router, uploads.router, items.router,
                    pages.items_router, pages.habits_router, views.router, pages.router,
                    pages.templates_router, sync.router, me.router, misc.ai, chat.router,
@@ -139,4 +145,5 @@ def create_app(
         v1.include_router(misc.dev_storage)
     app.include_router(v1)
     app.include_router(misc.health)
+    app.include_router(web_delete.router)  # W-01, plain HTML at /account/delete
     return app

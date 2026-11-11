@@ -254,8 +254,18 @@ async def stack_to_page(collection_id: uuid.UUID, user: BaseUser, db: Db,
             return {"page": page_out(page).model_dump(mode="json") if page else None,
                     "action": (await actions_dicts(db, [done], now))[0], "repeated": True}
     c = await _own(db, user, collection_id)
+    page, action, n = await stack_page(db, user.id, c, client_id=body.client_id,
+                                       title=body.title, by=Initiator.USER, now=now)  # fmt: skip
+    return {"page": page_out(page).model_dump(mode="json"), "records": n,
+            "action": (await actions_dicts(db, [action], now))[0], "repeated": False}
+
+
+async def stack_page(db: Db, user_id: int, c: Collection, *, client_id: uuid.UUID | None,
+                     title: str | None, by: str, now: datetime) -> tuple[Screen, Action, int]:
+    """A new «Своя страница» with the stack's records; the stack leaves its page. One action;
+    «Отменить» takes the page away and brings the stack back. Also R-55's «Да» (week 16)."""
     live = await db.scalar(select(func.count()).select_from(Screen).where(
-        Screen.user_id == user.id, Screen.deleted_at.is_(None)))  # fmt: skip
+        Screen.user_id == user_id, Screen.deleted_at.is_(None)))  # fmt: skip
     if (live or 0) >= MAX_PAGES:
         raise ApiError(422, "pages_limit")
     template = await latest_template(db, "custom")
@@ -265,10 +275,11 @@ async def stack_to_page(collection_id: uuid.UUID, user: BaseUser, db: Db,
         .where(CollectionItem.collection_id == c.id, CollectionItem.removed_by_user_at.is_(None),
                Item.deleted_at.is_(None), Item.hidden_reason.is_(None))
         .order_by(func.coalesce(Item.occurred_at, Item.created_at).desc(), Item.id.desc()))]
-    page = await create_page(db, user.id, template, client_id=body.client_id or uuid.uuid4(),
-                             title=(body.title or c.title)[:60],
+    page = await create_page(db, user_id, template, client_id=client_id or uuid.uuid4(),
+                             title=(title or c.title)[:60],
                              icon=c.icon if c.icon in ICONS else None,
-                             created_by=ScreenCreatedBy.USER)  # fmt: skip
+                             created_by=ScreenCreatedBy.AGENT if by == Initiator.AGENT
+                             else ScreenCreatedBy.USER)  # fmt: skip
     ops: list[dict[str, Any]] = [{"op": "add_screen_item", "page": str(page.public_id),
                                   "item": i, "added_by": "user"} for i in members]
     ops.append({"op": "restore_collection", "id": str(c.public_id),
@@ -276,21 +287,20 @@ async def stack_to_page(collection_id: uuid.UUID, user: BaseUser, db: Db,
     old = await db.get(Screen, c.screen_id) if c.screen_id else None
     if old is not None:
         ops += _ungroup_ops(old, c.title, await _grouped_rows(db, c), True)
-    out = await engine.apply(db, user.id, ops, by=Initiator.USER, check=False, now=now)
+    out = await engine.apply(db, user_id, ops, by=by, check=False, now=now)
     inverse = [*out.inverse, {"op": "delete_entity_soft", "entity": "screens",
                               "id": str(page.public_id)}]  # fmt: skip
-    n = len(members)
-    sentence = f"Сделал страницу «{page.title}» из стопки"
-    action = await record(db, user_id=user.id, kind=ActionKind.CREATE_SCREEN,
-                          initiated_by=Initiator.USER, summary={"ru": sentence, "kk": None},
+    sentence = (f"Страница «{page.title}» добавлена" if by == Initiator.AGENT
+                else f"Сделал страницу «{page.title}» из стопки")  # fmt: skip
+    action = await record(db, user_id=user_id, kind=ActionKind.CREATE_SCREEN,
+                          initiated_by=by, summary={"ru": sentence, "kk": None},
                           changes=[{"item_id": None, "title": page.title, "kind": "create_page",
                                     "page_id": str(page.public_id),
                                     "text": f"Новая страница «{page.title}»"}],
-                          inverse=inverse, now=now, screen_id=page.id, client_id=body.client_id,
+                          inverse=inverse, now=now, screen_id=page.id, client_id=client_id,
                           extra={"created_page_id": str(page.public_id),
                                  "collection_id": str(c.public_id)})  # fmt: skip
     await refresh_count(db, c)
     await db.flush()
     await db.refresh(page)
-    return {"page": page_out(page).model_dump(mode="json"), "records": n,
-            "action": (await actions_dicts(db, [action], now))[0], "repeated": False}
+    return page, action, len(members)

@@ -250,6 +250,20 @@ class Settings(BaseSettings):
     # AES-256-GCM key for БИН/ИИН and bank details of the company profile (base64 of 32 bytes).
     kp_field_key: SecretStr = Field(default=SecretStr(""))
 
+    # First launch (week 16, spec 6.14, Ф-24, R-60): the path S41 offers first, and which paths
+    # it shows. Env ONBOARDING_DEFAULT_PATH, ONBOARDING_PATHS_ENABLED='["gallery", ...]'.
+    onboarding_default_path: str = "phrase_first"  # gallery | blank | phrase_first
+    onboarding_paths_enabled: list[str] = ["gallery", "blank", "phrase_first"]
+    # Account deletion (week 16, spec 7.2, F-27). Ф-6 is open (0 or 7): the team's 7 by default.
+    # Sign-in is closed at once; within these days a sign-in can bring the account back; then
+    # `account:purge` deletes everything within 24 h.
+    account_delete_grace_days: int = 7
+    account_restore_token_minutes: int = 15  # the «Восстановить» token a sign-in gets
+    # «Скачать мои данные» (F-26, US-19): the link lives this long, then the file is deleted.
+    export_link_hours: int = 24
+    # Web deletion page W-01 (Google Play): code requests per IP per hour.
+    web_delete_ip_per_hour: int = 5
+
 
 @lru_cache
 def get_settings() -> Settings:

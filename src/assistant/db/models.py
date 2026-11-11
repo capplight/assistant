@@ -181,6 +181,10 @@ class User(Base):
     # 0015: tombstones up to this seq were deleted (retention): an older `since` resyncs fully
     sync_floor_seq: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
     last_active_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # 0022: first launch (spec 3.11): gallery | blank | phrase_first | skipped
+    onboarding_path: Mapped[str | None] = mapped_column(Text)
+    onboarding_done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    welcome_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     trips: Mapped[list["Trip"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 

@@ -18,6 +18,14 @@ export type OutboxKind =
   | 'item.restore'
   | 'profile.update'
   | 'pages.create'
+  /** Week 16: the S35 choice in one request (POST /pages/batch, one action, one «Отменить»). */
+  | 'pages.batch'
+  /** Week 16: product events (POST /events), only with the `analytics` consent. */
+  | 'events.send'
+  /** Week 16: `PATCH /onboarding {welcome_seen}` after S05 (metrics). */
+  | 'onboarding.welcome_seen'
+  /** Week 16: a tile on «Сегодня» pinned / hidden by hand (PUT /pages/{id}/today-tile). */
+  | 'page.today_tile'
   | 'pages.update'
   | 'capture.text'
   /** Unused: questions stream live (src/chat), they are not queued here. Old rows stay pending. */
@@ -117,6 +125,8 @@ export interface OutboxRepository {
   countPending(): Promise<number>;
   /** Oldest first: captures already sent, to replay them on another account. */
   listSent(kind: OutboxKind): Promise<OutboxEntry[]>;
+  /** Week 16: the account is being deleted — nothing of it stays on this phone. */
+  wipe(): Promise<void>;
 }
 
 export const OUTBOX_SCHEMA_VERSION = 1;
@@ -262,6 +272,10 @@ export class SqliteOutboxRepository implements OutboxRepository {
     private readonly now: () => number = Date.now,
   ) {}
 
+  async wipe() {
+    await this.db.runAsync('DELETE FROM outbox');
+  }
+
   async enqueue(kind: OutboxKind, payload: unknown): Promise<OutboxEntry> {
     const ts = this.now();
     const entry: OutboxEntry = {
@@ -354,6 +368,10 @@ export class InMemoryOutboxRepository implements OutboxRepository {
   private seq = 0;
 
   constructor(private readonly now: () => number = Date.now) {}
+
+  async wipe() {
+    this.rows.clear();
+  }
 
   async enqueue(kind: OutboxKind, payload: unknown): Promise<OutboxEntry> {
     // seq keeps insertion order stable when timestamps collide

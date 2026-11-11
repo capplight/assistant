@@ -25,8 +25,8 @@ import { useTheme } from '@/theme';
  * «Сегодня» first, always, without buttons. Each page: ↑ ↓ (48 pt), «⋯» (Открыть, Переименовать,
  * Убрать страницу), long press → drag (the double of ↑ ↓). The tab line is drawn where the tabs
  * end (2 at font ≥150%). Every change at once with «Отменить», offline and in «Без ИИ» too.
- * «+ Добавить страницу» makes a «Своя страница» for now: the gallery outside the first launch
- * (S35 «Добавить (N)») is not built yet.
+ * «+ Добавить страницу» just makes a «Своя страница» (founder, week 16); the ready pages (S35
+ * «Добавить (N)») open only from «Готовые страницы» below it, when the person asks for them.
  */
 export default function MyPagesScreen() {
   const theme = useTheme();
@@ -157,6 +157,14 @@ export default function MyPagesScreen() {
             disabled={total >= MAX_PAGES}
             onPress={() => setNaming({ page: null })}
             style={{ marginTop: theme.space[3] }}
+          />
+          <Button
+            testID="my-pages-templates"
+            label={t('pages.ready')}
+            variant="text"
+            minHeight={theme.size.minTouch}
+            disabled={total >= MAX_PAGES}
+            onPress={() => router.push('/pages-gallery')}
           />
           <AppText testID="my-pages-count" variant="meta" style={{ marginTop: theme.space[2] }}>
             {t('pages.count', { n: total })}

@@ -1,4 +1,5 @@
 import { getLocales } from 'expo-localization';
+import { noteDeletionPending } from '@/account/data';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -118,6 +119,11 @@ export default function PhoneScreen() {
       setName(out.user.display_name ?? '');
       setStep('name');
     } catch (e) {
+      // Week 16: this number's account is being deleted → «Восстановить?» (account.md).
+      if (noteDeletionPending(e)) {
+        router.replace('/account-deleting');
+        return;
+      }
       failed(e);
     } finally {
       setBusy(false);

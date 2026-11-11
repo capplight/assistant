@@ -159,7 +159,10 @@ export function ReminderRows({
   now,
   testPrefix = 'rem',
   canDelete = false,
+  skip,
 }: {
+  /** Week 16: the ring already shown in «Дальше» on «Сегодня». */
+  skip?: string | null;
   segment: Exclude<Segment, 'missed'>;
   now: number;
   testPrefix?: string;
@@ -174,7 +177,7 @@ export function ReminderRows({
   const late = useAlarms((s) => lateRisk(s.caps));
   const all = upcoming({ ...src, now }, 14 * 24 * 60 * 60_000);
   const eod = endOfDay(now);
-  const list = all.filter((a) => (segment === 'today' ? a.fireAt <= eod : a.fireAt > eod));
+  const list = all.filter((a) => a.group !== skip && (segment === 'today' ? a.fireAt <= eod : a.fireAt > eod));
   if (list.length === 0) return null;
   return (
     <View style={{ marginBottom: theme.space[3] }}>

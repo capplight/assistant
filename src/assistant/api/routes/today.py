@@ -12,7 +12,7 @@ from typing import Annotated, Any
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from assistant.actions import actions_dicts, record
 from assistant.api.consent_gate import AI_CONSENTS, missing_consents, require_base_consent
@@ -23,6 +23,7 @@ from assistant.api.schemas import (
     ChatMessageOut,
     DoneForYouOut,
     FireOut,
+    PageTileOut,
     ReminderOut,
     SuggestionAcceptIn,
     SuggestionAcceptOut,
@@ -39,6 +40,7 @@ from assistant.chat import store as chat_store
 from assistant.db.models import Item, Reminder, User
 from assistant.db.models_actions import Action, ActionKind, Initiator
 from assistant.db.models_chat import ConversationMessage, Delivery, MessageRole, MessageState
+from assistant.db.models_pages import Screen, ScreenKind
 from assistant.db.models_reminders import AppReminderKind, FireState, ReminderFire
 from assistant.db.models_tasks import ListKey, SuggestionKind, Task
 from assistant.pages import lock_user
@@ -61,6 +63,88 @@ DONE_SHOWN = 3
 
 def _now() -> datetime:
     return datetime.now(UTC).replace(microsecond=0)
+
+
+# «Сегодня» page tiles (Ф-32, template-screens 2.7): by code, ≤2; the rule picks none in the
+# first 7 days, a tile pinned by hand shows from day one.
+TILE_QUIET_DAYS = 7
+MAX_TILES = 2
+CURRENCY_SIGN = {"KZT": "₸", "USD": "$", "EUR": "€", "RUB": "₽", "KGS": "сом", "UZS": "сум"}
+
+
+def money(amount: Any, currency: str) -> str:
+    """«7 500 ₸», «12,50 $»: groups of three, kopecks only when there are any."""
+    from decimal import Decimal
+
+    value = Decimal(str(amount)).quantize(Decimal("0.01"))
+    whole, frac = divmod(abs(value), 1)
+    digits = f"{int(whole):,}".replace(",", " ")
+    tail = f",{int(frac * 100):02d}" if frac else ""
+    sign = "-" if value < 0 else ""
+    return f"{sign}{digits}{tail} {CURRENCY_SIGN.get(currency, currency)}"
+
+
+async def _tile_text(db: Db, page: Screen, user_id: int, day: Any) -> tuple[str | None, str]:
+    """(what the page has for today, or None; the line a pinned tile shows when it has none)."""
+    key = page.template_key
+    if key == "shopping":
+        n = await db.scalar(text("""
+            SELECT count(*) FROM tasks t JOIN items i ON i.id = t.item_id
+            WHERE t.user_id = :u AND t.list_key = 'shopping' AND t.deleted_at IS NULL
+              AND t.done_at IS NULL AND i.deleted_at IS NULL"""), {"u": user_id}) or 0
+        return (f"Осталось {n}" if n else None), "Всё куплено"
+    if key == "expenses":
+        recent = await db.scalar(text("""
+            SELECT 1 FROM expense_entries WHERE user_id = :u AND deleted_at IS NULL
+              AND direction = 'expense' AND spent_on > CAST(:d AS date) - 7 LIMIT 1"""),
+            {"u": user_id, "d": day})  # fmt: skip
+        if not recent:
+            return None, "Сегодня трат нет"
+        sums = (await db.execute(text("""
+            SELECT currency, sum(amount) FROM expense_entries WHERE user_id = :u
+              AND deleted_at IS NULL AND direction = 'expense' AND spent_on = CAST(:d AS date)
+            GROUP BY currency ORDER BY (currency = 'KZT') DESC, currency"""),
+            {"u": user_id, "d": day})).all()  # fmt: skip
+        if not sums:
+            return "Сегодня трат нет", "Сегодня трат нет"
+        return "Сегодня " + " · ".join(money(a, c) for c, a in sums), "Сегодня трат нет"
+    if key == "documents":
+        n = await db.scalar(text("""
+            SELECT count(*) FROM documents WHERE user_id = :u AND deleted_at IS NULL
+              AND deal_status IN ('sent', 'seen')"""), {"u": user_id}) or 0
+        return (f"КП ждут ответа: {n}" if n else None), "КП: ничего не ждёт"
+    n = await db.scalar(text("""
+        SELECT count(*) FROM screen_items si JOIN items i ON i.id = si.item_id
+        WHERE si.screen_id = :s AND si.removed_by_user_at IS NULL AND i.deleted_at IS NULL
+          AND i.hidden_reason IS NULL"""), {"s": page.id}) or 0
+    return None, f"Записей: {n}"
+
+
+async def page_tiles(db: Db, user: User, now: datetime, day: Any) -> list[PageTileOut]:
+    """Pinned first, then the pages that have something for today, in tab order; ≤2. «Дела» are
+    in the day list already, so they get a tile only when pinned. In the account's first 7 days
+    only pinned tiles show."""
+    # the first 7 days the rule shows nothing; a tile the person pinned by hand is theirs
+    young = now - user.created_at < timedelta(days=TILE_QUIET_DAYS)
+    pages = list(await db.scalars(
+        select(Screen).where(Screen.user_id == user.id, Screen.deleted_at.is_(None),
+                             Screen.kind == ScreenKind.PAGE)
+        .order_by(Screen.position, Screen.public_id)))  # fmt: skip
+    pinned: list[PageTileOut] = []
+    auto: list[PageTileOut] = []
+    for p in pages:
+        mode = (p.view_state or {}).get("today_tile") or "auto"
+        if mode == "hidden" or (mode == "auto" and (young or p.template_key == "tasks")):
+            continue
+        if mode == "auto" and len(auto) >= MAX_TILES:
+            continue
+        has, empty = await _tile_text(db, p, user.id, day)
+        if mode != "pinned" and has is None:
+            continue
+        tile = PageTileOut(page_id=p.public_id, template_key=p.template_key, title=p.title,
+                           icon=p.icon, text_ru=has or empty, pinned=mode == "pinned")  # fmt: skip
+        (pinned if mode == "pinned" else auto).append(tile)
+    return (pinned + auto)[:MAX_TILES]
 
 
 async def _occurrences(db: Db, user_id: int, start: datetime,
@@ -169,9 +253,11 @@ async def today(user: GatedUser, db: Db, ctx: Ctx) -> TodayOut:
         select(Reminder.id).where(Reminder.user_id == user.id, Reminder.deleted_at.is_(None),
                                   Reminder.kind == AppReminderKind.NORMAL).limit(1))  # fmt: skip
 
+    tiles = await page_tiles(db, u, now, day)
     sections = [name for name, has in (
         ("banner", banner is not None), ("missed", bool(missed)),
-        ("today", bool(due or todo or shopping)), ("done_for_you", bool(recent)),
+        ("today", bool(due or todo or shopping)), ("page_tiles", bool(tiles)),
+        ("done_for_you", bool(recent)),
         ("proposals", bool(proposals)), ("tip", tip is not None)) if has]  # fmt: skip
     name = (u.display_name or "").strip()
     await db.flush()
@@ -188,7 +274,7 @@ async def today(user: GatedUser, db: Db, ctx: Ctx) -> TodayOut:
                                    count_today=count_today),
         banner=banner, proposals=await _suggestions_out(db, proposals),
         tip=(await _suggestions_out(db, [tip]))[0] if tip else None,
-        empty=empty, example=EXAMPLE if empty else None,
+        empty=empty, example=EXAMPLE if empty else None, page_tiles=tiles,
     )  # fmt: skip
 
 
@@ -242,6 +328,9 @@ async def accept(suggestion_id: uuid.UUID, user: GatedUser, db: Db, ctx: Ctx, ki
             task_out = TaskOut.model_validate((await tasks.tasks_dicts(db, [task]))[0])
         if action is not None:
             action_out = ActionOut.model_validate((await actions_dicts(db, [action], now))[0])
+    page_out_ = None
+    if s.key in engine.PAGE_PROPOSALS:
+        page_out_, action_out = await _accept_page(db, user.id, s, repeated, now)
     out = (await _suggestions_out(db, [s]))[0]
     if s.key == "reminder_from_item":
         u = await db.get(User, user.id)
@@ -264,7 +353,65 @@ async def accept(suggestion_id: uuid.UUID, user: GatedUser, db: Db, ctx: Ctx, ki
                  "parser": "rules_first" if ctx.settings.reminders_rules_first else "llm",
                  "created_via": "agent_suggestion"}  # fmt: skip
     return SuggestionAcceptOut(suggestion=out, action=action_out, task=task_out,
-                               reminder_draft=draft)  # fmt: skip
+                               reminder_draft=draft, page=page_out_)  # fmt: skip
+
+
+async def _accept_page(db: Db, user_id: int, s: Any, repeated: bool,
+                       now: datetime) -> tuple[Any, ActionOut | None]:  # fmt: skip
+    """R-55 [Да]: the page is made now, by the assistant, with «Отменить» (week 16)."""
+    from assistant.api.routes.collections import stack_page
+    from assistant.api.routes.pages import _bring_back, _live_singleton, _removed_singleton
+    from assistant.api.routes.pages import page_out as page_view
+    from assistant.db.models_dedup import Collection
+    from assistant.pages import create_page, fill_page, latest_template
+
+    action = await db.get(Action, s.action_id) if s.action_id else None
+    page = None
+    if action is None and not repeated:
+        if s.key == "page_from_stack":
+            c = await db.scalar(select(Collection).where(
+                Collection.user_id == user_id, Collection.deleted_at.is_(None),
+                Collection.public_id == uuid.UUID(str(s.payload.get("collection_id")))))
+            if c is None:
+                raise ApiError(410, "suggestion_expired")
+            page, action, _ = await stack_page(db, user_id, c, client_id=None, title=None,
+                                               by=Initiator.AGENT, now=now)  # fmt: skip
+        else:
+            page = await _live_singleton(db, user_id, "documents")
+            if page is None:
+                page = await _removed_singleton(db, user_id, "documents")
+                if page is not None:
+                    await _bring_back(db, page)
+                else:
+                    template = await latest_template(db, "documents")
+                    assert template is not None
+                    from assistant.api.routes.pages import _check_room
+                    from assistant.db.models_pages import ScreenCreatedBy
+
+                    await _check_room(db, user_id)
+                    page = await create_page(db, user_id, template, client_id=uuid.uuid4(),
+                                             created_by=ScreenCreatedBy.AGENT)  # fmt: skip
+                    await fill_page(db, page)
+                sentence = f"Страница «{page.title}» добавлена"
+                action = await record(
+                    db, user_id=user_id, kind=ActionKind.CREATE_SCREEN,
+                    initiated_by=Initiator.AGENT, summary={"ru": sentence, "kk": None},
+                    changes=[{"item_id": None, "title": page.title, "kind": "create_page",
+                              "page_id": str(page.public_id), "text": sentence}],
+                    inverse=[{"op": "delete_entity_soft", "entity": "screens",
+                              "id": str(page.public_id)}],
+                    now=now, screen_id=page.id,
+                    extra={"created_page_id": str(page.public_id)})  # fmt: skip
+        if action is not None:
+            s.action_id = action.id
+        await db.flush()
+    if page is None and action is not None and action.screen_id:
+        page = await db.get(Screen, action.screen_id)
+    if page is not None:
+        await db.refresh(page)
+    action_out = (ActionOut.model_validate((await actions_dicts(db, [action], now))[0])
+                  if action is not None else None)  # fmt: skip
+    return (page_view(page) if page is not None else None), action_out
 
 
 @suggestions_router.post("/{suggestion_id}/dismiss", response_model=SuggestionDismissOut)

@@ -143,7 +143,7 @@ describe('S05 wired to the backend', () => {
     await settle(() => r.getPathname() === '/start');
 
     const pending = await outbox.listPending();
-    expect(pending.map((e) => e.kind)).toEqual(['consent.accept', 'device.register']);
+    expect(pending.map((e) => e.kind)).toEqual(['consent.accept', 'device.register', 'onboarding.welcome_seen']);
     const req = (pending[0]?.payload as { request: { consents: { kind: string }[] } }).request;
     expect(req.consents.map((c) => c.kind)).toEqual(['pd_processing', 'terms']);
     // the hash of exactly the text that was on screen

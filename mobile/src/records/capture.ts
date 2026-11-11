@@ -11,6 +11,12 @@ export interface FileOps {
   persist(srcUri: string, name: string): Promise<string>;
   size(uri: string): Promise<number>;
   sha256(uri: string): Promise<string>;
+  /**
+   * Week 16, account deletion: every file of the person on this phone goes — the records' copies
+   * (shares, photos, voice fragments, documents) and everything the app left in its cache (КП
+   * files, receipt photos, recordings not saved yet).
+   */
+  wipeAll?(): Promise<void>;
 }
 
 export type CaptureDeps = {

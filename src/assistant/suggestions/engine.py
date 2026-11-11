@@ -63,7 +63,14 @@ TIPS: dict[str, Tip] = {
                            {"type": "show_share_help"}),
     "link_phone": Tip("Сохраните записи — укажите номер", "Указать номер",
                       {"type": "link_phone"}),
+    # week 16 (US-33): the account started from a blank page; from its 2nd day, once
+    "add_ready_pages": Tip("Добавить готовые страницы?", "Посмотреть", {"type": "open_gallery"}),
 }  # fmt: skip
+# Page proposals (R-55, week 16): ≤1 a week, never in the first 10 minutes, each topic once.
+PAGE_PROPOSALS = ("page_from_stack", "add_documents_page")
+PAGE_PROPOSAL_EVERY = timedelta(days=7)
+PAGE_PROPOSAL_AFTER = timedelta(minutes=10)
+PAGE_FROM_STACK_RECORDS = 10
 NO_LABEL = "Не сейчас"
 
 
@@ -88,6 +95,14 @@ def view(s: Suggestion, item_public_id: uuid.UUID | None = None) -> dict[str, An
         when = payload.get("when_text") or ""
         text_ru = f"Напомнить: «{payload.get('text', '')}»" + (f" — {when}?" if when else "?")
         yes, do = "Да, напомнить", {"type": "accept"}
+    elif s.key == "page_from_stack":
+        title = payload.get("title", "")
+        text_ru = (f"Про «{title}» уже {payload.get('count', 0)} записей. "
+                   f"Сделать страницу «{title}»?")  # fmt: skip
+        yes, do = "Да, сделать", {"type": "accept"}
+    elif s.key == "add_documents_page":
+        text_ru, yes = "Добавить страницу «Документы и КП»?", "Да, добавить"
+        do = {"type": "accept"}
     else:
         text_ru, yes, do = "", "Да", {"type": "none"}
     return {"id": s.public_id, "kind": s.kind, "key": s.key, "text_ru": text_ru,
@@ -163,6 +178,50 @@ async def _new_proposals(session: AsyncSession, user_id: int, now: datetime,
     await session.flush()
 
 
+async def _page_proposals(session: AsyncSession, user: User, now: datetime,
+                          settings: Settings) -> None:  # fmt: skip
+    """R-55: the assistant offers a page; nothing is made before [Да]. At most one a week, not in
+    the first 10 minutes, each topic once ever."""
+    if now - user.created_at < PAGE_PROPOSAL_AFTER:
+        return
+    last = await session.scalar(select(func.max(Suggestion.created_at)).where(
+        Suggestion.user_id == user.id, Suggestion.key.in_(PAGE_PROPOSALS)))  # fmt: skip
+    if last is not None and now - last < PAGE_PROPOSAL_EVERY:
+        return
+    expires = now + timedelta(hours=settings.suggestions_proposal_hours)
+    stack = (await session.execute(text("""
+        SELECT c.public_id, c.title, c.item_count FROM collections c
+        WHERE c.user_id = :u AND c.deleted_at IS NULL AND c.hidden_at IS NULL
+          AND c.item_count >= :n
+          AND NOT EXISTS (SELECT 1 FROM screens sc WHERE sc.user_id = :u
+                          AND sc.deleted_at IS NULL AND lower(sc.title) = lower(c.title))
+          AND NOT EXISTS (SELECT 1 FROM suggestions s WHERE s.user_id = :u
+                          AND s.key = 'page_from_stack'
+                          AND s.payload ->> 'collection_id' = c.public_id::text)
+        ORDER BY c.item_count DESC, c.id LIMIT 1
+    """), {"u": user.id, "n": PAGE_FROM_STACK_RECORDS})).first()  # fmt: skip
+    if stack is not None:
+        session.add(Suggestion(user_id=user.id, kind=SuggestionKind.DATA_PROPOSAL,
+                               key="page_from_stack", status=SuggestionStatus.PENDING,
+                               payload={"collection_id": str(stack.public_id),
+                                        "title": stack.title, "count": int(stack.item_count)},
+                               expires_at=expires))  # fmt: skip
+        await session.flush()
+        return
+    wants_docs = await session.scalar(text("""
+        SELECT 1 FROM company_profiles p WHERE p.user_id = :u AND p.name IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM screens sc WHERE sc.user_id = :u
+                          AND sc.deleted_at IS NULL AND sc.template_key = 'documents')
+          AND NOT EXISTS (SELECT 1 FROM suggestions s WHERE s.user_id = :u
+                          AND s.key = 'add_documents_page')
+    """), {"u": user.id})  # fmt: skip
+    if wants_docs:
+        session.add(Suggestion(user_id=user.id, kind=SuggestionKind.DATA_PROPOSAL,
+                               key="add_documents_page", status=SuggestionStatus.PENDING,
+                               payload={}, expires_at=expires))  # fmt: skip
+        await session.flush()
+
+
 async def _count(session: AsyncSession, sql: str, **params: Any) -> int:
     return int(await session.scalar(text(sql), params) or 0)
 
@@ -211,6 +270,13 @@ async def _eligible(session: AsyncSession, user: User, key: str,
                          "source = 'share' AND created_at >= :since", u=u,
                          since=now - timedelta(days=5))  # fmt: skip
         return {} if n == 0 else None
+    if key == "add_ready_pages":
+        if user.onboarding_path != "blank":
+            return None
+        if user.created_at >= _today_start(now, user.tz or "Asia/Almaty"):
+            return None  # not before the 2nd day
+        c = await session.get(SuggestionCounter, (u, key))
+        return {} if c is None or not c.shown_total else None
     if key == "link_phone":
         phone = await session.scalar(select(AuthIdentity.id).where(
             AuthIdentity.user_id == u, AuthIdentity.provider == AuthProvider.PHONE).limit(1))
@@ -279,6 +345,7 @@ async def current(session: AsyncSession, user_id: int, now: datetime,
     day_start = _today_start(now, user.tz or "Asia/Almaty")
     await _expire(session, user_id, now, day_start)
     await _new_proposals(session, user_id, now, settings)
+    await _page_proposals(session, user, now, settings)
     proposals = list(await session.scalars(
         select(Suggestion).where(Suggestion.user_id == user_id,
                                  Suggestion.kind == SuggestionKind.DATA_PROPOSAL,

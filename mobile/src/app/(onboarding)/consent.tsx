@@ -19,6 +19,8 @@ export default function ConsentScreen() {
         const outbox = await getOutbox();
         await outbox.enqueue('consent.accept', { request });
         await outbox.enqueue('device.register', {});
+        // After S05 (before it the API serves only consents): S01–S02 seen, for the metrics.
+        if (useOnboarding.getState().welcomeSeenAt) await outbox.enqueue('onboarding.welcome_seen', {});
         kickSync();
         router.replace('/start');
       }}

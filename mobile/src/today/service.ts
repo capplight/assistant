@@ -5,7 +5,9 @@ import { reminderSink } from '@/alarms/service';
 import { ApiError } from '@/api/errors';
 import type { HabitOut, SuggestionOut, TodayOut } from '@/api/types';
 import i18n from '@/i18n';
+import { getPagesRepo } from '@/db';
 import { getApi, syncBlocked } from '@/services';
+import { syncPagesStore } from '@/store/pagesSync';
 import { useOnboarding } from '@/store/onboarding';
 import { usePages } from '@/store/pages';
 import { useToast } from '@/store/toast';
@@ -86,8 +88,9 @@ export function visibleSuggestions(last: TodayOut | null, answered: string[]): {
 }
 
 /** `do.type` the phone can carry out; anything else shows [Не сейчас] only (today.md). */
-const DOABLE = new Set(['open_mic', 'put_phrase', 'link_phone']);
-const PROPOSALS = new Set(['task_from_item', 'reminder_from_item']);
+const DOABLE = new Set(['open_mic', 'put_phrase', 'link_phone', 'open_gallery']);
+/** Done by the server on «Да» (week 16 adds the page proposals of R-55, onboarding.md). */
+const PROPOSALS = new Set(['task_from_item', 'reminder_from_item', 'page_from_stack', 'add_documents_page']);
 
 export function canSayYes(s: SuggestionOut): boolean {
   return PROPOSALS.has(s.key) || (!!s.do && DOABLE.has(s.do.type));
@@ -113,9 +116,18 @@ export async function sayYes(s: SuggestionOut): Promise<void> {
     useView.getState().requestLine({ kind: 'text', text: s.do.phrase });
   }
   if (s.do?.type === 'link_phone') router.push('/phone');
+  if (s.do?.type === 'open_gallery') router.push('/pages-gallery');
   try {
     const out = await getApi().acceptSuggestion(s.id, newId());
     if (out.task) taskSink.applyServer([out.task]);
+    if (out.page) {
+      // R-55 [Да]: the page is made; it shows as a tab at once and opens.
+      const repo = await getPagesRepo();
+      await repo.applyRemote(out.page);
+      await syncPagesStore(repo);
+      const local = usePages.getState().pages.find((p) => p.serverId === out.page?.id);
+      if (local) router.navigate({ pathname: '/page/[id]', params: { id: local.id } });
+    }
     if (out.action) {
       const action = out.action;
       rememberActions([action]);

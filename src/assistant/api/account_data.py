@@ -1,6 +1,6 @@
 """Where a person's data lives, and how account deletion removes it (spec 3.8 `account_deletions`,
-7.2, F-27). The deletion flow itself (grace days, web page, `account:purge`) comes in week 16
-(Ф-6); this registry and `purge_user` are its core, so nothing added since week 1 is forgotten.
+7.2, F-27). The deletion flow (grace days, web page, `account:purge`) is `assistant.account`
+(week 16); this registry and `purge_user` are its core, so nothing added since week 1 is forgotten.
 
 Every table of the `public` and `analytics` schemas is listed here with how it goes:
 - `cascade`: rows go with `users` (a chain of `ON DELETE CASCADE` foreign keys reaches it);
@@ -87,6 +87,10 @@ USER_TABLES: dict[str, Mode] = {
     "public.jobs": "explicit",  # queued work naming the person in its payload
     # product events (0015)
     "analytics.events": "pseudonym",
+    # week 16 (0022): «Скачать мои данные» archives; the deletion request itself is kept as
+    # proof of deletion, without the person (`user_id` cleared, `report` holds counts only)
+    "public.data_exports": "cascade",
+    "public.account_deletions": "anonymize",
     # no personal data
     "public.alembic_version": "shared",
     "public.screen_templates": "shared",
@@ -117,6 +121,9 @@ async def purge_user(session: AsyncSession, user_id: int) -> dict[str, int]:
     res = await session.execute(text("UPDATE provider_usage SET user_id = NULL WHERE user_id = :u"),
                                 {"u": user_id})  # fmt: skip
     report["public.provider_usage"] = res.rowcount or 0  # type: ignore[attr-defined]
+    res = await session.execute(text("UPDATE account_deletions SET user_id = NULL "
+                                     "WHERE user_id = :u"), {"u": user_id})  # fmt: skip
+    report["public.account_deletions"] = res.rowcount or 0  # type: ignore[attr-defined]
     await session.execute(text("DELETE FROM users WHERE id = :u"), {"u": user_id})
     # the cascade wrote tombstones for the rows it deleted: none must stay
     res = await session.execute(text("DELETE FROM sync_tombstones WHERE user_id = :u"),

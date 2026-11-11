@@ -1,0 +1,502 @@
+{
+ "description": "S35 ticks after the first phrase (docs/api/onboarding.md, src/assistant/onboarding/marks.py). Code only; the phone must give the same template_keys (order matters). «купил» (past) is not «Покупки».",
+ "max_marked": 3,
+ "cases": [
+  {
+   "phrase": "Напомни в пятницу оплатить свет",
+   "intro_marks": [],
+   "template_keys": [
+    "notes",
+    "tasks"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default"
+   }
+  },
+  {
+   "phrase": "Купить лекарства маме",
+   "intro_marks": [],
+   "template_keys": [
+    "notes",
+    "tasks",
+    "shopping"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default",
+    "shopping": "phrase"
+   }
+  },
+  {
+   "phrase": "Где мой чек за холодильник",
+   "intro_marks": [],
+   "template_keys": [
+    "notes",
+    "tasks"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default"
+   }
+  },
+  {
+   "phrase": "Сделай КП для клиента Ерлана",
+   "intro_marks": [],
+   "template_keys": [
+    "notes",
+    "tasks",
+    "documents"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default",
+    "documents": "phrase"
+   }
+  },
+  {
+   "phrase": "к.п. для ТОО «Алем»",
+   "intro_marks": [],
+   "template_keys": [
+    "notes",
+    "tasks",
+    "documents"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default",
+    "documents": "phrase"
+   }
+  },
+  {
+   "phrase": "Коммерческое предложение на монтаж",
+   "intro_marks": [],
+   "template_keys": [
+    "notes",
+    "tasks",
+    "documents"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default",
+    "documents": "phrase"
+   }
+  },
+  {
+   "phrase": "Клиенту отправить смету",
+   "intro_marks": [],
+   "template_keys": [
+    "notes",
+    "tasks",
+    "documents"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default",
+    "documents": "phrase"
+   }
+  },
+  {
+   "phrase": "потратил 5000 на бензин",
+   "intro_marks": [],
+   "template_keys": [
+    "notes",
+    "tasks",
+    "expenses"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default",
+    "expenses": "phrase"
+   }
+  },
+  {
+   "phrase": "Заплатила за свет 12 400",
+   "intro_marks": [],
+   "template_keys": [
+    "notes",
+    "tasks",
+    "expenses"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default",
+    "expenses": "phrase"
+   }
+  },
+  {
+   "phrase": "5 тыс тг такси",
+   "intro_marks": [],
+   "template_keys": [
+    "notes",
+    "tasks",
+    "expenses"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default",
+    "expenses": "phrase"
+   }
+  },
+  {
+   "phrase": "Обед 3500₸",
+   "intro_marks": [],
+   "template_keys": [
+    "notes",
+    "tasks",
+    "expenses"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default",
+    "expenses": "phrase"
+   }
+  },
+  {
+   "phrase": "Расходы за ноябрь",
+   "intro_marks": [],
+   "template_keys": [
+    "notes",
+    "tasks",
+    "expenses"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default",
+    "expenses": "phrase"
+   }
+  },
+  {
+   "phrase": "Бензинге 5000 теңге жұмсадым",
+   "intro_marks": [],
+   "template_keys": [
+    "notes",
+    "tasks",
+    "expenses"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default",
+    "expenses": "phrase"
+   }
+  },
+  {
+   "phrase": "Клиентке КҰ жаса",
+   "intro_marks": [],
+   "template_keys": [
+    "notes",
+    "tasks",
+    "documents"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default",
+    "documents": "phrase"
+   }
+  },
+  {
+   "phrase": "КП клиенту и потратил 200 тг",
+   "intro_marks": [],
+   "template_keys": [
+    "notes",
+    "tasks",
+    "documents"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default",
+    "documents": "phrase"
+   }
+  },
+  {
+   "phrase": "кпп на границе в субботу",
+   "intro_marks": [],
+   "template_keys": [
+    "notes",
+    "tasks"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default"
+   }
+  },
+  {
+   "phrase": "Клиника в 10:00",
+   "intro_marks": [],
+   "template_keys": [
+    "notes",
+    "tasks"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default"
+   }
+  },
+  {
+   "phrase": "",
+   "intro_marks": [
+    "kp"
+   ],
+   "template_keys": [
+    "notes",
+    "tasks",
+    "documents"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default",
+    "documents": "intro"
+   }
+  },
+  {
+   "phrase": "",
+   "intro_marks": [
+    "expenses"
+   ],
+   "template_keys": [
+    "notes",
+    "tasks",
+    "expenses"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default",
+    "expenses": "intro"
+   }
+  },
+  {
+   "phrase": "",
+   "intro_marks": [
+    "photo_receipt",
+    "kp"
+   ],
+   "template_keys": [
+    "notes",
+    "tasks",
+    "expenses"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default",
+    "expenses": "intro"
+   }
+  },
+  {
+   "phrase": "Напомни позвонить",
+   "intro_marks": [
+    "remind",
+    "find"
+   ],
+   "template_keys": [
+    "notes",
+    "tasks"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default"
+   }
+  },
+  {
+   "phrase": "потратил 2000",
+   "intro_marks": [
+    "kp"
+   ],
+   "template_keys": [
+    "notes",
+    "tasks",
+    "expenses"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default",
+    "expenses": "phrase"
+   }
+  },
+  {
+   "phrase": "Купи хлеб и молоко",
+   "intro_marks": [],
+   "template_keys": [
+    "notes",
+    "tasks",
+    "shopping"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default",
+    "shopping": "phrase"
+   }
+  },
+  {
+   "phrase": "Куплю завтра подарок Алине",
+   "intro_marks": [],
+   "template_keys": [
+    "notes",
+    "tasks",
+    "shopping"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default",
+    "shopping": "phrase"
+   }
+  },
+  {
+   "phrase": "Зайти в магазин после работы",
+   "intro_marks": [],
+   "template_keys": [
+    "notes",
+    "tasks",
+    "shopping"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default",
+    "shopping": "phrase"
+   }
+  },
+  {
+   "phrase": "Список покупок на неделю",
+   "intro_marks": [],
+   "template_keys": [
+    "notes",
+    "tasks",
+    "shopping"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default",
+    "shopping": "phrase"
+   }
+  },
+  {
+   "phrase": "Нан сатып алу",
+   "intro_marks": [],
+   "template_keys": [
+    "notes",
+    "tasks",
+    "shopping"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default",
+    "shopping": "phrase"
+   }
+  },
+  {
+   "phrase": "Дүкенге бару керек",
+   "intro_marks": [],
+   "template_keys": [
+    "notes",
+    "tasks",
+    "shopping"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default",
+    "shopping": "phrase"
+   }
+  },
+  {
+   "phrase": "Купить хлеб на 500 тг",
+   "intro_marks": [],
+   "template_keys": [
+    "notes",
+    "tasks",
+    "shopping"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default",
+    "shopping": "phrase"
+   }
+  },
+  {
+   "phrase": "Сделай КП и купи бумагу",
+   "intro_marks": [],
+   "template_keys": [
+    "notes",
+    "tasks",
+    "documents"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default",
+    "documents": "phrase"
+   }
+  },
+  {
+   "phrase": "купил вчера хлеб",
+   "intro_marks": [],
+   "template_keys": [
+    "notes",
+    "tasks"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default"
+   }
+  },
+  {
+   "phrase": "Купила лекарства маме",
+   "intro_marks": [],
+   "template_keys": [
+    "notes",
+    "tasks"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default"
+   }
+  },
+  {
+   "phrase": "купил телевизор за 200 000 тенге",
+   "intro_marks": [],
+   "template_keys": [
+    "notes",
+    "tasks",
+    "expenses"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default",
+    "expenses": "phrase"
+   }
+  },
+  {
+   "phrase": "Магазин закрыт до понедельника",
+   "intro_marks": [],
+   "template_keys": [
+    "notes",
+    "tasks"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default"
+   }
+  },
+  {
+   "phrase": "Покупатель просит скидку",
+   "intro_marks": [],
+   "template_keys": [
+    "notes",
+    "tasks"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default"
+   }
+  },
+  {
+   "phrase": null,
+   "intro_marks": null,
+   "template_keys": [
+    "notes",
+    "tasks"
+   ],
+   "reasons": {
+    "notes": "default",
+    "tasks": "default"
+   }
+  }
+ ]
+}

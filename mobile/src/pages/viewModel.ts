@@ -27,7 +27,11 @@ export type PageView = {
   /** Live own fields (≤5); a removed one leaves the list, its values stay. */
   customFields: CustomFieldOut[];
   customized: boolean;
+  /** Week 16 `view_state.today_tile`: the page's tile on «Сегодня» (`auto` = the server's rule). */
+  todayTile?: TodayTile;
 };
+
+export type TodayTile = 'auto' | 'pinned' | 'hidden';
 
 export const EMPTY_VIEW: PageView = {
   sort: null,
@@ -70,6 +74,7 @@ export function viewFromServer(out: PageOut): PageView {
     fieldPrefs: out.field_prefs ?? [],
     customFields: out.custom_fields ?? [],
     customized: out.customized === true,
+    ...(vs.today_tile === 'pinned' || vs.today_tile === 'hidden' || vs.today_tile === 'auto' ? { todayTile: vs.today_tile } : {}),
   };
 }
 

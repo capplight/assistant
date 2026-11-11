@@ -60,7 +60,7 @@ describe('first launch flow', () => {
     expect(screen.getByText('Моя страница')).toBeTruthy();
 
     const kinds = (await outbox.listPending()).map((e) => e.kind);
-    expect(kinds).toEqual(['consent.accept', 'device.register', 'pages.create']);
+    expect(kinds).toEqual(['consent.accept', 'device.register', 'onboarding.welcome_seen', 'pages.batch']);
   });
 
   it('skip → consent «Согласен» → gallery path creates the chosen pages', async () => {

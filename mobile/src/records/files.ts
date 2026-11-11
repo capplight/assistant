@@ -23,4 +23,19 @@ export const nativeFileOps: FileOps = {
   async sha256(uri) {
     return new File(uri).digest('SHA-256');
   },
+  async wipeAll() {
+    const records = new Directory(Paths.document, 'records');
+    if (records.exists) records.delete();
+    // The cache is the app's own: shared files, camera shots, recordings, КП / Word files.
+    const cache = new Directory(Paths.cache);
+    if (cache.exists) {
+      for (const entry of cache.list()) {
+        try {
+          entry.delete();
+        } catch {
+          // a file the system holds right now; the next deletion pass or the OS clears it
+        }
+      }
+    }
+  },
 };

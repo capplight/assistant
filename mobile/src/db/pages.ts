@@ -80,6 +80,8 @@ export function settle(
 export const placeholderLinkId = (pageKey: string, itemKey: string) => `local:${pageKey}|${itemKey}`;
 
 export interface PagesRepository {
+  /** Week 16: the account is being deleted — nothing of it stays on this phone. */
+  wipe(): Promise<void>;
   insertLocal(page: Page): Promise<LocalPage>;
   get(id: string): Promise<LocalPage | null>;
   /** All rows, also removed ones (the store needs to know what is gone). */
@@ -199,6 +201,12 @@ export class InMemoryPagesRepository implements PagesRepository {
   private serverRows = new Map<string, PageLink | null>();
 
   constructor(private readonly now: () => number = Date.now) {}
+
+  async wipe() {
+    this.rows.clear();
+    this.links.clear();
+    this.serverRows.clear();
+  }
 
   private byServerId(serverId: string) {
     return [...this.rows.values()].find((p) => p.serverId === serverId) ?? null;
@@ -466,6 +474,11 @@ export class SqlitePagesRepository implements PagesRepository {
     private readonly db: SqlDb,
     private readonly now: () => number = Date.now,
   ) {}
+
+  async wipe() {
+    await this.db.runAsync('DELETE FROM page_links');
+    await this.db.runAsync('DELETE FROM pages');
+  }
 
   private async write(p: LocalPage, mode: 'INSERT OR IGNORE' | 'INSERT OR REPLACE') {
     await this.db.runAsync(

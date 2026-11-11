@@ -57,6 +57,15 @@ services:
     depends_on: { migrate: { condition: service_completed_successfully } }
     restart: unless-stopped
 
+  # Week 16: «Скачать мои данные» archives (`account:export`) and account purge (`account:purge`)
+  worker-account:
+    build: .
+    command: python -m assistant.account
+    env_file: .env
+    environment: *dburl
+    depends_on: { migrate: { condition: service_completed_successfully } }
+    restart: unless-stopped
+
   scheduler:
     build: .
     command: python -m assistant.scheduler

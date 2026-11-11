@@ -109,7 +109,7 @@ async def otp_verify(body: OtpVerifyIn, user: OptionalUser, ctx: Ctx, db: Db) ->
     owner = await svc.find_identity_user(db, AuthProvider.PHONE, phone_hash)
     switched = False
     if owner is not None:
-        svc.ensure_active(owner)
+        await svc.ensure_signin_allowed(db, ctx, owner)
         switched = user is not None and owner.id != user.id
         target = owner
     else:

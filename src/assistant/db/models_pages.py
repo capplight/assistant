@@ -42,6 +42,7 @@ class ScreenCreatedBy(enum.StrEnum):
     ONBOARDING_GALLERY = "onboarding_gallery"
     ONBOARDING_BLANK = "onboarding_blank"
     ONBOARDING_PHRASE = "onboarding_phrase"
+    ONBOARDING_SKIPPED = "onboarding_skipped"  # 0022: S35 «Пропустить» / nothing chosen
     USER = "user"
     AGENT = "agent"
 

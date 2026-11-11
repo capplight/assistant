@@ -15,10 +15,12 @@ type Props = {
   hint?: string;
   onPress: () => void;
   testID?: string;
+  /** S35 «Добавить страницу»: a topic page the person has already («Уже есть ✓»), not pressable. */
+  exists?: boolean;
 };
 
 /** Gallery card ~160×180: mini schema, title2, one-line benefit, 32 pt mark. Whole card is one target. */
-export function TemplateCard({ templateKey, checked, title, hint, onPress, testID }: Props) {
+export function TemplateCard({ templateKey, checked, title, hint, onPress, testID, exists = false }: Props) {
   const theme = useTheme();
   const { t } = useTranslation();
   const name = title ?? t(`tpl.${templateKey}`);
@@ -28,9 +30,12 @@ export function TemplateCard({ templateKey, checked, title, hint, onPress, testI
     <Pressable
       testID={testID}
       accessibilityRole={selectable ? 'checkbox' : 'button'}
-      accessibilityState={selectable ? { checked } : undefined}
+      accessibilityState={selectable ? { checked: exists || checked, disabled: exists } : undefined}
+      disabled={exists}
       accessibilityLabel={
-        selectable
+        exists
+          ? `${name}. ${t('gallery.exists')}. ${benefit}`
+          : selectable
           ? t('gallery.card_a11y', {
               title: name,
               state: checked ? t('tour.selected') : t('tour.not_selected'),
@@ -78,6 +83,11 @@ export function TemplateCard({ templateKey, checked, title, hint, onPress, testI
         {name}
       </AppText>
       <AppText variant="meta">{benefit}</AppText>
+      {exists ? (
+        <AppText variant="meta" color="done" style={{ marginTop: theme.space[1] }}>
+          {`${t('gallery.exists')} ✓`}
+        </AppText>
+      ) : null}
     </Pressable>
   );
 }

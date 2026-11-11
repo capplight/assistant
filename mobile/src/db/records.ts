@@ -96,6 +96,8 @@ export interface RecordsRepository {
    * left to send) keep their status, with no server id. Local deletions stay deleted.
    */
   detachFromAccount(requeued: ReadonlySet<string>): Promise<void>;
+  /** Week 16: the account is being deleted — records and the sync cursor go from this phone. */
+  wipe(): Promise<void>;
   getCursor(): Promise<number>;
   setCursor(seq: number): Promise<void>;
 }
@@ -201,6 +203,11 @@ export class InMemoryRecordsRepository implements RecordsRepository {
   private cursor = 0;
 
   constructor(private readonly now: () => number = Date.now) {}
+
+  async wipe() {
+    this.rows.clear();
+    this.cursor = 0;
+  }
 
   async insertLocal(r: NewRecord & { id: string }): Promise<LocalRecord> {
     const existing = this.rows.get(r.id);
@@ -341,6 +348,11 @@ export class SqliteRecordsRepository implements RecordsRepository {
     private readonly db: SqlDb,
     private readonly now: () => number = Date.now,
   ) {}
+
+  async wipe() {
+    await this.db.runAsync('DELETE FROM records');
+    await this.db.runAsync('DELETE FROM sync_state');
+  }
 
   private async write(r: LocalRecord, mode: 'INSERT OR IGNORE' | 'INSERT OR REPLACE') {
     await this.db.runAsync(

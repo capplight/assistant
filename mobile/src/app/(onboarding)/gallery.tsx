@@ -1,50 +1,35 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { ChevronLeft } from 'lucide-react-native';
 import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, View } from 'react-native';
 
-import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
-import { Screen } from '@/components/Screen';
-import { TemplateCard } from '@/components/TemplateCard';
-import { saveNewPages } from '@/pages/service';
-import { DEFAULT_PREMARKED, GALLERY_ORDER, TEMPLATES, type TemplateKey } from '@/pages/templates';
+import { Gallery } from '@/components/Gallery';
+import { DEFAULT_SET, startWithPages } from '@/onboarding/service';
+import { DEFAULT_PREMARKED, TEMPLATES, type TemplateKey } from '@/pages/templates';
 import { useSavedLine } from '@/store/connectivity';
 import { premarksFor, useOnboarding } from '@/store/onboarding';
-import { usePages } from '@/store/pages';
-import { useTheme } from '@/theme';
 
 const isTemplateKey = (s: string): s is TemplateKey => TEMPLATES.some((t) => t.key === s);
 
 /**
- * S35 — template gallery in the first launch (R-48, US-23).
+ * S35 in the first launch (R-48, US-23).
  * from=phrase (path 3): Notes + Tasks premarked (+ Documents / Expenses from the phrase and welcome picks).
  * Otherwise (path 1): only the tapped card (if any) + welcome picks.
- * «Подходит» creates local pages; the server gets them via outbox (one POST /pages per page).
+ * «Подходит» makes the pages on the phone at once; the server gets them in one `POST /pages/batch`.
+ * «Пропустить»: path 3 keeps what was premarked, path 1 gets the default set (Заметки + Дела).
  */
 export default function GalleryScreen() {
   const savedLine = useSavedLine();
-  const theme = useTheme();
-  const { t } = useTranslation();
   const params = useLocalSearchParams<{ mark?: string; from?: string }>();
   const fromPhrase = params.from === 'phrase';
   const interests = useOnboarding((s) => s.interests);
   const complete = useOnboarding((s) => s.complete);
-  const createFromOnboarding = usePages((s) => s.createFromOnboarding);
-
-  const [selected, setSelected] = useState<TemplateKey[]>(() => {
+  const [initial] = useState<TemplateKey[]>(() => {
     const marks = (params.mark ?? '').split(',').filter(isTemplateKey);
-    return premarksFor(interests, fromPhrase ? [...DEFAULT_PREMARKED, ...marks] : marks);
+    // Path 3: the ticks of the phrase rule (≤3); path 1: the tapped card + the welcome picks.
+    return fromPhrase ? (marks.length > 0 ? marks : [...DEFAULT_PREMARKED]) : premarksFor(interests, marks);
   });
 
-  const toggle = (k: TemplateKey) => setSelected((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]));
-
-  const confirm = async () => {
-    // Tab order follows the catalog order, not the tap order.
-    const keys = TEMPLATES.map((tpl) => tpl.key).filter((k) => selected.includes(k));
-    const pages = createFromOnboarding(keys, fromPhrase ? 'onboarding_phrase' : 'onboarding_gallery');
-    await saveNewPages(pages);
+  const finish = async (keys: TemplateKey[]) => {
+    const pages = await startWithPages(keys, fromPhrase ? 'phrase_first' : 'gallery');
     complete();
     // Path 1: open the first chosen page (S04b comes after the first saved record).
     // Path 3: the first result exists already, so S04b now, then «Сегодня».
@@ -54,52 +39,12 @@ export default function GalleryScreen() {
   };
 
   return (
-    <Screen
-      testID="gallery-screen"
-      footer={
-        <View style={{ gap: theme.space[2] }}>
-          <AppText variant="meta">{t('gallery.today_fixed')}</AppText>
-          <Button testID="gallery-ok" label={t('gallery.ok')} onPress={confirm} />
-        </View>
-      }
-    >
-      {!fromPhrase ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back')}
-          onPress={() => router.back()}
-          style={[styles.back, { minHeight: theme.size.minTouch }]}
-        >
-          <ChevronLeft size={24} color={theme.colors.accent} />
-          <AppText color="accent">{t('common.back')}</AppText>
-        </Pressable>
-      ) : (
-        <AppText color="done" style={{ marginBottom: theme.space[2] }}>
-          {savedLine}
-        </AppText>
-      )}
-      <AppText variant="title1" accessibilityRole="header">
-        {t('gallery.title')}
-      </AppText>
-      <AppText color="ink2" style={{ marginBottom: theme.space[4] }}>
-        {fromPhrase ? t('gallery.premarked') : t('gallery.hint')}
-      </AppText>
-      <View style={[styles.grid, { gap: theme.space[3], flexDirection: theme.largeFont ? 'column' : 'row' }]}>
-        {GALLERY_ORDER.map((k) => (
-          <TemplateCard
-            key={k}
-            testID={`gallery-${k}`}
-            templateKey={k}
-            checked={selected.includes(k)}
-            onPress={() => toggle(k)}
-          />
-        ))}
-      </View>
-    </Screen>
+    <Gallery
+      mode={fromPhrase ? 'phrase' : 'gallery'}
+      initial={initial}
+      doneLine={fromPhrase ? savedLine : null}
+      onDone={(keys) => void finish(keys)}
+      onSkip={() => void finish(fromPhrase ? initial : [...DEFAULT_SET])}
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  back: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start' },
-  grid: { flexWrap: 'wrap' },
-});

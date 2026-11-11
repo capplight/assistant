@@ -118,8 +118,19 @@ export default function MoreScreen() {
         : phoneLinked
         ? row('phone', t('phone.linked'))
         : row('phone', t('phone.more_row'), () => router.push('/phone'), t('phone.more_hint'))}
+      {row('my_data', t('account.my_data'), () => router.push('/my-data'), t('account.my_data_hint'))}
       {row('settings', t('more.settings'), undefined, t('more.later'))}
       {row('help', t('more.help'), undefined, t('more.later'))}
+      <Pressable
+        testID="more-delete_account"
+        accessibilityRole="button"
+        onPress={() => router.push('/delete-account')}
+        style={[styles.row, { minHeight: theme.size.primaryTouch, borderBottomColor: theme.colors.line, paddingVertical: theme.space[2] }]}
+      >
+        <AppText color="alarm" style={styles.flex}>
+          {t('account.delete')}
+        </AppText>
+      </Pressable>
       {naming ? (
         <PageNameSheet
           onClose={() => setNaming(false)}

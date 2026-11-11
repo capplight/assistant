@@ -1,5 +1,5 @@
 import { router, useFocusEffect } from 'expo-router';
-import { ChevronRight, UserRound } from 'lucide-react-native';
+import { ChevronRight } from 'lucide-react-native';
 import { useCallback, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -12,7 +12,12 @@ import { AlarmRiskBanner } from '@/components/ReminderCards';
 import { MissedList, ReminderRows, useMinuteClock, useMissed } from '@/components/ReminderLists';
 import { Screen } from '@/components/Screen';
 import { TaskRow } from '@/components/TaskRow';
-import { useOnboarding } from '@/store/onboarding';
+import { NextCard, PageTiles, TodayHeader, type NextItem } from '@/components/TodaySheet';
+import { selectSortedPages, usePages } from '@/store/pages';
+import { todayTiles } from '@/today/tiles';
+import { useExpenses } from '@/expenses/store';
+import { act } from '@/alarms/service';
+import { selectNoAi, useOnboarding } from '@/store/onboarding';
 import { undoServerAction } from '@/tasks/actions';
 import { localDate } from '@/tasks/rows';
 import { doneAt, isDone, liveTasks, pageForList, setDone } from '@/tasks/service';
@@ -25,7 +30,9 @@ import { upcoming } from '@/alarms/plan';
 import { useAlarms } from '@/alarms/store';
 
 const DAY = 86_400_000;
-const DEFAULT_SECTIONS = ['banner', 'missed', 'today', 'done_for_you', 'proposals', 'tip'];
+const DEFAULT_SECTIONS = ['banner', 'missed', 'today', 'tiles', 'done_for_you', 'proposals', 'tip'];
+/** The server may name the tiles section either way (today.md week 16). */
+const SECTION_ALIAS: Record<string, string> = { page_tiles: 'tiles' };
 
 /**
  * S06 «Сегодня» — system page, always first, cannot be removed (R-49); «за 3 с понять, что важно».
@@ -34,11 +41,19 @@ const DEFAULT_SECTIONS = ['banner', 'missed', 'today', 'done_for_you', 'proposal
  * «Что я сделал ›» (S20), ≤2 proposals and ≤1 tip with [Да] / [Не сейчас].
  * Built from what the phone holds, so it works offline and in «Без ИИ»; `GET /today` (when the tab
  * is shown) adds suggestions, the order of the sections and the greeting.
+ * Week 16 — the tear-off sheet (template-screens 2.7): the day's number large, «Дальше» as the
+ * first card (the nearest ring or to-do, [Сделано] [Отложить на 10 минут]), ≤2 tiles of other
+ * pages (`page_tiles`, by the server's rule; offline the phone counts «Покупки» and «Расходы»),
+ * «Сегодня свободно…» when there is nothing. «Без ИИ»: no proposals.
  */
 export default function TodayScreen() {
   const theme = useTheme();
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const name = useOnboarding((s) => s.displayName);
+  const noAi = useOnboarding(selectNoAi);
+  const startedAt = useOnboarding((s) => s.openedAt ?? s.doneAt);
+  const pages = usePages(useShallow(selectSortedPages));
+  const expenseEntries = useExpenses((s) => s.entries);
   const now = useMinuteClock();
   const missed = useMissed(now);
   const last = useToday((s) => s.last);
@@ -54,12 +69,6 @@ export default function TodayScreen() {
     }, []),
   );
 
-  let date: string;
-  try {
-    date = new Date(now).toLocaleDateString(i18n.language, { weekday: 'long', day: 'numeric', month: 'long' });
-  } catch {
-    date = new Date(now).toDateString();
-  }
   const today = localDate(now);
   const dayStart = new Date(`${today}T00:00:00`).getTime();
 
@@ -72,16 +81,42 @@ export default function TodayScreen() {
   const toBuy = liveTasks(tasks, 'shopping').filter((x) => !isDone(x, ticks));
   const shopPage = pageForList('shopping');
   const eod = dayStart + DAY;
-  const hasReminders = upcoming({ ...alarmSrc, now }, eod - now).length > 0;
+  const rings = upcoming({ ...alarmSrc, now }, eod - now);
+  const hasReminders = rings.length > 0;
+
+  // «Дальше»: the nearest ring today, else the first open to-do of today.
+  const firstRing = rings[0];
+  const firstTodo = todos.find((x) => !isDone(x, ticks));
+  const next: NextItem | null = firstRing
+    ? { kind: 'reminder', key: firstRing.group, title: firstRing.title, at: firstRing.fireAt, alarm: firstRing.level === 'alarm' }
+    : firstTodo
+      ? { kind: 'task', key: firstTodo.id, title: firstTodo.title, at: null }
+      : null;
+  const listTodos = next?.kind === 'task' ? todos.filter((x) => x.id !== next.key) : todos;
+
+  const tiles = todayTiles({
+    pages,
+    startedAt,
+    now,
+    today,
+    server: last ? last.page_tiles : null,
+    toBuy,
+    expenses: Object.values(expenseEntries),
+    t,
+  });
 
   // «Я сделал за вас»: the assistant's own actions of the last 24 h, not undone, newest 3.
   const mine = Object.values(actions)
     .filter((a) => a.initiated_by === 'agent' && !a.undone_at && !a.undo_of && a.created_at && Date.parse(a.created_at) > now - DAY)
     .sort((a, b) => Date.parse(b.created_at ?? '') - Date.parse(a.created_at ?? ''));
-  const { proposals, tip } = visibleSuggestions(last, answered);
+  const shown = visibleSuggestions(last, answered);
+  const proposals = noAi ? [] : shown.proposals;
+  const tip = noAi ? null : shown.tip;
 
   const greeting = name ? t('today.hello_name', { name }) : t('today.hello');
-  const order = (last?.sections.length ? last.sections : DEFAULT_SECTIONS).filter((x) => DEFAULT_SECTIONS.includes(x));
+  const order = (last?.sections.length ? last.sections : DEFAULT_SECTIONS)
+    .map((x) => SECTION_ALIAS[x] ?? x)
+    .filter((x) => DEFAULT_SECTIONS.includes(x));
   for (const x of DEFAULT_SECTIONS) if (!order.includes(x)) order.push(x);
 
   const sections: Record<string, ReactNode> = {
@@ -110,8 +145,8 @@ export default function TodayScreen() {
             paddingVertical: theme.space[2],
           }}
         >
-          <ReminderRows segment="today" now={now} testPrefix="upcoming" />
-          {todos.map((x) => (
+          <ReminderRows segment="today" now={now} testPrefix="upcoming" skip={next?.kind === 'reminder' ? next.key : null} />
+          {listTodos.map((x) => (
             <TaskRow key={x.id} task={x} done={isDone(x, ticks)} onToggle={() => void setDone(x.id, !isDone(x, ticks))} />
           ))}
           {toBuy.length > 0 ? (
@@ -130,7 +165,11 @@ export default function TodayScreen() {
           ) : null}
           {!hasReminders && todos.length === 0 && toBuy.length === 0 ? (
             <AppText testID="today-empty" style={{ paddingVertical: theme.space[2] }}>
-              {last?.empty && last.example ? `${t('today.empty')}\n${last.example}` : t('today.nothing')}
+              {last?.empty && last.example ? t('today.free_example', { example: last.example }) : t('today.free')}
+            </AppText>
+          ) : next && rings.length - (next.kind === 'reminder' ? 1 : 0) === 0 && listTodos.length === 0 && toBuy.length === 0 ? (
+            <AppText testID="today-rest-empty" variant="meta" style={{ paddingVertical: theme.space[2] }}>
+              {t('today.nothing_else')}
             </AppText>
           ) : null}
         </View>
@@ -143,6 +182,7 @@ export default function TodayScreen() {
         />
       </View>
     ),
+    tiles: <PageTiles key="tiles" tiles={tiles} />,
     done_for_you: <DoneForYou key="done_for_you" list={mine.slice(0, 3)} />,
     proposals:
       proposals.length > 0 ? (
@@ -165,31 +205,15 @@ export default function TodayScreen() {
   return (
     <Screen testID="page-today" edges={['top']}>
       <AlarmRiskBanner />
-      <View style={styles.header}>
-        <AppText variant="meta" style={styles.flex}>
-          {date}
-        </AppText>
-        <Pressable
-          testID="today-profile"
-          accessibilityRole="button"
-          accessibilityLabel={t('today.profile')}
-          onPress={() => router.navigate('/more')}
-          style={[
-            styles.avatar,
-            {
-              width: theme.size.minTouch,
-              height: theme.size.minTouch,
-              borderRadius: theme.radius.round,
-              borderColor: theme.colors.lineStrong,
-            },
-          ]}
-        >
-          <UserRound size={24} color={theme.colors.ink} />
-        </Pressable>
-      </View>
-      <AppText variant="display" accessibilityRole="header" style={{ marginBottom: theme.space[8] }}>
-        {greeting}
-      </AppText>
+      <TodayHeader now={now} greeting={greeting} />
+      {next ? (
+        <NextCard
+          next={next}
+          now={now}
+          onDone={() => (next.kind === 'reminder' ? void act(next.key, 'done') : void setDone(next.key, true))}
+          onSnooze={next.kind === 'reminder' ? () => void act(next.key, 'snooze', 10) : undefined}
+        />
+      ) : null}
       {order.map((k) => sections[k] ?? null)}
     </Screen>
   );
@@ -292,8 +316,6 @@ function SuggestionCard({ s }: { s: SuggestionOut }) {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   flex: { flex: 1 },
-  avatar: { borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   row: { flexDirection: 'row', alignItems: 'center' },
 });

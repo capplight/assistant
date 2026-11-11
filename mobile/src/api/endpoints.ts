@@ -3,6 +3,20 @@ import { ApiError } from './errors';
 import { readSse, StreamDroppedError, type SseMessage } from './sse';
 import type {
   ActionChangeOut,
+  DeletionIn,
+  DeletionOut,
+  DeletionStateOut,
+  EventsIn,
+  ExportOut,
+  ExportStatus,
+  OnboardingConfigOut,
+  PagesBatchIn,
+  PagesBatchOut,
+  StartPath,
+  SuggestedPagesOut,
+  TodayTileIn,
+  TodayTileOut,
+  TodayTileWriteOut,
   ExpenseAggregateOut,
   ExpenseAggregateQuery,
   ExpenseCategoriesListOut,
@@ -62,6 +76,7 @@ import type {
   Locale,
   OtpRequestIn,
   OtpRequestOut,
+  TokenPair,
   OtpVerifyIn,
   OtpVerifyOut,
   PageCreateIn,
@@ -909,8 +924,102 @@ export function todayOut(v: unknown): TodayOut {
     tip: suggestionOut(o.tip),
     empty: o.empty === true,
     example: str(o.example),
+    page_tiles: arr(o.page_tiles).map(todayTileOut).filter((x): x is TodayTileOut => x !== null).slice(0, 2),
   };
 }
+
+// --- week 16 decoders (routes/onboarding.py, routes/account.py, routes/today.py) ---
+
+export function todayTileOut(v: unknown): TodayTileOut | null {
+  const o = obj(v);
+  const pageId = str(o?.page_id);
+  const text = str(o?.text_ru);
+  if (!o || !pageId || !text) return null;
+  return {
+    page_id: pageId,
+    template_key: str(o.template_key) ?? 'custom',
+    title: str(o.title) ?? '',
+    icon: str(o.icon),
+    text_ru: text,
+    pinned: o.pinned === true,
+  };
+}
+
+const START_PATHS: StartPath[] = ['gallery', 'blank', 'phrase_first'];
+const startPath = (v: unknown): StartPath | null => (START_PATHS.includes(v as StartPath) ? (v as StartPath) : null);
+
+export function onboardingConfigOut(v: unknown): OnboardingConfigOut {
+  const o = obj(v) ?? {};
+  const enabled = arr(o.paths_enabled).map(startPath).filter((x): x is StartPath => x !== null);
+  const paths = enabled.length > 0 ? enabled : START_PATHS;
+  const def = startPath(o.default_path);
+  const templates = strs(o.default_templates);
+  return {
+    default_path: def && paths.includes(def) ? def : paths.includes('phrase_first') ? 'phrase_first' : paths[0]!,
+    paths_enabled: paths,
+    path: str(o.path),
+    done_at: str(o.done_at),
+    default_templates: templates.length > 0 ? templates : ['notes', 'tasks'],
+    max_marked: num(o.max_marked, 3),
+  };
+}
+
+export function pagesBatchOut(v: unknown): PagesBatchOut {
+  const o = obj(v) ?? {};
+  return {
+    pages: arr(o.pages).map(pageOutOf).filter((x): x is PageOut => x !== null),
+    existing: arr(o.existing).flatMap((x) => {
+      const e = obj(x);
+      const key = str(e?.template_key);
+      const id = str(e?.page_id);
+      return key && id ? [{ template_key: key, page_id: id }] : [];
+    }),
+    action: actionOut(o.action),
+    repeated: o.repeated === true,
+  };
+}
+
+const EXPORT_STATUS: ExportStatus[] = ['queued', 'running', 'ready', 'failed', 'expired'];
+
+export function exportOut(v: unknown): ExportOut | null {
+  const o0 = obj(v);
+  const o = obj(o0?.export) ?? o0;
+  const id = str(o?.id);
+  if (!o || !id) return null;
+  return {
+    id,
+    status: EXPORT_STATUS.includes(o.status as ExportStatus) ? (o.status as ExportStatus) : 'queued',
+    requested_at: str(o.requested_at),
+    ready_at: str(o.ready_at),
+    expires_at: str(o.expires_at),
+    bytes: typeof o.bytes === 'number' ? o.bytes : null,
+    download_url: str(o.download_url),
+    error: str(o.error),
+  };
+}
+
+export function deletionStateOut(v: unknown): DeletionStateOut {
+  const o = obj(v) ?? {};
+  return {
+    status: str(o.status) ?? 'active',
+    needs_sms: o.needs_sms === true,
+    grace_days: num(o.grace_days, 7),
+    delete_after: str(o.delete_after),
+    points_ru: strs(o.points_ru),
+  };
+}
+
+export function deletionOut(v: unknown): DeletionOut {
+  const o = obj(v) ?? {};
+  return {
+    status: 'deletion_pending',
+    requested_at: str(o.requested_at),
+    delete_after: str(o.delete_after),
+    grace_days: num(o.grace_days, 7),
+    message_ru: str(o.message_ru) ?? '',
+  };
+}
+
 
 export const habitsOf = (v: unknown) => arr(v).map(habitOut).filter((x): x is HabitOut => x !== null);
 
@@ -2156,6 +2265,7 @@ export class Api {
       action: actionOut(o.action),
       task: taskOut(o.task),
       reminder_draft: obj(o.reminder_draft) ? parseOut(o.reminder_draft) : null,
+      page: pageOutOf(o.page),
     };
   }
 
@@ -2606,6 +2716,80 @@ export class Api {
   async authedFile(path: string): Promise<{ url: string; headers: Record<string, string> }> {
     const session = await this.client.tokens.getSession();
     return { url: this.client.url(path.replace(/^\/v1(?=\/)/, '')), headers: session ? { Authorization: `Bearer ${session.accessToken}` } : {} };
+  }
+
+  // week 16: first launch (routes/onboarding.py)
+
+  /** The team's flags (which path is the big one) and the account's own first-launch state. */
+  async onboardingConfig(): Promise<OnboardingConfigOut> {
+    return onboardingConfigOut(await this.client.request<unknown>('GET', '/onboarding'));
+  }
+
+  /** `{welcome_seen: true}` after S05 (metrics only; a repeat keeps the first time). */
+  patchOnboarding(body: { welcome_seen: boolean }): Promise<unknown> {
+    return this.client.request('PATCH', '/onboarding', { body });
+  }
+
+  /** The page's tile on «Сегодня» (onboarding.md): an action with «Отменить»; a `client_id` repeat is safe. */
+  async setTodayTile(pageId: string, body: TodayTileIn): Promise<TodayTileWriteOut> {
+    const o = await this.client.request<unknown>('PUT', `/pages/${encodeURIComponent(pageId)}/today-tile`, { body, idempotencyKey: body.client_id });
+    return { page: pageOutOf(o), action: actionOut(obj(o)?.action) };
+  }
+
+  /** S35 ticks after the first phrase, by code (the phrase is read and dropped). */
+  async suggestedPages(phrase: string | null, introMarks: string[]): Promise<SuggestedPagesOut> {
+    const o = obj(await this.client.request<unknown>('POST', '/onboarding/suggested-pages', { body: { phrase, intro_marks: introMarks } })) ?? {};
+    const reasons = obj(o.reasons) ?? {};
+    return {
+      template_keys: strs(o.template_keys),
+      reasons: Object.fromEntries(Object.entries(reasons).filter((e): e is [string, string] => typeof e[1] === 'string')),
+    };
+  }
+
+  /** S35 «Подходит» / «Добавить (N)»: all chosen pages in one request, one action. */
+  async createPagesBatch(body: PagesBatchIn): Promise<PagesBatchOut> {
+    return pagesBatchOut(await this.client.request<unknown>('POST', '/pages/batch', { body, idempotencyKey: body.client_id }));
+  }
+
+  /** Product events (events.md): only with the `analytics` consent. */
+  sendEvents(body: EventsIn): Promise<unknown> {
+    return this.client.request('POST', '/events', { body });
+  }
+
+  // week 16: «Скачать мои данные», account deletion (routes/account.py). A signed-in token is
+  // enough: a person who withdrew the consents can still take the data and delete the account.
+
+  /** Starts the archive (or returns the one being made, or the one of this `client_id`). */
+  async startExport(clientId: string): Promise<ExportOut | null> {
+    return exportOut(await this.client.request<unknown>('POST', '/export', { body: { client_id: clientId }, idempotencyKey: clientId }));
+  }
+
+  async getExport(id: string): Promise<ExportOut | null> {
+    return exportOut(await this.client.request<unknown>('GET', `/export/${encodeURIComponent(id)}`));
+  }
+
+  /** The newest archives (≤5), newest first. */
+  async exports(): Promise<ExportOut[]> {
+    const o = obj(await this.client.request<unknown>('GET', '/export')) ?? {};
+    return arr(o.exports).map(exportOut).filter((x): x is ExportOut => x !== null);
+  }
+
+  async deletionState(): Promise<DeletionStateOut> {
+    return deletionStateOut(await this.client.request<unknown>('GET', '/me/deletion'));
+  }
+
+  /** The SMS code that confirms the deletion: the number must be the account's own. */
+  deletionOtp(phone: string): Promise<OtpRequestOut> {
+    return this.client.request('POST', '/me/deletion/otp', { body: { phone } });
+  }
+
+  async requestDeletion(body: DeletionIn): Promise<DeletionOut> {
+    return deletionOut(await this.client.request<unknown>('POST', '/me/deletion', { body }));
+  }
+
+  /** «Восстановить»: no session (sign-in is closed), the token came with the refused sign-in. */
+  cancelDeletion(restoreToken: string): Promise<TokenPair> {
+    return this.client.request('POST', '/me/deletion/cancel', { auth: false, body: { restore_token: restoreToken } });
   }
 
   // feedback («Сообщить о проблеме», R-41)
