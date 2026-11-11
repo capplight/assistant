@@ -35,7 +35,14 @@ jobs:
       # WeasyPrint (КП PDF, week 14) needs Pango; with CI set, the real-render test must run
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq libpango-1.0-0 libpangoft2-1.0-0
       - run: pip install -e ".[dev]"
-      - run: pytest -q -m "not db"
+      # Failed test names and reasons also go out as annotations, readable without log access.
+      - name: Unit tests
+        run: |
+          set -o pipefail
+          pytest -q -m "not db" -rf 2>&1 | tee pytest-unit.txt
+      - name: Report failures as annotations
+        if: failure()
+        run: grep -E '^(FAILED|ERROR) ' pytest-unit.txt | cut -c1-900 | sed 's/^/::error::/' || true
 
   # Required for merge (spec 3-engineering 2.3). The image has pgvector + pg_trgm, no PostGIS:
   # migration 0001 then skips places.geom and the geo tests skip themselves.
