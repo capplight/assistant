@@ -326,9 +326,11 @@ class ItemListOut(BaseModel):
 
 class TombstoneOut(BaseModel):
     # 0014 added `task`, 0018 `expense` (a record purged with its tool row), 0020 `document` (a КП
-    # purged with its record) and `expense_duplicate` (a pair gone with one of its expenses)
+    # purged with its record) and `expense_duplicate` (a pair gone with one of its expenses);
+    # 0021 `company_profile`, `price_list`, `price_list_item`, `draft`
     entity: Literal["item", "screen", "screen_item", "conversation_message", "action", "task",
-                    "expense", "document", "expense_duplicate"]
+                    "expense", "document", "expense_duplicate", "company_profile", "price_list",
+                    "price_list_item", "draft"]
     id: uuid.UUID
     seq: int
     deleted_at: datetime
@@ -645,6 +647,11 @@ class SyncOut(BaseModel):
     statement_imports: list[dict[str, Any]] = []
     expense_duplicates: list[dict[str, Any]] = []
     documents: list["DocumentRowOut"] = []  # week 14: КП rows of the card file (kp.md)
+    # week 15 (0021, kp.md «Sync»): «Моя компания» without its secrets (0 or 1 row), «Мой прайс»
+    company_profile: list[dict[str, Any]] = []
+    price_lists: list[dict[str, Any]] = []
+    price_list_items: list[dict[str, Any]] = []
+    drafts: list[dict[str, Any]] = []  # week 15: messages and letters to send (kp.md «Drafts»)
     tombstones: list[TombstoneOut]  # purged for good: drop locally
     next_since: int  # pass as `since` next time
     has_more: bool  # true: call again right away with next_since
@@ -1553,6 +1560,7 @@ class DocumentRowOut(BaseModel):
     deal_status_text: str
     current_version_n: int | None
     sent_version_n: int | None
+    sent_at: datetime | None = None  # week 15: the last «Отправили? — Да»
     progress: dict[str, Any]
     error: str | None
     ai_generated: bool

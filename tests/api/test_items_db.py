@@ -360,6 +360,8 @@ async def test_sync_order_pagination_and_tombstones(db_app):
                          "pending_actions": [], "habits": [], "item_facets": [],
                          "expenses": [], "expense_categories": [],
                          "statement_imports": [], "expense_duplicates": [], "documents": [],
+                         "company_profile": [], "price_lists": [], "price_list_items": [],
+                         "drafts": [],
                          "tombstones": [], "next_since": full["next_since"],
                          "has_more": False, "full_resync": False}  # fmt: skip
 

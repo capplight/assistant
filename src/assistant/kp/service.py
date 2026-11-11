@@ -104,7 +104,8 @@ def record_text(data: dict[str, Any], total: Decimal) -> str:
     """The КП record's text (search: «Что я обещал ТОО Арман и на какую сумму?»)."""
     who = (data.get("client") or {}).get("name")
     head = f"КП {data.get('number') or ''} от {data.get('date')}".strip()
-    names = "; ".join(f"{it['name']} — {it['qty']} {it.get('unit') or ''}".strip()
+    names = "; ".join(f"{it['name']} — {it.get('volume') or it['qty']} {it.get('unit') or ''}"
+                      .strip()
                       for it in (data.get("items") or [])[:60])  # fmt: skip
     money_text = calc.format_money(total, data.get("currency") or "KZT")
     return normalize_text("\n".join(x for x in (head, f"Клиент: {who}" if who else None,
@@ -227,10 +228,10 @@ async def copy_version(session: AsyncSession, doc: Document, src: DocumentVersio
 
 def _diff_paths(a: dict[str, Any], b: dict[str, Any]) -> list[str]:
     out = []
-    for key in ("number", "date", "discount_total_pct"):
+    for key in ("number", "date", "discount_total_pct", "subject"):
         if a.get(key) != b.get(key):
             out.append(f"/{key}")
-    for group in ("client", "vat", "terms", "text_blocks"):
+    for group in ("client", "vat", "terms", "text_blocks", "outgoing"):
         ga, gb = a.get(group) or {}, b.get(group) or {}
         out += [f"/{group}/{k}" for k in sorted(set(ga) | set(gb))
                 if k != "review" and ga.get(k) != gb.get(k)]  # fmt: skip
@@ -241,24 +242,35 @@ def _diff_paths(a: dict[str, Any], b: dict[str, Any]) -> list[str]:
         if x is None or y is None:
             out.append(f"/items/{lid}")
             continue
-        out += [f"/items/{lid}/{k}" for k in ("name", "unit", "qty", "unit_price", "discount_pct")
-                if x.get(k) != y.get(k)]  # fmt: skip
+        out += [f"/items/{lid}/{k}" for k in ("name", "unit", "qty", "unit_price", "discount_pct",
+                                              "volume") if x.get(k) != y.get(k)]  # fmt: skip
     return out
 
 
 def missing_required(data: dict[str, Any], totals: dict[str, Any], profile: dict[str, Any],
                      required: list[str]) -> list[str]:  # fmt: skip
-    """Ф-17 (configurable): the required fields still empty. `signature_stamp` never blocks."""
+    """Ф-17 (configurable): the required fields still empty. `signature_stamp` never blocks.
+    Week 15 keys (the founder's father's real КП): `outgoing` («Исх. № … от …»), `items` (the
+    table has a line), `signer` (name and position); `seller.bank` = ИИК, БИК and Кбе."""
     client = data.get("client") or {}
     terms = data.get("terms") or {}
     bank = profile.get("bank") or {}
+    out_no = data.get("outgoing") or {}
+    signer = profile.get("signer") or {}
     checks = {
+        "outgoing": bool(out_no.get("number") and out_no.get("date")),
+        "items": bool(data.get("items")),
+        "signer": bool(signer.get("name") and signer.get("title")),
+        "license": bool((profile.get("license") or {}).get("number")),
+        "subject": bool(data.get("subject")),
         "number": bool(data.get("number")), "date": bool(data.get("date")),
         "validity": bool(terms.get("validity_days")),
         "seller.name": bool(profile.get("name")), "seller.bin_iin": bool(profile.get("bin_iin")),
-        "seller.address": bool(profile.get("address")), "seller.bank": bool(bank.get("iban")),
+        "seller.address": bool(profile.get("address")),
+        "seller.bank": bool(bank.get("iban") and bank.get("bik") and bank.get("kbe")),
         "buyer.name": bool(client.get("name")), "buyer.bin": bool(client.get("bin")),
-        "items.unit": all(it.get("unit") for it in data.get("items") or []),
+        "items.unit": all(it.get("unit") or it.get("kind") == "lump"
+                          for it in data.get("items") or []),
         "total": bool(totals.get("complete")), "vat": bool(totals.get("vat_mode")),
         "amount_words": bool(totals.get("complete")), "signature_stamp": True,
     }  # fmt: skip
@@ -286,7 +298,8 @@ async def items_dicts(session: AsyncSession, user_id: int, items: list[dict[str,
             label = f"{label}: «{it['matched_name']}» — та ли позиция?"
         out.append({**{k: it.get(k) for k in ("id", "name", "unit", "qty", "unit_price",
                                               "discount_pct", "price_source", "price_review",
-                                              "matched_name", "source_ref")},
+                                              "matched_name", "source_ref", "volume")},
+                    "kind": it.get("kind") or "qty",
                     "review_fields": list(it.get("review") or []),
                     "price_label": label, "amount": t.get("amount"), "gross": t.get("gross"),
                     "discount": t.get("discount")})  # fmt: skip
@@ -306,33 +319,85 @@ async def version_dict(session: AsyncSession, doc: Document, v: DocumentVersion,
                        tz: ZoneInfo, profile: dict[str, Any] | None,
                        required: list[str] | None) -> dict[str, Any]:  # fmt: skip
     data = v.data or {}
-    render = None
-    if v.render_file_id:
-        f = await session.get(File, v.render_file_id)
-        if f is not None:
-            render = file_dict(doc, f)
+    files = await version_files(session, doc, [v])
+    render = files[v.n]["pdf"]
     out = {
         "n": v.n, "author": v.author, "created_at": v.created_at, "calc_version": v.calc_version,
         "vat_rate": f"{v.vat_rate:.2f}" if v.vat_rate is not None else None,
         "vat_mode": v.vat_mode, "changed_paths": list(v.changed_paths or []),
         "patch": list(v.patch or []), "request_text": v.request_text,
         "data": {k: data.get(k) for k in ("number", "date", "currency", "vat",
-                                          "discount_total_pct", "terms", "text_blocks")},
+                                          "discount_total_pct", "terms", "text_blocks",
+                                          "subject", "outgoing")},
         "client": data.get("client") or {},
         "items": await items_dicts(session, doc.user_id, data.get("items") or [], v.totals, tz),
         "totals": v.totals, "valid_until": valid_until(data),
         "price_summary": price_summary(data.get("items") or []),
         "sent_at": v.sent_at, "sent_channel": v.sent_channel, "render": render,
-        "ai_generated": v.ai_generated,
+        "ai_generated": v.ai_generated, "files": files[v.n], "frozen": v.sent_at is not None,
     }  # fmt: skip
     if profile is not None and required is not None:
         out["missing_required"] = missing_required(data, v.totals, profile, required)
     return out
 
 
-def file_dict(doc: Document, f: File) -> dict[str, Any]:
-    return {"id": f.public_id, "mime": f.mime, "bytes": f.bytes, "sha256": f.sha256,
-            "url": f"/v1/documents/{doc.public_id}/files/{f.public_id}"}  # fmt: skip
+def file_dict(doc: Document, f: File, n: int | None = None) -> dict[str, Any]:
+    out = {"id": f.public_id, "mime": f.mime, "bytes": f.bytes, "sha256": f.sha256,
+           "url": f"/v1/documents/{doc.public_id}/files/{f.public_id}"}  # fmt: skip
+    if n is not None:
+        out["name"] = filename(doc, n, "docx" if f.mime == DOCX_MIME else "pdf")
+    return out
+
+
+DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+
+def filename(doc: Document, n: int, ext: str = "pdf") -> str:
+    """«КП_ТОО_Арман_v3.pdf»."""
+    who = ((doc.client or {}).get("name") or "").replace("«", "").replace("»", "")
+    base = "_".join(["КП", *who.split()])[:80] or "КП"
+    return f"{base}_v{n}.{ext}"
+
+
+async def version_files(session: AsyncSession, doc: Document, vers: list[DocumentVersion],
+                        ) -> dict[int, dict[str, Any]]:  # fmt: skip
+    """n → {pdf, docx}: the files made of each version (null when none or purged)."""
+    ids = {i for v in vers for i in (v.render_file_id, v.docx_file_id) if i}
+    rows = {f.id: f for f in await session.scalars(select(File).where(
+        File.id.in_(ids), File.purged_at.is_(None)))} if ids else {}  # fmt: skip
+    out = {}
+    for v in vers:
+        pdf, docx = rows.get(v.render_file_id or 0), rows.get(v.docx_file_id or 0)
+        out[v.n] = {"pdf": file_dict(doc, pdf, v.n) if pdf else None,
+                    "docx": file_dict(doc, docx, v.n) if docx else None}
+    return out
+
+
+AUTHOR_TEXT = {"initial": "Первая версия", "tap_edit": "Правка вручную"}
+
+
+def author_text(v: DocumentVersion) -> str:
+    if v.author == "agent_request":
+        phrase = " ".join((v.request_text or "").split())
+        return f"Правка: «{phrase[:80]}»" if phrase else "Правка"
+    if v.author == "revert":
+        src = next((p.get("from") for p in v.patch or [] if p.get("op") == "revert"), None)
+        return f"Вернул версию {src}" if src else "Вернул версию"
+    return AUTHOR_TEXT.get(v.author, "Правка")
+
+
+async def versions_rows(session: AsyncSession, doc: Document,
+                        limit: int = 50) -> list[dict[str, Any]]:  # fmt: skip
+    """The versions sheet, newest first."""
+    vers = list(await session.scalars(select(DocumentVersion).where(
+        DocumentVersion.document_id == doc.id).order_by(DocumentVersion.n.desc()).limit(limit)))
+    files = await version_files(session, doc, vers)
+    return [{"n": v.n, "author": v.author, "author_text": author_text(v),
+             "request_text": v.request_text, "created_at": v.created_at,
+             "total": v.totals.get("total"), "missing_prices": v.totals.get("missing", 0),
+             "changed_paths": list(v.changed_paths or []), "current": v.n == doc.current_version_n,
+             "sent_at": v.sent_at, "sent_channel": v.sent_channel, "frozen": v.sent_at is not None,
+             "files": files[v.n]} for v in vers]  # fmt: skip
 
 
 async def rows_dicts(session: AsyncSession, docs: list[Document]) -> list[dict[str, Any]]:
@@ -357,7 +422,8 @@ async def rows_dicts(session: AsyncSession, docs: list[Document]) -> list[dict[s
             t.get("missing", 0), "lines": len(data.get("items") or []), "status": d.status,
             "deal_status": d.deal_status, "deal_status_text": DEAL_TEXT[d.deal_status],
             "current_version_n": d.current_version_n, "sent_version_n": d.sent_version_n,
-            "progress": d.progress or {}, "error": d.error, "ai_generated": d.ai_generated,
+            "sent_at": d.sent_at, "progress": d.progress or {}, "error": d.error,
+            "ai_generated": d.ai_generated,
             "version": d.version, "seq": d.seq, "created_at": d.created_at,
             "updated_at": d.updated_at, "deleted_at": d.deleted_at,
         })  # fmt: skip
@@ -391,7 +457,8 @@ def same_name(a: str | None, b: str | None) -> bool:
     return name_norm(a) == name_norm(b)
 
 
-__all__ = ["DEAL_TEXT", "JOB_EXTRACT", "KpError", "PAGE_TEMPLATE", "Saved", "compute", "create",
-           "field_values", "file_dict", "get", "missing_required", "next_number",
+__all__ = ["DEAL_TEXT", "DOCX_MIME", "JOB_EXTRACT", "KpError", "PAGE_TEMPLATE", "Saved",
+           "author_text", "compute", "create", "field_values", "file_dict", "filename", "get",
+           "version_files", "versions_rows", "missing_required", "next_number",
            "other_field_values", "price_summary", "rows_dicts", "same_name", "save_version",
            "system_template", "user_tz", "valid_until", "version", "version_dict"]  # fmt: skip

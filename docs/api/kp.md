@@ -1,4 +1,4 @@
-# КП: «Моя компания», «Мой прайс», КП из ТЗ, правки, PDF (week 14)
+# КП: «Моя компания», «Мой прайс», КП из ТЗ, правки, PDF, DOCX, отправка, черновики (weeks 14–15)
 
 Spec: `docs/spec/final/3-engineering.md` 3.6, 4.7, 5.9, 6.7, 11.2 (week 14);
 `docs/spec/proposals/template-screens.md` §2.5 (картотека); product F-13, F-14, F-34, US-11,
@@ -62,6 +62,14 @@ an ИП without VAT are still open). Each version stores the rate it used (`vat_
   "version": 3, "updated_at": "...", "complete": true
 }}
 ```
+
+Week 15 adds `"license": {"number": "00000", "date": "2020-01-15", "category": "II
+категория"}` (the state licence line of the intro; optional) and `"outgoing": {"year": 2026,
+"next": 119}` (the outgoing-number sequence: each new КП takes `«<year>-<next>-1»`, e.g. «Исх. №
+2026-118-1», and moves `next`; a new year starts at 1). `PUT` takes `license` (replaced whole,
+`date` ISO) and `outgoing: {"next": 118}` (where the sequence goes on; not part of «Отменить»: a
+number once given is never given again). `default_terms.conditions`: the «Условия» lines every new
+КП starts with (≤12 strings).
 
 No profile yet: the same shape with nulls, `id: null`, `version: 0`, `complete: false`.
 `complete` = name and БИН/ИИН are there. `legal_form`: `ip` (ИП: the PDF says «ИИН») · `too` ·
@@ -192,7 +200,7 @@ partial, message, error}` whenever it changes, then `event: end`. `state`: `read
 
 ```json
 {
-  "n": 1, "author": "initial", "created_at": "...", "calc_version": "kp-calc.v1",
+  "n": 1, "author": "initial", "created_at": "...", "calc_version": "kp-calc.v2",
   "vat_rate": "16.00", "vat_mode": "included", "changed_paths": [], "patch": [],
   "request_text": null,
   "data": {"number": "КП-2026-014", "date": "2026-11-10", "currency": "KZT",
@@ -216,7 +224,7 @@ partial, message, error}` whenever it changes, then `event: end`. `state`: `read
     {"id": "i3", "name": "Щит ЩРН-24", "unit": "шт", "qty": "4", "unit_price": null,
      "price_source": "missing", "price_label": "укажите цену", "amount": null, "...": "..."}
   ],
-  "totals": {"calc_version": "kp-calc.v1", "lines": [{"id": "i1", "gross": "225000.00",
+  "totals": {"calc_version": "kp-calc.v2", "lines": [{"id": "i1", "gross": "225000.00",
              "discount": "0.00", "amount": "225000.00", "vat": null}],
              "lines_sum": "341000.00", "discount_total": "0.00", "amount": "341000.00",
              "net": "293965.52", "vat": "47034.48", "total": "341000.00",
@@ -225,7 +233,8 @@ partial, message, error}` whenever it changes, then `event: end`. `state`: `read
   "valid_until": "2026-11-20",
   "price_summary": {"price_list": 2, "past_kp": 0, "manual": 0, "missing": 1},
   "missing_required": ["seller.bin_iin", "total", "amount_words"],
-  "sent_at": null, "sent_channel": null, "render": null, "ai_generated": true
+  "sent_at": null, "sent_channel": null, "render": null, "ai_generated": true,
+  "files": {"pdf": null, "docx": null}, "frozen": false
 }
 ```
 
@@ -238,13 +247,17 @@ partial, message, error}` whenever it changes, then `event: end`. `state`: `read
 - `review_fields` of a line: `qty` (the quantity is not written in the ТЗ like that, or missing:
   then 1) · `unit`. `client.review`: `client.bin`. Show «Проверьте».
 - `price_summary` → S16 «ЦЕНЫ: 9 — из прайса · 1 — из КП · 2 — нет цены».
-- `missing_required` (Ф-17, configurable `kp_required_fields`, pending the founder): `number`,
-  `date`, `validity`, `seller.name`, `seller.bin_iin`, `seller.address`, `seller.bank`,
-  `buyer.name`, `buyer.bin`, `items.unit`, `total` / `amount_words` (= every line has a price),
-  `vat`. Default list: number, date, validity, seller.name, seller.bin_iin, buyer.name,
-  items.unit, total, vat, amount_words, signature_stamp (printed if uploaded, never missing).
+- `missing_required` (Ф-17, configurable `kp_required_fields`; week 15: as observed in the
+  founder's father's real КП, pending his confirmation). Keys: `number`, `date`, `outgoing`
+  («Исх. № … от …»), `validity`, `seller.name`, `seller.bin_iin`, `seller.address`,
+  `seller.bank` (ИИК + БИК + Кбе), `buyer.name`, `buyer.bin`, `items` (a line), `items.unit`,
+  `total` / `amount_words` (= every line has a price), `vat`, `signer` (name + position),
+  `license`, `subject`, `signature_stamp` (never missing). **Default:** number, date, outgoing,
+  validity, seller.name, seller.bin_iin, seller.address, seller.bank, buyer.name, items, total,
+  vat, amount_words, signer, signature_stamp. Optional by default: buyer.bin, license, subject,
+  the «Условия» lines, stamp and signature images.
 
-### `GET /v1/documents/{id}/versions` → `{versions: [{n, author, created_at, total, changed_paths, sent_at, current}], sent_version_n}`
+### `GET /v1/documents/{id}/versions` → `{versions: [VersionRow], sent_version_n}` (week 15: see «Versions» below)
 
 ### `GET /v1/documents/{id}/versions/{n}` → `{document, version, needs_profile}` (that version)
 
@@ -265,8 +278,15 @@ No model; the total is recomputed by code at once. JSON Patch (RFC 6902 subset):
 
 Paths: `/number` `/date` `/client/name|bin|contact` `/vat/mode` `/discount_total_pct`
 `/terms/payment|delivery|warranty|validity_days` `/text_blocks/intro|outro`
-`/items/<id or index>/name|unit|qty|unit_price|discount_pct`, `/items/<id>` (remove a line),
-`/items/-` (add). `remove` on an optional field clears it; on `unit_price` makes it `missing`. Sums
+`/items/<id or index>/name|unit|qty|unit_price|discount_pct|volume`, `/items/<id>` (remove a
+line), `/items/-` (add). Week 15: `/subject` («на монтаж систем …»), `/outgoing/number`,
+`/outgoing/date`, `/terms/conditions` (the «Условия» lines: a list of strings, ≤12, replaced
+whole; `remove` clears it). **Lump-sum lines** (the father's КП): add `{"kind": "lump", "name":
+"Монтаж систем", "volume": "1 здание", "unit_price": "38635000"}` — `unit_price` is the line's
+whole cost, `volume` free text, `qty` is "1" and cannot be patched (`patch_path_not_allowed`);
+`calc` takes `amount = unit_price` (no qty × price, `calc_version` `kp-calc.v2`). A version's
+`items[]` carry `kind` (`qty` · `lump`) and `volume`; `data` carries `subject` and `outgoing`
+`{number, date}`. `remove` on an optional field clears it; on `unit_price` makes it `missing`. Sums
 are never patched. A typed price → `price_source: manual`; a touched field loses «Проверьте».
 
 - `base_version` ≠ the current `n` → `409 conflict` with `details` = the current `{document,
@@ -309,7 +329,7 @@ back.
 ```
 
 `GET file.url` (with the Bearer) → the PDF bytes (`Content-Disposition: attachment`). PDF is the
-default; `format=docx` → `422 kp_format_later` until week 15 («Ещё → Сделать в Word»). The same
+default; `format=docx` makes the Word file (week 15, below). The same
 version with the same data and profile gives the same file (deterministic: template `kp_v1` +
 packaged fonts with Kazakh letters + data). The PDF prints: the seller's requisites (and logo),
 «Коммерческое предложение № … от …, действительно до …», the buyer, the lines (№, name, unit,
@@ -318,9 +338,220 @@ when `kp_words_langs` has it), terms, signer with signature and stamp if uploade
 `422 kp_prices_missing` (`details.lines`), `422 kp_fields_missing` (`details.fields`, Ф-17),
 `409 kp_not_ready`, `503 kp_render_unavailable` (the renderer is down: try again).
 
-Week 15: phrase edits (`POST /v1/documents/{id}/edit`, KP_EDIT, applied at once with
-`changed_paths` and «Отменить»), DOCX, `POST /v1/documents/{id}/send` (pending action, «Клиент
-видел v3. Отправить новую?») and `…/versions/{n}/sent` (the sent PDF kept, Ф-5).
+## Week 15: phrase edits, versions, DOCX, sending, drafts
+
+Spec: 3-engineering 4.7, 4.8, 6.7 steps 5–7, 6.8, 11.2 (week 15); product F-13, F-15, US-12,
+US-13; design S17, S18, S25. Nothing here sends a message: the phone's share sheet, mail
+composer or a `wa.me` link do, and the person presses ➤ (decision №6, R-15).
+
+### Phrase edits: `POST /v1/documents/{id}/edit` → `200 {status, document, version, action, change_text, price_offers, message, refused, repeated}`
+
+S17 «Скажите, что изменить»: «убери доставку», «скидка 5% на всё», «цена щита 18500», «срок 7
+дней». Needs `ai_cross_border` (`403 consent_required, details.missing`).
+
+```json
+{"client_id": "...", "base_version": 3, "text": "скидка 5% на всё"}
+```
+
+`text` 1–500 chars (voice: the phone sends the STT text). KP_EDIT (strong model, documents wallet,
+masked ИИН/БИН/IBAN/phones; the КП is sent as data, the phrase as the person's request) turns the
+phrase into JSON Patch ops on the same white list as tap edits (`/items/<id>/…` incl.
+`volume`, `/items/-` incl. a lump-sum line «добавь пусконаладку 500 000 на 1 здание»,
+`/items/<id>`, `/vat/mode`, `/discount_total_pct`, `/terms/…`, `/text_blocks/…`, `/subject`,
+`/client/name`, `/client/contact`, `/date`; **not** `/number`, `/client/bin`, `/outgoing/…` and
+`/terms/conditions`: tap edits only). Code then checks
+every op and either applies all of them **at once** (a new version, `author: "agent_request"`,
+`request_text` = the phrase, totals by `kp/calc.py`) or none:
+
+- every number the model puts in a price, quantity, percent or days must be **written in the
+  phrase** (`numbers_in`): the model never computes («подними цену кабеля на 10%» → `refused`, it
+  would have to compute 495). A price set this way is `price_source: "manual"` (the person said it).
+- a line the model adds takes its name from the phrase (its words must be in it); without a price
+  in the phrase it is `missing` («укажите цену») — a price is never invented.
+- the ops then go through the tap edit code (`patch_*` / `kp_*` checks below).
+
+| `status` | Meaning |
+|---|---|
+| `applied` | New version; `document`, `version` (with `changed_paths` → the 600 ms highlight), `action` (`edit_kp`, `initiated_by: "agent"`, «Отменить» = back to the version before; partial undo «Часть уже изменена вами» as tap edits), `change_text` («Итого: 1 240 000 → 1 178 000 ₸» or «Изменил КП»), `price_offers` (as tap edits). `message: null`, `refused: []`. |
+| `not_understood` | Nothing changed (`action: null`, `version` = the current one). `message`: «Не понял, что изменить. Скажите иначе или поправьте поле вручную.» |
+| `refused` | Nothing changed. `refused: [{path, reason}]`, `reason`: `number_not_said` (a number not in the phrase), `name_not_said`, `path_not_allowed`, `value_invalid`. `message`: «Не могу посчитать это сам — скажите число, например «цена кабеля 495»» for `number_not_said`, else «Так изменить не получится. Поправьте поле вручную.» |
+
+A repeat of the same `client_id` returns the first result (`repeated: true`, `status: "applied"`
+when it applied; a repeat of a call that changed nothing runs again). Errors: `409 conflict`
+(`base_version` ≠ the current `n`, before or after the model call; `details` = the current
+`{document, version}`), `409 kp_not_ready`, `409 item_deleted`, `503 kp_edit_unavailable` («Не
+получилось изменить — попробуйте ещё раз или поправьте поле вручную»), and the tap edit `422`s.
+A started КП is never cut off by the budget: edits run as `continuing` (R-18).
+
+### Versions
+
+`GET /v1/documents/{id}` (and `…/versions/{n}`) now also carries `versions` (newest first, at most
+50) and `version.files` / `version.frozen`. `GET /v1/documents/{id}/versions?limit=50` →
+`{versions: [VersionRow], sent_version_n}`:
+
+```json
+{"n": 4, "author": "agent_request", "author_text": "Правка: «скидка 5% на всё»",
+ "request_text": "скидка 5% на всё", "created_at": "...", "total": "1178000.00",
+ "missing_prices": 0, "changed_paths": ["/discount_total_pct", "/totals/total"],
+ "current": true, "sent_at": null, "sent_channel": null, "frozen": false,
+ "files": {"pdf": null, "docx": null}}
+```
+
+`author_text`: «Первая версия» · «Правка вручную» · «Правка: «…»» · «Вернул версию 2» (also an
+«Отменить» of an edit). Show it as the versions sheet («v3 · Отправлено 3 ноя · 1 218 500 ₸»); tap
+→ `GET …/versions/{n}`; «Вернуть эту версию» → `POST …/revert {client_id, n}`. `files.pdf` /
+`files.docx`: File (`{id, mime, bytes, sha256, url, name}`) made of that version, or null.
+
+**Frozen** (`frozen: true`, `sent_at` set): the version the client got. Versions never change
+anyway (every edit is a new one); a frozen version's files are kept for good (Ф-5,
+`kp_keep_sent_render`: `files.keep_reason = sent_kp`) and `render` of it returns the stored file,
+never a new one (even after the profile changed). An edit after sending makes `n + 1`; the next
+`send` says «Клиент видел v3. Отправить новую?».
+
+### The layout (v2, PDF and DOCX): the founder's father's real КП
+
+Five real КП of the father (one template, sent as Word) were reviewed for their structure only;
+layout v2 (`builtin:kp_v2` / `builtin:kp_docx_v1`, migration 0021) follows it in both formats:
+
+1. Letterhead: the legal form spelled out («ТОВАРИЩЕСТВО С ОГРАНИЧЕННОЙ ОТВЕТСТВЕННОСТЬЮ»,
+   «ИНДИВИДУАЛЬНЫЙ ПРЕДПРИНИМАТЕЛЬ», «АКЦИОНЕРНОЕ ОБЩЕСТВО»), the name in «», the address, one
+   line «БИН …, ИИК … в АО …, БИК …, Кбе …» (ИП: «ИИН»); the logo if uploaded.
+2. «Исх. № 2026-118-1 от 29.10.2026 г.» (`data.outgoing`).
+3. The buyer's name (its БИН only if the КП has one).
+4. «КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ № N» (`data.number`), the subject line (`data.subject`).
+5. The intro: «ТОО «…», государственная лицензия № … от … г., <категория>.» (from the profile, if
+   any) + `text_blocks.intro` (city, object, project).
+6. The table. All lines lump sums: **№ | Наименование | Объём | Стоимость, ₸**; otherwise № |
+   Наименование | Объём («100 м») | Цена | (Скидка) | Стоимость. Last rows by VAT mode: `none`
+   «ИТОГО без НДС»; `included` «ИТОГО» + «в т. ч. НДС 16%»; `on_top` «ИТОГО без НДС» + «НДС 16%» +
+   «ИТОГО с НДС» (and «Сумма по позициям» / «Скидка N%» first when there is a КП discount).
+7. «Общая стоимость: 38 635 000 ₸ (Тридцать восемь миллионов … тенге 00 тиын), без НДС.»
+   (`included`: «, в том числе НДС 16% — … ₸»; `on_top`: «, включая НДС 16% — … ₸»). KK words
+   below when `kp_words_langs` has `kk`.
+8. «Условия:» as a dash list: the VAT line («Цены указаны в тенге без НДС, ТОО «…» не является
+   плательщиком НДС.» / «…с учётом НДС 16%.» / «…НДС 16% начисляется сверху.»), then
+   `terms.conditions`, «Оплата: …», «Сроки: …», «Гарантия: …», «Предложение действительно N
+   календарных дней.».
+9. «Будем рады сотрудничеству.» (or `text_blocks.outro`).
+10. The signer: position + company, name, «моб.: …», «e-mail: …» (profile contacts); signature
+    and stamp images only if uploaded.
+
+### DOCX: `POST /v1/documents/{id}/render?format=docx&n=` → `200 {file, version_n, total, document}`
+
+«Ещё → Сделать в Word». The same data, the same `calc` totals, the same checks and errors as the
+PDF (`kp_prices_missing`, `kp_fields_missing`, `kp_not_ready`), the same content (requisites,
+logo, buyer, lines, totals by VAT mode, sum in words, terms, signer, signature and stamp). `file`:
+`mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"`, `name:
+"КП_ТОО_Арман_v3.docx"`. No model. Deterministic: the same version, data and profile give the
+same bytes (fixed zip times, core properties dated by the version). The «ИИ» rule is the PDF's:
+core properties `subject`, `keywords` and `comments` say `kp_ai_metadata` («Подготовлено с помощью
+ИИ») always; the visible line only with `kp_visible_ai_label`. Fonts: Arial (has every Kazakh
+letter, present wherever Word is). PDF stays the default everywhere (`format` omitted = pdf).
+
+### Sending (S18): `POST /v1/documents/{id}/send` → `200 {pending_action, file, version_n, resend, message, hint, document, repeated}`
+
+```json
+{"client_id": "...", "n": 3, "channel": "whatsapp", "format": "pdf",
+ "recipient_name": "Ерлан", "message": null}
+```
+
+`n` (default: current), `channel`: `whatsapp` · `email` · `share` (another app), `format`: `pdf`
+(default) · `docx`, `recipient_name`: the name the person picked (the phone number never comes
+here, R-16), `message`: the cover text if the person edited it. Makes the file if that version
+has none (render errors as above) and a pending action (24 h) with a preview made by code:
+
+```json
+{"pending_action": {"id": "0194...", "kind": "send_whatsapp_file", "status": "proposed",
+   "preview": {"title_ru": "Отправить КП?", "document_id": "...", "version_n": 3,
+               "client": "ТОО «Арман»", "recipient_name": "Ерлан", "total": "1218500.00",
+               "total_text": "1 218 500 ₸", "file": {"id": "...", "name": "КП_ТОО_Арман_v3.pdf",
+               "mime": "application/pdf", "bytes": 48213, "url": "/v1/documents/.../files/..."},
+               "channel": "whatsapp", "format": "pdf",
+               "message": "Добрый день, Ерлан! Направляю коммерческое предложение № КП-2026-014 на сумму 1 218 500 ₸.",
+               "hint": "Откроется WhatsApp — выберите чат «Ерлан» и нажмите ➤",
+               "resend": null},
+   "expires_at": "...", "...": "..."},
+ "file": {"...": "as render"}, "version_n": 3, "resend": null, "message": "…", "hint": "…",
+ "document": {"...": "DocumentRow"}, "repeated": false}
+```
+
+`kind`: `send_whatsapp_file` · `send_email` · `share_file`. `resend` when another version was
+sent before: `{"sent_version_n": 3, "sent_at": "...", "text": "Клиент видел v3. Отправить
+новую?"}` (S18 shows it first). `message` default is code's: «Добрый день[, <имя>]! Направляю
+коммерческое предложение № … на сумму … ₸.» (sum by `calc`). Hints: email «Откроется почта —
+проверьте адрес и нажмите «Отправить»», share «Выберите, куда отправить файл».
+
+**«Открыть WhatsApp» / «Открыть почту»** = `POST /v1/pending-actions/{id}/confirm` →
+`{pending_action (status "confirmed"), action: null, execute, repeated}`:
+
+```json
+{"execute": {"kind": "share_file", "file": {"url": "...", "name": "КП_ТОО_Арман_v3.pdf",
+             "mime": "application/pdf"},
+             "text": "Добрый день, Ерлан! …", "subject": "Коммерческое предложение № КП-2026-014",
+             "wa_url_template": "https://wa.me/{phone}?text=%D0%94%D0%BE...", "hint": "…"}}
+```
+
+`execute.kind`: `share_file` (whatsapp, share: download `file.url` with the Bearer →
+`expo-sharing`; «Отправить только текст в чат» = `wa_url_template` with `{phone}` replaced on the
+phone by the contact's digits) · `email` (`expo-mail-composer` with the file, `subject`, `text`;
+fallback `mailto:`) · `whatsapp_text` (drafts: open `wa_url_template`). Confirming again returns the
+same (`repeated: true`). The server sends nothing.
+
+**«Отправили?»** after the phone comes back:
+
+- [Да] → `POST /v1/documents/{id}/versions/{n}/sent` `{client_id, channel, pending_action_id?}` →
+  `200 {document, version, action, repeated}`. `channel` (stored as `sent_channel`):
+  `whatsapp_share` · `whatsapp_text` · `email` · `share_other`. The version gets `sent_at`,
+  becomes frozen (its PDF made now if it had no file: the PDF is what is kept), the document
+  `sent_version_n = n`, `status: "sent"`, `deal_status: "sent"` (unless already `accepted` /
+  `declined`), past-КП prices of that version get `sent_at`; the pending action (if given)
+  `executed`. `action.kind = "send_external"`, `scope: "external"`, **no «Отменить»**
+  (`undoable: false`): «Отправил КП ТОО «Арман» (v3) через WhatsApp». A version already sent:
+  nothing changes (`action: null`). Works without `send` too (the person shared it from
+  elsewhere). Errors: `404`, `409 kp_not_ready`, render errors when the PDF has to be made.
+- [Нет] → `POST /v1/pending-actions/{id}/result {outcome: "not_sent"}` → `{pending_action}`
+  (status `cancelled_by_user`); nothing is marked. `outcome: "sent"` (+ `channel?`) is the same as
+  `…/versions/{n}/sent` for a КП, and marks a draft sent (below):
+  `{pending_action, action, document?, draft?}`.
+- «Не сейчас» before opening → `POST /v1/pending-actions/{id}/reject` (as before).
+
+### Drafts (F-15, US-13, S25)
+
+A message or a letter the assistant writes and the person sends. Draft:
+
+```json
+{"id": "0194...", "client_id": "...", "channel": "whatsapp", "recipient_name": "Арман",
+ "subject": null, "text": "Добрый день, Арман! КП будет готово в пятницу.",
+ "request_text": "напиши Арману, что КП будет в пятницу", "document_id": null,
+ "status": "draft", "review_fields": [], "pending_action_id": "0194...", "ai_generated": true,
+ "sent_at": null, "version": 1, "seq": 9200, "created_at": "...", "updated_at": "...",
+ "deleted_at": null}
+```
+
+`status`: `draft` · `sent` · `discarded`. `review_fields: ["text"]`: the text has a number that is
+neither in the request nor in the КП it is about → «Проверьте». The single «ИИ» label
+(`labels.ai_generated`) is shown under the text while `ai_generated` is true (an edited text keeps
+it: it was still prepared by the assistant).
+
+- `POST /v1/drafts` `{client_id, request, channel: "whatsapp" | "email", recipient_name?,
+  document_id?}` → `201 {draft, pending_action, labels, repeated}`. DRAFT (light model, answers
+  budget; needs `ai_cross_border`, masked). `document_id`: a КП it is about (number, client,
+  total and date given to the model by code). `recipient_name`: from the request («Арману» →
+  «Арман») unless given; the phone resolves it to a contact with its own picker (two «Арман» →
+  the picker). `pending_action.kind`: `send_whatsapp_text` · `send_email`; preview `{title_ru:
+  "Отправить сообщение?", recipient_name, channel, text, subject, hint, draft_id}`. Errors: `403
+  consent_required`, `404` (document), `422 draft_empty` (the model wrote nothing usable), `503
+  draft_unavailable`.
+- `GET /v1/drafts?status=draft&limit=50` → `{drafts}`.
+- `PATCH /v1/drafts/{id}` `{text?, subject?, recipient_name?, channel?}` («Изменить») →
+  `{draft, pending_action}`: the open pending action is replaced by a new one with the new
+  preview (the confirmation is bound to what is shown).
+- `DELETE /v1/drafts/{id}` («Не надо») → `{draft}` (`discarded`; its pending action `rejected`).
+- «Открыть WhatsApp / почту» → `POST /v1/pending-actions/{id}/confirm` → `execute` (`whatsapp_text`
+  or `email`, no file). «Отправили? — Да» → `POST /v1/pending-actions/{id}/result {outcome:
+  "sent"}` → the draft `sent`, an action `send_external` (no «Отменить»).
+
+Drafts travel in `/v1/sync` (`drafts`).
 
 ## DocumentRow (sync, page rows, lists)
 
@@ -330,14 +561,14 @@ Week 15: phrase edits (`POST /v1/documents/{id}/edit`, KP_EDIT, applied at once 
  "client": {"name": "ТОО «Арман»"}, "currency": "KZT", "total": "1240000.00",
  "vat_mode": "included", "missing_prices": 0, "lines": 12,
  "status": "draft", "deal_status": "draft", "deal_status_text": "Черновик",
- "current_version_n": 1, "sent_version_n": null,
+ "current_version_n": 1, "sent_version_n": null, "sent_at": null,
  "progress": {"state": "done", "done": 12, "total": 12, "parts_done": 1, "parts_total": 1},
  "error": null, "ai_generated": true, "version": 3, "seq": 9123,
  "created_at": "...", "updated_at": "...", "deleted_at": null}
 ```
 
-`status`: `extracting` · `draft` · `ready` (a PDF of the current version exists) · `sent` (week
-15) · `archived` · `failed` (`error` + `progress.message`). The mini-sheet of the card is drawn
+`status`: `extracting` · `draft` · `ready` (a PDF of the current version exists) · `sent` (a
+version was sent; `sent_at` = when, «Отправлено 3 ноя») · `archived` · `failed` (`error` + `progress.message`). The mini-sheet of the card is drawn
 from `title` / `total` / `deal_status` (no picture).
 
 ## Pages: «Документы и КП» (template v2)
@@ -361,8 +592,22 @@ lands on «Документы и КП» (and not on «Заметки»).
   undo of the import / merge brings the row again with `status: "undone"`.
 - Tombstones: `entity: "document"` (a КП purged with its record), `"expense_duplicate"`.
 
-Not synced: the company profile and price lists (read online in S19 / S28; they are not needed
-offline and the price list can be thousands of rows).
+Week 15 adds:
+
+- `company_profile`: at most one row, the profile as `GET /v1/company-profile` gives it **except
+  the secrets**: `bin_iin: null` and `bank.iban: null`, with `bin_iin_hint: "…9013"` and
+  `bank.iban_hint: "…0100"` (last 4), `secrets_masked: true`; `complete` is computed from the real
+  values. The phone shows «Моя компания» offline from it; S19 editing and the PDF still read the
+  full profile online (`GET /v1/company-profile`). Why: an ИП's ИИН is a person's national ID and
+  the IBAN is a bank account; they are stored encrypted on the server (БИН/bank `*_enc`), and the
+  sync stream lands in the phone's general database on every device, so only a hint travels.
+  Tombstone `entity: "company_profile"` when an «Отменить» removes a profile that a PUT created.
+- `price_lists`: as `GET /v1/price-lists` rows (incl. removed, `deleted_at`).
+- `price_list_items`: PriceListItem rows (incl. removed, `deleted_at`), so «Мой прайс» and «🔍
+  Найти позицию» work offline. A list can be thousands of rows: they come in `seq` pages like
+  everything else (`has_more`).
+- `drafts`: Draft rows (above).
+- Tombstones: `"company_profile"`, `"price_list"`, `"price_list_item"`, `"draft"`.
 
 ## «Это разные» for expenses (week 13 fix)
 

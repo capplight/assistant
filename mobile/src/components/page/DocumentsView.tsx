@@ -8,7 +8,7 @@ import type { DocumentOut } from '@/api/types';
 import type { LocalRecord } from '@/db/records';
 import { useExpenses } from '@/expenses/store';
 import { assistantOn, pumpJobs, refreshDocuments, setKpStatus, shownStatus } from '@/kp/service';
-import { useKp, type KpJob } from '@/kp/store';
+import { shownDraft, useKp, type KpJob } from '@/kp/store';
 import { decToMinor } from '@/kp/calc';
 import { kpTitle, kpView, money, shortDate, statusWord } from '@/kp/view';
 import { facetKey, useFacets } from '@/pages/facets';
@@ -83,6 +83,8 @@ export function DocumentsView({ page, entries, frameTop, ordering }: ViewProps) 
   const docs = useKp((s) => s.docs);
   const statusEdits = useKp((s) => s.statusEdits);
   const jobs = useKp((s) => s.jobs);
+  const drafts = useKp((s) => s.drafts);
+  const draftEdits = useKp((s) => s.draftEdits);
   const expenses = useExpenses((s) => s.entries);
   const facets = useFacets((s) => s.values);
   const ai = useOnboarding((s) => s.consent?.mode === 'full');
@@ -120,6 +122,10 @@ export function DocumentsView({ page, entries, frameTop, ordering }: ViewProps) 
   const loose = Object.values(docs).filter((d) => !d.deleted_at && d.status !== 'extracting' && (!d.item_id || !onPage.has(d.item_id)));
   const working = Object.values(jobs).filter((j) => j.state !== 'done');
   const label = (f: Filter) => t(`kp.filter_${f}`);
+  // F-15: messages the assistant wrote and the person has not sent or dropped yet.
+  const openDrafts = Object.values(drafts)
+    .map((d) => shownDraft(d.id, { drafts, draftEdits }))
+    .filter((d): d is NonNullable<typeof d> => !!d && d.status === 'draft' && !d.deleted_at);
 
   const newKp = () => {
     if (!assistantOn()) return setNoAi(true);
@@ -134,6 +140,23 @@ export function DocumentsView({ page, entries, frameTop, ordering }: ViewProps) 
         <Button testID="docs-company" label={t('kp.my_company')} variant="outline" minHeight={theme.size.minTouch} style={{ flexGrow: 1 }} onPress={() => router.push('/company')} />
         <Button testID="docs-prices" label={t('kp.my_prices')} variant="outline" minHeight={theme.size.minTouch} style={{ flexGrow: 1 }} onPress={() => router.push('/price-list')} />
       </View>
+      {openDrafts.length > 0 ? (
+        <View testID="docs-drafts" style={{ gap: theme.space[2] }}>
+          <AppText variant="meta" accessibilityRole="header">
+            {t('draft.list_title', { count: openDrafts.length })}
+          </AppText>
+          {openDrafts.map((d) => (
+            <Button
+              key={d.id}
+              testID={`docs-draft-${d.id}`}
+              label={`${d.recipient_name ?? t('send.no_client')}: ${d.text.length > 60 ? `${d.text.slice(0, 60)}…` : d.text}`}
+              variant="outline"
+              minHeight={theme.size.minTouch}
+              onPress={() => router.push({ pathname: '/draft/[id]', params: { id: d.id } })}
+            />
+          ))}
+        </View>
+      ) : null}
       {all.length > 0 ? (
         theme.largeFont ? (
           <Pressable
@@ -352,7 +375,7 @@ function KpCard({
 }) {
   const theme = useTheme();
   const { t, i18n } = useTranslation();
-  const status = useKp((s) => s.statusEdits[doc.id]?.status ?? doc.deal_status);
+  const status = useKp((s) => shownStatus(doc, s.statusEdits, s.sentEdits));
   const edit = useKp((s) => s.docEdits[doc.id]);
   const version = useKp((s) => s.versions[doc.id]);
   // A tap-edit still on its way: the total as the phone counts it; else the server's.

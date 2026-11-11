@@ -5,12 +5,13 @@ import { computeTotals, KpCalcError, priceText, qtyText } from '@/kp/calc';
 
 /**
  * Week 14: the phone's КП totals equal the server's. `fixtures/kp-calc.json` was written by the
- * server's own `src/assistant/kp/calc.py` (kp-calc.v1) over 608 seeded synthetic sets — every
- * total, VAT, discount and line amount must match to the tiyn.
+ * server's own `src/assistant/kp/calc.py` — v1's 608 seeded synthetic sets, and since week 15
+ * (kp-calc.v2) 221 more with lump-sum lines (`kind: "lump"`: the given amount, «Объём» as text).
+ * Every total, VAT, discount and line amount must match to the tiyn.
  */
 
 type Case = {
-  lines: { id: string; qty: string; unit_price: string | null; discount_pct: string }[];
+  lines: { id: string; qty: string; unit_price: string | null; discount_pct: string; kind?: 'qty' | 'lump'; volume?: string }[];
   vat_mode: 'included' | 'on_top' | 'none';
   vat_rate: string | null;
   rounding: 'on_total' | 'per_line';
@@ -35,7 +36,8 @@ const d = (m: bigint) => minorToDecimal(m);
 
 describe('КП calc = server kp/calc.py', () => {
   it(`all ${cases.length} vectors`, () => {
-    expect(cases.length).toBeGreaterThan(600);
+    expect(cases.length).toBeGreaterThan(800);
+    expect(cases.some((c) => c.lines.some((l) => l.kind === 'lump'))).toBe(true);
     for (const c of cases) {
       const run = () =>
         computeTotals(c.lines, { vatMode: c.vat_mode, vatRate: c.vat_rate, rounding: c.rounding, discountTotalPct: c.discount_total_pct });

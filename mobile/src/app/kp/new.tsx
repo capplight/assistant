@@ -244,7 +244,7 @@ export default function NewKpScreen() {
         </>
       );
     }
-  } else if (!profileReady(profile) && !companyLater) {
+  } else if (!profileReady(profile) && !(savedProfile?.secrets_masked && savedProfile.complete) && !companyLater) {
     body = (
       <>
         <AppText variant="title1" accessibilityRole="header">

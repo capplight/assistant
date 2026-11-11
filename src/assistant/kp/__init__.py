@@ -11,7 +11,10 @@ Public surface:
 - `extract`: KP_EXTRACT parts and code's checks; `jobs.run_extract` (job `kp:extract`, worker
   `python -m assistant.kp`).
 - `service`: documents, versions, rows for sync and pages; `patch`: tap edits (JSON Patch).
-- `render`: Jinja2 → WeasyPrint PDF (`WeasyPdfRenderer`, `FakePdfRenderer` for tests).
+- `render`: Jinja2 → WeasyPrint PDF (`WeasyPdfRenderer`, `FakePdfRenderer` for tests); layout v2
+  of the founder's father's real КП (week 15). `docx_render`: the same КП as Word (python-docx).
+- Week 15: `edit` (KP_EDIT phrase → checked ops, applied at once), `send` (pending «Да» for the
+  phone's share sheet / `wa.me`, «Отправили?», drafts with DRAFT).
 """
 
 from typing import Any

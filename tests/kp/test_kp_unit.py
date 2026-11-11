@@ -240,7 +240,7 @@ def _context(visible: str | None = None, langs: tuple[str, ...] = ("ru",)) -> di
 
 
 def test_html_has_every_required_part_and_code_numbers():
-    html = render.render_html(_context(langs=("ru", "kk")))
+    html = render.render_html(_context(langs=("ru", "kk")), render.TEMPLATE_V1_FILE)  # week 14
     for part in ("ТОО «Свет-Монтаж»", f"БИН: {BIN}", IBAN, "№ КП-2026-001", "от 10.11.2026",
                  "действительно до 20.11.2026", "ТОО «Қазақ Құрылыс»", "Кабель", "5%",
                  "4 500,00", "17 575,00", "22 075,00",
@@ -253,7 +253,8 @@ def test_html_has_every_required_part_and_code_numbers():
         assert part in html, part
     assert "Подготовил помощник" not in html  # the visible label is off until the lawyer
     assert "Подготовил помощник (ИИ)" in render.render_html(
-        _context(visible="Подготовил помощник (ИИ) по вашим записям — проверьте"))
+        _context(visible="Подготовил помощник (ИИ) по вашим записям — проверьте"),
+        render.TEMPLATE_V1_FILE)
 
 
 def test_html_escapes_the_clients_text():

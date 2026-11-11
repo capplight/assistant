@@ -2,6 +2,9 @@ import {
   actionsOf,
   collectionsOf,
   documentsOf,
+  priceListsOf,
+  syncedProfileOf,
+  messageDraftsOf,
   duplicateGroupsOf,
   expenseCategoriesOf,
   expensesOf,
@@ -18,6 +21,9 @@ import {
 } from '@/api/endpoints';
 import { ApiError, isOfflineError, isRetryable, SignInRequiredError } from '@/api/errors';
 import type {
+  CompanyProfileOut,
+  DraftOut,
+  PriceListOut,
   DocumentOut,
   PriceItemOut,
   ConsentsIn,
@@ -251,12 +257,15 @@ export type SyncDeps = {
   /** Week 14: КП — profile, «Мой прайс», tap-edits, status (`kp.*`), /sync `documents` / `price_list_items` (src/kp/service.ts). */
   kp?: {
     send(e: OutboxEntry): Promise<void>;
-    apply(x: { documents: DocumentOut[]; prices: PriceItemOut[] }): void;
+    apply(x: { documents: DocumentOut[]; prices: PriceItemOut[]; profile?: CompanyProfileOut | null; drafts?: DraftOut[]; priceLists?: PriceListOut[] }): void;
     tombstone?(entity: string, id: string): void;
   };
 };
 
 export type PushResult = { sent: number; retried: number; failed: number; offline: boolean };
+
+/** Week 14–15: tombstones of the КП side (kp.md «Sync»). */
+const KP_TOMBSTONES = new Set(['document', 'price_list_item', 'price_list', 'company_profile', 'draft']);
 
 /** Kinds that later entries depend on (devices/items need consent on the server): strict order. */
 const BARRIERS = new Set(['consent.accept', 'device.register']);
@@ -291,6 +300,9 @@ const IN_TAP_ORDER = new Set<string>([
   'kp.price_delete',
   'kp.patch',
   'kp.status',
+  'kp.revert',
+  'kp.sent',
+  'kp.draft',
 ]);
 
 /**
@@ -500,10 +512,20 @@ export class SyncEngine {
         applied += nSpent;
       }
       // Week 14 (docs/api/kp.md «Sync»): the КП and «Мой прайс» changed on another phone or by the server.
-      const kp = { documents: documentsOf(out.documents), prices: priceItemsOf(out.price_list_items) };
-      if (kp.documents.length + kp.prices.length > 0) {
+      // Week 15: «Моя компания» too, if the server sends it (kp.md «Sync»: not yet); the price list rows already come here.
+      // Week 15 (kp.md «Sync»): «Моя компания» without its secrets, «Мой прайс» (lists and rows), drafts.
+      const profile = syncedProfileOf((out as { company_profile?: unknown }).company_profile);
+      const kp = {
+        documents: documentsOf(out.documents),
+        prices: priceItemsOf(out.price_list_items),
+        profile,
+        drafts: messageDraftsOf(out.drafts),
+        priceLists: priceListsOf((out as { price_lists?: unknown }).price_lists),
+      };
+      const nKp = kp.documents.length + kp.prices.length + (profile ? 1 : 0) + kp.drafts.length + kp.priceLists.length;
+      if (nKp > 0) {
         this.d.kp?.apply(kp);
-        applied += kp.documents.length + kp.prices.length;
+        applied += nKp;
       }
       const acts = Array.isArray(out.actions) ? actionsOf(out.actions) : [];
       if (acts.length > 0) {
@@ -515,7 +537,7 @@ export class SyncEngine {
         else if (t.entity === 'screen') await this.d.pages.applyTombstone(t.id);
         else if (t.entity === 'screen_item') await this.d.pages.removeLink(t.id);
         else if (t.entity === 'expense_entry' || t.entity === 'expense') this.d.expenses?.tombstone?.(t.id);
-        else if (t.entity === 'document' || t.entity === 'price_list_item') this.d.kp?.tombstone?.(t.entity, t.id);
+        else if (KP_TOMBSTONES.has(t.entity)) this.d.kp?.tombstone?.(t.entity, t.id);
         applied++;
       }
       if (typeof out.next_since === 'number' && out.next_since >= since) {
@@ -604,7 +626,10 @@ export class SyncEngine {
       case 'kp.price':
       case 'kp.price_delete':
       case 'kp.patch':
-      case 'kp.status': {
+      case 'kp.status':
+      case 'kp.revert':
+      case 'kp.sent':
+      case 'kp.draft': {
         const kp = this.d.kp;
         return kp ? (e) => kp.send(e) : null;
       }

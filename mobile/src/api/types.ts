@@ -1140,7 +1140,7 @@ export type CleanupPreview = { before: number; after: number; removed: number; g
 export type CleanupPlanOut = { pending_action: PendingActionOut | null; preview: CleanupPreview | null; groups: DuplicateGroupOut[] };
 
 /** POST /pending-actions/{id}/confirm: the «Да». `action` has the one «Отменить» of the whole batch. */
-export type PendingConfirmOut = { pending_action: PendingActionOut | null; action: ActionOut | null };
+export type PendingConfirmOut = { pending_action: PendingActionOut | null; action: ActionOut | null; execute: SendExecuteOut | null };
 
 /** A stack (`collections`): shown as a group on its page; its rows there carry `group_key = title`. */
 export type CollectionOut = {
@@ -1475,6 +1475,19 @@ export type CompanyProfileOut = {
   /** A name and a БИН/ИИН: enough for a КП. */
   complete: boolean;
   updated_at: string | null;
+  /**
+   * Week 15, /sync only: БИН/ИИН and IBAN are not in the sync stream (`bin_iin` / `bank.iban`
+   * null); their last 4 digits are («…9013»). The full profile is read online.
+   */
+  secrets_masked?: boolean;
+  bin_iin_hint?: string | null;
+  iban_hint?: string | null;
+  /** Week 15: who signs (the signer block: position, name; mobile and e-mail come from `contacts`). */
+  signer?: { name: string | null; title: string | null };
+  /** Week 15: the state licence line of the intro (optional); `date` ISO. */
+  license?: { number: string | null; date: string | null; category: string | null };
+  /** Week 15: the outgoing-number sequence («Исх. № 2026-118-1»): the next number of `year`. */
+  outgoing?: { year: number | null; next: number | null };
 };
 
 /**
@@ -1496,6 +1509,9 @@ export type CompanyProfileIn = {
   signature_file_id?: string | null;
   stamp_file_id?: string | null;
   review_fields?: string[];
+  signer?: { name: string | null; title: string | null };
+  license?: { number: string | null; date: string | null; category: string | null };
+  outgoing?: { next: number };
 };
 
 export type CompanyProfileWriteOut = { profile: CompanyProfileOut; action: ActionOut | null; repeated: boolean };
@@ -1527,6 +1543,22 @@ export type PriceItemsOut = { items: PriceItemOut[]; action: ActionOut | null; r
 /** PATCH /price-lists/items/{id}; `checked: true` = «Верно». */
 export type PriceItemPatchIn = { client_id: string; name?: string; unit?: string | null; price?: string; checked?: boolean };
 export type PriceItemWriteOut = { item: PriceItemOut | null; action: ActionOut | null; repeated: boolean };
+/** A price list (GET /price-lists, /sync `price_lists`): `typed_sequence` is «Мои цены», the person's own. */
+export type PriceListOut = {
+  id: string;
+  client_id: string | null;
+  title: string | null;
+  source: string | null;
+  reader: string | null;
+  active: boolean;
+  items: number;
+  review_count: number;
+  uploaded_at: string | null;
+  updated_at: string | null;
+  deleted_at: string | null;
+  seq: number;
+};
+
 /** GET /price-lists/items?q=&limit=&offset=. */
 export type PriceSearchOut = { items: PriceItemOut[]; next_offset: number | null };
 
@@ -1536,6 +1568,10 @@ export type PriceSource = string;
 /** One line of a КП version (kp/service.py `items_dicts`). Money and quantities are decimal strings. */
 export type KpItemOut = {
   id: string;
+  /** Week 15 (kp-calc.v2): `lump` = a lump sum («Монтаж систем — 1 здание — 38 635 000 ₸»): `unit_price` is the line's whole cost, `qty` is 1. */
+  kind: 'qty' | 'lump';
+  /** «Объём» as written («1 здание», «на срок работ (40 дней)»): text, never a number. */
+  volume: string | null;
   name: string;
   unit: string | null;
   qty: string | null;
@@ -1566,6 +1602,11 @@ export type KpDataOut = {
   items: KpItemOut[];
   discount_total_pct: string;
   terms: Record<string, string | number | null>;
+  /** Week 15: «Условия» lines (≤12), as written. */
+  conditions: string[];
+  /** Week 15: the subject line («на монтаж систем …») and «Исх. № 2026-118-1 от …». */
+  subject: string | null;
+  outgoing: { number: string | null; date: string | null };
 };
 
 /** `document_versions.totals` (kp/calc.py `Totals.as_json`): money as text with two places. */
@@ -1597,6 +1638,12 @@ export type KpVersionOut = {
   /** Required fields (Ф-17, `kp.required_fields`) still empty: the PDF waits for them. */
   missing_required: string[];
   sent_at: string | null;
+  /** Week 15: how this version went («Отправили?» [Да]). */
+  sent_channel: string | null;
+  /** Week 15: the phrase of an `agent_request` version. */
+  request_text: string | null;
+  /** Week 15: the version the client got (never changes; its files kept). */
+  frozen: boolean;
   ai_generated: boolean;
 };
 
@@ -1624,6 +1671,8 @@ export type DocumentOut = {
   deal_status: DealStatus;
   current_version_n: number | null;
   sent_version_n: number | null;
+  /** Week 15: when a version was sent («Отправлено 3 ноя»). */
+  sent_at: string | null;
   progress: { state: string | null; done: number; total: number; message: string | null; partial: boolean } | null;
   error: string | null;
   ai_generated: boolean;
@@ -1643,6 +1692,8 @@ export type KpFullOut = {
   action: ActionOut | null;
   /** «Итого: 1 240 000 → 1 218 500 ₸». */
   change_text: string | null;
+  /** Week 15: the versions, newest first (≤50), when the server sends them with the document. */
+  versions: KpVersionRowOut[] | null;
   /** US-21 «Обновить в прайсе?»: typed prices «Мой прайс» does not have. */
   price_offers: { line_id: string; name: string; unit: string | null; price: string; price_item_id: string | null; old_price: string | null }[];
   repeated: boolean;
@@ -1662,4 +1713,134 @@ export type DocumentStatusIn = { client_id: string; deal_status: DealStatus };
 export type DocumentStatusOut = { document: DocumentOut | null; action: ActionOut | null; repeated: boolean };
 
 /** POST /documents/{id}/render?format=pdf: `file.url` is an API path (`/v1/documents/{id}/files/{fid}`), fetched with the session. */
-export type KpRenderOut = { url: string; file_name: string; version_n: number; total: string | null; document: DocumentOut | null };
+export type KpRenderOut = { url: string; file_name: string; mime: string; version_n: number; total: string | null; document: DocumentOut | null };
+
+// --- week 15: КП — phrase edits, versions, DOCX, sending, drafts (docs/api/kp.md «Week 15»; 3-engineering 4.7, 6.7, 6.8) ---
+
+/** A file the server renders (`kp_v1`): PDF by default, Word on request («Ещё → Сделать в Word»). */
+export type KpFileFormat = 'pdf' | 'docx';
+
+/** POST /documents/{id}/render?format=&n=. */
+export type KpRenderIn = { format?: KpFileFormat; n?: number | null };
+
+/** POST /documents/{id}/edit — a phrase («убери доставку», «скидка 5%») → KP_EDIT → a JSON Patch applied at once. */
+export type KpEditIn = { client_id: string; base_version: number; text: string };
+
+/**
+ * `applied`: a new version (`changed_paths` for the highlight) with its action («Отменить»).
+ * `not_understood` / `refused`: nothing changed; `message` says why in the server's words
+ * («Не могу посчитать это сам — скажите число…»).
+ */
+export type KpEditStatus = 'applied' | 'not_understood' | 'refused';
+export type KpEditOut = KpFullOut & { status: KpEditStatus; message: string | null; refused: { path: string; reason: string }[] };
+
+/** One row of GET /documents/{id}/versions (also `versions` of GET /documents/{id}). */
+export type KpVersionRowOut = {
+  n: number;
+  author: string;
+  /** «Первая версия» · «Правка вручную» · «Правка: «…»» · «Вернул версию 2» (Russian only). */
+  author_text: string | null;
+  created_at: string | null;
+  total: string | null;
+  missing_prices: number;
+  changed_paths: string[];
+  sent_at: string | null;
+  sent_channel: string | null;
+  /** The version the client got: never changes, its files kept for good (Ф-5). */
+  frozen: boolean;
+  current: boolean;
+  /** The phrase of an `agent_request` version («скидка 5% на кабель»). */
+  request_text: string | null;
+};
+
+export type KpVersionsOut = { versions: KpVersionRowOut[]; sent_version_n: number | null };
+
+/** POST /documents/{id}/revert: a new version equal to `n` (its numbers exactly as they were). */
+export type KpRevertIn = { client_id: string; n: number };
+
+/** How the file goes from S18: WhatsApp and «Другое» through the system sheet, mail through the mail app. */
+export type KpSendChannel = 'whatsapp' | 'email' | 'share';
+
+/** How it went, as `…/versions/{n}/sent` stores it (`sent_channel`). */
+export type KpSentChannel = 'whatsapp_share' | 'whatsapp_text' | 'email' | 'share_other';
+
+/** A file of the API: `url` is an API path fetched with the session. */
+export type ApiFileOut = { url: string; name: string; mime: string };
+
+/**
+ * POST /documents/{id}/send: makes the file of that version (if none) and a pending «Да» (24 h)
+ * with a preview by code. `recipient_name` never carries the number (R-16); `message` = the cover
+ * text as shown.
+ */
+export type KpSendIn = {
+  client_id: string;
+  n?: number;
+  channel: KpSendChannel;
+  format: KpFileFormat;
+  recipient_name?: string | null;
+  message?: string | null;
+};
+
+export type KpSendOut = {
+  pending_action: PendingActionOut | null;
+  file: ApiFileOut | null;
+  version_n: number;
+  /** «Клиент видел v3. Отправить новую?» when another version was sent before. */
+  resend: { sent_version_n: number; sent_at: string | null; text: string | null } | null;
+  message: string | null;
+  hint: string | null;
+  document: DocumentOut | null;
+  repeated: boolean;
+};
+
+/** POST /pending-actions/{id}/confirm of a send: what the phone opens (the server sends nothing). */
+export type SendExecuteOut = {
+  kind: 'share_file' | 'email' | 'whatsapp_text';
+  file: ApiFileOut | null;
+  text: string | null;
+  subject: string | null;
+  /** `https://wa.me/{phone}?text=…`: `{phone}` is put in on the phone. */
+  wa_url_template: string | null;
+  hint: string | null;
+};
+
+/** POST /documents/{id}/versions/{n}/sent — «Отправили?» [Да]: the version frozen, its file kept (Ф-5). */
+export type KpSentIn = { client_id: string; channel: KpSentChannel; pending_action_id?: string | null };
+
+/** The document with that version; action `send_external` (no «Отменить»), null when it was sent before. */
+export type KpSentOut = KpFullOut;
+
+/** POST /pending-actions/{id}/result: «Отправили?» [Нет] (`not_sent`) / [Да] (`sent`) of a draft. */
+export type PendingResultIn = { outcome: 'sent' | 'not_sent' | 'cancelled'; channel?: KpSentChannel; client_id?: string };
+export type PendingResultOut = { pending_action: PendingActionOut | null; action: ActionOut | null; document: DocumentOut | null; draft: DraftOut | null };
+
+/** F-15 (US-13, S25): a message or a letter the assistant writes and the person sends. */
+export type DraftOut = {
+  id: string;
+  client_id: string | null;
+  channel: 'whatsapp' | 'email';
+  recipient_name: string | null;
+  subject: string | null;
+  text: string;
+  request_text: string | null;
+  document_id: string | null;
+  status: 'draft' | 'sent' | 'discarded';
+  /** `text`: a number neither in the request nor in the КП → «Проверьте». */
+  review_fields: string[];
+  pending_action_id: string | null;
+  ai_generated: boolean;
+  sent_at: string | null;
+  version: number;
+  seq: number;
+  created_at: string | null;
+  updated_at: string | null;
+  deleted_at: string | null;
+};
+
+/** POST /drafts («напиши Арману, что КП будет в пятницу»): DRAFT (needs `ai_cross_border`). */
+export type DraftCreateIn = { client_id: string; request: string; channel: 'whatsapp' | 'email'; recipient_name?: string | null; document_id?: string | null };
+
+/** PATCH /drafts/{id} («Изменить»): the open «Да» is replaced by one with the new preview. */
+export type DraftPatchIn = { text?: string; subject?: string | null; recipient_name?: string | null; channel?: 'whatsapp' | 'email' };
+
+export type DraftWriteOut = { draft: DraftOut | null; pending_action: PendingActionOut | null; repeated: boolean };

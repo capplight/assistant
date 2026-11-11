@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="{{ doc.lang }}">
+<head>
+<meta charset="utf-8">
+<title>{{ doc.title }}</title>
+<meta name="author" content="{{ seller.name or '' }}">
+<meta name="description" content="{{ meta.ai }}">
+<meta name="keywords" content="{{ meta.ai }}">
+<meta name="generator" content="{{ meta.generator }}">
+<meta name="dcterms.created" content="{{ meta.created }}">
+<meta name="dcterms.modified" content="{{ meta.created }}">
+<style>
+@font-face { font-family: "KP Sans"; src: url("DejaVuSans.ttf"); font-weight: normal; }
+@font-face { font-family: "KP Sans"; src: url("DejaVuSans-Bold.ttf"); font-weight: bold; }
+@page {
+  size: A4;
+  margin: 16mm 14mm 18mm 18mm;
+  @bottom-right { content: counter(page) " / " counter(pages); font: 7.5pt "KP Sans"; color: #666; }
+}
+* { box-sizing: border-box; }
+body { font-family: "KP Sans"; font-size: 10pt; line-height: 1.35; color: #111; margin: 0; }
+.letterhead { text-align: center; border-bottom: 0.8pt solid #111; padding-bottom: 2mm; position: relative; }
+.letterhead .form { font-weight: bold; font-size: 10pt; }
+.letterhead .name { font-weight: bold; font-size: 13pt; }
+.letterhead .small { font-size: 8.5pt; }
+.logo { position: absolute; left: 0; top: 0; max-width: 35mm; max-height: 20mm; }
+.out { margin-top: 4mm; }
+.to { text-align: right; margin-top: 2mm; font-weight: bold; }
+h1 { font-size: 13pt; text-align: center; margin: 8mm 0 0; }
+.subject { text-align: center; margin-bottom: 5mm; }
+.intro { text-indent: 10mm; text-align: justify; white-space: pre-line; }
+table.lines { width: 100%; border-collapse: collapse; margin-top: 4mm; }
+table.lines th, table.lines td { border: 0.5pt solid #333; padding: 1.4mm 1.6mm; vertical-align: top; }
+table.lines th { font-weight: bold; text-align: center; }
+table.lines td.num { text-align: right; white-space: nowrap; }
+table.lines td.c { text-align: center; }
+table.lines tr { page-break-inside: avoid; }
+table.lines tr.total td { font-weight: bold; }
+.total-line { margin-top: 4mm; }
+.conditions { margin-top: 4mm; }
+.conditions .head { font-weight: bold; }
+.conditions div.c { padding-left: 4mm; text-indent: -4mm; }
+.closing { margin-top: 5mm; }
+.sign { margin-top: 10mm; display: flex; align-items: flex-end; gap: 6mm; }
+.sign .who { flex: 1; }
+.sign img.signature { max-height: 16mm; max-width: 40mm; }
+.sign img.stamp { max-height: 34mm; max-width: 34mm; opacity: 0.9; }
+.ai { margin-top: 8mm; font-size: 7.5pt; color: #666; }
+</style>
+</head>
+<body>
+<div class="letterhead">
+  {% if images.logo %}<img class="logo" src="{{ images.logo }}" alt="">{% endif %}
+  {% if v2.letterhead.form %}<div class="form">{{ v2.letterhead.form }}</div>{% endif %}
+  <div class="name">{{ v2.letterhead.name }}</div>
+  {% if v2.letterhead.address %}<div class="small">{{ v2.letterhead.address }}</div>{% endif %}
+  {% if v2.letterhead.requisites %}<div class="small">{{ v2.letterhead.requisites }}</div>{% endif %}
+</div>
+
+<div class="out">Исх. №{% if v2.outgoing.number %} {{ v2.outgoing.number }}{% endif %}{% if v2.outgoing.date %} от {{ v2.outgoing.date }} г.{% endif %}</div>
+<div class="to">{{ buyer.name or '' }}{% if buyer.bin %}<br><span style="font-weight: normal">БИН/ИИН {{ buyer.bin }}</span>{% endif %}</div>
+
+<h1>КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ{% if doc.number %} № {{ doc.number }}{% endif %}</h1>
+{% if v2.subject %}<div class="subject">{{ v2.subject }}</div>{% else %}<div class="subject"></div>{% endif %}
+
+{% if v2.license_line or blocks.intro %}<div class="intro">{% if v2.license_line %}{{ v2.seller_quoted or '' }}, {{ v2.license_line }}.{% if blocks.intro %} {% endif %}{% endif %}{{ blocks.intro or '' }}</div>{% endif %}
+
+<table class="lines">
+  {% if v2.table.lump %}
+  <thead><tr><th>№</th><th>Наименование</th><th>Объём</th><th>Стоимость, {{ v2.table.sign }}</th></tr></thead>
+  <tbody>
+  {% for ln in lines %}
+    <tr><td class="c">{{ ln.n }}</td><td>{{ ln.name }}</td><td class="c">{{ ln.volume }}</td><td class="num">{{ ln.amount }}</td></tr>
+  {% endfor %}
+  {% for label, value in v2.table.rows %}
+    <tr class="total"><td colspan="3">{{ label }}</td><td class="num">{{ value }}</td></tr>
+  {% endfor %}
+  </tbody>
+  {% else %}
+  <thead><tr>
+    <th>№</th><th>Наименование</th><th>Объём</th><th>Цена, {{ v2.table.sign }}</th>
+    {% if has_discounts %}<th>Скидка</th>{% endif %}<th>Стоимость, {{ v2.table.sign }}</th>
+  </tr></thead>
+  <tbody>
+  {% for ln in lines %}
+    <tr>
+      <td class="c">{{ ln.n }}</td><td>{{ ln.name }}</td><td class="c">{{ ln.volume }}</td>
+      <td class="num">{% if not ln.lump %}{{ ln.price }}{% endif %}</td>
+      {% if has_discounts %}<td class="num">{{ ln.discount or '' }}</td>{% endif %}<td class="num">{{ ln.amount }}</td>
+    </tr>
+  {% endfor %}
+  {% for label, value in v2.table.rows %}
+    <tr class="total"><td colspan="{{ 5 if has_discounts else 4 }}">{{ label }}</td><td class="num">{{ value }}</td></tr>
+  {% endfor %}
+  </tbody>
+  {% endif %}
+</table>
+
+<div class="total-line">{{ v2.total_line }}</div>
+{% for w in v2.extra_words %}<div>{{ w }}</div>{% endfor %}
+
+<div class="conditions">
+  <div class="head">Условия:</div>
+  {% for c in v2.conditions %}<div class="c">– {{ c }}</div>{% endfor %}
+</div>
+
+<div class="closing">{{ v2.closing }}</div>
+
+<div class="sign">
+  <div class="who">
+    <div>{{ v2.signer.title }}{% if v2.signer.company %} {{ v2.signer.company }}{% endif %}</div>
+    {% if v2.signer.name %}<div><b>{{ v2.signer.name }}</b></div>{% endif %}
+    {% if v2.signer.phone %}<div>моб.: {{ v2.signer.phone }}</div>{% endif %}
+    {% if v2.signer.email %}<div>e-mail: {{ v2.signer.email }}</div>{% endif %}
+  </div>
+  {% if images.signature %}<img class="signature" src="{{ images.signature }}" alt="">{% endif %}
+  {% if images.stamp %}<img class="stamp" src="{{ images.stamp }}" alt="">{% endif %}
+</div>
+
+{% if meta.visible_label %}<div class="ai">{{ meta.visible_label }}</div>{% endif %}
+</body>
+</html>

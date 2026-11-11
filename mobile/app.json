@@ -25,6 +25,7 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
+      "blockedPermissions": ["android.permission.WRITE_CONTACTS"],
       "package": "kz.assistant.mobile"
     },
     "web": {
@@ -95,7 +96,14 @@
         }
       ],
       "expo-notifications",
-      "expo-sharing"
+      "expo-sharing",
+      "expo-mail-composer",
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Чтобы взять номер клиента из ваших контактов. Берём только номер, который вы выберете; он остаётся в телефоне."
+        }
+      ]
     ]
   }
 }

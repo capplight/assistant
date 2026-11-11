@@ -859,6 +859,8 @@ async def test_sync_carries_pages_links_and_removals_in_seq_order(db_app):
                          "pending_actions": [], "habits": [], "item_facets": [],
                          "expenses": [], "expense_categories": [],
                          "statement_imports": [], "expense_duplicates": [], "documents": [],
+                         "company_profile": [], "price_lists": [], "price_list_items": [],
+                         "drafts": [],
                         "tombstones": [], "next_since": delta["next_since"],
                         "has_more": False, "full_resync": False}  # fmt: skip
 

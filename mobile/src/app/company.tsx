@@ -19,7 +19,18 @@ import { MAX_FONT_SCALE, useTheme } from '@/theme';
 type TextKey = Exclude<keyof ProfileFields, 'vat_payer' | 'legal_form'>;
 const MAIN: TextKey[] = ['name', 'bin_iin', 'address', 'phone', 'email'];
 const BANK: TextKey[] = ['iban', 'bik', 'bank_name', 'kbe'];
-const NUMERIC = new Set<TextKey>(['bin_iin', 'phone', 'kbe']);
+const NUMERIC = new Set<TextKey>(['bin_iin', 'phone', 'kbe', 'outgoing_next']);
+/** Week 15 (the founder's father's КП): the signer block and the licence line of the intro. */
+const SIGNER_KEYS: TextKey[] = ['signer_title', 'signer_name'];
+const LICENSE_KEYS: TextKey[] = ['license_number', 'license_date', 'license_category'];
+
+/** «15.01.2020» ↔ ISO «2020-01-15» (the licence date as the person writes it). */
+const isoDay = (v: string): string | null => {
+  const m = /^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/.exec(v.trim());
+  if (m) return `${m[3]}-${m[2]!.padStart(2, '0')}-${m[1]!.padStart(2, '0')}`;
+  return /^\d{4}-\d{2}-\d{2}$/.test(v.trim()) ? v.trim() : null;
+};
+const shownDay = (iso: string | null) => (iso && /^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso.split('-').reverse().join('.') : (iso ?? ''));
 const LEGAL = ['ip', 'too', 'ao', 'other'] as const;
 const ROLES: ProfileImageRole[] = ['logo', 'signature', 'stamp'];
 
@@ -43,7 +54,7 @@ export default function CompanyScreen() {
     void refreshProfile();
   }, []);
 
-  const valueOf = (k: TextKey) => draft[k] ?? shown[k] ?? '';
+  const valueOf = (k: TextKey) => draft[k] ?? (k === 'license_date' ? shownDay(shown[k]) : (shown[k] ?? ''));
   const commit = (k: TextKey) => {
     const v = draft[k];
     if (v === undefined) return;
@@ -52,7 +63,12 @@ export default function CompanyScreen() {
       delete n[k];
       return n;
     });
-    const next = v.trim() || null;
+    let next = v.trim() || null;
+    if (k === 'license_date' && next) {
+      next = isoDay(next);
+      if (!next) return useToast.getState().show(t('kp.license_date_bad'), 4000);
+    }
+    if (k === 'outgoing_next' && next && !/^\d{1,6}$/.test(next)) return useToast.getState().show(t('kp.outgoing_bad'), 4000);
     if (next !== (shown[k] ?? null)) void editProfile({ [k]: next } as Partial<ProfileFields>);
   };
 
@@ -128,6 +144,20 @@ export default function CompanyScreen() {
             {t('kp.bank_title')}
           </AppText>
           {BANK.map(field)}
+          <AppText variant="section" accessibilityRole="header">
+            {t('kp.signer_title')}
+          </AppText>
+          {SIGNER_KEYS.map(field)}
+          <AppText variant="section" accessibilityRole="header">
+            {t('kp.license_title')}
+          </AppText>
+          <AppText variant="meta">{t('kp.license_hint')}</AppText>
+          {LICENSE_KEYS.map(field)}
+          <AppText variant="section" accessibilityRole="header">
+            {t('kp.outgoing_title')}
+          </AppText>
+          <AppText variant="meta">{t('kp.outgoing_hint')}</AppText>
+          {field('outgoing_next')}
 
           <View style={[styles.row, { gap: theme.space[3], minHeight: theme.size.primaryTouch }]}>
             <AppText style={{ flex: 1 }}>{t('kp.vat_payer')}</AppText>

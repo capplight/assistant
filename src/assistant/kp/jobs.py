@@ -207,9 +207,11 @@ async def _finish(maker: async_sessionmaker[AsyncSession], router: Any, settings
         defaults = dict(prof.default_terms or {}) if prof else {}
         seq_no, number = await service.next_number(s, user_id, today.year,
                                                    settings.kp_number_prefix)  # fmt: skip
+        outgoing = profile.take_outgoing(prof, today, seq_no)  # «Исх. № 2026-118-1»
         doc.year, doc.seq_no, doc.number = today.year, seq_no, number
         data = {
             "number": number, "date": today.isoformat(), "currency": "KZT",
+            "outgoing": {"number": outgoing, "date": today.isoformat()}, "subject": None,
             "seller_ref": f"company_profile:{prof.public_id}" if prof else None,
             "client": client,
             "vat": {"mode": vat.default_mode(prof.vat_payer if prof else None,
@@ -218,7 +220,8 @@ async def _finish(maker: async_sessionmaker[AsyncSession], router: Any, settings
             "terms": {"payment": terms.get("payment") or defaults.get("payment"),
                       "delivery": terms.get("delivery") or defaults.get("delivery"),
                       "warranty": defaults.get("warranty"),
-                      "validity_days": defaults.get("validity_days") or settings.kp_validity_days},
+                      "validity_days": defaults.get("validity_days") or settings.kp_validity_days,
+                      "conditions": list(defaults.get("conditions") or []) or None},
             "text_blocks": {"intro": None, "outro": None},
         }  # fmt: skip
         saved = await service.save_version(s, doc, data, author="initial", now=now,

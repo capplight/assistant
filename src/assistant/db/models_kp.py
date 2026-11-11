@@ -1,5 +1,6 @@
-"""КП and «Мой прайс» (migration 0020, frozen SQL; spec 3.6). Allowed values are the StrEnums below
-and must match the CHECKs in the migration. `documents.seq` is set by the `sync_seq_bump` trigger.
+"""КП and «Мой прайс» (migrations 0020, 0021, frozen SQL; spec 3.6). Allowed values are the StrEnums
+below and must match the CHECKs in the migrations. `seq` columns are set by the `sync_seq_bump`
+trigger.
 """
 
 import enum
@@ -115,9 +116,14 @@ class CompanyProfile(Base):
     template_id: Mapped[int | None] = mapped_column(
         ForeignKey("doc_templates.id", ondelete="SET NULL"))
     default_terms: Mapped[dict] = mapped_column(JSONB, default=dict)
+    license: Mapped[dict] = mapped_column(JSONB, default=dict)  # 0021: {number, date, category}
+    outgoing: Mapped[dict] = mapped_column(JSONB, default=dict)  # 0021: {year, next} «Исх. №»
     review_fields: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
     source: Mapped[str] = mapped_column(Text, default="typed")
     version: Mapped[int] = mapped_column(Integer, default=1)
+    seq: Mapped[int] = mapped_column(
+        BigInteger, server_default=FetchedValue(), server_onupdate=FetchedValue()
+    )
     created_at: Mapped[datetime] = _now()
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -138,6 +144,9 @@ class PriceList(Base):
     title: Mapped[str] = mapped_column(Text)
     reader: Mapped[str | None] = mapped_column(Text)  # table | model
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    seq: Mapped[int] = mapped_column(
+        BigInteger, server_default=FetchedValue(), server_onupdate=FetchedValue()
+    )
     uploaded_at: Mapped[datetime] = _now()
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -162,6 +171,9 @@ class PriceListItem(Base):
     currency: Mapped[str] = mapped_column(String(3), default="KZT")
     review_fields: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
     source_ref: Mapped[str | None] = mapped_column(Text)
+    seq: Mapped[int] = mapped_column(
+        BigInteger, server_default=FetchedValue(), server_onupdate=FetchedValue()
+    )
     created_at: Mapped[datetime] = _now()
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -195,6 +207,7 @@ class Document(Base):
     progress: Mapped[dict] = mapped_column(JSONB, default=dict)
     draft: Mapped[dict] = mapped_column(JSONB, default=dict)
     error: Mapped[str | None] = mapped_column(Text)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # 0021
     version: Mapped[int] = mapped_column(Integer, default=1)
     seq: Mapped[int] = mapped_column(
         BigInteger, server_default=FetchedValue(), server_onupdate=FetchedValue()
@@ -227,6 +240,8 @@ class DocumentVersion(Base):
     author: Mapped[str] = mapped_column(Text)
     request_text: Mapped[str | None] = mapped_column(Text)
     render_file_id: Mapped[int | None] = mapped_column(ForeignKey("files.id", ondelete="SET NULL"))
+    docx_file_id: Mapped[int | None] = mapped_column(  # 0021: «Сделать в Word»
+        ForeignKey("files.id", ondelete="SET NULL"))
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     sent_channel: Mapped[str | None] = mapped_column(Text)
     ai_generated: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -249,3 +264,48 @@ class KpPriceHistory(Base):
     client_key: Mapped[str | None] = mapped_column(Text)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _now()
+
+
+class DraftStatus(enum.StrEnum):
+    DRAFT = "draft"
+    SENT = "sent"  # «Отправили? — Да»
+    DISCARDED = "discarded"  # «Не надо»
+
+
+class DraftChannel(enum.StrEnum):
+    WHATSAPP = "whatsapp"
+    EMAIL = "email"
+
+
+class Draft(Base):
+    """A message or a letter the assistant wrote (F-15, 0021); the person sends it."""
+
+    __tablename__ = "drafts"
+    __mapper_args__ = {"eager_defaults": True}
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(Uuid, default=uuid7, unique=True)
+    client_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    document_id: Mapped[int | None] = mapped_column(
+        ForeignKey("documents.id", ondelete="SET NULL"))
+    channel: Mapped[str] = mapped_column(Text)
+    recipient_name: Mapped[str | None] = mapped_column(Text)
+    subject: Mapped[str | None] = mapped_column(Text)
+    text: Mapped[str] = mapped_column(Text)
+    request_text: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text, default=DraftStatus.DRAFT)
+    review_fields: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    pending_action_id: Mapped[int | None] = mapped_column(
+        ForeignKey("pending_actions.id", ondelete="SET NULL"))
+    ai_generated: Mapped[bool] = mapped_column(Boolean, default=True)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    seq: Mapped[int] = mapped_column(
+        BigInteger, server_default=FetchedValue(), server_onupdate=FetchedValue()
+    )
+    created_at: Mapped[datetime] = _now()
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

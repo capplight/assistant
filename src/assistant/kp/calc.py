@@ -2,8 +2,12 @@
 no model, no float. The model gives data (names, units, quantities as written) and at most picks a
 price reference; every number of the КП that is a result comes from here.
 
-Rules (`CALC_VERSION` = "kp-calc.v1"; bump it whenever a result for the same input could change):
+Rules (`CALC_VERSION` = "kp-calc.v2"; bump it whenever a result for the same input could change;
+v2 added lump-sum lines, every v1 input gives the same result):
 - Money: `Decimal`, `ROUND_HALF_UP` to 0.01 at every step that makes a printed number.
+- A lump-sum line (`kind: "lump"`, the founder's father's real КП: «Монтаж систем — 1 здание —
+  38 635 000 ₸»): `gross = unit_price` (the line's given amount), its free-text «Объём» is not a
+  quantity and nothing is multiplied.
 - A line: `gross = qty × unit_price`, `discount = gross × discount_pct / 100`, `amount = gross −
   discount` (each rounded). A line without a price (`missing`) has no amount, counts in nothing,
   and makes the КП `complete = false` (the PDF is not made until it gets a price).
@@ -27,7 +31,7 @@ from typing import Any, Literal
 
 from assistant.kp.norm import MONEY_MAX, QTY_MAX
 
-CALC_VERSION = "kp-calc.v1"
+CALC_VERSION = "kp-calc.v2"
 CENT = Decimal("0.01")
 HUNDRED = Decimal(100)
 VAT_MODES = ("included", "on_top", "none")
@@ -58,6 +62,7 @@ class Line:
     qty: Decimal
     unit_price: Decimal | None  # None = missing («укажите цену»)
     discount_pct: Decimal = Decimal(0)
+    lump: bool = False  # a given amount for the whole line («Объём» is text), no qty × price
 
 
 @dataclass(frozen=True)
@@ -133,7 +138,7 @@ def compute(lines: Iterable[Line], *, vat_mode: str, vat_rate: Decimal | None,
     line_vat_sum = Decimal("0.00")
     priced = missing = 0
     for ln in lines:
-        qty = Decimal(ln.qty)
+        qty = Decimal(1) if ln.lump else Decimal(ln.qty)
         if not qty.is_finite() or qty <= 0 or qty > QTY_MAX:
             raise CalcError("kp_qty_invalid", ln.id)
         pct = _pct(Decimal(ln.discount_pct), "kp_discount_invalid", ln.id)
@@ -144,7 +149,7 @@ def compute(lines: Iterable[Line], *, vat_mode: str, vat_rate: Decimal | None,
         price = Decimal(ln.unit_price)
         if not price.is_finite() or price < 0 or price > MONEY_MAX:
             raise CalcError("kp_price_invalid", ln.id)
-        gross = money(qty * price)
+        gross = money(price) if ln.lump else money(qty * price)
         discount = money(gross * pct / HUNDRED)
         amount = gross - discount
         vat = None
@@ -181,9 +186,11 @@ def lines_of(items: Iterable[dict[str, Any]]) -> list[Line]:
     out = []
     for it in items:
         price = it.get("unit_price")
-        out.append(Line(id=str(it["id"]), qty=Decimal(str(it["qty"])),
+        lump = it.get("kind") == "lump"
+        out.append(Line(id=str(it["id"]), qty=Decimal(str(it.get("qty") or "1")),
                         unit_price=Decimal(str(price)) if price not in (None, "") else None,
-                        discount_pct=Decimal(str(it.get("discount_pct") or "0"))))  # fmt: skip
+                        discount_pct=Decimal(str(it.get("discount_pct") or "0")),
+                        lump=lump))  # fmt: skip
     return out
 
 

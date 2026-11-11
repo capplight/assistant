@@ -1,4 +1,4 @@
-# Mobile app — week 14 («Документы и КП»: the card file and the КП wizard) on week 13 («Расходы 2»: receipts, QR, statements) on week 12 («Расходы» — the expense calculator) on week 11's PageFrame + view registry
+# Mobile app — week 15 (КП: phrase edits, versions, Word, sending, drafts) on week 14 («Документы и КП»: the card file and the КП wizard) on week 13 («Расходы 2»: receipts, QR, statements) on week 12 («Расходы» — the expense calculator) on week 11's PageFrame + view registry
 
 Expo SDK 58 (React Native 0.88, New Architecture), TypeScript strict, expo-router.
 Spec: `../docs/spec/SPEC.md`, `../docs/spec/final/2-design.md`, `../docs/spec/final/3-engineering.md` §2.1, §11.2 (week 1, Mobile).
@@ -92,6 +92,50 @@ src/
   alarms/                    week 8: port (FakeAlarms), native + notification adapters, planner, S15 steps, service
 modules/alarms/              native Expo module: Android (Kotlin) AlarmManager + S14 + battery-guide, iOS (Swift) AlarmKit
 ```
+
+## Week 15: what works
+
+Contract: `../docs/api/kp.md` «Week 15» + «The layout (v2)», `routes/documents.py`, `routes/drafts.py`, `routes/duplicates.py`
+(confirm / result), `kp/calc.py` (kp-calc.v2) as of 2026-11-11. Shapes only in `src/api/types.ts` + `src/api/endpoints.ts`.
+**Checked by Jest with a fake server and synthetic data only: not against the real server, not on a device (share sheet,
+mail app, WhatsApp, contact picker, file download untested on a phone).** KK strings of this week are drafts. New
+dependencies: `expo-mail-composer`, `expo-contacts` (config plugins added, `WRITE_CONTACTS` blocked; bundle id unchanged;
+both need a development build).
+
+- **Phrase edits on S17** («Скажите, что изменить» → `POST /documents/{id}/edit`): `applied` → the new version at once, the
+  changed lines lit 600 ms, the box «Изменил: … Итого: было → стало ₸» with [Что изменилось] (line by line from the two
+  versions, nothing counted) and [Отменить] (the action's undo; offline: «Вернуть» to the version before through the
+  outbox). `not_understood` / `refused` → the server's words, the phrase stays in the field. Offline and «Без ИИ» the
+  phrase is not queued; the person is told and edits by hand. Text only (no voice on this line yet).
+- **Versions** (`app/kp/versions.tsx`, `app/kp/version.tsx`): newest first, who made it, total, the sent one marked and
+  frozen («Эту версию получил клиент»), its PDF again; «Вернуть эту» at once (offline when the phone saw it) with «Отменить».
+- **Word**: «Сделать в Word» next to «Получить PDF» on S17 and a PDF / Word choice on S18 (PDF stays the default).
+- **S18** (`app/kp/send.tsx`): file, the server's sum, to whom, WhatsApp / Почта / Другое, the cover text (a draft kept
+  on the phone), «Клиент видел v1. Отправить новую?». [Открыть …] = `POST /send` → `confirm` → `execute.file` fetched with
+  the session → the system sheet, or the mail app with the file attached (no mail account → the sheet). Back:
+  «Отправили?» [Нет] first → `result {not_sent}`; [Да] → `/versions/{n}/sent` (`whatsapp_share` · `email` ·
+  `share_other`), «Отправлено, отменить нельзя». «Отправить только текст в чат» opens `wa.me/<номер>?text=` offline too;
+  the number is typed and never leaves the phone.
+- **Drafts (F-15)**: «Ещё» → «Написать клиенту» → `POST /drafts` (with the КП) → `app/draft/[id].tsx`: text editable
+  offline with «Отменить», «Проверьте» on a number, the «ИИ» label, [Открыть WhatsApp / почту] → `confirm` → `wa.me` /
+  mail → «Отправили?» → `result`. «Не надо» hides it at once; the DELETE goes only after the undo strip is gone (the
+  server cannot bring a draft back). Open drafts listed on «Документы и КП»; `/sync` `drafts`.
+- **Lump-sum lines** (the founder's father's КП): «Объём» as text, «Стоимость» on the keys, no quantity; «+ Добавить
+  строку» (lump or quantity × price) offline with «Отменить»; «Итого без НДС». `kp/calc.ts` = kp-calc.v2; the fixture
+  has the 608 v1 cases (unchanged under v2) + 221 lump cases, written by the server's own `calc.py`.
+- **S19**: signer (position, name), licence (number, date as «15.01.2020», category), where «Исх. №» continues.
+- **The client's number from the contacts** (founder 2026-11-11; S18 and drafts): «Выбрать из контактов» → the app's own
+  words first («возьму только его номер…»), then the system question; denied or «Введу номер сам» → typing as before;
+  several numbers → the person picks one. Only that number is kept (in the S18 draft on this phone); the contact book is
+  never stored or sent (`kp/contacts.ts`, `ContactPhoneField`, `Contact.presentPicker()` of SDK 58).
+- **Lump sums never go into «Мой прайс»** (founder 2026-11-11): no «Сохранить в прайс» for them on S17 or in «Ввести цены
+  подряд», `save_prices` never sent for them.
+- **/sync** (kp.md «Sync», final): `company_profile` (a list of ≤1 row, БИН/IBAN masked: the phone keeps its own full values
+  when the last 4 digits agree; S19 reads the full one online), `price_lists` (a removed list takes its rows off),
+  `price_list_items`, `drafts`; tombstones `company_profile`, `price_list`, `price_list_item`, `draft`.
+
+Not yet: voice on the phrase line, «Обновить в прайсе?» offers, a per-list view of «Мой прайс», `subject` / «Исх. №» /
+«Условия» edits on S17, «3 дня назад вы отправили КП…».
 
 ## Week 14: what works
 

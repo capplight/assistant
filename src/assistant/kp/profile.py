@@ -11,6 +11,12 @@
   `files` with their own roles (kept always, Ф-5 / memory.retention).
 The text of a card or an old КП is data, never instructions.
 
+Week 15 (the founder's father's real КП): `license` {number, date, category} — the state
+construction licence line of the intro; `outgoing` {year, next} — the outgoing number «Исх. №
+2026-118-1» (year-sequence-index), taken by code for each new КП (`take_outgoing`). The person may
+set where the sequence goes on (`outgoing: {next: 118}`); the counter is not part of an undo (a
+number once given is never given again).
+
 Undo: `snapshot()` is the whole profile as JSON (ciphertext as base64, files by public id), the op
 `set_company_profile` (actions/ops_kp.py) sets one back.
 """
@@ -21,7 +27,7 @@ import logging
 import re
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -56,7 +62,8 @@ SIGNER_KEYS = ("name", "title")
 TERM_KEYS = ("payment", "delivery", "warranty")
 SNAPSHOT_FIELDS = ("name", "legal_form", "bin_iin_enc", "address", "bank_enc", "contacts",
                    "signer", "vat_payer", "logo_file_id", "signature_file_id", "stamp_file_id",
-                   "default_terms", "review_fields", "source")  # fmt: skip
+                   "default_terms", "license", "review_fields", "source")  # fmt: skip
+LICENSE_KEYS = ("number", "date", "category")
 
 
 class ProfileError(ValueError):
@@ -117,7 +124,7 @@ def _sub(values: Any, keys: tuple[str, ...], limit: int = 200) -> dict[str, Any]
 def clean_terms(values: Any) -> dict[str, Any]:
     if values is None:
         return {}
-    if not isinstance(values, dict) or set(values) - {*TERM_KEYS, "validity_days"}:
+    if not isinstance(values, dict) or set(values) - {*TERM_KEYS, "validity_days", "conditions"}:
         raise ProfileError("validation_error")
     out: dict[str, Any] = _sub({k: v for k, v in values.items() if k in TERM_KEYS}, TERM_KEYS, 300)
     days = values.get("validity_days")
@@ -125,7 +132,53 @@ def clean_terms(values: Any) -> dict[str, Any]:
         if not isinstance(days, int) or not 1 <= days <= 365:
             raise ProfileError("validation_error", "default_terms.validity_days")
         out["validity_days"] = days
+    conditions = values.get("conditions")
+    if conditions not in (None, []):  # week 15: the «Условия» lines every КП starts with
+        if not isinstance(conditions, list) or len(conditions) > 12:
+            raise ProfileError("validation_error", "default_terms.conditions")
+        out["conditions"] = [c for c in (clean_text(str(x), 300) for x in conditions) if c]
     return out
+
+
+def clean_license(values: Any) -> dict[str, Any]:
+    out = _sub(values, LICENSE_KEYS, 200)
+    if out.get("date"):
+        try:
+            out["date"] = date.fromisoformat(out["date"]).isoformat()
+        except ValueError as exc:
+            raise ProfileError("validation_error", "license.date") from exc
+    if out.get("number"):
+        out["number"] = out["number"][:40]
+    return out
+
+
+def clean_outgoing(values: Any) -> dict[str, Any]:
+    """`{next: 118, year?: 2026}`: where the outgoing numbers go on."""
+    if not isinstance(values, dict) or set(values) - {"next", "year"}:
+        raise ProfileError("validation_error", "outgoing")
+    nxt, year = values.get("next"), values.get("year")
+    if not isinstance(nxt, int) or not 1 <= nxt <= 999_999:
+        raise ProfileError("validation_error", "outgoing.next")
+    if year is not None and (not isinstance(year, int) or not 2000 <= year <= 2100):
+        raise ProfileError("validation_error", "outgoing.year")
+    return {"next": nxt, **({"year": year} if year else {})}
+
+
+def take_outgoing(p: "CompanyProfile | None", today: date, fallback: int) -> str:
+    """«2026-118-1»: year-sequence-index of a new КП (index 1). Without a profile the КП's own
+    number of the year is used. The caller holds the user lock."""
+    if p is None:
+        return f"{today.year}-{fallback}-1"
+    cur = dict(p.outgoing or {})
+    n = int(cur.get("next") or 1) if cur.get("year") in (None, today.year) else 1
+    p.outgoing = {"year": today.year, "next": n + 1}
+    return f"{today.year}-{n}-1"
+
+
+def outgoing_preview(p: "CompanyProfile | None", today: date) -> str:
+    cur = dict(p.outgoing or {}) if p else {}
+    n = int(cur.get("next") or 1) if cur.get("year") in (None, today.year) else 1
+    return f"{today.year}-{n}-1"
 
 
 @dataclass
@@ -165,6 +218,10 @@ def clean_change(body: dict[str, Any]) -> Clean:
             out[key] = value  # a public id or None, checked against `files` in `apply`
         elif key == "default_terms":
             out[key] = clean_terms(value)
+        elif key == "license":
+            out[key] = clean_license(value)
+        elif key == "outgoing":
+            out[key] = clean_outgoing(value)
         elif key == "review_fields":
             if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
                 raise ProfileError("validation_error", key)
@@ -241,7 +298,7 @@ async def restore(session: AsyncSession, user_id: int, values: dict[str, Any] | 
             pid = (await session.scalar(select(File.id).where(
                 File.user_id == user_id, File.public_id == uuid.UUID(value)))) if value else None
             value = pid
-        elif name in ("contacts", "signer", "default_terms"):
+        elif name in ("contacts", "signer", "default_terms", "license"):
             value = dict(value or {})
         elif name == "review_fields":
             value = list(value or [])
@@ -259,7 +316,7 @@ async def apply(session: AsyncSession, user_id: int, change: Clean, cipher: Fiel
     before = await snapshot(session, p)
     if p is None:
         p = CompanyProfile(user_id=user_id, contacts={}, signer={}, default_terms={},
-                           review_fields=[], version=0)  # fmt: skip
+                           license={}, outgoing={}, review_fields=[], version=0)  # fmt: skip
         session.add(p)
     for key, value in change.values.items():
         if key == "bin_iin":
@@ -286,7 +343,8 @@ async def profile_dict(session: AsyncSession, p: CompanyProfile | None,
         return {"id": None, "name": None, "legal_form": None, "bin_iin": None, "address": None,
                 "bank": {}, "contacts": {}, "signer": {}, "vat_payer": None,
                 "logo_file_id": None, "signature_file_id": None, "stamp_file_id": None,
-                "default_terms": {}, "review_fields": [], "source": None, "version": 0,
+                "default_terms": {}, "license": {}, "outgoing": {}, "review_fields": [],
+                "source": None, "version": 0,
                 "updated_at": None, "complete": False}  # fmt: skip
     files: dict[int, uuid.UUID] = {}
     ids = [i for i in (p.logo_file_id, p.signature_file_id, p.stamp_file_id) if i]
@@ -301,10 +359,28 @@ async def profile_dict(session: AsyncSession, p: CompanyProfile | None,
             "logo_file_id": files.get(p.logo_file_id or 0),
             "signature_file_id": files.get(p.signature_file_id or 0),
             "stamp_file_id": files.get(p.stamp_file_id or 0),
-            "default_terms": dict(p.default_terms or {}),
+            "default_terms": dict(p.default_terms or {}), "license": dict(p.license or {}),
+            "outgoing": dict(p.outgoing or {}),
             "review_fields": list(p.review_fields or []), "source": p.source,
             "version": p.version, "updated_at": p.updated_at,
             "complete": bool(p.name and bin_iin)}  # fmt: skip
+
+
+def _hint(value: str | None) -> str | None:
+    return f"…{value[-4:]}" if value else None
+
+
+async def sync_dict(session: AsyncSession, p: CompanyProfile,
+                    cipher: FieldCipher) -> dict[str, Any]:  # fmt: skip
+    """The profile in `/v1/sync` (week 15): everything but the secrets. An ИП's ИИН is a person's
+    national ID and the IBAN a bank account: only their last 4 digits travel; S19 and the PDF read
+    the full profile online (`profile_dict`)."""
+    full = await profile_dict(session, p, cipher)
+    bank = dict(full["bank"] or {})
+    bank["iban_hint"] = _hint(bank.get("iban"))
+    bank["iban"] = None
+    return {**full, "bin_iin": None, "bin_iin_hint": _hint(full["bin_iin"]), "bank": bank,
+            "secrets_masked": True, "seq": p.seq}  # fmt: skip
 
 
 # --- from a business card or an old КП (PROFILE_EXTRACT) ---
@@ -411,4 +487,5 @@ async def extract(text: str, *, router: Any, user_id: int) -> tuple[dict[str, An
 
 
 __all__ = ["Clean", "ProfileError", "ProfileReply", "apply", "check_reply", "clean_change",
-           "extract", "fingerprint", "get", "profile_dict", "restore", "snapshot"]  # fmt: skip
+           "extract", "fingerprint", "get", "outgoing_preview", "profile_dict", "restore",
+           "snapshot", "sync_dict", "take_outgoing"]  # fmt: skip

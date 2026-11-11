@@ -9,8 +9,9 @@ come back as tombstones. Pages (`screens`, `screen_items`) and app reminders (`r
 `reminder_fires`, week 8) are in the same stream; week 9 adds `tasks`, `suggestions`,
 `pending_actions` and learned `habits`; week 12 adds `expenses` and `expense_categories`; week 14
 adds week 13's `statement_imports` and `expense_duplicates` (offline «Объединить?» and the plan's
-state) and `documents` (the КП card file, offline per template-screens §2.5). Other synced
-entities join the same response.
+state) and `documents` (the КП card file, offline per template-screens §2.5); week 15 adds
+«Моя компания» (`company_profile`, without its secrets), «Мой прайс» (`price_lists`,
+`price_list_items`) and `drafts`. Other synced entities join the same response.
 """
 
 import uuid
@@ -56,7 +57,7 @@ from assistant.db.models_expenses import (
     StatementImport,
 )
 from assistant.db.models_habits import HabitKind, UserHabit
-from assistant.db.models_kp import Document
+from assistant.db.models_kp import CompanyProfile, Document, Draft, PriceList, PriceListItem
 from assistant.db.models_pages import ItemFacet, Screen, ScreenItem
 from assistant.db.models_reminders import APP_KINDS, ReminderFire
 from assistant.db.models_search import ScreenSummary
@@ -65,6 +66,9 @@ from assistant.db.models_v2 import Device, HiddenReason, SyncTombstone
 from assistant.expenses import imports as statement_plans
 from assistant.expenses import repeats as expense_repeats
 from assistant.expenses import service as expenses
+from assistant.kp import pricelist as kp_pricelist
+from assistant.kp import profile as kp_profile
+from assistant.kp import send as kp_send
 from assistant.kp import service as kp_service
 from assistant.pages import habits as page_habits
 from assistant.reminders import service as reminder_service
@@ -196,7 +200,8 @@ async def sync(
     ]  # fmt: skip
     extra: list[object] = []
     for model in (Task, Suggestion, PendingAction, UserHabit, ExpenseEntry, ExpenseCategory,
-                  StatementImport, ExpenseDuplicate, Document):
+                  StatementImport, ExpenseDuplicate, Document, CompanyProfile, PriceList,
+                  PriceListItem, Draft):
         extra.extend(await db.scalars(
             select(model).where(model.user_id == user.id, model.seq > since)  # type: ignore[attr-defined]
             .order_by(model.seq).limit(limit + 1)))  # type: ignore[attr-defined]  # fmt: skip
@@ -225,6 +230,10 @@ async def sync(
     page_statements = [row for _, row in page if isinstance(row, StatementImport)]
     page_dups = [row for _, row in page if isinstance(row, ExpenseDuplicate)]
     page_documents = [row for _, row in page if isinstance(row, Document)]
+    page_profiles = [row for _, row in page if isinstance(row, CompanyProfile)]
+    page_lists = [row for _, row in page if isinstance(row, PriceList)]
+    page_prices = [row for _, row in page if isinstance(row, PriceListItem)]
+    page_drafts = [row for _, row in page if isinstance(row, Draft)]
     next_since = page[-1][0] if page else since
     if not has_more:  # nothing older than the floor is left to see
         next_since = max(next_since, floor)
@@ -264,6 +273,12 @@ async def sync(
         expense_duplicates=[jsonable(d) for d in await expense_repeats.dup_dicts(db, page_dups)],
         documents=[DocumentRowOut.model_validate(d)
                    for d in await kp_service.rows_dicts(db, page_documents)],
+        company_profile=[jsonable(await kp_profile.sync_dict(db, row, ctx.kp_cipher))
+                         for row in page_profiles],
+        price_lists=[jsonable({**await kp_pricelist.list_dict(db, row), "seq": row.seq})
+                     for row in page_lists],
+        price_list_items=await price_items_out(db, page_prices),
+        drafts=[jsonable(d) for d in await kp_send.draft_dicts(db, page_drafts)],
         tombstones=[
             TombstoneOut(entity=t.entity, id=t.public_id, seq=t.seq, deleted_at=t.deleted_at)
             for t in page_tombs
@@ -271,6 +286,14 @@ async def sync(
         next_since=next_since,
         has_more=has_more,
     )
+
+
+async def price_items_out(db: Db, rows: list[PriceListItem]) -> list[dict]:
+    lists = {r.price_list_id for r in rows}
+    ids = dict((await db.execute(select(PriceList.id, PriceList.public_id).where(
+        PriceList.id.in_(lists)))).tuples().all()) if lists else {}  # fmt: skip
+    return [jsonable({**kp_pricelist.item_dict(r, ids.get(r.price_list_id)), "seq": r.seq,
+                      "deleted_at": r.deleted_at}) for r in rows]  # fmt: skip
 
 
 async def pending_out(db: Db, rows: list[PendingAction]) -> list[PendingActionOut]:

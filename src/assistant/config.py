@@ -221,15 +221,20 @@ class Settings(BaseSettings):
     kp_vat_rates: list[dict[str, str]] = [{"rate": "16.00", "from": "2026-01-01"}]
     kp_vat_default_mode: str = "included"  # included («в сумме») | on_top («сверху») | none
     kp_vat_rounding: str = "on_total"  # on_total | per_line
-    # Ф-17 (proposal, pending the founder): the PDF is not made while one of these is empty.
-    # Keys: number, date, validity, seller.name, seller.bin_iin, seller.address, seller.bank,
-    # buyer.name, buyer.bin, items.unit, total, vat, amount_words, signature_stamp (= printed when
-    # uploaded; never blocks). Env KP_REQUIRED_FIELDS='["number", ...]'.
-    kp_required_fields: list[str] = ["number", "date", "validity", "seller.name", "seller.bin_iin",
-                                     "buyer.name", "items.unit", "total", "vat", "amount_words",
-                                     "signature_stamp"]  # fmt: skip
+    # Ф-17 (observed in the founder's father's 5 real КП, 2026-11-11; pending his confirmation):
+    # the file is not made while one of these is empty. Keys: number, date, outgoing («Исх. № …
+    # от …»), validity, seller.name, seller.bin_iin, seller.address, seller.bank (ИИК + БИК + Кбе),
+    # buyer.name, buyer.bin, items (a line), items.unit, total, vat, amount_words, signer (name +
+    # position), license, subject, signature_stamp (= printed when uploaded; never blocks).
+    # Optional by default: buyer.bin, license, subject, conditions, stamp/signature images.
+    # Env KP_REQUIRED_FIELDS='["number", ...]'.
+    kp_required_fields: list[str] = ["number", "date", "outgoing", "validity", "seller.name",
+                                     "seller.bin_iin", "seller.address", "seller.bank",
+                                     "buyer.name", "items", "total", "vat", "amount_words",
+                                     "signer", "signature_stamp"]  # fmt: skip
     kp_words_langs: list[str] = ["ru"]  # the sum in words on the PDF: ru, kk or both
     kp_number_prefix: str = "КП"  # «КП-2026-014»
+    # the father's КП: «действительно 60 календарных дней» (a profile's default_terms wins)
     kp_validity_days: int = 10
     # Spec 5.9: the visible «ИИ» line on the PDF waits for the lawyer; metadata always carry it.
     kp_visible_ai_label: bool = False

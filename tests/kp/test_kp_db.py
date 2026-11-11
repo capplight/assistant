@@ -265,8 +265,8 @@ async def test_father_makes_a_kp_from_his_tz(env9):
         f = r.json()["file"]
         assert r.json()["document"]["status"] == "ready" and f["name"] == "КП_ТОО_Тест_Строй_v2.pdf"
         html = app.state.ctx.kp_renderer.calls[-1]
-        for part in ("445 000,00", "в том числе НДС 16%:", "61 379,31",
-                     "Четыреста сорок пять тысяч тенге 00 тиын", f"БИН: {BIN_SELLER}", IBAN,
+        for part in ("445 000,00", "в т. ч. НДС 16%", "61 379,31",
+                     "Четыреста сорок пять тысяч тенге 00 тиын", f"БИН {BIN_SELLER}", IBAN,
                      BIN_CLIENT, "Иванов И. И.", "Подготовлено с помощью ИИ",
                      v2["data"]["number"]):  # fmt: skip
             assert part in html, part
@@ -365,19 +365,23 @@ async def test_not_a_vat_payer_gets_no_vat_and_render_needs_required_fields(env9
         assert v["totals"]["total"] == "15000.00"
         r = await c.post(f"/v1/documents/{doc['id']}/render", headers=h)
         assert r.status_code == 422 and r.json()["code"] == "kp_fields_missing"
-        assert set(r.json()["details"]["fields"]) == {"seller.bin_iin", "buyer.name"}
+        assert set(r.json()["details"]["fields"]) == {"seller.bin_iin", "buyer.name",
+                                                      "seller.address", "seller.bank", "signer"}
         assert (await c.post(f"/v1/documents/{doc['id']}/render?format=docx",
-                             headers=h)).json()["code"] == "kp_format_later"
+                             headers=h)).json()["code"] == "kp_fields_missing"  # week 15: Word
         r = await patch(c, h, doc["id"], 1, [{"op": "replace", "path": "/client/name",
                                               "value": "x"}], status=409)
         assert r["code"] == "conflict"
         await patch(c, h, doc["id"], 2, [{"op": "replace", "path": "/client/name",
                                           "value": "ТОО «Покупатель»"}])
-        await put_profile(c, h, bin_iin=BIN_SELLER)
+        await put_profile(c, h, bin_iin=BIN_SELLER, address="г. Алматы",
+                          bank={"iban": IBAN, "bik": "TESTKZKA", "kbe": "19"},
+                          signer={"name": "Тестов Т.", "title": "ИП"})
         r = await c.post(f"/v1/documents/{doc['id']}/render", headers=h)
         assert r.status_code == 200, r.text
         html = app.state.ctx.kp_renderer.calls[-1]
-        assert "Итого (без НДС):" in html and "ИИН: " + BIN_SELLER in html
+        assert "ИТОГО без НДС" in html and "ИИН " + BIN_SELLER in html
+        assert "не является плательщиком НДС" in html
         assert "Пятнадцать тысяч тенге 00 тиын" in html
 
 
@@ -535,7 +539,7 @@ async def test_template_row_matches_the_packaged_files(env9):
         row = (await s.execute(text(
             "SELECT storage_key, template_hash, fonts_hash FROM doc_templates "
             "WHERE user_id IS NULL AND kind = 'kp' AND engine = 'html' AND version = 1"))).one()
-    assert row == ("builtin:kp_v1", template_hash(), fonts_hash())
+    assert row == ("builtin:kp_v1", template_hash("kp_v1.html.j2"), fonts_hash())
 
 
 async def test_versions_list_and_revert(env9):

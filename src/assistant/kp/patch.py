@@ -11,6 +11,12 @@ Ops: `replace` (also `add` on a field = the same), `remove` (a line, or clears a
 A line can also be named by its id instead of the index (`/items/i3/qty`): what the phone saw is
 then what changes, even if lines moved.
 
+Week 15 (the founder's father's real КП): `/items/<id>/volume` (free text «1 здание», «на срок
+работ (40 дней)»); a new line `{kind: "lump", name, volume, unit_price}` is a lump sum (its
+`unit_price` is the line's amount, no quantity: `qty` cannot be patched on it); `/subject` («на
+монтаж систем …»), `/outgoing/number` and `/outgoing/date` («Исх. № 2026-118-1 от …»),
+`/terms/conditions` (the «Условия» list, replaced whole).
+
 `changed_paths` name lines by id (`/items/i3/unit_price`) for the highlight. A price the person
 types becomes `price_source = manual`; a field they touch loses its «Проверьте».
 """
@@ -27,13 +33,17 @@ from assistant.kp.norm import MONEY_MAX, QTY_MAX, clean_text, digits, parse_deci
 
 MAX_OPS = 200
 MAX_ITEMS = 600
-TEXT_FIELDS = {"/number": 40, "/client/name": 200, "/client/contact": 120,
+TEXT_FIELDS = {"/number": 40, "/client/name": 200, "/client/contact": 120, "/subject": 300,
+               "/outgoing/number": 40,
                "/terms/payment": 300, "/terms/delivery": 300, "/terms/warranty": 300,
                "/text_blocks/intro": 2000, "/text_blocks/outro": 2000}  # fmt: skip
 OPTIONAL = {"/client/bin", "/client/contact", "/terms/payment", "/terms/delivery",
             "/terms/warranty", "/terms/validity_days", "/text_blocks/intro",
-            "/text_blocks/outro"}  # fmt: skip
-LINE_FIELDS = ("name", "unit", "qty", "unit_price", "discount_pct")
+            "/text_blocks/outro", "/subject", "/terms/conditions"}  # fmt: skip
+LINE_FIELDS = ("name", "unit", "qty", "unit_price", "discount_pct", "volume")
+ADD_FIELDS = (*LINE_FIELDS, "kind")
+CONDITIONS_MAX = 12
+KINDS = (None, "qty", "lump")
 _LINE = re.compile(r"^/items/([^/]+)(?:/([a-z_]+))?$")
 
 
@@ -74,6 +84,8 @@ def _line_value(name: str, value: Any, path: str) -> Any:
         return text
     if name == "unit":
         return unit_norm(str(value or ""))
+    if name == "volume":
+        return clean_text(str(value or ""), 120)
     if name == "qty":
         return _qty(value, path)
     if name == "unit_price":
@@ -87,7 +99,14 @@ def _field_value(path: str, value: Any) -> Any:
         if text is None and path not in OPTIONAL:
             raise PatchError("patch_value_invalid", path)
         return text
-    if path == "/date":
+    if path == "/terms/conditions":
+        if value in (None, ""):
+            return None
+        if not isinstance(value, list) or len(value) > CONDITIONS_MAX:
+            raise PatchError("patch_value_invalid", path)
+        out = [clean_text(str(x), 300) for x in value]
+        return [x for x in out if x] or None
+    if path in ("/date", "/outgoing/date"):
         try:
             return date.fromisoformat(str(value)).isoformat()
         except ValueError as exc:
@@ -158,23 +177,28 @@ def apply_patch(data: dict[str, Any], ops: list[dict[str, Any]],
             ref, name = m.group(1), m.group(2)
             if ref == "-" and kind == "add" and name is None:
                 value = op.get("value")
-                if not isinstance(value, dict) or set(value) - set(LINE_FIELDS):
+                bad_kind = isinstance(value, dict) and value.get("kind") not in KINDS
+                if not isinstance(value, dict) or set(value) - set(ADD_FIELDS) or bad_kind:
                     raise PatchError("patch_value_invalid", path)
                 if len(items) >= MAX_ITEMS:
                     raise PatchError("too_many", path)
+                lump = value.get("kind") == "lump"
                 line = {"id": _next_id(items), "name": _line_value("name", value.get("name"), path),
-                        "unit": _line_value("unit", value.get("unit"), path),
-                        "qty": _line_value("qty", value.get("qty", "1"), path),
+                        "unit": None if lump else _line_value("unit", value.get("unit"), path),
+                        "qty": "1" if lump else _line_value("qty", value.get("qty", "1"), path),
                         "unit_price": _line_value("unit_price", value.get("unit_price"), path),
                         "discount_pct": _line_value("discount_pct", value.get("discount_pct"),
                                                     path),
+                        "volume": _line_value("volume", value.get("volume"), path),
                         "matched_name": None, "price_review": False, "source_ref": None,
                         "review": []}  # fmt: skip
+                if lump:
+                    line["kind"] = "lump"
                 line["price_source"] = "manual" if line["unit_price"] is not None else "missing"
                 items.append(line)
                 changed.append(f"/items/{line['id']}")
                 applied.append({"op": "add", "path": "/items/-", "value": {
-                    k: line[k] for k in LINE_FIELDS}})  # fmt: skip
+                    k: line.get(k) for k in ADD_FIELDS}})  # fmt: skip
                 continue
             if ref == "-":
                 raise PatchError("patch_path_not_allowed", path)
@@ -189,10 +213,10 @@ def apply_patch(data: dict[str, Any], ops: list[dict[str, Any]],
                 changed.append(f"/items/{line['id']}")
                 applied.append({"op": "remove", "path": f"/items/{line['id']}"})
                 continue
-            if name not in LINE_FIELDS:
+            if name not in LINE_FIELDS or (name == "qty" and line.get("kind") == "lump"):
                 raise PatchError("patch_path_not_allowed", path)
             value = None if kind == "remove" else op.get("value")
-            if kind == "remove" and name not in ("unit", "unit_price", "discount_pct"):
+            if kind == "remove" and name not in ("unit", "unit_price", "discount_pct", "volume"):
                 raise PatchError("patch_path_not_allowed", path)
             value = _line_value(name, value, path)
             line["review"] = [r for r in line.get("review") or [] if r != name]

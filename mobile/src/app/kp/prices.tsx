@@ -49,7 +49,7 @@ export default function FastPricesScreen() {
         setBad(true);
         return;
       }
-      void editKp(doc.id, [{ item: index, field: 'unit_price', value }], { strip: t('kp.price_set', { name: item.name }), savePrices: toList });
+      void editKp(doc.id, [{ item: index, field: 'unit_price', value }], { strip: t('kp.price_set', { name: item.name }), savePrices: toList && item.kind !== 'lump' });
     }
     setText('');
     setBad(false);
@@ -69,7 +69,9 @@ export default function FastPricesScreen() {
           {item ? (
             <>
               <AppText testID="kp-fast-item" variant="title2" accessibilityRole="header">
-                {t('kp.fast_item', { name: item.name, qty: qtyShown(item.qty), unit: item.unit ?? '' }).trim()}
+                {item.kind === 'lump'
+                  ? [item.name, item.volume].filter(Boolean).join(', ')
+                  : t('kp.fast_item', { name: item.name, qty: qtyShown(item.qty), unit: item.unit ?? '' }).trim()}
               </AppText>
               <NumberDisplay testID="kp-fast-display" text={text} />
               {bad ? (
@@ -77,7 +79,8 @@ export default function FastPricesScreen() {
                   {t('kp.edit_bad')}
                 </AppText>
               ) : null}
-              <Checkbox testID="kp-fast-to-list" label={t('kp.save_to_list')} checked={toList} onChange={setToList} />
+              {/* A lump sum is this project's amount, not a price of a position: never offered for «Мой прайс» (founder 2026-11-11). */}
+              {item.kind !== 'lump' ? <Checkbox testID="kp-fast-to-list" label={t('kp.save_to_list')} checked={toList} onChange={setToList} /> : null}
               <DigitKeypad
                 testID="kp-fast-keys"
                 onKey={(k) => {

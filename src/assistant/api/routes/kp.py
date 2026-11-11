@@ -81,6 +81,8 @@ class ProfileIn(BaseModel):
     signature_file_id: uuid.UUID | None = None
     stamp_file_id: uuid.UUID | None = None
     default_terms: dict[str, Any] | None = None
+    license: dict[str, Any] | None = None  # week 15: {number, date, category}
+    outgoing: dict[str, Any] | None = None  # week 15: {next, year?} «Исх. №» goes on from here
     review_fields: list[str] | None = None
     source: str | None = None
 

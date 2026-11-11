@@ -16,12 +16,13 @@
  * The words «сумма прописью» are the server's (in the PDF).
  */
 
-export const KP_CALC_VERSION = 'kp-calc.v1';
+export const KP_CALC_VERSION = 'kp-calc.v2';
 
 export type VatMode = 'included' | 'on_top' | 'none';
 export type VatRounding = 'per_line' | 'on_total';
 
-export type CalcLine = { id: string; qty: string | null; unit_price: string | null; discount_pct?: string | null };
+/** `kind: 'lump'` (v2, the father's КП): `unit_price` is the line's whole cost, «Объём» is text, nothing is multiplied. */
+export type CalcLine = { id: string; qty: string | null; unit_price: string | null; discount_pct?: string | null; kind?: 'qty' | 'lump' | null };
 
 export type LineTotal = { id: string; gross: bigint | null; discount: bigint | null; amount: bigint | null; vat: bigint | null };
 
@@ -106,14 +107,15 @@ export class KpCalcError extends Error {
 
 /** One line in tiyn; `amount` null when its price is not known. */
 export function lineTotal(l: CalcLine): LineTotal {
-  const q = parseDecimal(l.qty ?? '1');
+  const lump = l.kind === 'lump';
+  const q = lump ? { n: 1n, scale: 0 } : parseDecimal(l.qty ?? '1');
   if (!q || q.n <= 0n || cmp(q, QTY_MAX) > 0) throw new KpCalcError('kp_qty_invalid', l.id);
   const pct = parseDecimal(l.discount_pct || '0');
   if (!validPct(pct)) throw new KpCalcError('kp_discount_invalid', l.id);
   if (l.unit_price === null || l.unit_price === '') return { id: l.id, gross: null, discount: null, amount: null, vat: null };
   const p = parseDecimal(l.unit_price);
   if (!p || p.n < 0n) throw new KpCalcError('kp_price_invalid', l.id);
-  // qty × price in tiyn: q.n × p.n / 10^(qs+ps) × 100
+  // qty × price in tiyn: q.n × p.n / 10^(qs+ps) × 100; a lump line: its price, rounded to the tiyn.
   const gross = divHalfUp(q.n * p.n * 100n, pow10(q.scale + p.scale));
   if (gross > MONEY_MAX_MINOR) throw new KpCalcError('kp_price_invalid', l.id);
   const discount = pctOf(gross, pct!);

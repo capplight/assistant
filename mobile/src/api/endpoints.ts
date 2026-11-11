@@ -152,6 +152,26 @@ import type {
   KpItemOut,
   KpPatchIn,
   KpRenderOut,
+  KpEditIn,
+  KpEditOut,
+  KpRenderIn,
+  KpRevertIn,
+  KpSendIn,
+  KpSendOut,
+  KpSentIn,
+  KpSentOut,
+  KpVersionRowOut,
+  KpVersionsOut,
+  PriceListOut,
+  KpEditStatus,
+  ApiFileOut,
+  SendExecuteOut,
+  PendingResultIn,
+  PendingResultOut,
+  DraftOut,
+  DraftCreateIn,
+  DraftPatchIn,
+  DraftWriteOut,
   KpTotalsOut,
   KpVatMode,
   KpVersionOut,
@@ -1086,6 +1106,9 @@ function bankOut(v: unknown): CompanyBankOut {
 export function companyProfileOut(v: unknown): CompanyProfileOut {
   const o = obj(obj(v)?.profile ?? v) ?? {};
   const c = obj(o.contacts) ?? {};
+  const signer = obj(o.signer) ?? {};
+  const license = obj(o.license) ?? {};
+  const outgoing = obj(o.outgoing) ?? {};
   const name = str(o.name);
   const bin = str(o.bin_iin);
   return {
@@ -1103,6 +1126,12 @@ export function companyProfileOut(v: unknown): CompanyProfileOut {
     version: num(o.version, 0),
     complete: typeof o.complete === 'boolean' ? o.complete : !!(name && bin),
     updated_at: str(o.updated_at),
+    secrets_masked: o.secrets_masked === true,
+    bin_iin_hint: str(o.bin_iin_hint),
+    iban_hint: str((obj(o.bank) ?? {}).iban_hint),
+    signer: { name: str(signer.name), title: str(signer.title) },
+    license: { number: str(license.number), date: str(license.date), category: str(license.category) },
+    outgoing: { year: typeof outgoing.year === 'number' ? outgoing.year : null, next: typeof outgoing.next === 'number' ? outgoing.next : null },
   };
 }
 
@@ -1129,6 +1158,34 @@ export function priceItemOut(v: unknown): PriceItemOut | null {
 
 export const priceItemsOf = (v: unknown) => arr(v).map(priceItemOut).filter((x): x is PriceItemOut => x !== null);
 
+export function priceListOut(v: unknown): PriceListOut | null {
+  const o = obj(v);
+  const id = o && str(o.id);
+  if (!o || !id) return null;
+  return {
+    id,
+    client_id: str(o.client_id),
+    title: str(o.title),
+    source: str(o.source),
+    reader: str(o.reader),
+    active: o.active !== false,
+    items: num(o.items),
+    review_count: num(o.review_count),
+    uploaded_at: str(o.uploaded_at),
+    updated_at: str(o.updated_at),
+    deleted_at: str(o.deleted_at),
+    seq: num(o.seq),
+  };
+}
+
+export const priceListsOf = (v: unknown) => arr(v).map(priceListOut).filter((x): x is PriceListOut => x !== null);
+
+/** /sync `company_profile`: at most one row (a list, kp.md «Sync»); an object is taken too. Null when none. */
+export function syncedProfileOf(v: unknown): CompanyProfileOut | null {
+  const row = Array.isArray(v) ? v[v.length - 1] : v;
+  return obj(row) ? companyProfileOut(row) : null;
+}
+
 export function pastPriceOut(v: unknown): PastPriceOut | null {
   const o = obj(v);
   const name = o && str(o.name);
@@ -1152,6 +1209,8 @@ function kpItemOut(v: unknown, i: number): KpItemOut | null {
   const price = decText(o.unit_price);
   return {
     id: str(o.id) ?? `i${i + 1}`,
+    kind: o.kind === 'lump' ? 'lump' : 'qty',
+    volume: str(o.volume),
     name,
     unit: str(o.unit),
     qty: decText(o.qty),
@@ -1211,6 +1270,9 @@ export function kpVersionOut(v: unknown): KpVersionOut | null {
       .map(kpItemOut)
       .filter((x): x is KpItemOut => x !== null),
     discount_total_pct: decText(d.discount_total_pct) ?? '0',
+    conditions: strs(terms.conditions),
+    subject: str(d.subject),
+    outgoing: { number: str(obj(d.outgoing)?.number), date: str(obj(d.outgoing)?.date) },
     terms: Object.fromEntries(
       Object.entries(terms).filter(([, x]) => typeof x === 'string' || typeof x === 'number' || x === null),
     ) as KpDataOut['terms'],
@@ -1226,6 +1288,9 @@ export function kpVersionOut(v: unknown): KpVersionOut | null {
     price_summary: { price_list: num(ps.price_list), past_kp: num(ps.past_kp), manual: num(ps.manual), missing: num(ps.missing) },
     missing_required: strs(o.missing_required),
     sent_at: str(o.sent_at),
+    sent_channel: str(o.sent_channel),
+    request_text: str(o.request_text),
+    frozen: o.frozen === true,
     ai_generated: o.ai_generated !== false,
   };
 }
@@ -1257,6 +1322,7 @@ export function documentOut(v: unknown): DocumentOut | null {
     deal_status: (deal && DEALS.has(deal) ? deal : 'draft') as DealStatus,
     current_version_n: typeof o.current_version_n === 'number' ? o.current_version_n : null,
     sent_version_n: typeof o.sent_version_n === 'number' ? o.sent_version_n : null,
+    sent_at: str(o.sent_at),
     progress:
       progress && Object.keys(progress).length > 0
         ? { state: str(progress.state), done: num(progress.done), total: num(progress.total), message: str(progress.message), partial: progress.partial === true }
@@ -1292,8 +1358,135 @@ export function kpFullOut(v: unknown): KpFullOut {
     action: actionOut(o.action),
     change_text: str(o.change_text),
     price_offers: offers,
+    versions: Array.isArray(o.versions) ? kpVersionRowsOf(o.versions) : null,
     repeated: o.repeated === true,
   };
+}
+
+// --- week 15: phrase edits, versions, DOCX, sending (docs/api/kp.md «Week 15») ---
+
+export const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+const EDIT_STATES = new Set<string>(['applied', 'not_understood', 'refused']);
+
+export function kpEditOut(v: unknown): KpEditOut {
+  const o = obj(v) ?? {};
+  const status = str(o.status);
+  const refused = arr(o.refused).flatMap((x) => {
+    const r = obj(x);
+    return r ? [{ path: str(r.path) ?? '', reason: str(r.reason) ?? '' }] : [];
+  });
+  return {
+    ...kpFullOut(v),
+    status: (status && EDIT_STATES.has(status) ? status : 'not_understood') as KpEditStatus,
+    message: str(o.message),
+    refused,
+  };
+}
+
+function kpVersionRowOut(v: unknown): KpVersionRowOut | null {
+  const o = obj(v);
+  if (!o || typeof o.n !== 'number') return null;
+  return {
+    n: o.n,
+    author: str(o.author) ?? 'initial',
+    author_text: str(o.author_text),
+    created_at: str(o.created_at),
+    total: decText(o.total),
+    missing_prices: num(o.missing_prices),
+    changed_paths: strs(o.changed_paths),
+    sent_at: str(o.sent_at),
+    sent_channel: str(o.sent_channel),
+    frozen: o.frozen === true,
+    current: o.current === true,
+    request_text: str(o.request_text),
+  };
+}
+
+const kpVersionRowsOf = (v: unknown) =>
+  arr(v)
+    .map(kpVersionRowOut)
+    .filter((x): x is KpVersionRowOut => x !== null)
+    .sort((a, b) => b.n - a.n);
+
+export function kpVersionsOut(v: unknown): KpVersionsOut {
+  const o = obj(v) ?? {};
+  return { versions: kpVersionRowsOf(o.versions), sent_version_n: typeof o.sent_version_n === 'number' ? o.sent_version_n : null };
+}
+
+function apiFileOut(v: unknown): ApiFileOut | null {
+  const o = obj(v);
+  const url = o && str(o.url);
+  if (!o || !url) return null;
+  return { url, name: str(o.name) ?? 'КП.pdf', mime: str(o.mime) ?? 'application/pdf' };
+}
+
+export function kpSendOut(v: unknown): KpSendOut {
+  const o = obj(v) ?? {};
+  const pa = pendingActionOut(o.pending_action);
+  const resend = obj(o.resend);
+  return {
+    pending_action: pa,
+    file: apiFileOut(o.file) ?? apiFileOut(pa?.preview.file),
+    version_n: num(o.version_n ?? pa?.preview.version_n),
+    resend: resend && typeof resend.sent_version_n === 'number' ? { sent_version_n: resend.sent_version_n, sent_at: str(resend.sent_at), text: str(resend.text) } : null,
+    message: str(o.message),
+    hint: str(o.hint),
+    document: documentOut(o.document),
+    repeated: o.repeated === true,
+  };
+}
+
+const EXECUTE_KINDS = new Set<string>(['share_file', 'email', 'whatsapp_text']);
+
+export function sendExecuteOut(v: unknown): SendExecuteOut | null {
+  const o = obj(v);
+  const kind = o && str(o.kind);
+  if (!o || !kind || !EXECUTE_KINDS.has(kind)) return null;
+  return {
+    kind: kind as SendExecuteOut['kind'],
+    file: apiFileOut(o.file),
+    text: str(o.text),
+    subject: str(o.subject),
+    wa_url_template: str(o.wa_url_template),
+    hint: str(o.hint),
+  };
+}
+
+const DRAFT_STATES = new Set<string>(['draft', 'sent', 'discarded']);
+
+export function messageDraftOut(v: unknown): DraftOut | null {
+  const o = obj(v);
+  const id = o && str(o.id);
+  if (!o || !id) return null;
+  const status = str(o.status);
+  return {
+    id,
+    client_id: str(o.client_id),
+    channel: o.channel === 'email' ? 'email' : 'whatsapp',
+    recipient_name: str(o.recipient_name),
+    subject: str(o.subject),
+    text: str(o.text) ?? '',
+    request_text: str(o.request_text),
+    document_id: str(o.document_id),
+    status: (status && DRAFT_STATES.has(status) ? status : 'draft') as DraftOut['status'],
+    review_fields: strs(o.review_fields),
+    pending_action_id: str(o.pending_action_id),
+    ai_generated: o.ai_generated !== false,
+    sent_at: str(o.sent_at),
+    version: num(o.version, 1),
+    seq: num(o.seq),
+    created_at: str(o.created_at),
+    updated_at: str(o.updated_at),
+    deleted_at: str(o.deleted_at),
+  };
+}
+
+export const messageDraftsOf = (v: unknown) => arr(v).map(messageDraftOut).filter((x): x is DraftOut => x !== null);
+
+function draftWriteOut(v: unknown): DraftWriteOut {
+  const o = obj(v) ?? {};
+  return { draft: messageDraftOut(o.draft), pending_action: pendingActionOut(o.pending_action), repeated: o.repeated === true };
 }
 
 /** Typed /v1 endpoints. The ONLY place that knows paths and request bodies. */
@@ -2068,7 +2261,7 @@ export class Api {
           idempotencyKey: clientId,
         }),
       ) ?? {};
-    return { pending_action: pendingActionOut(o.pending_action), action: actionOut(o.action) };
+    return { pending_action: pendingActionOut(o.pending_action), action: actionOut(o.action), execute: sendExecuteOut(o.execute) };
   }
 
   /** «Нет» / «Не сейчас» of S25. */
@@ -2342,12 +2535,71 @@ export class Api {
    * The PDF of the current version (the server renders; never on the phone). `422
    * kp_prices_missing` / `kp_fields_missing`, `503 kp_render_unavailable`.
    */
-  async renderKp(id: string): Promise<KpRenderOut> {
-    const o = obj(await this.client.request<unknown>('POST', `/documents/${encodeURIComponent(id)}/render`, { query: { format: 'pdf' } })) ?? {};
+  async renderKp(id: string, r: KpRenderIn = {}): Promise<KpRenderOut> {
+    const format = r.format ?? 'pdf';
+    const query: Record<string, string> = { format };
+    if (r.n) query.n = String(r.n);
+    const o = obj(await this.client.request<unknown>('POST', `/documents/${encodeURIComponent(id)}/render`, { query })) ?? {};
     const file = obj(o.file) ?? {};
     const url = str(file.url);
     if (!url) throw new ApiError(502, { code: 'bad_answer' });
-    return { url, file_name: str(file.name) ?? 'КП.pdf', version_n: num(o.version_n), total: decText(o.total), document: documentOut(o.document) };
+    const mime = str(file.mime) ?? (format === 'docx' ? DOCX_MIME : 'application/pdf');
+    return { url, file_name: str(file.name) ?? (format === 'docx' ? 'КП.docx' : 'КП.pdf'), mime, version_n: num(o.version_n), total: decText(o.total), document: documentOut(o.document) };
+  }
+
+  // week 15 — phrase edits, versions, sending
+
+  /** A phrase → KP_EDIT → applied at once (a new version, `changed_paths`, the action's «Отменить»). Needs `ai_cross_border`. */
+  async editKpPhrase(id: string, body: KpEditIn): Promise<KpEditOut> {
+    return kpEditOut(await this.client.request<unknown>('POST', `/documents/${encodeURIComponent(id)}/edit`, { body, idempotencyKey: body.client_id }));
+  }
+
+  async kpVersions(id: string): Promise<KpVersionsOut> {
+    return kpVersionsOut(await this.client.request<unknown>('GET', `/documents/${encodeURIComponent(id)}/versions`));
+  }
+
+  async kpVersion(id: string, n: number): Promise<KpFullOut> {
+    return kpFullOut(await this.client.request<unknown>('GET', `/documents/${encodeURIComponent(id)}/versions/${n}`));
+  }
+
+  /** «Вернуть эту»: a new version equal to `n`, with its action («Отменить» goes back). */
+  async revertKp(id: string, body: KpRevertIn): Promise<KpFullOut> {
+    return kpFullOut(await this.client.request<unknown>('POST', `/documents/${encodeURIComponent(id)}/revert`, { body, idempotencyKey: body.client_id }));
+  }
+
+  /** S18: the file of a version and a pending «Да» with the preview by code. The server sends nothing itself (decision №6). */
+  async sendKp(id: string, body: KpSendIn): Promise<KpSendOut> {
+    return kpSendOut(await this.client.request<unknown>('POST', `/documents/${encodeURIComponent(id)}/send`, { body, idempotencyKey: body.client_id }));
+  }
+
+  /** «Отправили?» [Да]: `sent_at`, `sent_version_n`, frozen, its file kept. Action `send_external`, no «Отменить». */
+  async markKpSent(id: string, n: number, body: KpSentIn): Promise<KpSentOut> {
+    return kpFullOut(await this.client.request<unknown>('POST', `/documents/${encodeURIComponent(id)}/versions/${n}/sent`, { body, idempotencyKey: body.client_id }));
+  }
+
+  /** «Отправили?» [Нет] (`not_sent`), or [Да] of a draft (`sent`). */
+  async pendingResult(id: string, body: PendingResultIn): Promise<PendingResultOut> {
+    const o = obj(await this.client.request<unknown>('POST', `/pending-actions/${encodeURIComponent(id)}/result`, { body, ...(body.client_id ? { idempotencyKey: body.client_id } : {}) })) ?? {};
+    return { pending_action: pendingActionOut(o.pending_action), action: actionOut(o.action), document: documentOut(o.document), draft: messageDraftOut(o.draft) };
+  }
+
+  // F-15 drafts (S25): the assistant writes, the person sends.
+
+  async createDraft(body: DraftCreateIn): Promise<DraftWriteOut> {
+    return draftWriteOut(await this.client.request<unknown>('POST', '/drafts', { body, idempotencyKey: body.client_id }));
+  }
+
+  async drafts(): Promise<DraftOut[]> {
+    const o = obj(await this.client.request<unknown>('GET', '/drafts', { query: { status: 'draft', limit: '50' } })) ?? {};
+    return messageDraftsOf(o.drafts);
+  }
+
+  async patchDraft(id: string, body: DraftPatchIn): Promise<DraftWriteOut> {
+    return draftWriteOut(await this.client.request<unknown>('PATCH', `/drafts/${encodeURIComponent(id)}`, { body }));
+  }
+
+  async deleteDraft(id: string): Promise<DraftWriteOut> {
+    return draftWriteOut(await this.client.request<unknown>('DELETE', `/drafts/${encodeURIComponent(id)}`));
   }
 
   /** A file of the API (`/v1/…`) as an absolute URL with the session's header, for the file system's download. */

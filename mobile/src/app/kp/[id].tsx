@@ -6,18 +6,28 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
+import { PhraseChangeBox, PhraseLine } from '@/components/kp/KpEdits';
+import { AddLineSheet, VolumeSheet } from '@/components/kp/KpLineSheets';
 import { CheckBadge } from '@/components/kp/KpParts';
 import { NumberSheet } from '@/components/kp/NumberSheet';
+import { Sheet } from '@/components/page/ExpenseParts';
 import { ChoiceSheet } from '@/components/page/FieldSheets';
 import { Screen } from '@/components/Screen';
 import { StandaloneUndoStrip } from '@/components/UndoStrip';
 import { priceText, qtyText } from '@/kp/calc';
-import { editKp, findPrice, refreshDocument, sharePdf, type PdfResult } from '@/kp/service';
-import { shownData, useKp } from '@/kp/store';
-import { kpTitle, kpView, money, priceLabel, priceMoney, qtyShown, rateText, vatText } from '@/kp/view';
+import { addKpLine, assistantOn, editKp, findPrice, refreshDocument, shareKpFile, type PdfResult } from '@/kp/service';
+import { cachedVersion, sentVersion, shownData, useKp } from '@/kp/store';
+import { kpTitle, kpView, money, priceLabel, priceMoney, qtyShown, rateText, shortDate, vatText } from '@/kp/view';
 import { useTheme } from '@/theme';
 
 type Editing = { item: string; field: 'unit_price' | 'qty' } | null;
+
+/** 2-design `motion`: a changed line is lit for 600 ms (R-30). */
+const HIGHLIGHT_MS = 600;
+
+/** `/items/i3/unit_price`, `/items/i3` → `i3`: the lines a version changed. */
+const NONE = new Set<string>();
+const changedLines = (paths: readonly string[]) => new Set(paths.flatMap((p) => /^\/items\/([^/]+)/.exec(p)?.[1] ?? []));
 
 /**
  * S17 «КП, шаг 2: превью и правка» (week 14). The total is counted by code (`kp/calc.ts`, the
@@ -28,7 +38,7 @@ type Editing = { item: string; field: 'unit_price' | 'qty' } | null;
  */
 export default function KpScreen() {
   const theme = useTheme();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const doc = useKp((s) => s.docs[id]);
   const edits = useKp((s) => s.docEdits);
@@ -36,11 +46,29 @@ export default function KpScreen() {
   const needsProfile = useKp((s) => s.needsProfile);
   const [editing, setEditing] = useState<Editing>(null);
   const [vatOpen, setVatOpen] = useState(false);
-  const [pdf, setPdf] = useState<{ result: PdfResult; fields?: string[] } | 'busy' | null>(null);
+  const [pdf, setPdf] = useState<{ result: PdfResult; fields?: string[]; format: 'pdf' | 'docx' } | 'busy' | null>(null);
+  const [more, setMore] = useState(false);
+  const [volumeFor, setVolumeFor] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const change = useKp((s) => s.phraseChanges[id]);
+  const oldVersions = useKp((s) => s.oldVersions);
+  const sentEdits = useKp((s) => s.sentEdits);
+  const history = useKp((s) => s.history[id]);
+  // The version whose 600 ms are over.
+  const [litDone, setLitDone] = useState<number | null>(null);
 
   useEffect(() => {
     void refreshDocument(id);
   }, [id]);
+
+  // The lines the phrase changed are lit for 600 ms, once, when its version arrives.
+  const changeN = change?.n;
+  useEffect(() => {
+    if (!changeN) return;
+    const timer = setTimeout(() => setLitDone(changeN), HIGHLIGHT_MS);
+    return () => clearTimeout(timer);
+  }, [changeN]);
+  const lit = change && litDone !== change.n ? changedLines(change.changedPaths) : NONE;
 
   const back = () => (router.canGoBack() ? router.back() : router.replace('/'));
 
@@ -62,10 +90,15 @@ export default function KpScreen() {
   const editItem = editing ? data.items.find((x) => x.id === editing.item) : undefined;
   const required = version?.missing_required.filter((f) => f !== 'total' && f !== 'amount_words') ?? [];
 
-  const getPdf = async () => {
+  const getFile = async (format: 'pdf' | 'docx') => {
+    setMore(false);
     setPdf('busy');
-    setPdf(await sharePdf(doc.id, missing));
+    setPdf({ ...(await shareKpFile(doc.id, { format, missing })), format });
   };
+  const sentN = sentVersion(doc, { sentEdits });
+  const sentAt = version && sentN === version.n ? (sentEdits[doc.id]?.at ?? version.sent_at) : null;
+  const versionCount = Math.max(history?.versions.length ?? 0, doc.current_version_n ?? version?.n ?? 1);
+  const before = change ? (cachedVersion(doc.id, change.beforeN, { versions, oldVersions })?.data ?? null) : null;
 
   return (
     <View style={styles.root}>
@@ -92,6 +125,16 @@ export default function KpScreen() {
           <AppText testID="kp-total" variant="title2" accessibilityLiveRegion="polite" style={{ fontVariant: ['tabular-nums'] }}>
             {totals ? t(data.vat.mode === 'none' ? 'kp.total' : 'kp.total_with_vat', { amount: money(totals.total) }) : ''}
           </AppText>
+          {version ? (
+            <AppText testID="kp-version-line" variant="meta">
+              {sentAt
+                ? t('kp.version_sent', { n: version.n, date: shortDate(sentAt, i18n.language) })
+                : sentN !== null && version.n > sentN
+                  ? t('kp.version_after_sent', { n: version.n, sent: sentN })
+                  : t('kp.version_n', { n: version.n })}
+            </AppText>
+          ) : null}
+          {change && change.n === version?.n && !waiting ? <PhraseChangeBox docId={doc.id} change={change} before={before} after={data} /> : null}
           {waiting ? (
             <AppText testID="kp-waiting" variant="meta">
               {t('kp.waiting_sync')}
@@ -113,23 +156,46 @@ export default function KpScreen() {
               const sum = line?.amount != null ? money(line.amount) : null;
               const qty = qtyShown(it.qty);
               const unit = it.unit ?? '';
+              const lump = it.kind === 'lump';
+              const volume = it.volume ?? '';
+              // A line added here and not on the server yet: its id is the phone's, edits wait for it.
+              const pendingLine = it.id.startsWith('new-');
               return (
                 <View
                   key={it.id}
                   testID={`kp-line-${i}`}
-                  style={{ borderBottomWidth: 1, borderBottomColor: theme.colors.line, paddingBottom: theme.space[3], gap: theme.space[1] }}
+                  style={{
+                    borderBottomWidth: 1,
+                    borderBottomColor: theme.colors.line,
+                    paddingBottom: theme.space[3],
+                    gap: theme.space[1],
+                    backgroundColor: lit.has(it.id) ? theme.colors.markerSoft : undefined,
+                  }}
                 >
                   <View
                     accessible
                     accessibilityLabel={
-                      sum
-                        ? t('kp.line_a11y', { n: i + 1, name: it.name, qty, unit, price: priceMoney(it.unit_price), sum, source: label.text })
-                        : t('kp.line_missing_a11y', { n: i + 1, name: it.name, qty, unit })
+                      lump
+                        ? sum
+                          ? t('kp.line_lump_a11y', { n: i + 1, name: it.name, volume, sum, source: label.text })
+                          : t('kp.line_lump_missing_a11y', { n: i + 1, name: it.name, volume })
+                        : sum
+                          ? t('kp.line_a11y', { n: i + 1, name: it.name, qty, unit, price: priceMoney(it.unit_price), sum, source: label.text })
+                          : t('kp.line_missing_a11y', { n: i + 1, name: it.name, qty, unit })
                     }
                   >
                     <AppText variant="bodyStrong">{`${i + 1}. ${it.name}`}</AppText>
+                    {lump && volume ? (
+                      <AppText testID={`kp-line-${i}-volume`}>{t('kp.volume_line', { volume })}</AppText>
+                    ) : null}
                     <AppText variant="number" testID={`kp-line-${i}-calc`}>
-                      {sum ? t('kp.line_calc', { qty, unit, price: priceMoney(it.unit_price), sum }) : t('kp.line_no_price', { qty, unit })}
+                      {lump
+                        ? sum
+                          ? t('kp.line_lump', { sum })
+                          : t('kp.line_lump_no_price')
+                        : sum
+                          ? t('kp.line_calc', { qty, unit, price: priceMoney(it.unit_price), sum })
+                          : t('kp.line_no_price', { qty, unit })}
                     </AppText>
                     <AppText testID={`kp-line-${i}-source`} variant="meta" color={label.kind === 'missing' || label.check ? 'warnText' : 'ink2'}>
                       {label.check ? `⚠ ${label.text}` : label.text}
@@ -139,26 +205,52 @@ export default function KpScreen() {
                   <View style={[styles.row, { flexWrap: 'wrap', gap: theme.space[2] }]}>
                     <Button
                       testID={`kp-line-${i}-price`}
-                      label={it.unit_price === null ? t('kp.set_price') : t('kp.change_price', { price: priceMoney(it.unit_price) })}
-                      accessibilityLabel={t('kp.change_price_a11y', { name: it.name })}
+                      label={
+                        it.unit_price === null
+                          ? t(lump ? 'kp.set_amount' : 'kp.set_price')
+                          : t(lump ? 'kp.change_amount' : 'kp.change_price', { price: priceMoney(it.unit_price) })
+                      }
+                      accessibilityLabel={t(lump ? 'kp.change_amount_a11y' : 'kp.change_price_a11y', { name: it.name })}
                       variant={it.unit_price === null ? 'primary' : 'outline'}
                       minHeight={theme.size.minTouch}
                       style={{ flexGrow: 1 }}
+                      disabled={pendingLine}
                       onPress={() => setEditing({ item: it.id, field: 'unit_price' })}
                     />
-                    <Button
-                      testID={`kp-line-${i}-qty`}
-                      label={t('kp.change_qty', { qty: `${qty} ${unit}`.trim() })}
-                      accessibilityLabel={t('kp.change_qty_a11y', { name: it.name })}
-                      variant="outline"
-                      minHeight={theme.size.minTouch}
-                      style={{ flexGrow: 1 }}
-                      onPress={() => setEditing({ item: it.id, field: 'qty' })}
-                    />
+                    {lump ? (
+                      <Button
+                        testID={`kp-line-${i}-volume-edit`}
+                        label={volume ? t('kp.change_volume', { volume }) : t('kp.set_volume')}
+                        accessibilityLabel={t('kp.change_volume_a11y', { name: it.name })}
+                        variant="outline"
+                        minHeight={theme.size.minTouch}
+                        style={{ flexGrow: 1 }}
+                        disabled={pendingLine}
+                        onPress={() => setVolumeFor(it.id)}
+                      />
+                    ) : (
+                      <Button
+                        testID={`kp-line-${i}-qty`}
+                        label={t('kp.change_qty', { qty: `${qty} ${unit}`.trim() })}
+                        accessibilityLabel={t('kp.change_qty_a11y', { name: it.name })}
+                        variant="outline"
+                        minHeight={theme.size.minTouch}
+                        style={{ flexGrow: 1 }}
+                        disabled={pendingLine}
+                        onPress={() => setEditing({ item: it.id, field: 'qty' })}
+                      />
+                    )}
                   </View>
                 </View>
               );
             })}
+            <Button
+              testID="kp-add-line"
+              label={t('kp.add_line')}
+              variant="outline"
+              minHeight={theme.size.minTouch}
+              onPress={() => setAdding(true)}
+            />
           </View>
 
           {totals ? (
@@ -168,7 +260,7 @@ export default function KpScreen() {
               {data.vat.mode !== 'none' ? (
                 <SumRow testID="kp-vat" label={t(data.vat.mode === 'included' ? 'kp.sum_vat_in' : 'kp.sum_vat', { rate: rateText(v.vatRate) })} value={money(totals.vat)} />
               ) : null}
-              <SumRow testID="kp-sum-total" label={t('kp.sum_total')} value={money(totals.total)} strong />
+              <SumRow testID="kp-sum-total" label={t(data.vat.mode === 'none' ? 'kp.sum_total_no_vat' : 'kp.sum_total')} value={money(totals.total)} strong />
             </View>
           ) : null}
           <Button
@@ -185,19 +277,34 @@ export default function KpScreen() {
               <Button testID="kp-required-company" label={t('kp.company_fill')} variant="outline" onPress={() => router.push('/company')} />
             </View>
           ) : null}
-          <Button testID="kp-pdf" label={pdf === 'busy' ? t('kp.pdf_busy') : t('kp.pdf')} disabled={pdf === 'busy'} onPress={() => void getPdf()} />
+          <PhraseLine docId={doc.id} assistant={assistantOn()} />
+          <Button
+            testID="kp-versions"
+            label={t('kp.versions', { count: versionCount })}
+            variant="text"
+            minHeight={theme.size.minTouch}
+            onPress={() => router.push({ pathname: '/kp/versions', params: { doc: doc.id } })}
+          />
+          <View style={[styles.row, { flexWrap: 'wrap', gap: theme.space[2] }]}>
+            <Button testID="kp-pdf" label={pdf === 'busy' ? t('kp.pdf_busy') : t('kp.pdf')} variant="outline" style={{ flexGrow: 1 }} disabled={pdf === 'busy'} onPress={() => void getFile('pdf')} />
+            <Button testID="kp-docx" label={t('kp.docx')} variant="outline" style={{ flexGrow: 1 }} disabled={pdf === 'busy'} onPress={() => void getFile('docx')} />
+          </View>
           {pdf && pdf !== 'busy' ? (
             <AppText testID="kp-pdf-result" accessibilityLiveRegion="polite" color={pdf.result === 'shared' ? 'done' : 'warnText'}>
               {pdf.result === 'fields'
                 ? t('kp.fields_missing', { list: (pdf.fields ?? []).map((f) => t(`kp.req_${f.replace('.', '_')}`, { defaultValue: f })).join(', ') })
-                : t(`kp.pdf_${pdf.result}`)}
+                : pdf.result === 'shared' && pdf.format === 'docx'
+                  ? t('kp.docx_shared')
+                  : t(`kp.pdf_${pdf.result}`)}
             </AppText>
           ) : null}
+          <Button testID="kp-more" label={t('kp.more')} variant="text" minHeight={theme.size.minTouch} onPress={() => setMore(true)} />
           {doc.ai_generated ? (
             <AppText testID="kp-ai-label" variant="meta">
               {t('ai.label')}
             </AppText>
           ) : null}
+          <Button testID="kp-send" label={t('send.open')} onPress={() => router.push({ pathname: '/kp/send', params: { doc: doc.id } })} />
         </View>
       </Screen>
       <StandaloneUndoStrip />
@@ -205,11 +312,15 @@ export default function KpScreen() {
       {editing && editItem ? (
         <NumberSheet
           testID="kp-edit"
-          title={editing.field === 'unit_price' ? t('kp.edit_title_price', { name: editItem.name }) : t('kp.edit_title_qty', { name: editItem.name })}
+          title={
+            editing.field === 'unit_price'
+              ? t(editItem.kind === 'lump' ? 'kp.edit_title_amount' : 'kp.edit_title_price', { name: editItem.name })
+              : t('kp.edit_title_qty', { name: editItem.name })
+          }
           initial={(editing.field === 'unit_price' ? editItem.unit_price : editItem.qty) ?? ''}
           unit={editItem.unit}
           money={editing.field === 'unit_price'}
-          offerList={editing.field === 'unit_price' && !findPrice(editItem.name)}
+          offerList={editing.field === 'unit_price' && editItem.kind !== 'lump' && !findPrice(editItem.name)}
           onClose={() => setEditing(null)}
           onSave={(text, toList) => {
             const value = editing.field === 'unit_price' ? priceText(text) : qtyText(text);
@@ -222,6 +333,42 @@ export default function KpScreen() {
             return true;
           }}
         />
+      ) : null}
+      {volumeFor && data.items.find((x) => x.id === volumeFor) ? (
+        <VolumeSheet
+          name={data.items.find((x) => x.id === volumeFor)!.name}
+          initial={data.items.find((x) => x.id === volumeFor)!.volume ?? ''}
+          onClose={() => setVolumeFor(null)}
+          onSave={(value) => {
+            const id = volumeFor;
+            setVolumeFor(null);
+            void editKp(doc.id, [{ item: id, field: 'volume', value }], { strip: t('kp.volume_set') });
+          }}
+        />
+      ) : null}
+      {adding ? (
+        <AddLineSheet
+          defaultKind={data.items.some((x) => x.kind === 'lump') || data.items.length === 0 ? 'lump' : 'qty'}
+          onClose={() => setAdding(false)}
+          onSave={(l) => {
+            setAdding(false);
+            void addKpLine(doc.id, l);
+            return true;
+          }}
+        />
+      ) : null}
+      {more ? (
+        <Sheet testID="kp-more-sheet" title={t('kp.more')} onClose={() => setMore(false)}>
+          <Button
+            testID="kp-write"
+            label={t('draft.write_client')}
+            variant="outline"
+            onPress={() => {
+              setMore(false);
+              router.push({ pathname: '/draft/new', params: { doc: doc.id } });
+            }}
+          />
+        </Sheet>
       ) : null}
       {vatOpen ? (
         <ChoiceSheet

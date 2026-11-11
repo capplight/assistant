@@ -79,7 +79,7 @@ export function kpView(data: KpDataOut, version: KpVersionOut | null | undefined
   } else {
     try {
       totals = computeTotals(
-        data.items.map((i) => ({ id: i.id, qty: i.qty ?? '1', unit_price: i.unit_price, discount_pct: i.discount_pct })),
+        data.items.map((i) => ({ id: i.id, qty: i.qty ?? '1', unit_price: i.unit_price, discount_pct: i.discount_pct, kind: i.kind })),
         { vatMode: data.vat.mode, vatRate, rounding: data.vat.rounding, discountTotalPct: data.discount_total_pct },
       );
     } catch {

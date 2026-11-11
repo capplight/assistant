@@ -1,14 +1,24 @@
 /**
  * Week 14: the PDF of a КП onto the phone and into the system «Поделиться» (3-engineering 6.8:
  * `expo-sharing`; the person picks the chat themselves). Behind a small port, loaded lazily, so
- * Jest never touches a native module. Sending through WhatsApp / mail with «Отправили?» is week 15.
+ * Jest never touches a native module.
+ * Week 15 (S18): the mail app with the file attached (`expo-mail-composer`), and a link
+ * (`wa.me/<номер>?text=` for the text alone). Nothing is ever sent by the app or the server: the
+ * person presses ➤ themselves (decision №6, R-15).
  */
+
+export type MailResult = 'sent' | 'saved' | 'cancelled' | 'unknown' | 'unavailable';
+export type MailDraft = { recipients: string[]; subject: string; body: string; attachments: string[] };
 
 export type SharePort = {
   /** The API file (with the session header) → a local file; returns its uri. */
   download(url: string, fileName: string, headers?: Record<string, string>): Promise<string>;
   /** The system share sheet with this file. */
   share(uri: string, mime: string, title: string): Promise<void>;
+  /** The phone's mail app with the letter filled in; `unavailable` when no account is set up. */
+  mail?(draft: MailDraft): Promise<MailResult>;
+  /** Opens a link (WhatsApp's `wa.me`); false when nothing on the phone can open it. */
+  openUrl?(url: string): Promise<boolean>;
 };
 
 const safeName = (n: string) => n.replace(/[\\/:*?"<>|]+/g, '_').slice(-120) || 'KP.pdf';
@@ -27,7 +37,26 @@ const nativeShare: SharePort = {
   async share(uri, mime, title) {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const Sharing = require('expo-sharing') as typeof import('expo-sharing');
-    await Sharing.shareAsync(uri, { mimeType: mime, dialogTitle: title, UTI: mime === 'application/pdf' ? 'com.adobe.pdf' : undefined });
+    const UTI = mime === 'application/pdf' ? 'com.adobe.pdf' : mime.includes('wordprocessingml') ? 'org.openxmlformats.wordprocessingml.document' : undefined;
+    await Sharing.shareAsync(uri, { mimeType: mime, dialogTitle: title, UTI });
+  },
+  async mail(draft) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const Mail = require('expo-mail-composer') as typeof import('expo-mail-composer');
+    if (!(await Mail.isAvailableAsync())) return 'unavailable';
+    const r = await Mail.composeAsync(draft);
+    // Android does not say what happened: «Отправили?» asks the person.
+    return r.status === 'sent' || r.status === 'saved' || r.status === 'cancelled' ? r.status : 'unknown';
+  },
+  async openUrl(url) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Linking } = require('react-native') as typeof import('react-native');
+    try {
+      await Linking.openURL(url);
+      return true;
+    } catch {
+      return false;
+    }
   },
 };
 

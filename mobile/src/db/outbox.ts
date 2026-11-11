@@ -79,7 +79,12 @@ export type OutboxKind =
   | 'kp.price'
   | 'kp.price_delete'
   | 'kp.patch'
-  | 'kp.status';
+  | 'kp.status'
+  /** Week 15: «Вернуть эту» (POST /documents/{id}/revert) and «Отправили?» [Да] (…/versions/{n}/sent). */
+  | 'kp.revert'
+  | 'kp.sent'
+  /** F-15 drafts: «Изменить» (PATCH), «Не надо» (DELETE), «Отправили?» (pending result). */
+  | 'kp.draft';
 
 export type OutboxStatus = 'pending' | 'sent' | 'failed';
 

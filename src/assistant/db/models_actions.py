@@ -54,6 +54,7 @@ class ActionKind(enum.StrEnum):
     EDIT_KP = "edit_kp"  # week 14: tap edits, «Вернуть версию», the status strip, «Убрать»
     COMPANY_PROFILE_EDIT = "company_profile_edit"  # week 14: «Моя компания» (0020)
     PRICE_LIST_EDIT = "price_list_edit"  # week 14: «Мой прайс» (0020)
+    SEND_EXTERNAL = "send_external"  # week 15: «Отправили? — Да» (in the 0011 CHECK; no undo)
 
 
 class Initiator(enum.StrEnum):
