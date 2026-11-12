@@ -310,6 +310,29 @@ export default function PageSettingsScreen() {
             </Pressable>
           ))}
         </View>
+        {/* Weeks 16а–16б: the stickers' two modes, the same switch as on the page (Ф-28). */}
+        {page.templateKey === 'notes' && layout === 'builtin:notes_board' ? (
+          <View accessibilityRole="tablist" style={[styles.row, { gap: theme.space[2] }]}>
+            {([false, true] as const).map((on) => {
+              const board = page.view?.mode === 'board';
+              return (
+                <Button
+                  key={String(on)}
+                  testID={`settings-notes-${on ? 'board' : 'rows'}`}
+                  label={t(on ? 'notes.mode_board' : 'notes.mode_rows')}
+                  variant={on === board ? 'primary' : 'outline'}
+                  minHeight={theme.size.minTouch}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: on === board }}
+                  style={styles.flex}
+                  onPress={() => {
+                    if (on !== board) void changeView(page, { kind: 'board', on });
+                  }}
+                />
+              );
+            })}
+          </View>
+        ) : null}
 
         {section('view.order_section')}
         <SettingRow testID="settings-sort" label={t('view.sort')} value={t(`view.sort_${page.view?.sort ?? 'position'}`)} onPress={() => setSheet('sort')} />

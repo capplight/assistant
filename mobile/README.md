@@ -1,4 +1,4 @@
-# Mobile app — week 16 (first launch, «Сегодня» tear-off sheet, «Мои данные», account deletion) on week 15 (КП: phrase edits, versions, Word, sending, drafts) on week 14 («Документы и КП»: the card file and the КП wizard) on week 13 («Расходы 2»: receipts, QR, statements) on week 12 («Расходы» — the expense calculator) on week 11's PageFrame + view registry
+# Mobile app — weeks 16а–16б («Заметки»: the free board «Доска») on week 16 (first launch, «Сегодня» tear-off sheet, «Мои данные», account deletion) on week 15 (КП: phrase edits, versions, Word, sending, drafts) on week 14 («Документы и КП»: the card file and the КП wizard) on week 13 («Расходы 2»: receipts, QR, statements) on week 12 («Расходы» — the expense calculator) on week 11's PageFrame + view registry
 
 Expo SDK 58 (React Native 0.88, New Architecture), TypeScript strict, expo-router.
 Spec: `../docs/spec/SPEC.md`, `../docs/spec/final/2-design.md`, `../docs/spec/final/3-engineering.md` §2.1, §11.2 (week 1, Mobile).
@@ -92,6 +92,34 @@ src/
   alarms/                    week 8: port (FakeAlarms), native + notification adapters, planner, S15 steps, service
 modules/alarms/              native Expo module: Android (Kotlin) AlarmManager + S14 + battery-guide, iOS (Swift) AlarmKit
 ```
+
+## Weeks 16а–16б: what works
+
+Contract: `../docs/api/views.md` «Доска» and `routes/pages.py` `items/place`, `schemas.py` `ItemPlaceIn` / `ItemPlaceOut`
+as of 2026-11-13. Shapes only in `src/api/types.ts` + `src/api/endpoints.ts`. **Checked by Jest with a fake server and
+synthetic data only: not against the real server, not on a device. Whether the drag is smooth on a low-end Redmi needs a
+real phone**; Jest only shows that 20 drag moves draw neither the board nor any sticker again (`boardStats`). KK strings of
+this week are drafts. No new dependency (PanResponder + Animated of React Native).
+
+- **One tool, two modes** (Ф-28): `[Ряды | Доска]` under «Найти» and in S38 «Вид» → `/view` `board` (outbox `page.view`,
+  «Отменить»). «Ряды» are the `position` order; «Доска» is `board_*`; a move in one never changes the other, switching loses
+  neither. «Простой список» stays.
+- **The board** (`components/page/BoardView.tsx`, maths in `pages/board.ts`): 360 board pt wide, drawn at `width / 360`,
+  140 pt stickers, overlap allowed, no sideways scroll. Stickers with no place take the server's slots (x 24 / 196, rows
+  16 + 156·k, «Ряды» order); turning the board on stores those slots on the phone at once (as the server does), so nothing
+  slides into a slot the person empties offline. A new sticker is lit 600 ms. Only the stickers near the screen are drawn.
+- **Moves**: long press 400 ms → drag (only the dragged sticker follows by an animated value), let go → 8 pt grid; «⋯ Ещё →
+  Подвинуть» (in place of «Выше / Ниже») → «Выше · Ниже · Левее · Правее» (±72) and «Положить наверх доски» (on top, in place),
+  the sheet stays open; the same five as screen-reader actions. Each move: outbox `page.item_place` → `POST
+  /pages/{id}/items/place` (one sticker alone, a swap as `places`), `board_z` = time of the place, «Отменить» (waiting →
+  dropped; sent → the action's undo). Offline and in «Без ИИ».
+- **≥150% and screen readers**: the board as rows in the contract's reading order with «При крупном шрифте доска показана
+  рядами…»; «Выше / Ниже» swap two stickers' places (one call, two `places`).
+- **Two phones**: a pending move keeps showing over /sync; the answer's `links` win (`placed: false, newer_move` shows the
+  other phone's place). SQLite v9: `page_links.board_x/y/z/manual`. The `/view` answer's `page_patch.rows` are applied.
+
+Not yet: piles drawn *on* the board at their first sticker's place (they stay above the board; their stickers keep their
+slots), dragging a pile, scrolling at the edges while dragging, a haptic tick.
 
 ## Week 16: what works
 

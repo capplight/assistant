@@ -38,6 +38,15 @@ export type PageLink = {
   pinned: boolean;
   /** Week 11а: the sticker's colour on this page («Заметки»); null/absent = none (white). */
   color?: NoteColor | null;
+  /**
+   * Weeks 16а–16б: the sticker's place on the free board («Доска», views.md `board_*`): `boardX`
+   * share of the width 0..1, `boardY` pt at 360 pt width, `boardZ` who lies on top. Null/absent:
+   * never put on the board (it takes the first free place). `boardManual`: the person put it there.
+   */
+  boardX?: number | null;
+  boardY?: number | null;
+  boardZ?: number | null;
+  boardManual?: boolean;
   removedAt: string | null;
   seq: number;
   /**
@@ -189,6 +198,10 @@ export function linkFrom(out: PageItemOut): PageLink {
     manualOrder: out.manual_order,
     pinned: out.pinned,
     color: out.appearance?.color ?? null,
+    boardX: out.board_x ?? null,
+    boardY: out.board_y ?? null,
+    boardZ: out.board_z ?? null,
+    boardManual: out.board_manual === true,
     removedAt: out.removed_at,
     seq: out.seq,
   };
@@ -436,6 +449,10 @@ type LinkRow = {
   manual_order: number;
   pinned: number;
   color?: string | null;
+  board_x?: number | null;
+  board_y?: number | null;
+  board_z?: number | null;
+  board_manual?: number | null;
   removed_at: string | null;
   seq: number;
   pending?: number;
@@ -451,6 +468,10 @@ const linkFromRow = (r: LinkRow): PageLink => ({
   manualOrder: !!r.manual_order,
   pinned: !!r.pinned,
   color: (r.color as NoteColor | null | undefined) ?? null,
+  boardX: r.board_x ?? null,
+  boardY: r.board_y ?? null,
+  boardZ: r.board_z ?? null,
+  boardManual: !!r.board_manual,
   removedAt: r.removed_at,
   seq: r.seq,
   pending: r.pending ?? 0,
@@ -590,8 +611,9 @@ export class SqlitePagesRepository implements PagesRepository {
     // The UNIQUE (page, item) index makes this an upsert by either key.
     await this.db.runAsync(
       `INSERT OR REPLACE INTO page_links
-         (id, page_server_id, item_server_id, position, group_key, manual_order, pinned, color, removed_at, seq, pending, server_row)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, page_server_id, item_server_id, position, group_key, manual_order, pinned, color,
+          board_x, board_y, board_z, board_manual, removed_at, seq, pending, server_row)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       l.id,
       l.pageServerId,
       l.itemServerId,
@@ -600,6 +622,10 @@ export class SqlitePagesRepository implements PagesRepository {
       l.manualOrder ? 1 : 0,
       l.pinned ? 1 : 0,
       l.color ?? null,
+      l.boardX ?? null,
+      l.boardY ?? null,
+      l.boardZ ?? null,
+      l.boardManual ? 1 : 0,
       l.removedAt,
       l.seq,
       pending,

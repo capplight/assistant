@@ -32,6 +32,8 @@ from assistant.api.schemas import (
     HabitsOut,
     ItemMoveIn,
     ItemMoveOut,
+    ItemPlaceIn,
+    ItemPlaceOut,
     MoveToPageIn,
     MoveToPageOut,
     PageCreateIn,
@@ -704,6 +706,36 @@ async def move_item(page_id: uuid.UUID, body: ItemMoveIn, user: GatedUser, db: D
     return ItemMoveOut(moved=res.done, reason=res.reason, repeated=res.repeated,
                        rebased=res.rebased, link=links[0],
                        action=await _action_out(db, res, now), page_patch=patch)  # fmt: skip
+
+
+@router.post("/{page_id}/items/place", response_model=ItemPlaceOut)
+async def place_items(page_id: uuid.UUID, body: ItemPlaceIn, user: GatedUser,
+                      db: Db) -> ItemPlaceOut:  # fmt: skip
+    """The free board of «Заметки» (weeks 16а–16б): the person's own place for stickers; the
+    later place of a sticker wins (views.md «Доска»)."""
+    now = datetime.now(UTC)
+    try:
+        res = await manual.place_stickers(
+            db, user.id, page_id=page_id, places=body.all_places(),
+            base_view_version=body.base_view_version, client_id=body.client_id,
+            client_ts=body.client_ts, now=now,
+        )  # fmt: skip
+    except _MANUAL as exc:
+        raise _manual_error(exc) from exc
+    await db.flush()
+    assert res.page is not None
+    patch = (await page_patches(db, user.id, res.pages, res.items))[0]
+    rows = await db.execute(
+        select(ScreenItem, Item.public_id).join(Item, Item.id == ScreenItem.item_id)
+        .where(ScreenItem.screen_id == res.page.id, ScreenItem.item_id.in_(res.item_pks))
+        .execution_options(populate_existing=True)
+    )  # fmt: skip
+    by_pk = {link.item_id: page_item_out(link, res.page.public_id, iid) for link, iid in rows}
+    return ItemPlaceOut(placed=res.done,
+                        reason=res.reason, repeated=res.repeated, rebased=res.rebased,
+                        links=[by_pk[pk] for pk in res.item_pks if pk in by_pk],
+                        kept_item_ids=[uuid.UUID(i) for i in res.kept],
+                        action=await _action_out(db, res, now), page_patch=patch)  # fmt: skip
 
 
 @router.delete("/{page_id}/items/{item_id}", response_model=RemoveFromPageOut)

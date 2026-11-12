@@ -9,8 +9,10 @@ import type { NoteColor } from '@/api/types';
 import type { LocalRecord } from '@/db';
 import { refreshCollections, refreshGroups, stacksOf } from '@/dedup/service';
 import { useDedup } from '@/dedup/store';
+import { layoutBoard, placeOf, readingOrder, swapInReading, toRow, zNow } from '@/pages/board';
 import type { PageEntry } from '@/pages/contents';
-import { setRowLook } from '@/pages/manual';
+import { placeStickers, setRowLook } from '@/pages/manual';
+import { changeView } from '@/pages/viewService';
 import { recordTitle, sourceLine, statusLine } from '@/records/format';
 import { unverifiedCount } from '@/records/review';
 import { NOTE_COLOR_KEYS, useTheme } from '@/theme';
@@ -20,9 +22,14 @@ import { Button } from '../Button';
 import type { MenuExtra } from '../RecordMenuSheet';
 import type { RowMoves } from '../RecordRow';
 import { StackCards } from '../StackCards';
+import { useScreenReader } from '../useScreenReader';
+import { BoardView } from './BoardView';
 import { EntryList, type EntryCtx } from './EntryList';
 import { entryRow, withGroups, type EntryRow } from './rows';
 import type { ViewProps } from './registry';
+import { stickerLabel } from './stickerLabel';
+
+export { stickerLabel };
 
 /**
  * «Заметки» — the wall of stickers, mode «Ряды» (template-screens 2.1, Ф-28; week 11а). Piles of
@@ -33,8 +40,11 @@ import type { ViewProps } from './registry';
  * темам» comes from the assistant line as a view change with «Что изменилось» / «Отменить».
  * ≥150%: one column, a sticker as wide as the screen and as tall as its text, the colour as an
  * 8 pt band on the left plus the background.
- * The free board («Доска», weeks 16а–16б) plugs in here by `view.mode === 'board'`; until then
- * such a page shows rows with a plain line about it.
+ * Weeks 16а–16б: the second mode «Доска» (`view_state.board`; the switch `[Ряды | Доска]` under
+ * «Найти», also in S38) is the free board (`BoardView`). Both layouts are kept: the rows by
+ * `position`, the board by `board_*`; a move in one never changes the other. ≥150% and with a
+ * screen reader the board is shown as rows top to bottom, left to right by its places, with a line
+ * saying so; «Выше / Ниже» there swap two stickers' places on the board.
  */
 export function StickersView({ page, entries, frameTop, ordering }: ViewProps) {
   const theme = useTheme();
@@ -53,14 +63,64 @@ export function StickersView({ page, entries, frameTop, ordering }: ViewProps) {
     return new Set(stacksOf(dedup.collections, dedup.gone, page.serverId, groups).map((c) => c.title));
   }, [dedup.collections, dedup.gone, page.serverId, page.groups]);
 
+  const screenReader = useScreenReader();
+  const board = page.view?.mode === 'board';
+  // ≥150% and with a screen reader the board is drawn as rows (template-screens 2.1, 5).
+  const boardAsRows = board && (theme.largeFont || screenReader);
+
+  // Every sticker in «Ряды» order (pinned first, a stable split, R-54): the board's slots follow it.
+  const all = useMemo(() => {
+    const list = entries ?? [];
+    return [...list.filter((e) => e.link?.pinned), ...list.filter((e) => !e.link?.pinned)];
+  }, [entries]);
+  // Stickers in a pile are drawn in the pile above (they still take their slot on the board).
+  const inPile = useMemo(
+    () => new Set(all.filter((e) => e.link?.groupKey && pileTitles.has(e.link.groupKey)).map((e) => e.record.id)),
+    [all, pileTitles],
+  );
+  const inRows = useMemo(() => all.filter((e) => !inPile.has(e.record.id)), [all, inPile]);
+  const laid = useMemo(
+    () =>
+      board
+        ? layoutBoard(all.map((e) => ({ id: e.record.id, tie: e.record.serverId ?? e.record.id, place: placeOf(e.link) }))).filter(
+            (l) => !inPile.has(l.id),
+          )
+        : [],
+    [board, all, inPile],
+  );
+
   const rows = useMemo(() => {
-    const loose = (entries ?? []).filter((e) => !(e.link?.groupKey && pileTitles.has(e.link.groupKey)));
-    // Pinned first, the rest in the page order (a stable split, R-54).
-    const pinned = loose.filter((e) => e.link?.pinned);
-    const rest = loose.filter((e) => !e.link?.pinned);
+    if (boardAsRows) {
+      const byRec = new Map(inRows.map((e) => [e.record.id, e]));
+      return readingOrder(laid).flatMap((l) => {
+        const e = byRec.get(l.id);
+        return e ? [entryRow(e)] : [];
+      });
+    }
+    const pinned = inRows.filter((e) => e.link?.pinned);
+    const rest = inRows.filter((e) => !e.link?.pinned);
     // «Разложи» groups that are not piles keep their headings (week 6).
     return [...pinned.map(entryRow), ...withGroups(rest, page.groups ?? [])];
-  }, [entries, pileTitles, page.groups]);
+  }, [boardAsRows, inRows, laid, page.groups]);
+
+  /** The board as rows: «Выше / Ниже» swap the places of two neighbours (the board is counted again). */
+  const swap = (recordId: string, step: -1 | 1) => {
+    // One call with two places, each sticker getting the other's (views.md «the board as rows»).
+    const pair = swapInReading(laid, recordId, step, zNow());
+    if (!pair) return;
+    const byRec = new Map(inRows.map((e) => [e.record.id, e]));
+    const a = byRec.get(pair.a.id);
+    const b = byRec.get(pair.b.id);
+    if (!a || !b) return;
+    void placeStickers(
+      page,
+      [
+        { record: a.record, ...toRow(pair.a) },
+        { record: b.record, ...toRow(pair.b) },
+      ],
+      t('notes.board_moved', { what: recordTitle(a.record, t) }),
+    );
+  };
 
   // «Стикер 3 из 12»: the place among the stickers, headings not counted.
   const order = useMemo(() => rows.flatMap((r) => (r.type === 'entry' ? [r.entry.record.id] : [])), [rows]);
@@ -91,9 +151,10 @@ export function StickersView({ page, entries, frameTop, ordering }: ViewProps) {
   const header = (
     <View style={{ marginBottom: theme.space[4], gap: theme.space[4] }}>
       {frameTop}
-      {page.view?.mode === 'board' ? (
-        <AppText testID="notes-board-later" variant="meta" accessibilityLiveRegion="polite">
-          {t('notes.board_later')}
+      <ModeSwitch board={board} onPick={(on) => void changeView(page, { kind: 'board', on })} />
+      {boardAsRows ? (
+        <AppText testID="notes-board-rows" variant="meta" accessibilityLiveRegion="polite">
+          {t(theme.largeFont ? 'notes.board_as_rows_large' : 'notes.board_as_rows_reader')}
         </AppText>
       ) : null}
       <StackCards page={page} entries={entries} piles />
@@ -117,16 +178,21 @@ export function StickersView({ page, entries, frameTop, ordering }: ViewProps) {
 
   return (
     <>
-      <EntryList
-        page={page}
-        rows={rows}
-        header={header}
-        ordering={ordering}
-        renderEntry={renderEntry}
-        menuExtra={menuExtra}
-        columns={large ? 1 : 2}
-        empty={entries ? <EmptyWall /> : null}
-      />
+      {board && !boardAsRows ? (
+        <BoardView page={page} entries={all} hidden={inPile} header={header} menuExtra={menuExtra} empty={entries ? <EmptyWall /> : null} />
+      ) : (
+        <EntryList
+          page={page}
+          rows={rows}
+          header={header}
+          ordering={ordering}
+          renderEntry={renderEntry}
+          menuExtra={menuExtra}
+          columns={large ? 1 : 2}
+          empty={entries ? <EmptyWall /> : null}
+          {...(boardAsRows ? { onStep: swap } : {})}
+        />
+      )}
       {colorFor ? (
         <ColorSheet
           title={recordTitle(colorFor.record, t)}
@@ -143,26 +209,6 @@ export function StickersView({ page, entries, frameTop, ordering }: ViewProps) {
       ) : null}
     </>
   );
-}
-
-/** «Стикер, жёлтый, приколот. Код домофона 4512. Сегодня» (template-screens 5). */
-export function stickerLabel(
-  record: LocalRecord,
-  o: { color: NoteColor | null; pinned: boolean; index: number; total: number },
-  t: (k: string, x?: Record<string, unknown>) => string,
-  lang: string,
-): string {
-  return [
-    t('notes.sticker_a11y', { n: o.index + 1, total: o.total }),
-    t(`notes.colors_a11y.${o.color ?? 'white'}`),
-    o.pinned ? t('notes.pinned_a11y') : null,
-    recordTitle(record, t),
-    sourceLine(record, lang, t),
-    statusLine(record, t),
-    unverifiedCount(record) > 0 ? t('check.badge') : null,
-  ]
-    .filter(Boolean)
-    .join('. ');
 }
 
 function Sticker({ entry, ctx, large, index, total }: { entry: PageEntry; ctx: EntryCtx; large: boolean; index: number; total: number }) {
@@ -303,6 +349,31 @@ function Sticker({ entry, ctx, large, index, total }: { entry: PageEntry; ctx: E
         accessibilityElementsHidden
         style={[styles.fold, { backgroundColor: theme.colors.bg, borderColor: theme.colors.line }]}
       />
+    </View>
+  );
+}
+
+/** `[Ряды | Доска]` (48 pt, Ф-28): «Ряды» by default; the same choice is in S38 → «Вид». */
+function ModeSwitch({ board, onPick }: { board: boolean; onPick: (board: boolean) => void }) {
+  const theme = useTheme();
+  const { t } = useTranslation();
+  return (
+    <View accessibilityRole="tablist" style={[styles.row, { gap: theme.space[2] }]}>
+      {([false, true] as const).map((on) => (
+        <Button
+          key={String(on)}
+          testID={`notes-mode-${on ? 'board' : 'rows'}`}
+          label={t(on ? 'notes.mode_board' : 'notes.mode_rows')}
+          variant={on === board ? 'primary' : 'outline'}
+          minHeight={theme.size.minTouch}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: on === board }}
+          style={styles.flex}
+          onPress={() => {
+            if (on !== board) onPick(on);
+          }}
+        />
+      ))}
     </View>
   );
 }

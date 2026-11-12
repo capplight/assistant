@@ -46,6 +46,7 @@ import type {
   ActionUndoOut,
   AnswerReadyPushData,
   ItemMoveIn,
+  ItemPlaceIn,
   ManualOut,
   MoveReason,
   MoveToPageIn,
@@ -353,8 +354,15 @@ function linkOut(v: unknown): PageItemOut | null {
     updated_by: str(o.updated_by) ?? 'agent',
     ...('done_at' in o ? { done_at: str(o.done_at) } : {}),
     ...(obj(o.appearance) ? { appearance: appearanceOut(o.appearance) } : {}),
+    // Weeks 16а–16б: the free board's place (a missing key = an older server = never placed).
+    ...('board_x' in o ? { board_x: numOrNull(o.board_x) } : {}),
+    ...('board_y' in o ? { board_y: numOrNull(o.board_y) } : {}),
+    ...('board_z' in o ? { board_z: numOrNull(o.board_z) } : {}),
+    ...('board_manual' in o ? { board_manual: o.board_manual === true } : {}),
   };
 }
+
+const numOrNull = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
 const NOTE_COLOR_SET = new Set<string>(['yellow', 'pink', 'green', 'blue', 'peach', 'white']);
 const setByOf = (v: unknown) => (v === 'user' || v === 'agent' || v === 'template' ? v : null);
@@ -519,6 +527,12 @@ function pageOutOf(v: unknown): PageOut | null {
     ...(o.field_prefs !== undefined ? { field_prefs: fieldPrefsOf(o.field_prefs) } : {}),
     ...(o.custom_fields !== undefined ? { custom_fields: customFieldsOf(o.custom_fields) } : {}),
   };
+}
+
+/** `ItemPlaceOut` read as the other changes by hand: `placed` is its `moved`. */
+export function placeOut(v: unknown): ManualOut {
+  const o = obj(v) ?? {};
+  return { ...manualOut(o), moved: o.placed === true || o.moved === true };
 }
 
 const MOVE_REASONS = new Set<string>(['newer_move', 'anchor_gone', 'nothing_to_do', 'page_removed', 'timed']);
@@ -2026,6 +2040,16 @@ export class Api {
   async moveItem(pageId: string, body: ItemMoveIn): Promise<ManualOut> {
     const path = `/pages/${encodeURIComponent(pageId)}/items/move`;
     return manualOut(await this.client.request<unknown>('POST', path, { body, idempotencyKey: body.client_id }));
+  }
+
+  /**
+   * Weeks 16а–16б: the person's place on the free board (views.md `items/place`). The stickers
+   * come back in `links` (+ `page_patch`); `placed: false, reason: "newer_move"` when another
+   * phone's later place stands for every sticker of the call.
+   */
+  async placeItems(pageId: string, body: ItemPlaceIn): Promise<ManualOut> {
+    const path = `/pages/${encodeURIComponent(pageId)}/items/place`;
+    return placeOut(await this.client.request<unknown>('POST', path, { body, idempotencyKey: body.client_id }));
   }
 
   /** S39: move to another page, or show there too. */

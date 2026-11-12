@@ -740,8 +740,12 @@ async def _page_rows(session: AsyncSession, user_id: int, screen_pk: int) -> lis
     rows = await session.execute(text("""
         SELECT i.id, i.public_id, i.title, left(coalesce(i.text, i.raw_text, i.summary, ''), 300)
                AS body, si.position, si.group_key, si.manual_order, si.pinned, si.updated_at,
-               si.updated_by, coalesce(i.occurred_at, i.created_at) AS "when"
+               si.updated_by, coalesce(i.occurred_at, i.created_at) AS "when",
+               -- the free board (weeks 16а–16б): a sticker the person placed there is theirs too
+               (si.board_manual AND sc.template_key = 'notes'
+                AND coalesce((sc.view_state ->> 'board')::boolean, false)) AS board_manual
         FROM screen_items si JOIN items i ON i.id = si.item_id
+        JOIN screens sc ON sc.id = si.screen_id
         WHERE si.screen_id = :s AND i.user_id = :u AND si.removed_by_user_at IS NULL
           AND si.position IS NOT NULL AND i.deleted_at IS NULL AND i.hidden_reason IS NULL
         ORDER BY si.position, i.public_id
@@ -750,7 +754,8 @@ async def _page_rows(session: AsyncSession, user_id: int, screen_pk: int) -> lis
     for r in rows:
         body = " ".join((r.body or "").split())
         out.append(Row(r.id, r.public_id, title_of(r.title, body), body[:GROUP_LINE_CHARS],
-                       r.position, r.group_key, r.manual_order, r.pinned, r.updated_at,
+                       r.position, r.group_key, r.manual_order or r.board_manual, r.pinned,
+                       r.updated_at,
                        r.updated_by, r.when))  # fmt: skip
     return out
 

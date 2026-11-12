@@ -6,6 +6,7 @@ import { useUndo, type ManualStripText } from '@/store/undo';
 import { newId } from '@/utils/id';
 
 import { itemKey, pageEntries, pageKey, placesLocally, type PageEntry } from './contents';
+import { layoutBoard, placeOf, toRow } from './board';
 import { between, RankError } from './lexorank';
 
 /**
@@ -97,7 +98,20 @@ export type ItemLookPayload = Base & {
   before: [PageLink | null];
 };
 
-export type LinkPayload = ItemMovePayload | MoveToPagePayload | ItemRemovePayload | ItemLookPayload;
+/**
+ * Weeks 16а–16б: stickers put on the free board by hand (`page.item_place` → POST
+ * /pages/{id}/items/place). `x` share of the width, `y` board points, absolute; `z` is what the
+ * phone shows until the server answers (the time of the place). `keys` / `before` follow `items`.
+ */
+export type ItemPlacePayload = Base & {
+  pageId: string;
+  items: { recordId: string; x: number; y: number; z: number }[];
+  baseViewVersion: number;
+  keys: LinkKey[];
+  before: (PageLink | null)[];
+};
+
+export type LinkPayload = ItemMovePayload | MoveToPagePayload | ItemRemovePayload | ItemLookPayload | ItemPlacePayload;
 
 const nowIso = () => new Date().toISOString();
 
@@ -372,6 +386,76 @@ export function setRowLook(
   });
 }
 
+/** One sticker's new place on the board: `x` as a share of the width, `y` board points. */
+export type BoardMove = { record: LocalRecord; boardX: number; boardY: number; boardZ: number };
+
+/**
+ * Weeks 16а–16б, «Доска» (template-screens 2.1): stickers put somewhere by hand — dragged, moved by
+ * «Выше · Ниже · Левее · Правее», «Положить наверх доски», or swapped in the rows shown at ≥150%.
+ * Shown at once (offline and in «Без ИИ» too), one outbox row, «Отменить» like every change of a
+ * row by hand. The order of the rows (`position`) is never touched: «Ряды» stay as they were.
+ */
+export function placeStickers(page: Page, moves: BoardMove[], stripText: string): Promise<string | null> {
+  return serial(async () => {
+    if (moves.length === 0) return null;
+    const repo = await getPagesRepo();
+    const keys: LinkKey[] = [];
+    const before: (PageLink | null)[] = [];
+    for (const m of moves) {
+      const old = await currentLink(page, m.record);
+      const key = old ? keyOf(old) : { page: pageKey(page), item: itemKey(m.record) };
+      await repo.writeLocal({
+        ...(old ?? blankLink(key)),
+        boardX: m.boardX,
+        boardY: m.boardY,
+        boardZ: m.boardZ,
+        boardManual: true,
+      });
+      keys.push(key);
+      before.push(old);
+    }
+    const payload: ItemPlacePayload = {
+      clientId: newId(),
+      at: nowIso(),
+      pageId: page.id,
+      items: moves.map((m) => ({ recordId: m.record.id, x: m.boardX, y: m.boardY, z: m.boardZ })),
+      baseViewVersion: page.viewVersion ?? 0,
+      keys,
+      before,
+    };
+    const row = await (await getOutbox()).enqueue('page.item_place', payload);
+    notifyDataChanged();
+    useUndo.getState().showCustom(stripText, () => void undoManual([row.id]));
+    kickSync();
+    return row.id;
+  });
+}
+
+/**
+ * The board was turned on by hand: stickers with no place yet get the server's slots on this
+ * phone at once (the server stores the same ones when the switch reaches it, views.md «Places the
+ * server gives»), so nothing slides into a slot the person empties before that. Not the person's
+ * places (`board_manual` false, no `board_z`), not sent, no «Отменить» of their own.
+ */
+export async function settleBoardSlots(page: Page): Promise<void> {
+  const entries = await loadEntries(page);
+  const laid = layoutBoard(entries.map((e) => ({ id: e.record.id, place: placeOf(e.link) })));
+  const repo = await getPagesRepo();
+  const byId = new Map(entries.map((e) => [e.record.id, e]));
+  const rows: PageLink[] = [];
+  for (const l of laid) {
+    const e = byId.get(l.id);
+    if (l.stored || !e) continue;
+    const old = (await currentLink(page, e.record)) ?? e.link;
+    const key = old ? keyOf(old) : { page: pageKey(page), item: itemKey(e.record) };
+    const { boardX, boardY } = toRow(l);
+    rows.push({ ...(old ?? blankLink(key)), boardX, boardY, boardZ: null, boardManual: false });
+  }
+  if (rows.length === 0) return;
+  await repo.restoreLinks(rows);
+  notifyDataChanged();
+}
+
 // --- S34: the page order and «Убрать страницу» ---
 
 const sorted = () => [...usePages.getState().pages].sort(comparePages);
@@ -488,7 +572,8 @@ async function takeBack(outboxId: string): Promise<void> {
     case 'page.item_move':
     case 'item.move_to_page':
     case 'page.item_remove':
-    case 'page.item_look': {
+    case 'page.item_look':
+    case 'page.item_place': {
       const p = row.payload as LinkPayload;
       // Still waiting, or it stays on this phone only (no answer ever came): only local rows to put back.
       if (pending || !p.realKeys) {

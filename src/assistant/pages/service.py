@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import delete as sa_delete
-from sqlalchemy import func, select, text, update
+from sqlalchemy import func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -25,7 +25,7 @@ from assistant.db.models_pages import (
     ScreenTemplate,
 )
 from assistant.db.models_v2 import HiddenReason
-from assistant.pages import habits, lexorank, order
+from assistant.pages import board, habits, lexorank, order
 from assistant.pages.rules import ItemFacts, excluded, matches
 
 
@@ -164,13 +164,59 @@ async def add_link(session: AsyncSession, page: Screen, item_id: int, when: date
         return False
     key = await _position_for(session, page.id, when)
     updated_by = "user" if added_by == AddedBy.USER else "agent"
+    place: dict[str, float] = {}
+    if board_on(page):  # a new sticker lies in the first free place from the top (Ф-28)
+        (bx, by), = board.free_slots(await _placed(session, page.id), 1)
+        place = {"board_x": bx, "board_y": by}
     result = await session.execute(
         insert(ScreenItem)
         .values(screen_id=page.id, item_id=item_id, user_id=page.user_id, public_id=uuid7(),
-                position=key, added_by=str(added_by), updated_by=updated_by)
+                position=key, added_by=str(added_by), updated_by=updated_by, **place)
         .on_conflict_do_nothing(index_elements=["screen_id", "item_id"])
     )  # fmt: skip
     return bool(result.rowcount)
+
+
+# --- the free board of «Заметки» (weeks 16а–16б; pure rules in `pages.board`) ---
+
+
+def board_on(page: Screen) -> bool:
+    """«Заметки» shown as «Доска» (`view_state.board`)."""
+    return page.template_key == "notes" and bool((page.view_state or {}).get("board"))
+
+
+def _shown():  # type: ignore[no-untyped-def]
+    return (ScreenItem.removed_by_user_at.is_(None), Item.deleted_at.is_(None),
+            Item.hidden_reason.is_(None))  # fmt: skip
+
+
+async def _placed(session: AsyncSession, screen_id: int) -> list[board.Placed]:
+    rows = await session.execute(
+        select(ScreenItem.board_x, ScreenItem.board_y).join(Item, Item.id == ScreenItem.item_id)
+        .where(ScreenItem.screen_id == screen_id, ScreenItem.board_x.is_not(None),
+               ScreenItem.board_y.is_not(None), *_shown())
+    )  # fmt: skip
+    return [board.Placed(board.x_pt(x), int(y)) for x, y in rows]
+
+
+async def fill_board(session: AsyncSession, page: Screen) -> list[str]:
+    """Give every shown sticker without a place the first free grid slot, in rows order (pinned
+    first, then position). Never moves a placed sticker; not the person's place
+    (`board_manual` stays false). Returns the item public ids that got a place."""
+    rows = (await session.execute(
+        select(ScreenItem, Item.public_id).join(Item, Item.id == ScreenItem.item_id)
+        .where(ScreenItem.screen_id == page.id, *_shown(),
+               or_(ScreenItem.board_x.is_(None), ScreenItem.board_y.is_(None)))
+        .order_by(ScreenItem.pinned.desc(), ScreenItem.position, Item.public_id)
+        .with_for_update(of=ScreenItem)
+    )).all()  # fmt: skip
+    if not rows:
+        return []
+    slots = board.free_slots(await _placed(session, page.id), len(rows))
+    for (link, _), (bx, by) in zip(rows, slots, strict=True):
+        link.board_x, link.board_y, link.board_z = bx, by, None
+    await session.flush()
+    return [str(pid) for _, pid in rows]
 
 
 async def place_item(session: AsyncSession, item: Item) -> int:

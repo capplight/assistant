@@ -11,6 +11,11 @@ returns that first action. Offline conflicts are settled here, not by the phone:
 - the phone's own LexoRank key is stored as is when it can be trusted (`pages.order.trusted` and no
   re-key of the page after the phone's `base_seq`), so moves of different rows commute;
 - a move never leaves a record on no page (a removed target page, `rescue_moved`).
+
+The free board (weeks 16а–16б, `place_stickers`): every sticker has its own clock of its place
+(`board_ts`, apart from the rows clock), the place is absolute (board space, `pages.board`) and the
+stacking value comes from the winning stamp, so each sticker ends where its latest place put it
+whatever order two phones' calls arrive in.
 """
 
 import uuid
@@ -27,7 +32,15 @@ from assistant.db.models import Item
 from assistant.db.models_actions import Action, ActionKind, Initiator
 from assistant.db.models_habits import HabitKind, HabitStatus, UserHabit
 from assistant.db.models_pages import Screen, ScreenItem, ScreenKind, UpdatedBy
-from assistant.pages import habits, lexorank, lock_user, order, rebalance_page, timed_items
+from assistant.pages import (
+    board,
+    habits,
+    lexorank,
+    lock_user,
+    order,
+    rebalance_page,
+    timed_items,
+)
 
 KEEP = object()  # "leave group_key as it is"
 
@@ -61,6 +74,8 @@ class Manual:
     learned: bool = False
     item_pk: int | None = None
     touched: list[int] = field(default_factory=list)  # screen pks whose row of the item to return
+    item_pks: list[int] = field(default_factory=list)  # the free board: stickers of the call
+    kept: list[str] = field(default_factory=list)  # the free board: a later place stands
 
 
 def _q(text: str) -> str:
@@ -218,6 +233,99 @@ async def move_row(session: AsyncSession, user_id: int, *, page_id: uuid.UUID,
                   "page_id": str(page.public_id), "text": f"{_q(title)} — переставил"}],
         inverse=[{"op": "restore_positions", "page": str(page.public_id), "rows": [old]}],
         now=now, screen_id=page.id, source_item_ids=[item_pk], client_id=client_id,  # type: ignore[list-item]
+    )  # fmt: skip
+    return base
+
+
+# --- the free board of «Заметки» (weeks 16а–16б) ---
+
+
+def _sticker_words(n: int) -> str:
+    if n % 10 == 1 and n % 100 != 11:
+        return f"{n} стикер"
+    if n % 10 in (2, 3, 4) and n % 100 not in (12, 13, 14):
+        return f"{n} стикера"
+    return f"{n} стикеров"
+
+
+async def place_stickers(session: AsyncSession, user_id: int, *, page_id: uuid.UUID,
+                         places: list[tuple[uuid.UUID, float, float]],
+                         base_view_version: int | None, client_id: uuid.UUID,
+                         client_ts: datetime | None, now: datetime) -> Manual:  # fmt: skip
+    """«Перетащил», «Левее / Правее / Выше / Ниже», «Положить наверх доски» (the same place): each
+    sticker of the call gets its absolute place (x share, y board pt), goes on top and becomes the
+    person's (`board_manual`). One action with «Отменить»."""
+    ids = [p[0] for p in places]
+    if not ids or len(ids) > board.MAX_PLACES or len(set(ids)) != len(ids):
+        raise Invalid("places")
+    try:
+        norm = {iid: board.normalize(x, y) for iid, x, y in places}
+    except board.BadPlace as exc:
+        raise Invalid(str(exc)) from exc
+    await lock_user(session, user_id)
+    page = await _page(session, user_id, page_id)
+    if page.kind == ScreenKind.SYSTEM_TODAY:
+        raise SystemPage
+    if page.template_key != "notes":
+        raise Invalid("the board is on «Заметки» only")
+    pks = await _item_pks(session, user_id, ids)
+    links: dict[uuid.UUID, ScreenItem] = {}
+    for iid in ids:
+        link = await _link(session, page.id, pks[iid]) if iid in pks else None
+        if link is None:
+            raise NotFound("item")
+        links[iid] = link
+    base = Manual(done=False, pages={page.id}, items={str(i) for i in ids}, page=page,
+                  item_pks=[pks[i] for i in ids])  # fmt: skip
+    if (prior := await _repeat(session, user_id, client_id)) is not None:
+        base.done, base.repeated, base.action = True, True, prior
+        return base
+    stamp = order.Stamp.of(client_ts or now, client_id, now)
+    z = board.z_of(stamp.ts)
+    base.rebased = base_view_version is not None and base_view_version != page.view_version
+    ops: list[dict[str, Any]] = []
+    titles: list[tuple[uuid.UUID, str, bool]] = []  # (id, title, only raised)
+    repeats = 0
+    for iid in ids:
+        link = links[iid]
+        current = order.stamp_of(link.board_ts, link.board_client_id)
+        if current is not None and stamp == current:
+            repeats += 1  # a repeat of a place that changed nothing
+            continue
+        if not order.wins(stamp, current):
+            base.kept.append(str(iid))  # a later place of this sticker (other phone) stands
+            continue
+        link.board_ts, link.board_client_id = stamp.ts, client_id  # moves even on a no-op
+        x, y = norm[iid]
+        ops.append({"op": "set_board", "page": str(page.public_id), "item": str(iid),
+                    "values": {"x": x, "y": y, "z": z, "manual": True}})
+        item = await session.get(Item, pks[iid])
+        assert item is not None
+        titles.append((iid, title_of(item), (link.board_x, link.board_y) == (x, y)))
+    await session.flush()
+    if repeats == len(ids):
+        base.done, base.repeated = True, True
+        return base
+    if not ops:
+        base.reason = "newer_move"
+        return base
+    base.done = True
+    out = await engine.apply(session, user_id, ops, by=Initiator.USER, check=False, now=now)
+    if not out.inverse:
+        return base  # already there, on top and the person's
+    if len(titles) == 1:
+        name = _q(titles[0][1])
+        summary = (f"Положил {name} наверх доски" if titles[0][2]
+                   else f"Переставил {name} на доске")  # fmt: skip
+    else:
+        summary = f"Переставил {_sticker_words(len(titles))} на доске"
+    changes = [{"item_id": str(iid), "title": t, "kind": "place", "page_id": str(page.public_id),
+                "text": f"{_q(t)} — {'наверх доски' if raised else 'новое место на доске'}"}
+               for iid, t, raised in titles]  # fmt: skip
+    base.action = await record(
+        session, user_id=user_id, kind=ActionKind.SCREEN_REORDER_ITEMS, initiated_by=Initiator.USER,
+        summary={"ru": summary, "kk": None}, changes=changes, inverse=out.inverse, now=now,
+        screen_id=page.id, source_item_ids=[pks[i] for i, _, _ in titles], client_id=client_id,
     )  # fmt: skip
     return base
 

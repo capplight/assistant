@@ -850,6 +850,52 @@ class ItemMoveOut(BaseModel):
     page_patch: dict[str, Any]
 
 
+class StickerPlaceIn(BaseModel):
+    item_id: uuid.UUID
+    x: float  # the left edge, share of the board width (views.md «Доска»)
+    y: float  # the top edge, board points (360 pt wide board)
+
+
+class ItemPlaceIn(BaseModel):
+    """`POST /pages/{id}/items/place` (weeks 16а–16б): one sticker (`item_id`, `x`, `y`) or
+    several (`places`: a pile, a swap)."""
+
+    client_id: uuid.UUID
+    client_ts: AwareDatetime | None = None
+    base_view_version: int | None = None
+    item_id: uuid.UUID | None = None
+    x: float | None = None
+    y: float | None = None
+    places: list[StickerPlaceIn] | None = Field(default=None, min_length=1, max_length=200)
+
+    @model_validator(mode="after")
+    def _one_way(self) -> "ItemPlaceIn":
+        single = (self.item_id, self.x, self.y)
+        if self.places is None and None in single:
+            raise ValueError("item_id, x and y (or places) are required")
+        if self.places is not None and any(v is not None for v in single):
+            raise ValueError("places goes alone")
+        if self.places is not None and len({p.item_id for p in self.places}) != len(self.places):
+            raise ValueError("a sticker once per call")
+        return self
+
+    def all_places(self) -> list[tuple[uuid.UUID, float, float]]:
+        if self.places is not None:
+            return [(p.item_id, p.x, p.y) for p in self.places]
+        return [(self.item_id, self.x, self.y)]  # type: ignore[list-item]
+
+
+class ItemPlaceOut(BaseModel):
+    placed: bool
+    reason: MoveReason | None
+    repeated: bool
+    rebased: bool
+    links: list[PageItemOut]
+    kept_item_ids: list[uuid.UUID]
+    action: "ActionOut | None"
+    page_patch: dict[str, Any]
+
+
 class MoveToPageIn(BaseModel):
     client_id: uuid.UUID
     client_ts: AwareDatetime | None = None

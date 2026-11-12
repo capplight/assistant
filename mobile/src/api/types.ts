@@ -463,6 +463,33 @@ export type PageItemOut = {
   done_at?: string | null;
   /** Week 11а: the sticker's colour on this page; undefined = an older server. */
   appearance?: AppearanceOut;
+  /**
+   * Weeks 16а–16б (views.md «Rows and contents»): the sticker's place on the free board —
+   * `board_x` share of the width 0..1, `board_y` pt at 360 pt width, `board_z` stacking; null =
+   * never placed. `board_manual`: placed by the person (the assistant asks before moving it).
+   */
+  board_x?: number | null;
+  board_y?: number | null;
+  board_z?: number | null;
+  board_manual?: boolean;
+};
+
+/**
+ * Weeks 16а–16б (views.md «Доска», schemas.py `ItemPlaceIn`): `POST /pages/{id}/items/place` — the
+ * person's place on the free board (dragged, «Левее / Правее / Выше / Ниже», «Положить наверх
+ * доски», a swap in the rows at ≥150%). One sticker (`item_id`, `x`, `y`) or several (`places`,
+ * alone). `x`: the left edge as a share of the width; `y`: the top edge in board points; both
+ * absolute. Every sticker of the call goes on top and becomes the person's. Idempotent by
+ * `client_id`; `client_ts`: each sticker's later place wins on two phones.
+ */
+export type ItemPlaceIn = {
+  client_id: string;
+  client_ts: string;
+  base_view_version?: number;
+  item_id?: string;
+  x?: number;
+  y?: number;
+  places?: { item_id: string; x: number; y: number }[];
 };
 
 export type PageLinkCreateOut = { link: PageItemOut; created: boolean };

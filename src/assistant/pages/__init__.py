@@ -6,14 +6,19 @@ Public surface for other modules:
 - `rescue_moved(session, page)`: call when a page is removed: records moved onto it by hand go
   back to where they came from.
 - `timed_items(session, page)`: rows of «Дела» that have a time (ordered by it, not moved).
-- `lexorank`, `rules`, `order`: pure code, no DB. `habits`: learned placement (`placement_rule`).
+- `board_on(page)`, `fill_board(session, page)`: the free board of «Заметки» (weeks 16а–16б):
+  stickers without a place get the first free grid slot (`board` holds the pure rules).
+- `lexorank`, `rules`, `order`, `board`: pure code, no DB. `habits`: learned placement
+  (`placement_rule`).
 The API is in `assistant.api.routes.pages`.
 """
 
-from assistant.pages import habits, lexorank, order, rules
+from assistant.pages import board, habits, lexorank, order, rules
 from assistant.pages.service import (
     add_link,
+    board_on,
     create_page,
+    fill_board,
     fill_page,
     latest_template,
     latest_templates,
@@ -25,7 +30,6 @@ from assistant.pages.service import (
     timed_items,
 )
 
-__all__ = ["add_link", "create_page", "fill_page", "habits", "latest_template",
-           "latest_templates", "lexorank", "lock_user", "mark_rekeyed", "order", "place_item",
-           "rebalance_page",
-           "rescue_moved", "rules", "timed_items"]  # fmt: skip
+__all__ = ["add_link", "board", "board_on", "create_page", "fill_board", "fill_page", "habits",
+           "latest_template", "latest_templates", "lexorank", "lock_user", "mark_rekeyed", "order",
+           "place_item", "rebalance_page", "rescue_moved", "rules", "timed_items"]  # fmt: skip

@@ -8,6 +8,12 @@
 - `set_appearance` {page, item, values: {color?, color_set_by?, pinned?, pinned_set_by?,
   done_at?}, expect?}: a row's colour, «приколоть» and checklist tick (`done_at` ISO or null).
 - `set_facet` {page, item, field, value, expect?}: a value of an own field.
+- `set_board` {page, item, values: {x, y, z, manual}, expect?} (weeks 16а–16б): a sticker's place
+  on the free board (`board_x`, `board_y`, `board_z`, `board_manual`; x as the stored share).
+  Never touches the place's clock (`board_ts`), so a stale offline place still loses after an
+  undo. Turning the board on (`set_view_key` `view.board` → true, also as an undo) first gives
+  the stickers without a place the first free slots (`pages.fill_board`; no inverse: auto places
+  are kept, like the rows order).
 Each returns its own reverse with `expect` = what it left, so an undo skips what the person
 changed since («Часть уже изменена вами»).
 """
@@ -26,8 +32,10 @@ from assistant.db.models_pages import (
     ScreenKind,
     ScreenTemplate,
 )
+from assistant.pages import fill_board
 from assistant.pages import view as views
 
+BOARD_KEYS = {"x": "board_x", "y": "board_y", "z": "board_z", "manual": "board_manual"}
 APPEARANCE_KEYS = frozenset({"color", "color_set_by", "pinned", "pinned_set_by", "done_at"})
 SET_BY = frozenset({"user", "agent", "template"})
 
@@ -125,6 +133,9 @@ async def _set_view_key(session: AsyncSession, user_id: int, op: dict, out: Outc
     out.inverse.append({"op": "set_view_key", "page": str(page.public_id), "key": key,
                         "value": cur, "set_by": cur_by or "template", "expect": value,
                         **({"change": op["change"]} if op.get("change") else {})})  # fmt: skip
+    if key == "view.board" and value and page.template_key == "notes":
+        await session.flush()
+        out.items.update(await fill_board(session, page))
     template = await session.get(ScreenTemplate, (page.template_key, page.template_version))
     if template is not None:
         page.customized = views.is_customized(page, template)
@@ -214,7 +225,42 @@ async def _set_facet(session: AsyncSession, user_id: int, op: dict, out: Outcome
     out.items.add(str(item.public_id))
 
 
+def board_state(link: Any) -> dict[str, Any]:
+    return {"x": link.board_x, "y": link.board_y, "z": link.board_z,
+            "manual": bool(link.board_manual)}  # fmt: skip
+
+
+async def _set_board(session: AsyncSession, user_id: int, op: dict, out: Outcome, *,
+                     by: str, check: bool, now: datetime) -> None:  # fmt: skip
+    values = dict(op.get("values") or {})
+    if not values or set(values) - set(BOARD_KEYS):
+        raise ValueError("set_board: fields not allowed")
+    page = await _screen(session, user_id, op["page"])
+    item = (await _items(session, user_id, [op["item"]])).get(str(op["item"]))
+    link = (await _links(session, page.id, [item.id])).get(item.id) if page and item else None
+    if link is None:
+        out.skipped += 1
+        return
+    cur = board_state(link)
+    expect = op.get("expect")
+    if check and expect and any(cur.get(k) != v for k, v in expect.items()):
+        out.skipped += 1  # the person moved it again since: their place stays
+        return
+    changed = {k: v for k, v in values.items() if cur[k] != v}
+    if not changed:
+        return
+    out.inverse.append({"op": "set_board", "page": str(page.public_id),  # type: ignore[union-attr]
+                        "item": str(item.public_id), "values": {k: cur[k] for k in changed},  # type: ignore[union-attr]
+                        "expect": changed})  # fmt: skip
+    for k, v in changed.items():
+        setattr(link, BOARD_KEYS[k], bool(v) if k == "manual" else v)
+    link.updated_at = now
+    out.items.add(str(item.public_id))  # type: ignore[union-attr]
+    out.pages.add(page.id)  # type: ignore[union-attr]
+
+
 HANDLERS = {
+    "set_board": _set_board,
     "set_view_key": _set_view_key,
     "set_appearance": _set_appearance,
     "set_facet": _set_facet,

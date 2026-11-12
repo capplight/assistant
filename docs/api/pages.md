@@ -323,7 +323,8 @@ Fields of these calls:
   the outbox, the same value on every retry): when the person did it on the phone. Two phones that moved **the same row** (or the same tab) offline: the later `client_ts`
   wins, equal times by the larger `client_id` (as a lowercase string). The loser gets `200`,
   `moved: false`, `reason: "newer_move"` and the row as it stands: show it there, no dialog. A time
-  in the future counts as the server's time. Used by `items/move` and `pages/reorder`; accepted and
+  in the future counts as the server's time. Used by `items/move`, `pages/reorder` and (weeks
+  16а–16б, on its own clock per sticker) `items/place` of the free board (`views.md` «Доска»); accepted and
   not needed by `move-to-page` (two moves to different pages both stay) and `DELETE` (taking a row
   off a page always stands; a move of it from the other phone changes only its hidden place).
 
@@ -490,6 +491,5 @@ page is live). Exclusions travel as `screen_items` rows with `removed_at`. `200 
 
 | What | When |
 |---|---|
-| `POST /pages/{id}/items/place` (free board) | weeks 16а–16б |
 | Other kinds of habit (`alias`, `default_time`, `never_do`, ...) | later |
 | `expense.*`, `document.*` field values (`task.*` and the shopping `facet.*` fields are filled from tasks since week 9, see `today.md`) | weeks 10-14 |

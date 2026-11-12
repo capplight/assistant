@@ -30,6 +30,7 @@ export function RecordMenuSheet({
   onDelete,
   onClose,
   extra,
+  move,
 }: {
   title: string;
   /** «Вы поставили эту запись сюда сами». */
@@ -45,11 +46,17 @@ export function RecordMenuSheet({
   onClose: () => void;
   /** Template-screens 3: the template's own items go first, the shared ones stay where they are. */
   extra?: MenuExtra[];
+  /**
+   * Weeks 16а–16б, «Доска»: «Подвинуть» stands where «Выше / Ниже» stand (on the free board a
+   * sticker moves in four directions, in its own sheet).
+   */
+  move?: MenuExtra;
 }) {
   const theme = useTheme();
   const { t } = useTranslation();
   const row = (testID: string, label: string, onPress: () => void, hint?: string) => (
     <Pressable
+      key={testID}
       testID={testID}
       accessibilityRole="button"
       accessibilityHint={hint}
@@ -92,6 +99,7 @@ export function RecordMenuSheet({
               </AppText>
             ) : null}
             {(extra ?? []).slice(0, 2).map((x) => row(x.testID, x.label, x.onPress, x.hint))}
+            {move ? row(move.testID, move.label, move.onPress, move.hint) : (
             <View style={[styles.pair, { gap: theme.space[2], flexDirection: theme.largeFont ? 'column' : 'row' }]}>
               <Button
                 testID="record-menu-up"
@@ -114,6 +122,7 @@ export function RecordMenuSheet({
                 style={styles.flex}
               />
             </View>
+            )}
             {row('record-menu-move', t('move.to'), onMoveTo)}
             {row('record-menu-also', t('move.also'), onAlso)}
             {row('record-menu-remove', t('move.remove'), onRemove, t('move.remove_hint'))}

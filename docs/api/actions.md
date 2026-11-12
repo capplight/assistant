@@ -15,6 +15,9 @@ Week 6 writes actions for the assistant line (`initiated_by: "agent"`) and for u
 `screen_move_items` («Перенёс «…» в «…»», «Теперь ещё на странице «…»»), `screen_remove_item`
 («Убрал «…» со страницы «…»»), `reorder_screens` («Переставил страницу «…»», no `changes` rows), `habit_change` (a learned rule turned off, no
 `changes` rows).
+Weeks 16а–16б add `screen_reorder_items` for a place on the free board (`views.md` «Доска»:
+«Переставил «…» на доске», «Положил «…» наверх доски»; `changes[].kind: "place"`, «Вернуть» by
+`item_id` puts that sticker back; a sticker moved again since stays, `partial`).
 Week 9 adds, on the same objects (the shapes below do not change):
 
 | Where | `kind` | `summary.ru` (examples) | «Отменить» |
@@ -102,7 +105,7 @@ just the text.
 | `kind` | Weeks 6-7: `reorder_screens` (tabs), `screen_remove_item` (убрал со страницы), `screen_reorder_items` («Разложи», «отсортируй»), `screen_move_items` (перенёс / показал ещё на / убрал со страницы), `save_item` (записал), `delete_item` (в корзину), `user_edit` (переименовал), `create_screen` (страница). An undo has the kind of what it undid. More kinds come in week 9: show `summary`, do not switch on `kind`. |
 | `summary.ru` | Ready to show in the line: «Разложил 23 заметки в 5 групп». `summary.kk` is `null` until reviewed (R-39): fall back to `ru`. |
 | `page` | The page it happened on (null: none / removed). |
-| `changes` | «Что изменилось»: one row per record, ready text in `text`. `kind`: `group`, `order`, `move`, `show`, `remove`, `trash`, `rename`, `create`, `create_page`. `page_id`: the page the row is about, or null (a note placed only by the page rules). `reverted=true`: already returned with «Вернуть». At most 500 rows. |
+| `changes` | «Что изменилось»: one row per record, ready text in `text`. `kind`: `group`, `order`, `move`, `show`, `remove`, `trash`, `rename`, `create`, `create_page`, `place` (weeks 16а–16б: a sticker on the free board). `page_id`: the page the row is about, or null (a note placed only by the page rules). `reverted=true`: already returned with «Вернуть». At most 500 rows. |
 | `changes[].item_id` null | Only for `kind: "create_page"` (the row is the new page itself, `page_id` = that page). Show the row with its `text` («Новая страница «Ремонт»»), tap opens `page_id`; it has **no** «Вернуть» of its own: the page goes only with «Отменить» of the whole action. Every other row has an `item_id`. |
 | `changed_item_ids` | Highlight these for 600 ms. |
 | `created_page_id` | Set when the action made a page (open it). |

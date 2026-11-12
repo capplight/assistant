@@ -62,6 +62,7 @@ export type OutboxKind =
   | 'page.item_fields'
   /** Week 11а: a sticker's colour or «Приколоть» by hand (PATCH /pages/{id}/items/{item_id}). */
   | 'page.item_look'
+  | 'page.item_place'
   /** Week 11а: «− 2 +» on «Покупки», «На завтра» on «Дела» (PATCH /tasks/{id} with `version`). */
   | 'task.patch'
   /** Week 11а: «Убрать все купленные» (POST /tasks/clear-done, one action). */
@@ -220,6 +221,11 @@ export const OUTBOX_MIGRATIONS: readonly string[] = [
    ALTER TABLE pages ADD COLUMN view_dirty INTEGER NOT NULL DEFAULT 0;`,
   // v8 (week 11а): the sticker's colour on this page (`link.appearance.color`)
   `ALTER TABLE page_links ADD COLUMN color TEXT;`,
+  // v9 (weeks 16а–16б): the sticker's place on the free board (`board_x/y/z`, `board_manual`)
+  `ALTER TABLE page_links ADD COLUMN board_x REAL;
+   ALTER TABLE page_links ADD COLUMN board_y REAL;
+   ALTER TABLE page_links ADD COLUMN board_z INTEGER;
+   ALTER TABLE page_links ADD COLUMN board_manual INTEGER NOT NULL DEFAULT 0;`,
 ];
 
 type Row = {

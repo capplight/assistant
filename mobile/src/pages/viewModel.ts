@@ -149,6 +149,8 @@ export type ViewChange =
   | { kind: 'group'; groupBy: string | null }
   /** Week 11а: the whole order of the groups after one moved (↑ ↓). */
   | { kind: 'group_order'; order: string[]; moved: string }
+  /** Weeks 16а–16б, «Заметки»: «Ряды» (false) or «Доска» (true); neither layout is lost. */
+  | { kind: 'board'; on: boolean }
   | { kind: 'icon'; icon: IconKey }
   | { kind: 'field_visible'; fieldId: string; visible: boolean }
   | { kind: 'field_move'; fieldId: string; step: -1 | 1 }
@@ -202,6 +204,11 @@ export function applyChange(
       const was = view.groupOrder ?? [];
       if (was.length === change.order.length && was.every((x, i) => x === change.order[i])) return { error: 'nothing' };
       return { look: { ...look, view: { ...view, groupOrder: change.order, setBy: mine('group_order'), customized: true } } };
+    }
+    case 'board': {
+      if (tpl.key !== 'notes') return { error: 'layout_not_allowed' };
+      if ((view.mode === 'board') === change.on) return { error: 'nothing' };
+      return { look: { ...look, view: { ...view, mode: change.on ? 'board' : null, setBy: mine('board'), customized: true } } };
     }
     case 'icon':
       if (change.icon === look.icon) return { error: 'nothing' };
@@ -262,6 +269,8 @@ export function viewBody(change: ViewChange, after: Look): Record<string, unknow
       return { layout: after.layout };
     case 'icon':
       return { icon: after.icon };
+    case 'board':
+      return { board: after.view.mode === 'board' };
     case 'sort':
       return sortToServer(after.view.sort);
     case 'group':

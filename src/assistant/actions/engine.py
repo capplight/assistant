@@ -30,6 +30,7 @@ An op is a JSON object with ids as public uuids (strings), never database ids:
   reminder's status back (the undo of a late «Сделано»). `restore_habit` may carry `state.key`
   (a rule moved to another page).
 - Week 11 (`ops_view`): `set_view_key`, `set_appearance`, `set_facet` (page views, own fields).
+  Weeks 16а–16б: `set_board` (a sticker's place on the free board).
 - Week 14 (`ops_kp`): `delete_entity_soft` / `restore_entity` take `entity: documents` (a КП and
   its record); `revert_document`, `set_document`, `set_company_profile`, `set_price_list`,
   `set_price_item`; `set_status` takes `entity: expense_duplicates` («Это разные», week 13).
@@ -71,6 +72,8 @@ OPS = frozenset({"restore_positions", "restore_view_state", "add_screen_item",
                  "remove_collection_item", "restore_collection",
                  # week 11 (actions/ops_view.py): page views
                  "set_view_key", "set_appearance", "set_facet",
+                 # weeks 16а–16б (actions/ops_view.py): the free board
+                 "set_board",
                  # week 12 (actions/ops_expenses.py): «Расходы»
                  "set_expense", "set_expense_category",
                  # week 13: an expense leaves while its record (a receipt photo) stays

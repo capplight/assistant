@@ -81,6 +81,7 @@ export function EntryList({
   renderGroup,
   today,
   columns = 1,
+  onStep,
 }: {
   page: Page;
   rows: Row[];
@@ -104,6 +105,11 @@ export function EntryList({
    * Выше / Ниже and «Порядок» ↑ ↓ move a sticker one place (template-screens 2.1). Needs `renderEntry`.
    */
   columns?: number;
+  /**
+   * Weeks 16а–16б: «Выше / Ниже» do something else than the page order — the free board shown as
+   * rows (≥150%, screen reader) swaps the places of two stickers. No drag then.
+   */
+  onStep?: (recordId: string, step: -1 | 1) => void;
 }) {
   const theme = useTheme();
   const { t } = useTranslation();
@@ -134,6 +140,7 @@ export function EntryList({
   const menuEntry = menuIndex >= 0 ? shown[menuIndex] : undefined;
   const sheetEntry = moveSheet ? shown.find((e) => e.record.id === moveSheet.recordId) : undefined;
   const hl = highlight ? new Set(highlight.ids) : null;
+  const step = (recordId: string, by: -1 | 1) => (onStep ? onStep(recordId, by) : void stepRecord(page, recordId, by));
 
   const open = (rec: LocalRecord) => {
     // «Какую? → выбрать»: this tap answers the assistant (US-30).
@@ -155,10 +162,10 @@ export function EntryList({
     const moves: RowMoves | undefined = canMove
       ? {
           onMenu: () => setMenuFor(rec.id),
-          onUp: at > 0 ? () => void stepRecord(page, rec.id, -1) : undefined,
-          onDown: at >= 0 && at < shown.length - 1 ? () => void stepRecord(page, rec.id, 1) : undefined,
+          onUp: at > 0 ? () => step(rec.id, -1) : undefined,
+          onDown: at >= 0 && at < shown.length - 1 ? () => step(rec.id, 1) : undefined,
           onMoveTo: () => setMoveSheet({ recordId: rec.id, mode: 'move' }),
-          onDragStart: canDrag
+          onDragStart: canDrag && !onStep
             ? () =>
                 drag.start(index, (to) => {
                   const target = entryIndexAfterDrop(
@@ -317,8 +324,8 @@ export function EntryList({
               x.onPress();
             },
           }))}
-          onUp={() => void stepRecord(page, menuEntry.record.id, -1)}
-          onDown={() => void stepRecord(page, menuEntry.record.id, 1)}
+          onUp={() => step(menuEntry.record.id, -1)}
+          onDown={() => step(menuEntry.record.id, 1)}
           onMoveTo={() => {
             setMenuFor(null);
             setMoveSheet({ recordId: menuEntry.record.id, mode: 'move' });

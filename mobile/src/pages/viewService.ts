@@ -12,6 +12,7 @@ import { useUndo } from '@/store/undo';
 import type { ActionUndoPayload } from '@/sync/engine';
 import { refreshCollections } from '@/dedup/service';
 import { undoServerAction } from '@/tasks/actions';
+import { settleBoardSlots } from './manual';
 import { rememberActions } from '@/tasks/service';
 import { newId } from '@/utils/id';
 
@@ -78,6 +79,8 @@ export function changeText(page: Page, change: ViewChange, lang = i18n.language)
       return change.groupBy ? t('view.changed_group', { field: field(change.groupBy) }) : t('view.changed_ungroup');
     case 'group_order':
       return t('view.changed_group_order', { group: change.moved });
+    case 'board':
+      return t('view.changed_layout', { view: t(change.on ? 'notes.mode_board' : 'notes.mode_rows') });
     case 'icon':
       return t('view.changed_icon');
     case 'field_visible':
@@ -127,6 +130,8 @@ export async function changeView(page: Page, change: ViewChange): Promise<Change
   }
   const text = changeText(page, change);
   await show(page, r.look, true);
+  // Weeks 16а–16б: the board on — stickers with no place take the server's slots here at once.
+  if (change.kind === 'board' && change.on) await settleBoardSlots(page);
   const payload: PageViewPayload = { pageId: page.id, change, before, after: r.look, clientId: newId() };
   const row = await (await getOutbox()).enqueue('page.view', payload);
   useUndo.getState().showCustom(text, () => void undoView(row.id));
@@ -177,7 +182,8 @@ async function serverPage(localId: string): Promise<string | null> {
 
 async function callView(serverId: string, p: PageViewPayload, base: number | undefined): Promise<PageViewOut> {
   // One call for every part (views.md `POST /pages/{id}/view`); only the keys this change touched.
-  const body = p.restore ? restoreBody(p.after) : viewBody(p.change, p.after);
+  // A board switch taken back goes as the switch itself (`board` is a «Заметки» key only).
+  const body = p.restore && p.change.kind !== 'board' ? restoreBody(p.after) : viewBody(p.change, p.after);
   return getApi().setView(serverId, { client_id: p.clientId, ...(base ? { base_view_version: base } : {}), ...body });
 }
 
@@ -208,6 +214,8 @@ async function sendView(e: OutboxEntry): Promise<void> {
   }
   await repo.settlePage(p.pageId, 'view');
   if (out.page) await repo.applyRemote(out.page);
+  // The board turned on: the slots the server gave come as rows (views.md «Доска»).
+  for (const row of out.page_patch?.rows ?? []) await repo.applyLink(row);
   if (out.action) rememberActions([out.action]);
   await (await getOutbox()).updatePayload(e.id, { ...p, actionId: out.action?.id ?? null } satisfies PageViewPayload);
   notifyDataChanged();

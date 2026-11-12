@@ -12,8 +12,8 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     DateTime,
+    Double,
     FetchedValue,
-    Float,
     ForeignKey,
     Integer,
     Text,
@@ -177,10 +177,13 @@ class ScreenItem(Base):
     # 0016: the sticker's colour on this page and who set it ({color, color_set_by,
     # pinned_set_by}); its place on the free board (Ф-28, UI in weeks 16а–16б)
     appearance: Mapped[dict] = mapped_column(JSONB, default=dict)
-    board_x: Mapped[float | None] = mapped_column(Float)
-    board_y: Mapped[float | None] = mapped_column(Float)
-    board_z: Mapped[int | None] = mapped_column(Integer)
+    # 0023: double / bigint, and the last-writer-wins clock of the place (`pages.board`)
+    board_x: Mapped[float | None] = mapped_column(Double)
+    board_y: Mapped[float | None] = mapped_column(Double)
+    board_z: Mapped[int | None] = mapped_column(BigInteger)
     board_manual: Mapped[bool] = mapped_column(Boolean, default=False)
+    board_ts: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    board_client_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # checklist tick
 
 

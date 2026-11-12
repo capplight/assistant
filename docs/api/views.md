@@ -14,7 +14,7 @@ planned by the same server code (`pages/view.py`): the same white list, the same
 | Setting | Where it lives | Values |
 |---|---|---|
 | Layout | `page.layout` | one of the template's `layouts` (catalogue). `list` («Простой список», Ф-30) is allowed on every template except «Сегодня» |
-| Rows / board («Заметки») | `view_state.board` | `true` = free board, absent/false = rows. Allowed only on «Заметки»; the board itself is drawn from weeks 16а–16б |
+| Rows / board («Заметки») | `view_state.board` | `true` = free board, absent/false = rows. Allowed only on «Заметки»; see «Доска» below |
 | Sort | `view_state.sort`, `view_state.sort_dir` | `"position"` (the person's order, default) · `"date"` (record date, newest first unless `asc`) · a field id. `sort_dir`: `asc` / `desc` |
 | Group by field | `view_state.group_by` | a field id (not `long_text`, `number`, `money`, `datetime`, `link`) or absent |
 | Group order (week 11а) | `view_state.group_order` | the person's order of the groups: ≤30 names of 1…60 chars (spaces trimmed, repeats ignoring case and «ё» dropped), or absent. «Покупки»: the shop walk («Магнум», «Аптека») |
@@ -37,7 +37,7 @@ person moved to it (migration 0017). The old layouts stay allowed.
 
 | Template | `layouts` (first = default) | Tool |
 |---|---|---|
-| `notes` v4 | `builtin:notes_board`, `list`, `stacks` | sticker wall: «Ряды» (`view_state.board` absent/false), «Доска» (`board: true`, drawn from weeks 16а–16б) |
+| `notes` v4 | `builtin:notes_board`, `list`, `stacks` | sticker wall: «Ряды» (`view_state.board` absent/false), «Доска» (`board: true`, see «Доска») |
 | `tasks` v3 | `builtin:planner`, `builtin:tasks`, `list` | the day planner (`today.md` → «Ежедневник») |
 | `shopping` v3 | `builtin:shopping`, `checklist`, `list` | the fridge list with «Я в магазине» (`today.md` → «Покупки») |
 
@@ -166,8 +166,8 @@ colour / pin, `facet_edit` when `values` or `done` were sent («Отменить
 {"appearance": {"color": "yellow", "color_set_by": "user"}, "board_x": null, "board_y": null,
  "board_z": null, "board_manual": false, "done_at": null}
 ```
-`board_*`: the sticker's place on the free board (`board_x` share of width 0..1, `board_y` pt at
-360 pt width, `board_z` stacking): schema only until weeks 16а–16б, always null now.
+`board_*`: the sticker's place on the free board: see «Доска» below (board space, stacking,
+who placed it).
 
 `GET /v1/pages/{id}/items`:
 - **Pinned first (week 11а).** In every order, rows with `link.pinned: true` come first (in page
@@ -262,6 +262,133 @@ model, whose `set_view` takes `color_by: "topic"`. Only the person's own phrase 
 
 Nothing is coloured by itself: new notes stay white unless a habit says so (S30, later).
 
+## «Доска»: the free sticker board (weeks 16а–16б, Ф-28)
+
+Spec: proposal §2.1 «Режим «Доска»», §4, §5; Ф-28. «Заметки» has two modes: «Ряды» (default, the
+one-dimensional `position` order of `pages.md`) and «Доска» (`view_state.board: true`), where a
+sticker lies where the person put it, overlapping allowed. **The two layouts are independent and
+both are kept**: a place on the board never changes `position`, a move in «Ряды» never changes a
+board place, switching modes (by hand, the assistant, «Отменить», «Вернуть как было») loses
+neither.
+
+### Board space (the same board on every phone)
+
+The board is **360 board points wide** and grows down; no horizontal scroll. Draw it at scale
+`s = board width on screen (pt) / 360`:
+
+| Field | Meaning | Range | Draw at |
+|---|---|---|---|
+| `board_x` | the sticker's **left edge**, share of the board width | 0 … 220/360 (0.6111…) | `board_x × width` |
+| `board_y` | the sticker's **top edge**, board points | 0 … 100 000 | `board_y × s` |
+| sticker | 140 × 140 board points | — | `140 × s` square |
+| `board_z` | stacking: higher lies on top; `null` lowest; ties by item id (string order) | integer (≤ 2⁵³) | — |
+| `board_manual` | `true` = the person put it there by hand | — | — |
+
+- The server keeps whole board points: it stores `round(x × 360) / 360` and `round(y)`, clamped
+  into the ranges above (a sticker never hangs off the board). Use the `link` values it returns.
+- The 8 pt grid the sticker snaps to on drop is the phone's (snap the board-point value:
+  `round(v / 8) × 8`); the server does not snap.
+- The board's height: `max(board_y) + 140 + 16` board points (at least the screen).
+- `board_z` is the Unix time in ms of the winning place (`client_ts`; a future time counts as the
+  server's time). Offline, set it to your own `client_ts` in ms: the server gives the same number.
+
+### Places the server gives (not the person's)
+
+Slots: two columns at board x **24** and **196**, rows at board y **16 + 156·k** (k = 0, 1, …),
+read row by row, left then right. A slot is free when no placed, shown sticker of the page
+overlaps it (the rectangles share some area).
+- **Turning the board on** (any path: `/view` `board: true`, the assistant, an undo that brings
+  the board back): every shown sticker **without a place** gets the first free slot, in «Ряды»
+  order (pinned first, then `position`). Stickers that have a place keep it («места
+  запоминаются»). These places come in `page_patch.rows` / sync with `board_manual: false`,
+  `board_z: null`; they have no «Что изменилось» row and stay when the board is turned off.
+- **A new sticker** on a page in board mode lies in the first free slot (highlight 600 ms).
+- A shown sticker without a place while the board is on (rare: back from the trash): draw it in
+  the first free slot by the same rule, after the placed ones, in «Ряды» order. It is stored when
+  the person moves it or the board is turned on again.
+
+### `POST /v1/pages/{id}/items/place` — the person's place
+
+```json
+{"client_id": "uuid", "client_ts": "2026-11-12T10:00:00+05:00", "base_view_version": 9,
+ "item_id": "uuid", "x": 0.0667, "y": 172}
+```
+or several stickers in one tap (one action, one «Отменить»):
+```json
+{"client_id": "uuid", "client_ts": "...",
+ "places": [{"item_id": "uuid", "x": 0.0667, "y": 172}, {"item_id": "uuid", "x": 0.5444, "y": 16}]}
+```
+- `x`, `y`: the **absolute** new place in board space, always both (also for the arrows and for
+  «Наверх доски»: send the place the phone shows). Every sticker of the call goes on top
+  (`board_z`) and becomes the person's (`board_manual: true`).
+- `places`: 1…200 stickers, each once. Use it for a **pile** (every sticker of the pile with the
+  same `x`, `y`) and for a **swap** (below).
+- Gestures, all as absolute places: drag (long press 400 ms, drop, snap to 8 pt) · «⋯ Ещё →
+  Подвинуть»: «Левее / Правее / Выше / Ниже» = ±70 board pt (half a sticker) from where it is,
+  snapped to 8 pt (so ±72), clamped · «Положить наверх доски» = its current `x`, `y`.
+- `client_id` from the outbox, the same on every retry: a repeat returns the first result with
+  `repeated: true`. `client_ts`: when the person did it (always send it from the outbox).
+- `base_view_version` (optional): never a conflict; `rebased: true` says the page had changed.
+- Works offline, in «Без ИИ», in either mode (a place queued in board mode that arrives after the
+  page went back to rows is stored for the board). A sticker taken off the page meanwhile takes
+  the place but stays off the page. Only «Заметки».
+
+`200`:
+```json
+{"placed": true, "reason": null, "repeated": false, "rebased": false,
+ "links": [PageItemOut], "kept_item_ids": [], "action": Action | null, "page_patch": PagePatch}
+```
+- `links`: the stickers of the call as they are now (show them there).
+- `kept_item_ids`: stickers whose later place (other phone) stands; they are left as they are.
+  `placed: false, reason: "newer_move"` when that is every sticker of the call. No dialog.
+- `action`: `screen_reorder_items`, `initiated_by: "user"`, `summary.ru` «Переставил «Код
+  домофона» на доске» / «Положил «…» наверх доски» / «Переставил 3 стикера на доске»; one
+  «Что изменилось» row per sticker (`kind: "place"`, «Вернуть» by `item_id`). `null` when nothing
+  changed (already there, on top and the person's).
+- Errors: `404 not_found` (page, or a sticker not on it) · `403 page_system` ·
+  `422 validation_error` (not «Заметки», no place, a sticker twice, more than 200, `x` / `y` not a
+  finite number).
+
+### Two phones offline
+
+Each sticker's place has its own last-writer-wins clock (`client_ts`, ties by the larger
+`client_id` as a lowercase string: the rule of `pages.md` «Manual order», on a clock separate from
+the rows order). Because the place is absolute and `board_z` comes from the winning time, **every
+sticker ends where its latest place put it, whatever order the calls arrive in, with retries**;
+both phones converge after `/v1/sync`. A losing call changes nothing for that sticker. Auto places
+(above) are the server's: they follow the order new stickers arrive in.
+
+### «Отменить»
+
+`POST /v1/actions/{id}/undo` puts every sticker of the call back (place, stacking, «ваше»); a
+sticker moved again since stays where it is (`partial`). The clock does not go back: a stale
+offline place of that sticker still loses. If the call is still in the outbox, drop it instead.
+
+### Large font (≥150%) and screen readers: the board as rows
+
+Show the stickers as rows in **reading order** with the strip «При крупном шрифте доска показана
+рядами. Места стикеров сохранены». Reading order: by band `floor((board_y + 70) / 140)`, then
+`round(board_x × 360)`, then `board_y`, then «Ряды» order; stickers without a place last (in «Ряды»
+order). Announce «Стикер 3 из 12». «Выше / Ниже» there = **swap places** with the previous / next
+sticker in reading order: one call with two `places`, each sticker getting the other's `x`, `y`.
+Custom actions for screen readers: «Выше / Ниже / Левее / Правее / Наверх доски».
+
+### Piles on the board
+
+A pile (rows sharing `group_key`, `stacks.md`) is drawn as one pile at the place of its first
+sticker in «Ряды» order; dragging it sends every sticker of the pile with the same `x`, `y`. A
+sticker taken out of a pile shows at its own stored place.
+
+### The assistant and the board
+
+- The assistant **never places stickers**. It may switch the mode (`set_view` `board`, the rules
+  above: only when the person's own phrase asks; record text never triggers it); that only gives
+  places to stickers that have none.
+- «Разложи заметки» on a page in board mode counts the stickers the person placed on the board
+  (`board_manual`) as theirs: `confirm_manual` «Вы сами расставили 9 стикеров. Переставить и
+  их?» [Да] [Оставить мои]. It changes piles and the rows order only; board places stay.
+- «Вернуть как было» turns the board off (rows); places are kept.
+
 ## Stacks → page (`stacks.md`)
 
 `POST /v1/collections/{id}/to-page {client_id?, title?}` — «Сделать стопку страницей».
@@ -270,7 +397,6 @@ Nothing is coloured by itself: new notes stay white unless a habit says so (S30,
 
 | What | When |
 |---|---|
-| Free-board drawing and `POST /pages/{id}/items/place` (`board_*`) | weeks 16а–16б |
 | `page_tiles` on `/today` (reads `today_tile`) | week 16 |
 | Habit «всегда раскрашивай новые заметки по теме» | S30, later |
 | Category order of «Расходы» | week 12 |

@@ -47,6 +47,7 @@ import type {
   ItemCreateIn,
   ItemKind,
   ItemOut,
+  ItemPlaceIn,
   ItemSource,
   ManualOut,
   PageCreateIn,
@@ -63,6 +64,7 @@ import type { RecordFile, RecordsRepository } from '@/db/records';
 import type {
   ItemLookPayload,
   ItemMovePayload,
+  ItemPlacePayload,
   ItemRemovePayload,
   LinkKey,
   LinkPayload,
@@ -307,6 +309,7 @@ const IN_TAP_ORDER = new Set<string>([
   'page.view',
   'page.item_fields',
   'page.item_look',
+  'page.item_place',
   'task.patch',
   'task.clear_done',
   'expense.create',
@@ -637,6 +640,8 @@ export class SyncEngine {
         return (e) => this.sendClearDone(e);
       case 'page.item_look':
         return (e) => this.sendItemLook(e);
+      case 'page.item_place':
+        return (e) => this.sendItemPlace(e);
       case 'import.telegram':
         return (e) => this.sendImport(e);
       case 'expense.create':
@@ -875,6 +880,34 @@ export class SyncEngine {
         ...(typeof p.pinned === 'boolean' ? { pinned: p.pinned } : {}),
       });
       return { out: { ...NOTHING, moved: true, rows: out.link ? [out.link] : [], action: out.action }, real: [{ page, item }] };
+    });
+  }
+
+  /**
+   * Weeks 16а–16б: stickers put on the free board (views.md `items/place`). A sticker whose record
+   * is still on its way holds the call; one that lives on this phone only stays here.
+   */
+  private sendItemPlace(e: OutboxEntry): Promise<void> {
+    return this.sendLink(e, async () => {
+      const p = e.payload as ItemPlacePayload;
+      const page = await this.pageServerId(p.pageId);
+      if (!page) return null;
+      const places: NonNullable<ItemPlaceIn['places']> = [];
+      const real: LinkKey[] = [];
+      for (const [i, it] of p.items.entries()) {
+        const item = await this.itemServerId(it.recordId);
+        real.push(item ? { page, item } : (p.keys[i] as LinkKey));
+        if (item) places.push({ item_id: item, x: it.x, y: it.y });
+      }
+      if (places.length === 0) return null; // the stickers live on this phone only
+      const out = await this.d.api.placeItems(page, {
+        client_id: p.clientId,
+        client_ts: p.at,
+        base_view_version: p.baseViewVersion,
+        // One sticker goes alone; several (a swap) as `places` (schemas.py `ItemPlaceIn`).
+        ...(places.length === 1 ? places[0]! : { places }),
+      });
+      return { out, real };
     });
   }
 
