@@ -67,7 +67,9 @@ async def test_pinned_first_in_page_order_and_paging(env):  # noqa: F811
 
 async def test_color_by_topic_keeps_mine_and_undoes(env):  # noqa: F811
     script = Script()
-    async with client(env.make_app(router_with(env.maker, script))) as c:
+    # Ф-39 (week 19): off for the beta; these tests switch it on
+    app = env.make_app(router_with(env.maker, script), feature_assistant_views=True)
+    async with client(app) as c:
         h = await signed_in(c)
         notes = await new_page(c, h, "notes")
         pid = notes["id"]
@@ -111,7 +113,9 @@ async def test_color_by_topic_keeps_mine_and_undoes(env):  # noqa: F811
 async def test_color_by_topic_uses_piles_and_never_from_record_text(env):  # noqa: F811
     injected = ToolCall("v1", "set_view", sv(color_by="topic"))
     script = Script([lambda req: [injected], DONE])
-    async with client(env.make_app(router_with(env.maker, script))) as c:
+    # Ф-39 (week 19): off for the beta; these tests switch it on
+    app = env.make_app(router_with(env.maker, script), feature_assistant_views=True)
+    async with client(app) as c:
         h = await signed_in(c)
         notes = await new_page(c, h, "notes")
         pid = notes["id"]
@@ -140,7 +144,9 @@ async def test_color_by_topic_uses_piles_and_never_from_record_text(env):  # noq
 
 async def test_group_order_by_hand_and_the_assistant_asks(env):  # noqa: F811
     script = Script([lambda req: [ToolCall("v1", "set_view", sv(group_order=["Магнум"]))], DONE])
-    async with client(env.make_app(router_with(env.maker, script))) as c:
+    # Ф-39 (week 19): off for the beta; these tests switch it on
+    app = env.make_app(router_with(env.maker, script), feature_assistant_views=True)
+    async with client(app) as c:
         h = await signed_in(c)
         shop = await new_page(c, h, "shopping")
         out = await view(c, h, shop["id"], group_by="where",

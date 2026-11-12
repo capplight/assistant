@@ -18,7 +18,7 @@ import { useOnboarding } from '@/store/onboarding';
 import { useTheme } from '@/theme';
 
 import { AppText } from '../AppText';
-import { Button } from '../Button';
+import { Button } from '../ui/Button';
 import { MiniSheet, StatusBar } from '../kp/KpParts';
 import { ChoiceSheet } from './FieldSheets';
 import { EntryList, type EntryCtx } from './EntryList';
@@ -137,12 +137,12 @@ export function DocumentsView({ page, entries, frameTop, ordering }: ViewProps) 
       {frameTop}
       <Button testID="docs-new-kp" label={ai ? t('kp.new') : t('kp.new_no_ai')} onPress={newKp} />
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.space[2] }}>
-        <Button testID="docs-company" label={t('kp.my_company')} variant="outline" minHeight={theme.size.minTouch} style={{ flexGrow: 1 }} onPress={() => router.push('/company')} />
-        <Button testID="docs-prices" label={t('kp.my_prices')} variant="outline" minHeight={theme.size.minTouch} style={{ flexGrow: 1 }} onPress={() => router.push('/price-list')} />
+        <Button testID="docs-company" label={t('kp.my_company')} variant="secondary" minHeight={theme.size.minTouch} style={{ flexGrow: 1 }} onPress={() => router.push('/company')} />
+        <Button testID="docs-prices" label={t('kp.my_prices')} variant="secondary" minHeight={theme.size.minTouch} style={{ flexGrow: 1 }} onPress={() => router.push('/price-list')} />
       </View>
       {openDrafts.length > 0 ? (
         <View testID="docs-drafts" style={{ gap: theme.space[2] }}>
-          <AppText variant="meta" accessibilityRole="header">
+          <AppText variant="callout" accessibilityRole="header">
             {t('draft.list_title', { count: openDrafts.length })}
           </AppText>
           {openDrafts.map((d) => (
@@ -150,7 +150,7 @@ export function DocumentsView({ page, entries, frameTop, ordering }: ViewProps) 
               key={d.id}
               testID={`docs-draft-${d.id}`}
               label={`${d.recipient_name ?? t('send.no_client')}: ${d.text.length > 60 ? `${d.text.slice(0, 60)}…` : d.text}`}
-              variant="outline"
+              variant="secondary"
               minHeight={theme.size.minTouch}
               onPress={() => router.push({ pathname: '/draft/[id]', params: { id: d.id } })}
             />
@@ -165,8 +165,8 @@ export function DocumentsView({ page, entries, frameTop, ordering }: ViewProps) 
             onPress={() => setChoosing(true)}
             style={{ minHeight: theme.size.minTouch, flexDirection: 'row', alignItems: 'center', gap: theme.space[2] }}
           >
-            <AppText color="accent">{t('kp.show', { label: label(filter) })}</AppText>
-            <ChevronDown size={22} color={theme.colors.accent} />
+            <AppText color="brand">{t('kp.show', { label: label(filter) })}</AppText>
+            <ChevronDown size={22} color={theme.colors.brand} />
           </Pressable>
         ) : (
           <View testID="docs-dividers" accessibilityRole="tablist" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.space[2] }}>
@@ -182,15 +182,15 @@ export function DocumentsView({ page, entries, frameTop, ordering }: ViewProps) 
                   minHeight: theme.size.minTouch,
                   paddingHorizontal: theme.space[3],
                   justifyContent: 'center',
-                  borderTopLeftRadius: theme.radius.chip,
-                  borderTopRightRadius: theme.radius.chip,
+                  borderTopLeftRadius: theme.radius.round,
+                  borderTopRightRadius: theme.radius.round,
                   borderWidth: filter === f ? 2 : 1,
                   borderBottomWidth: filter === f ? 0 : 1,
-                  borderColor: filter === f ? theme.colors.accent : theme.colors.lineStrong,
+                  borderColor: filter === f ? theme.colors.brand : theme.colors.iconSecondary,
                   backgroundColor: filter === f ? theme.colors.surface : theme.colors.bg,
                 }}
               >
-                <AppText color={filter === f ? 'accent' : 'ink'} variant={filter === f ? 'bodyStrong' : 'body'}>
+                <AppText color={filter === f ? 'brand' : 'ink'} variant={filter === f ? 'bodyStrong' : 'body'}>
                   {f === 'all' ? label(f) : t('kp.filter_count', { label: label(f), count: counts[f] })}
                 </AppText>
               </Pressable>
@@ -252,7 +252,7 @@ export function DocumentsView({ page, entries, frameTop, ordering }: ViewProps) 
         }
         style={{ minHeight: theme.size.minTouch, flexDirection: 'row', alignItems: 'center', gap: theme.space[2], marginTop: theme.space[2], marginBottom: theme.space[2] }}
       >
-        <AppText variant="section" accessibilityRole="header" style={{ flex: 1 }}>
+        <AppText variant="sectionLabel" accessibilityRole="header" style={{ flex: 1 }}>
           {t('kp.folder', { name: g.title })}
         </AppText>
         <AppText variant="number">{`${n} ${isClosed ? '›' : '⌄'}`}</AppText>
@@ -271,7 +271,7 @@ export function DocumentsView({ page, entries, frameTop, ordering }: ViewProps) 
 
   const empty =
     entries && working.length === 0 && loose.length === 0 ? (
-      <View testID="docs-empty" style={{ gap: theme.space[3], padding: theme.space[4], borderWidth: 1, borderStyle: 'dashed', borderColor: theme.colors.lineStrong, borderRadius: theme.radius.card }}>
+      <View testID="docs-empty" style={{ gap: theme.space[3], padding: theme.space[4], borderWidth: 1, borderStyle: 'dashed', borderColor: theme.colors.iconSecondary, borderRadius: theme.radius.lg }}>
         <AppText variant="title2">{t('kp.empty_title')}</AppText>
         <AppText>{t('kp.empty_body')}</AppText>
       </View>
@@ -306,11 +306,11 @@ export function DocumentsView({ page, entries, frameTop, ordering }: ViewProps) 
       ) : null}
       {statusDoc ? (
         <Sheet testID="kp-status-sheet" title={t('kp.status_title')} onClose={() => setStatusFor(null)}>
-          <AppText variant="meta">{kpTitle(statusDoc, t)}</AppText>
+          <AppText variant="callout">{kpTitle(statusDoc, t)}</AppText>
           <Button
             testID="kp-status-seen"
             label={t('kp.status_seen')}
-            variant="outline"
+            variant="secondary"
             onPress={() => {
               setStatusFor(null);
               void setKpStatus(statusDoc.id, 'seen');
@@ -327,7 +327,7 @@ export function DocumentsView({ page, entries, frameTop, ordering }: ViewProps) 
           <Button
             testID="kp-status-no"
             label={t('kp.status_no')}
-            variant="outline"
+            variant="secondary"
             onPress={() => {
               setStatusFor(null);
               void setKpStatus(statusDoc.id, 'declined');
@@ -349,8 +349,8 @@ export function DocumentsView({ page, entries, frameTop, ordering }: ViewProps) 
       {noAi ? (
         <Sheet testID="kp-no-ai" title={t('kp.no_ai_title')} onClose={() => setNoAi(false)}>
           <AppText>{t('kp.no_ai_body')}</AppText>
-          <Button testID="kp-no-ai-company" label={t('kp.my_company')} variant="outline" onPress={() => { setNoAi(false); router.push('/company'); }} />
-          <Button testID="kp-no-ai-prices" label={t('kp.my_prices')} variant="outline" onPress={() => { setNoAi(false); router.push('/price-list'); }} />
+          <Button testID="kp-no-ai-company" label={t('kp.my_company')} variant="secondary" onPress={() => { setNoAi(false); router.push('/company'); }} />
+          <Button testID="kp-no-ai-prices" label={t('kp.my_prices')} variant="secondary" onPress={() => { setNoAi(false); router.push('/price-list'); }} />
         </Sheet>
       ) : null}
     </>
@@ -397,7 +397,7 @@ function KpCard({
   return (
     <View
       testID={testID}
-      style={{ borderWidth: 1, borderColor: theme.colors.line, borderRadius: theme.radius.card, backgroundColor: highlighted ? theme.colors.markerSoft : theme.colors.surface, padding: theme.space[3], marginBottom: theme.space[3], gap: theme.space[2] }}
+      style={{ borderWidth: 1, borderColor: theme.colors.separator, borderRadius: theme.radius.lg, backgroundColor: highlighted ? theme.colors.highlightTint : theme.colors.surface, padding: theme.space[3], marginBottom: theme.space[3], gap: theme.space[2] }}
     >
       <View style={{ flexDirection: 'row', gap: theme.space[3] }}>
         <Pressable
@@ -409,7 +409,7 @@ function KpCard({
           onPress={onOpen}
           onLongPress={moves?.onDragStart}
           delayLongPress={400}
-          style={{ flex: 1, flexDirection: 'row', gap: theme.space[3], minHeight: theme.size.primaryTouch }}
+          style={{ flex: 1, flexDirection: 'row', gap: theme.space[3], minHeight: theme.size.buttonHeight }}
         >
           {theme.largeFont ? null : <MiniSheet type={t('kp.type_kp')} />}
           <View style={{ flex: 1, gap: theme.space[1] }}>
@@ -425,7 +425,7 @@ function KpCard({
             onPress={moves.onMenu}
             style={{ width: theme.size.minTouch, height: theme.size.minTouch, alignItems: 'center', justifyContent: 'center' }}
           >
-            <Ellipsis size={24} color={theme.colors.accent} />
+            <Ellipsis size={24} color={theme.colors.brand} />
           </Pressable>
         ) : null}
       </View>
@@ -457,7 +457,7 @@ function DocCard({ record, type, client, ctx }: { record: LocalRecord; type: Doc
     <View
       testID={`docs-doc-${record.id}`}
       onLayout={ctx.onLayout}
-      style={{ flexDirection: 'row', borderWidth: 1, borderColor: ctx.lifted ? theme.colors.accent : theme.colors.line, borderRadius: theme.radius.card, backgroundColor: ctx.highlighted ? theme.colors.markerSoft : theme.colors.surface, padding: theme.space[3], marginBottom: theme.space[3], gap: theme.space[3] }}
+      style={{ flexDirection: 'row', borderWidth: 1, borderColor: ctx.lifted ? theme.colors.brand : theme.colors.separator, borderRadius: theme.radius.lg, backgroundColor: ctx.highlighted ? theme.colors.highlightTint : theme.colors.surface, padding: theme.space[3], marginBottom: theme.space[3], gap: theme.space[3] }}
     >
       <Pressable
         testID={`record-${record.id}`}
@@ -468,12 +468,12 @@ function DocCard({ record, type, client, ctx }: { record: LocalRecord; type: Doc
         onPress={ctx.onPress}
         onLongPress={moves?.onDragStart}
         delayLongPress={400}
-        style={{ flex: 1, flexDirection: 'row', gap: theme.space[3], minHeight: theme.size.primaryTouch }}
+        style={{ flex: 1, flexDirection: 'row', gap: theme.space[3], minHeight: theme.size.buttonHeight }}
       >
         {theme.largeFont ? null : <MiniSheet type={typeWord} />}
         <View style={{ flex: 1, gap: theme.space[1] }}>
           <AppText numberOfLines={3}>{theme.largeFont ? `${typeWord} · ${title}` : title}</AppText>
-          {meta ? <AppText variant="meta">{meta}</AppText> : null}
+          {meta ? <AppText variant="callout">{meta}</AppText> : null}
         </View>
       </Pressable>
       {moves ? (
@@ -484,7 +484,7 @@ function DocCard({ record, type, client, ctx }: { record: LocalRecord; type: Doc
           onPress={moves.onMenu}
           style={{ width: theme.size.minTouch, height: theme.size.minTouch, alignItems: 'center', justifyContent: 'center' }}
         >
-          <Ellipsis size={24} color={theme.colors.accent} />
+          <Ellipsis size={24} color={theme.colors.brand} />
         </Pressable>
       ) : null}
     </View>
@@ -510,9 +510,9 @@ export function JobCard({ job }: { job: KpJob }) {
       testID={`kp-job-${job.id}`}
       accessibilityRole="button"
       onPress={() => router.push({ pathname: '/kp/new', params: { job: job.id } })}
-      style={{ minHeight: theme.size.primaryTouch, padding: theme.space[3], borderWidth: 1, borderStyle: 'dashed', borderColor: theme.colors.lineStrong, borderRadius: theme.radius.card, justifyContent: 'center' }}
+      style={{ minHeight: theme.size.buttonHeight, padding: theme.space[3], borderWidth: 1, borderStyle: 'dashed', borderColor: theme.colors.iconSecondary, borderRadius: theme.radius.lg, justifyContent: 'center' }}
     >
-      <AppText testID={`kp-job-${job.id}-text`} accessibilityLiveRegion="polite" color={job.state === 'failed' ? 'warnText' : 'ink'}>
+      <AppText testID={`kp-job-${job.id}-text`} accessibilityLiveRegion="polite" color={job.state === 'failed' ? 'warning' : 'ink'}>
         {text}
       </AppText>
     </Pressable>

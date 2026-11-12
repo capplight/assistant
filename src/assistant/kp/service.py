@@ -30,7 +30,7 @@ from assistant.db.models_kp import (
 from assistant.db.models_v2 import File, RecordKind, RecordSource, RecordStatus
 from assistant.kp import calc, prices, vat
 from assistant.kp.norm import name_norm
-from assistant.pages import lock_user, place_item
+from assistant.pages import first_use_page, lock_user, place_item
 from assistant.records import content_hash, normalize_text
 
 PAGE_TEMPLATE = "documents"
@@ -135,6 +135,7 @@ async def create(session: AsyncSession, user_id: int, *, sources: list[Item], wi
                              "parts_total": 0}, draft={})  # fmt: skip
     session.add(doc)
     await session.flush()
+    await first_use_page(session, user_id, PAGE_TEMPLATE)  # made on the first КП (Ф-35)
     await place_item(session, item)  # «Документы и КП» takes it (kind kp; `_owners`)
     return Created(doc, item)
 

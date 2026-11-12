@@ -5,7 +5,7 @@ import { View } from 'react-native';
 
 import type { KpVersionOut } from '@/api/types';
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/Screen';
 import { loadVersion, revertTo, shareKpFile, type FileResult } from '@/kp/service';
 import { cachedVersion, sentVersion, useKp } from '@/kp/store';
@@ -40,11 +40,11 @@ export default function KpVersionScreen() {
     return (
       <Screen testID="kp-version-screen">
         <View style={{ gap: theme.space[4] }}>
-          <AppText variant="title1" accessibilityRole="header">
+          <AppText variant="largeTitle" accessibilityRole="header">
             {t('kp.version_n', { n })}
           </AppText>
           <AppText testID="kp-version-missing">{version === 'loading' ? t('kp.versions_loading') : t('kp.version_offline')}</AppText>
-          <Button testID="kp-version-back" label={t('kp.back')} variant="outline" onPress={back} />
+          <Button testID="kp-version-back" label={t('kp.back')} variant="secondary" onPress={back} />
         </View>
       </Screen>
     );
@@ -68,19 +68,19 @@ export default function KpVersionScreen() {
     <Screen testID="kp-version-screen">
       <View style={{ gap: theme.space[4] }}>
         <Button testID="kp-version-back" label={`‹ ${t('kp.back')}`} variant="text" minHeight={theme.size.minTouch} style={{ alignSelf: 'flex-start' }} onPress={back} />
-        <AppText variant="title1" accessibilityRole="header">
+        <AppText variant="largeTitle" accessibilityRole="header">
           {[t('kp.version_n', { n }), version.data.client.name].filter(Boolean).join(' · ')}
         </AppText>
-        <AppText variant="meta">{shortDate(version.created_at, i18n.language)}</AppText>
+        <AppText variant="callout">{shortDate(version.created_at, i18n.language)}</AppText>
         {sent ? (
-          <View testID="kp-version-frozen" style={{ padding: theme.space[3], borderRadius: theme.radius.card, borderWidth: 2, borderColor: theme.colors.done }}>
+          <View testID="kp-version-frozen" style={{ padding: theme.space[3], borderRadius: theme.radius.lg, borderWidth: 2, borderColor: theme.colors.success }}>
             <AppText>{t('kp.v_frozen', { date: shortDate(sentAt, i18n.language) }).trim()}</AppText>
           </View>
         ) : null}
         <AppText testID="kp-version-total" variant="title2" style={{ fontVariant: ['tabular-nums'] }}>
           {v.totals ? t(version.data.vat.mode === 'none' ? 'kp.total' : 'kp.total_with_vat', { amount: money(v.totals.total) }) : ''}
         </AppText>
-        <AppText variant="meta">{vatText(version.data.vat.mode, v.vatRate, t)}</AppText>
+        <AppText variant="callout">{vatText(version.data.vat.mode, v.vatRate, t)}</AppText>
         <View style={{ gap: theme.space[3] }}>
           {version.data.items.map((it, i) => {
             const label = priceLabel(it, t);
@@ -100,7 +100,7 @@ export default function KpVersionScreen() {
                     ? t('kp.line_a11y', { n: i + 1, name: it.name, qty, unit, price: priceMoney(it.unit_price), sum, source: label.text })
                     : t('kp.line_missing_a11y', { n: i + 1, name: it.name, qty, unit })
                 }
-                style={{ borderBottomWidth: 1, borderBottomColor: theme.colors.line, paddingBottom: theme.space[3], gap: theme.space[1] }}
+                style={{ borderBottomWidth: 1, borderBottomColor: theme.colors.separator, paddingBottom: theme.space[3], gap: theme.space[1] }}
               >
                 <AppText variant="bodyStrong">{`${i + 1}. ${it.name}`}</AppText>
                 {it.kind === 'lump' && it.volume ? <AppText>{t('kp.volume_line', { volume: it.volume })}</AppText> : null}
@@ -113,27 +113,27 @@ export default function KpVersionScreen() {
                       ? t('kp.line_calc', { qty, unit, price: priceMoney(it.unit_price), sum })
                       : t('kp.line_no_price', { qty, unit })}
                 </AppText>
-                <AppText variant="meta">{label.text}</AppText>
+                <AppText variant="callout">{label.text}</AppText>
               </View>
             );
           })}
         </View>
         {current ? (
-          <AppText testID="kp-version-current" variant="meta">
+          <AppText testID="kp-version-current" variant="callout">
             {t('kp.v_is_current')}
           </AppText>
         ) : (
           <Button testID="kp-version-revert" label={t('kp.v_revert')} onPress={() => void doRevert()} />
         )}
         {revert === 'unknown' ? (
-          <AppText testID="kp-version-revert-offline" color="warnText" accessibilityLiveRegion="polite">
+          <AppText testID="kp-version-revert-offline" color="warning" accessibilityLiveRegion="polite">
             {t('kp.version_offline')}
           </AppText>
         ) : null}
         <Button
           testID="kp-version-pdf"
           label={file === 'busy' ? t('kp.pdf_busy') : t('kp.v_pdf')}
-          variant="outline"
+          variant="secondary"
           disabled={file === 'busy'}
           onPress={() => {
             setFile('busy');
@@ -141,11 +141,11 @@ export default function KpVersionScreen() {
           }}
         />
         {file && file !== 'busy' ? (
-          <AppText testID="kp-version-pdf-result" color={file.result === 'shared' ? 'done' : 'warnText'} accessibilityLiveRegion="polite">
+          <AppText testID="kp-version-pdf-result" color={file.result === 'shared' ? 'success' : 'warning'} accessibilityLiveRegion="polite">
             {t(`kp.pdf_${file.result}`)}
           </AppText>
         ) : null}
-        {version.ai_generated ? <AppText variant="meta">{t('ai.label')}</AppText> : null}
+        {version.ai_generated ? <AppText variant="callout">{t('ai.label')}</AppText> : null}
       </View>
     </Screen>
   );

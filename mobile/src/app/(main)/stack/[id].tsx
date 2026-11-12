@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { FlatList, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { PageIcon } from '@/components/Icon';
 import { PageNameSheet } from '@/components/PageNameSheet';
 import { RecordRow } from '@/components/RecordRow';
@@ -70,19 +70,19 @@ export default function StackScreen() {
             <Button testID="stack-back" label={`‹ ${t('common.back')}`} variant="text" minHeight={theme.size.minTouch} onPress={back} style={styles.start} />
             <View style={[styles.row, { gap: theme.space[3] }]}>
               <PageIcon name={stackIcon(stack)} color={theme.colors.ink} size={28} />
-              <AppText variant="title1" accessibilityRole="header" style={styles.flex}>
+              <AppText variant="largeTitle" accessibilityRole="header" style={styles.flex}>
                 {name}
               </AppText>
             </View>
             <AppText testID="stack-count">{t('stack.records', { count })}</AppText>
-            {ba ? <AppText variant="meta">{ba}</AppText> : null}
+            {ba ? <AppText variant="callout">{ba}</AppText> : null}
             <View style={[styles.row, { gap: theme.space[2], flexWrap: 'wrap' }]}>
-              <Button testID="stack-rename" label={t('stack.rename')} variant="outline" minHeight={theme.size.minTouch} onPress={() => setRenaming(true)} />
+              <Button testID="stack-rename" label={t('stack.rename')} variant="secondary" minHeight={theme.size.minTouch} onPress={() => setRenaming(true)} />
               <Button
                 testID="stack-to-page"
                 label={t('stack.to_page')}
                 accessibilityHint={t('stack.to_page_hint')}
-                variant="outline"
+                variant="secondary"
                 minHeight={theme.size.minTouch}
                 onPress={() =>
                   void stackToPage(stack).then((pageId) => {

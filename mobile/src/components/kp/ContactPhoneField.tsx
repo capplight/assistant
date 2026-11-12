@@ -6,7 +6,7 @@ import { getContactsPort, type PickedContact } from '@/kp/contacts';
 import { useTheme } from '@/theme';
 
 import { AppText } from '../AppText';
-import { Button } from '../Button';
+import { Button } from '../ui/Button';
 import { Sheet } from '../page/ExpenseParts';
 import { KpTextField } from './KpEdits';
 
@@ -68,16 +68,16 @@ export function ContactPhoneField({ testID, value, onChange }: { testID: string;
   return (
     <View style={{ gap: theme.space[2] }}>
       <KpTextField testID={testID} label={t('send.phone')} value={value} onChangeText={onChange} keyboardType="phone-pad" placeholder="+7 7__ ___ __ __" />
-      <Button testID={`${testID}-contacts`} label={t('contacts.pick')} variant="outline" minHeight={theme.size.minTouch} onPress={() => void start()} />
+      <Button testID={`${testID}-contacts`} label={t('contacts.pick')} variant="secondary" minHeight={theme.size.minTouch} onPress={() => void start()} />
       {picked ? (
-        <AppText testID={`${testID}-picked`} variant="meta">
+        <AppText testID={`${testID}-picked`} variant="callout">
           {t('contacts.picked', { name: picked })}
         </AppText>
       ) : null}
-      <AppText variant="meta">{t('send.phone_note')}</AppText>
+      <AppText variant="callout">{t('send.phone_note')}</AppText>
       {note ? (
         <View style={{ gap: theme.space[2] }}>
-          <AppText testID={`${testID}-contacts-note`} color="warnText" accessibilityLiveRegion="polite">
+          <AppText testID={`${testID}-contacts-note`} color="warning" accessibilityLiveRegion="polite">
             {note}
           </AppText>
           {note === t('contacts.denied') ? (
@@ -93,7 +93,7 @@ export function ContactPhoneField({ testID, value, onChange }: { testID: string;
           <Button
             testID={`${testID}-contacts-type`}
             label={t('contacts.type_instead')}
-            variant="outline"
+            variant="secondary"
             onPress={() => {
               setExplain(false);
               setNote(t('contacts.declined'));
@@ -108,7 +108,7 @@ export function ContactPhoneField({ testID, value, onChange }: { testID: string;
               key={`${p.number}-${i}`}
               testID={`${testID}-contacts-phone-${i}`}
               label={p.label ? `${p.number} · ${p.label}` : p.number}
-              variant="outline"
+              variant="secondary"
               onPress={() => take(choose, p.number)}
             />
           ))}

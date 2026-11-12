@@ -369,7 +369,12 @@ async def test_answer_numbers_come_from_aggregate_and_invented_ones_are_removed(
 # --- sync and the pages ---
 
 
-async def test_sync_brings_expenses_categories_and_the_page_fills(env9):
+async def test_sync_brings_expenses_categories_and_the_page_fills(env9, monkeypatch):
+    import assistant.config as config
+    from tests.api.conftest import make_settings
+
+    off = make_settings(pages_on_first_use=False)  # the page comes by hand here (week 19: Ф-36)
+    monkeypatch.setattr(config, "get_settings", lambda: off)
     async with client(env9.make_app()) as c:
         h = await signed_in(c)
         exp = (await add(c, h, amount="4200", note="свет"))["expense"]

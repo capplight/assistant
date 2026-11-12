@@ -72,8 +72,8 @@ export const GALLERY_ORDER: readonly TemplateKey[] = ['custom', 'notes', 'tasks'
 export const DEFAULT_PREMARKED: readonly TemplateKey[] = ['notes', 'tasks'];
 
 export const MAX_PAGES = 20; // including «Сегодня»
-export const MAX_TAB_PAGES = 3;
-export const MAX_TAB_PAGES_LARGE_FONT = 2;
+export const MAX_TAB_PAGES = 2;
+export const MAX_TAB_PAGES_LARGE_FONT = 1;
 
 export function getTemplate(key: TemplateKey): PageTemplate {
   const tpl = TEMPLATES.find((t) => t.key === key);

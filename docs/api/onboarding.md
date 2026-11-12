@@ -6,6 +6,16 @@ US-33, US-30, R-55; `2-design.md` S01–S02, S41, S03, S35, 4.5.4; founder Ф-24
 and the base consents (`pd_processing` + `terms`), else `403 consent_required`. Errors have the
 usual shape `{code, message_ru, message_kk, details?}`.
 
+## Beta first launch (Ф-34, Ф-35, week 19) — replaces the order below for now
+
+`POST /auth/anonymous` → one welcome screen with «Начать» and the privacy-policy line →
+«Начать» = `POST /consents` with `"screen": "welcome"` (`auth.md`) → `POST /pages/batch
+{"path": "skipped"}` (makes «Заметки» + «Дела»; «Сегодня» comes with the account; marks the first
+launch done) → «Сегодня». No S41, S35, S04b, notifications or alarm setup in the first minutes:
+those are asked when needed. «Покупки», «Расходы», «Документы и КП» are made by the server on
+their first record (`features.md`). The endpoints below stay (gallery and «Новая страница» use
+them); page proposals and «Сегодня» tiles are off for the beta (`features.md`).
+
 ## The order on the phone (6.14)
 
 `POST /auth/anonymous` → welcome S01–S02 (local, no network, «Пропустить») → S05 consents

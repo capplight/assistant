@@ -1,13 +1,12 @@
-import type { TextStyle } from 'react-native';
+import { Platform, type TextStyle } from 'react-native';
 
 /**
- * Typography (2-design §2.2). Onest via @expo-google-fonts/onest; fallback Inter → system.
+ * Typography «Мята / Глубина» (`docs/design/system/design-system.md` §2, Ф-45: platform sizes).
+ * Onest via @expo-google-fonts/onest (loaded in `app/_layout.tsx`); Kazakh ӘҒҚҢӨҰҮҺІ / әғқңөұүһі are in
+ * the font's cmap. Line heights leave room for the tails of қ ң ғ ұ. No uppercase labels anywhere.
  *
- * TODO(release-blocker): Kazakh glyph check for every weight (Regular, Medium, SemiBold, Bold):
- *   ә Ә ғ Ғ қ Қ ң Ң ө Ө ұ Ұ ү Ү һ Һ і І ₸ № « »
- *   Test line: KAZAKH_GLYPH_TEST_LINE below — on iOS + Android (Xiaomi, Samsung) at 100% and 200%.
- *   Glyph must be in the font itself (not system-substituted), tails of қ ң ғ ұ not clipped at line-height 1.3.
- *   If any check fails — switch to Inter and repeat. See src/__tests__/fonts.test.ts for the automated part.
+ * TODO(release-blocker): manual Kazakh glyph check for every weight on iOS + Android (Xiaomi, Samsung)
+ *   at 100% and 200% with KAZAKH_GLYPH_TEST_LINE below; see src/__tests__/fonts.test.ts for the automated part.
  */
 export const KAZAKH_GLYPH_TEST_LINE =
   'Әке, ертең сағат 10:00-де Ғалымға қоңырау шал. Ұлың үйде, һәм іс бітті. 1 240 000 ₸ №17';
@@ -19,30 +18,59 @@ export const fontFamily = {
   bold: 'Onest_700Bold',
 } as const;
 
-/** Max font scale multiplier (system Dynamic Type / fontScale), 2-design §8. */
+/** System font scale is honoured up to 2.0 (F-22, Ф-45). */
 export const MAX_FONT_SCALE = 2.0;
-/** At or above this system font scale layouts switch to «large font» mode (2 tabs, two-row line, 1 column). */
+/** At or above this scale layouts switch to «large font» mode (fewer tabs, two-row capsule, 1 column). */
 export const LARGE_FONT_SCALE = 1.5;
+/** Hero numbers (`amount`, `time`) grow with the system font at most ×1.4. */
+export const HERO_MAX_SCALE = 1.4;
 
 export type TypeToken =
-  'display' | 'title1' | 'title2' | 'section' | 'body' | 'bodyStrong' | 'button' | 'meta' | 'number' | 'amount';
+  | 'largeTitle'
+  | 'title1'
+  | 'title2'
+  | 'headline'
+  | 'body'
+  | 'bodyStrong'
+  | 'callout'
+  | 'sectionLabel'
+  | 'footnote'
+  | 'caption'
+  | 'tabLabel'
+  | 'button'
+  | 'number'
+  | 'amount'
+  | 'time';
+
+/** iOS pt; on Android body / bodyStrong / button are 16/24 (Material bodyLarge). */
+const android = Platform.OS === 'android';
+const bodySize = android ? { fontSize: 16, lineHeight: 24 } : { fontSize: 17, lineHeight: 24 };
 
 export const type: Record<TypeToken, TextStyle> = {
-  display: { fontFamily: fontFamily.semibold, fontSize: 34, lineHeight: 40 },
-  title1: { fontFamily: fontFamily.semibold, fontSize: 28, lineHeight: 34 },
-  title2: { fontFamily: fontFamily.semibold, fontSize: 22, lineHeight: 28 },
-  section: {
-    fontFamily: fontFamily.bold,
-    fontSize: 15,
-    lineHeight: 20,
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-  },
-  body: { fontFamily: fontFamily.regular, fontSize: 18, lineHeight: 26 },
-  bodyStrong: { fontFamily: fontFamily.semibold, fontSize: 18, lineHeight: 26 },
-  button: { fontFamily: fontFamily.semibold, fontSize: 20, lineHeight: 24 },
-  meta: { fontFamily: fontFamily.regular, fontSize: 16, lineHeight: 22 },
-  number: { fontFamily: fontFamily.semibold, fontSize: 18, lineHeight: 26, fontVariant: ['tabular-nums'] },
-  /** Week 12: the board of «Расходы» (template-screens 3, `type.amount` 48/56), tabular digits; scales to 1.6× at most. */
-  amount: { fontFamily: fontFamily.semibold, fontSize: 48, lineHeight: 56, fontVariant: ['tabular-nums'] },
+  /** Screen title. */
+  largeTitle: { fontFamily: fontFamily.bold, fontSize: 30, lineHeight: 36, letterSpacing: -0.6 },
+  /** Welcome, sheet hero. */
+  title1: { fontFamily: fontFamily.bold, fontSize: 24, lineHeight: 30, letterSpacing: -0.4 },
+  /** «Дальше» text, card hero. */
+  title2: { fontFamily: fontFamily.semibold, fontSize: 20, lineHeight: 26, letterSpacing: -0.2 },
+  /** Sheet title, sticky-note title. */
+  headline: { fontFamily: fontFamily.semibold, fontSize: 17, lineHeight: 22 },
+  body: { fontFamily: fontFamily.regular, ...bodySize },
+  bodyStrong: { fontFamily: fontFamily.semibold, ...bodySize },
+  /** Row meta, note body. */
+  callout: { fontFamily: fontFamily.regular, fontSize: 15, lineHeight: 20 },
+  /** Section labels — never uppercase. */
+  sectionLabel: { fontFamily: fontFamily.semibold, fontSize: 15, lineHeight: 20 },
+  /** Dates, the privacy line. */
+  footnote: { fontFamily: fontFamily.regular, fontSize: 13, lineHeight: 18 },
+  /** Chips. */
+  caption: { fontFamily: fontFamily.medium, fontSize: 12, lineHeight: 16 },
+  tabLabel: { fontFamily: fontFamily.medium, fontSize: 11, lineHeight: 13 },
+  /** Every button: = body, never larger. */
+  button: { fontFamily: fontFamily.semibold, ...(android ? { fontSize: 16, lineHeight: 22 } : { fontSize: 17, lineHeight: 22 }) },
+  number: { fontFamily: fontFamily.semibold, fontSize: 17, lineHeight: 24, fontVariant: ['tabular-nums'] },
+  /** The «Расходы» total; scales ≤ HERO_MAX_SCALE. */
+  amount: { fontFamily: fontFamily.bold, fontSize: 40, lineHeight: 46, letterSpacing: -1.2, fontVariant: ['tabular-nums'] },
+  /** «Дальше 14:30»; scales ≤ HERO_MAX_SCALE. */
+  time: { fontFamily: fontFamily.bold, fontSize: 36, lineHeight: 40, letterSpacing: -1, fontVariant: ['tabular-nums'] },
 };

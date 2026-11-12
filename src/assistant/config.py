@@ -279,6 +279,35 @@ class Settings(BaseSettings):
     # Web deletion page W-01 (Google Play): code requests per IP per hour.
     web_delete_ip_per_hour: int = 5
 
+    # Scope for the beta (founder 2026-11-13, Ф-33...Ф-44): hidden, not deleted. The defaults are
+    # the founder's decisions; each is an env switch (FEATURE_BOARD=true ...). The app reads them
+    # all from GET /v1/features (docs/api/features.md).
+    feature_statements_pdf: bool = False  # Ф-37: bank statement PDF import (POST statements)
+    feature_receipt_qr: bool = False  # Ф-37: fiscal receipt QR (POST /expenses/from-qr)
+    feature_board: bool = False  # Ф-38: «Доска» on «Заметки»; the board API stays, app hides it
+    feature_assistant_views: bool = False  # Ф-39: the assistant changes page views (set_view)
+    feature_page_settings_full: bool = False  # Ф-40: off = «Настроить» only name, icon, view
+    # Ф-42: «Сегодня» shows ≤ today_tips_per_day tips only while the account is younger than
+    # today_tips_days (0 = no age limit); data/page proposals and page tiles are off.
+    today_tips_days: int = 7
+    today_tips_per_day: int = 1
+    feature_today_proposals: bool = False
+    feature_today_tiles: bool = False
+    feature_telegram_login: bool = False  # Ф-43: after the public release (not built yet)
+    feature_personal_mail: bool = False  # Ф-43: personal forwarding address (not built yet)
+    feature_setup_for_other: bool = False  # Ф-44: «Настраиваю для другого человека» until Full
+    # Ф-35, Ф-36: new accounts get «Сегодня», «Заметки», «Дела»; «Покупки», «Расходы»,
+    # «Документы и КП» are made by the server on their first record (once per page kind).
+    pages_on_first_use: bool = True
+    pages_first_use_keys: list[str] = ["shopping", "expenses", "documents"]
+
+    # Messages a person sends to the assistant line (week 18, founder 2026-11-12) [proposal:
+    # numbers]. By users.profile; a profile without an entry uses `regular`. Only phrases the
+    # person sends count (POST /v1/chat/messages without a tap), never background work. The day
+    # is computed in budget_tz.
+    chat_rate_per_minute: dict[str, int] = {"regular": 10, "work": 10, "family_beta": 30}
+    chat_rate_per_day: dict[str, int] = {"regular": 300, "work": 300, "family_beta": 2000}
+
 
 @lru_cache
 def get_settings() -> Settings:

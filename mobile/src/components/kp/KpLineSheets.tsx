@@ -6,7 +6,7 @@ import { priceText, qtyText } from '@/kp/calc';
 import { useTheme } from '@/theme';
 
 import { AppText } from '../AppText';
-import { Button } from '../Button';
+import { Button } from '../ui/Button';
 import { Sheet } from '../page/ExpenseParts';
 import { KpTextField } from './KpEdits';
 
@@ -63,16 +63,16 @@ export function AddLineSheet({ defaultKind, onSave, onClose }: { defaultKind: 'q
             onPress={() => setKind(k)}
             style={{
               flexGrow: 1,
-              minHeight: theme.size.primaryTouch,
+              minHeight: theme.size.buttonHeight,
               justifyContent: 'center',
               paddingHorizontal: theme.space[3],
-              borderRadius: theme.radius.button,
+              borderRadius: theme.radius.md,
               borderWidth: 2,
-              borderColor: kind === k ? theme.colors.accent : theme.colors.lineStrong,
-              backgroundColor: kind === k ? theme.colors.accent : theme.colors.surface,
+              borderColor: kind === k ? theme.colors.brand : theme.colors.iconSecondary,
+              backgroundColor: kind === k ? theme.colors.brand : theme.colors.surface,
             }}
           >
-            <AppText color={kind === k ? 'onAccent' : 'ink'} style={{ textAlign: 'center' }}>{`${kind === k ? '● ' : '○ '}${t(`kp.add_kind_${k}`)}`}</AppText>
+            <AppText color={kind === k ? 'onBrand' : 'ink'} style={{ textAlign: 'center' }}>{`${kind === k ? '● ' : '○ '}${t(`kp.add_kind_${k}`)}`}</AppText>
           </Pressable>
         ))}
       </View>
@@ -91,7 +91,7 @@ export function AddLineSheet({ defaultKind, onSave, onClose }: { defaultKind: 'q
       )}
       <KpTextField testID="kp-add-price" label={lump ? t('kp.add_amount') : t('kp.line_add_price')} value={price} onChangeText={setPrice} keyboardType="decimal-pad" />
       {error ? (
-        <AppText testID="kp-add-error" color="warnText" accessibilityLiveRegion="polite">
+        <AppText testID="kp-add-error" color="warning" accessibilityLiveRegion="polite">
           {error}
         </AppText>
       ) : null}

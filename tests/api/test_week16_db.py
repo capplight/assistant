@@ -24,6 +24,10 @@ pytestmark = [
     pytest.mark.db,
     pytest.mark.skipif(not os.environ.get("DATABASE_URL"), reason="DATABASE_URL not set"),
 ]
+# Week 19 (Ф-42): tiles, proposals and tips after the first week are off for the beta; these
+# tests check the R-35 / Ф-32 rules themselves, so they switch them back on.
+R35 = {"feature_today_tiles": True, "feature_today_proposals": True, "today_tips_days": 0,
+       "today_tips_per_day": 2}
 PHONE = "+7 701 555 12 34"
 
 
@@ -201,7 +205,7 @@ async def _shop(c, h, *titles: str) -> None:  # type: ignore[no-untyped-def]
 
 
 async def test_today_tiles_by_rule_pin_and_hide(env):  # noqa: F811
-    async with client(env.make_app()) as c:
+    async with client(env.make_app(**R35)) as c:
         h = await signed_in(c, BASE)
         uid = await _uid(env.maker, (await _me(c, h))["id"])
         r = await c.post("/v1/pages/batch", json={"client_id": str(uuid.uuid4()),
@@ -274,7 +278,7 @@ async def _stack(maker, uid: int, title: str, n: int) -> str:  # type: ignore[no
 
 
 async def test_page_proposal_from_a_stack_needs_yes_and_is_weekly(env):  # noqa: F811
-    async with client(env.make_app()) as c:
+    async with client(env.make_app(**R35)) as c:
         h = await signed_in(c, BASE)
         uid = await _uid(env.maker, (await _me(c, h))["id"])
         await _stack(env.maker, uid, "Ремонт", 14)

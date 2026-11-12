@@ -12,7 +12,7 @@ import { useTheme } from '@/theme';
 
 import { AmountText } from '../AmountText';
 import { AppText } from '../AppText';
-import { Button } from '../Button';
+import { Button } from '../ui/Button';
 import { ExpenseKeypad } from './ExpenseKeypad';
 
 /** The sum as typed and what code made of it, for the board of the keys and the live region. */
@@ -45,14 +45,14 @@ export function SumDisplay({ text, testID = 'exp-sum' }: { text: string; testID?
       accessibilityLiveRegion="polite"
       style={{
         borderWidth: 1,
-        borderColor: theme.colors.lineStrong,
-        borderRadius: theme.radius.input,
+        borderColor: theme.colors.iconSecondary,
+        borderRadius: theme.radius.sm,
         padding: theme.space[3],
         backgroundColor: theme.colors.bg,
         alignItems: 'flex-end',
       }}
     >
-      <AmountText testID={`${testID}-text`} variant="title1" maxScale={1.6} inset={theme.screenPadding * 2 + theme.space[3] * 2 + 2} style={styles.right}>
+      <AmountText testID={`${testID}-text`} variant="largeTitle" maxScale={1.6} inset={theme.screenPadding * 2 + theme.space[3] * 2 + 2} style={styles.right}>
         {`${shown} ₸`}
       </AmountText>
       {compound && total ? (
@@ -61,12 +61,12 @@ export function SumDisplay({ text, testID = 'exp-sum' }: { text: string; testID?
         </AppText>
       ) : null}
       {text !== '' && c === 'amount_not_positive' ? (
-        <AppText testID={`${testID}-error`} color="warnText" variant="meta">
+        <AppText testID={`${testID}-error`} color="warning" variant="callout">
           {t('exp.not_positive')}
         </AppText>
       ) : null}
       {c === 'amount_too_large' ? (
-        <AppText testID={`${testID}-error`} color="warnText" variant="meta">
+        <AppText testID={`${testID}-error`} color="warning" variant="callout">
           {t('exp.too_big')}
         </AppText>
       ) : null}
@@ -110,13 +110,13 @@ export function CategoryChips({
               minHeight: theme.size.minTouch,
               justifyContent: 'center',
               paddingHorizontal: theme.space[3],
-              borderRadius: theme.radius.chip,
+              borderRadius: theme.radius.round,
               borderWidth: on ? 3 : 1,
-              borderColor: on ? theme.colors.accent : theme.colors.lineStrong,
+              borderColor: on ? theme.colors.brand : theme.colors.iconSecondary,
               backgroundColor: on ? theme.colors.surface : 'transparent',
             }}
           >
-            <AppText variant={on ? 'bodyStrong' : 'body'} color={on ? 'accent' : 'ink'}>
+            <AppText variant={on ? 'bodyStrong' : 'body'} color={on ? 'brand' : 'ink'}>
               {categoryTitle(c, i18n.language)}
             </AppText>
           </Pressable>
@@ -141,7 +141,7 @@ export function DayChip({ value, today, onChange, testID = 'exp-day' }: { value:
         testID={testID}
         label={`${label} ▾`}
         accessibilityLabel={t('exp.day_a11y', { day: label })}
-        variant="outline"
+        variant="secondary"
         minHeight={theme.size.minTouch}
         onPress={() => setOpen(true)}
         style={{ alignSelf: 'flex-start' }}
@@ -151,7 +151,7 @@ export function DayChip({ value, today, onChange, testID = 'exp-day' }: { value:
           <Button
             testID={`${testID}-today`}
             label={t('exp.day_today')}
-            variant={value === today ? 'primary' : 'outline'}
+            variant={value === today ? 'primary' : 'secondary'}
             onPress={() => {
               onChange(today);
               setOpen(false);
@@ -160,7 +160,7 @@ export function DayChip({ value, today, onChange, testID = 'exp-day' }: { value:
           <Button
             testID={`${testID}-yesterday`}
             label={t('exp.day_yesterday')}
-            variant={value === addDays(today, -1) ? 'primary' : 'outline'}
+            variant={value === addDays(today, -1) ? 'primary' : 'secondary'}
             onPress={() => {
               onChange(addDays(today, -1));
               setOpen(false);
@@ -172,7 +172,7 @@ export function DayChip({ value, today, onChange, testID = 'exp-day' }: { value:
               accessibilityRole="button"
               accessibilityLabel={t('exp.day_earlier')}
               onPress={() => onChange(addDays(value, -1))}
-              style={[styles.square, { width: theme.size.primaryTouch, height: theme.size.primaryTouch, borderColor: theme.colors.lineStrong, borderRadius: theme.radius.button }]}
+              style={[styles.square, { width: theme.size.buttonHeight, height: theme.size.buttonHeight, borderColor: theme.colors.iconSecondary, borderRadius: theme.radius.md }]}
             >
               <ChevronLeft size={28} color={theme.colors.ink} />
             </Pressable>
@@ -188,7 +188,7 @@ export function DayChip({ value, today, onChange, testID = 'exp-day' }: { value:
               onPress={() => onChange(addDays(value, 1))}
               style={[
                 styles.square,
-                { width: theme.size.primaryTouch, height: theme.size.primaryTouch, borderColor: theme.colors.lineStrong, borderRadius: theme.radius.button, opacity: value >= today ? 0.45 : 1 },
+                { width: theme.size.buttonHeight, height: theme.size.buttonHeight, borderColor: theme.colors.iconSecondary, borderRadius: theme.radius.md, opacity: value >= today ? 0.45 : 1 },
               ]}
             >
               <ChevronRight size={28} color={theme.colors.ink} />
@@ -211,7 +211,7 @@ export function Sheet({ title, onClose, children, testID }: { title: string; onC
         <SafeAreaView
           edges={['bottom']}
           testID={testID}
-          style={[{ backgroundColor: theme.colors.surface, borderTopLeftRadius: theme.radius.sheet, borderTopRightRadius: theme.radius.sheet, maxHeight: '92%' }, theme.elevation?.sheet]}
+          style={[{ backgroundColor: theme.colors.surface, borderTopLeftRadius: theme.radius.sheet, borderTopRightRadius: theme.radius.sheet, maxHeight: '92%' }, theme.elevation.floating]}
         >
           <ScrollView contentContainerStyle={{ padding: theme.space[5], gap: theme.space[3] }}>
             <AppText variant="title2" accessibilityRole="header" numberOfLines={3}>
@@ -257,7 +257,7 @@ export function EntryPanel({
   const { t } = useTranslation();
   return (
     <View testID="exp-entry" style={{ gap: theme.space[3] }}>
-      <AppText variant="section" accessibilityRole="header">
+      <AppText variant="sectionLabel" accessibilityRole="header">
         {t('exp.enter_hint')}
       </AppText>
       <SumDisplay text={sum.text} />

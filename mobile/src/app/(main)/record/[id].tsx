@@ -6,7 +6,7 @@ import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, TextInput
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/Screen';
 import { isTrashed } from '@/db/records';
 import { recordTitle, sourceLine, statusLine } from '@/records/format';
@@ -71,8 +71,8 @@ export default function RecordScreen() {
       onPress={back}
       style={[styles.back, { minHeight: theme.size.minTouch }]}
     >
-      <ChevronLeft size={24} color={theme.colors.accent} />
-      <AppText color="accent">{ret ? t('record.back_answer') : t('common.back')}</AppText>
+      <ChevronLeft size={24} color={theme.colors.brand} />
+      <AppText color="brand">{ret ? t('record.back_answer') : t('common.back')}</AppText>
     </Pressable>
   );
 
@@ -86,7 +86,7 @@ export default function RecordScreen() {
     return (
       <Screen testID="record-missing" edges={['top']}>
         {backRow}
-        <AppText variant="title1">{t('record.not_found')}</AppText>
+        <AppText variant="largeTitle">{t('record.not_found')}</AppText>
       </Screen>
     );
   }
@@ -105,17 +105,17 @@ export default function RecordScreen() {
       <AppText variant="title2" accessibilityRole="header" style={{ marginBottom: theme.space[1] }}>
         {title}
       </AppText>
-      <AppText variant="meta" style={{ marginBottom: theme.space[1] }}>
+      <AppText variant="callout" style={{ marginBottom: theme.space[1] }}>
         {sourceLine(record, i18n.language, t)}
       </AppText>
       {status ? (
-        <AppText testID="record-status" variant="meta" style={{ marginBottom: theme.space[1] }}>
+        <AppText testID="record-status" variant="callout" style={{ marginBottom: theme.space[1] }}>
           {status}
         </AppText>
       ) : null}
       <SimilarNote serverId={record.serverId} />
       {record.aiGenerated ? (
-        <AppText testID="record-ai-label" variant="meta" style={{ marginBottom: theme.space[1] }}>
+        <AppText testID="record-ai-label" variant="callout" style={{ marginBottom: theme.space[1] }}>
           {t('ai.label')}
         </AppText>
       ) : null}
@@ -126,16 +126,16 @@ export default function RecordScreen() {
           style={[
             styles.banner,
             {
-              backgroundColor: theme.colors.markerSoft,
-              borderRadius: theme.radius.card,
+              backgroundColor: theme.colors.highlightTint,
+              borderRadius: theme.radius.lg,
               padding: theme.space[3],
               marginTop: theme.space[3],
               gap: theme.space[2],
             },
           ]}
         >
-          <TriangleAlert size={22} color={theme.colors.warnText} />
-          <AppText color="warnText" style={styles.flex}>
+          <TriangleAlert size={22} color={theme.colors.warning} />
+          <AppText color="warning" style={styles.flex}>
             {t(`check.banner.${pluralForm(toCheck.length)}`, { n: toCheck.length })}
           </AppText>
           <Button
@@ -150,7 +150,7 @@ export default function RecordScreen() {
 
       {rows.length > 0 ? (
         <View style={{ marginTop: theme.space[6], gap: theme.space[2] }}>
-          <AppText variant="section" accessibilityRole="header">
+          <AppText variant="sectionLabel" accessibilityRole="header">
             {t('record.understood')}
           </AppText>
           {rows.map((row) => (
@@ -169,16 +169,16 @@ export default function RecordScreen() {
               style={{
                 minHeight: theme.size.minTouch,
                 padding: theme.space[3],
-                borderRadius: theme.radius.input,
-                backgroundColor: row.verified ? theme.colors.surface : theme.colors.markerSoft,
+                borderRadius: theme.radius.sm,
+                backgroundColor: row.verified ? theme.colors.surface : theme.colors.highlightTint,
                 gap: theme.space[1],
               }}
             >
-              <AppText variant="meta">{fieldLabel(row.kind)}</AppText>
+              <AppText variant="callout">{fieldLabel(row.kind)}</AppText>
               <AppText variant="number">{row.value ?? ''}</AppText>
               <View style={[styles.mark, { gap: theme.space[1] }]}>
-                {row.verified ? <Check size={18} color={theme.colors.done} /> : null}
-                <AppText variant="meta" color={row.verified ? 'done' : 'warnText'}>
+                {row.verified ? <Check size={18} color={theme.colors.success} /> : null}
+                <AppText variant="callout" color={row.verified ? 'success' : 'warning'}>
                   {row.verified ? t('check.verified') : t('check.badge')}
                 </AppText>
               </View>
@@ -192,7 +192,7 @@ export default function RecordScreen() {
       ) : null}
       {body ? (
         <View style={{ marginTop: theme.space[6], gap: theme.space[2] }}>
-          <AppText variant="section" accessibilityRole="header">
+          <AppText variant="sectionLabel" accessibilityRole="header">
             {t('record.text')}
           </AppText>
           <AppText selectable testID="record-text">
@@ -205,7 +205,7 @@ export default function RecordScreen() {
         testID="record-delete"
         label={t('record.delete')}
         variant="text"
-        labelColor="alarm"
+        labelColor="danger"
         style={{ marginTop: theme.space[8] }}
         onPress={() => {
           const recordId = record.id;
@@ -232,10 +232,10 @@ export default function RecordScreen() {
                   padding: theme.space[5],
                   gap: theme.space[3],
                 },
-                theme.elevation?.sheet,
+                theme.elevation.floating,
               ]}
             >
-              <AppText variant="meta">{fieldLabel(asking.kind)}</AppText>
+              <AppText variant="callout">{fieldLabel(asking.kind)}</AppText>
               {fixing === null ? (
                 <>
                   <AppText variant="title2" accessibilityRole="header">
@@ -254,7 +254,7 @@ export default function RecordScreen() {
                     <Button
                       testID="check-fix"
                       label={t('check.fix')}
-                      variant="outline"
+                      variant="secondary"
                       onPress={() => setFixing(asking.value ?? '')}
                     />
                   ) : null}
@@ -277,10 +277,10 @@ export default function RecordScreen() {
                     style={[
                       theme.type.body,
                       {
-                        minHeight: theme.size.primaryTouch,
+                        minHeight: theme.size.buttonHeight,
                         borderWidth: 1,
-                        borderColor: theme.colors.lineStrong,
-                        borderRadius: theme.radius.input,
+                        borderColor: theme.colors.iconSecondary,
+                        borderRadius: theme.radius.sm,
                         paddingHorizontal: theme.space[3],
                         color: theme.colors.ink,
                         backgroundColor: theme.colors.bg,

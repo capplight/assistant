@@ -6,7 +6,7 @@ import { View } from 'react-native';
 import { refreshCaps } from '@/alarms/service';
 import { useAlarms } from '@/alarms/store';
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/Screen';
 import { getAlarmPort } from '@/services';
 import { useTheme } from '@/theme';
@@ -49,7 +49,7 @@ export default function NotifyScreen() {
     >
       {saved ? (
         <>
-          <AppText variant="title1" accessibilityRole="header">
+          <AppText variant="largeTitle" accessibilityRole="header">
             {t('notify.title')}
           </AppText>
           <View
@@ -57,9 +57,9 @@ export default function NotifyScreen() {
               marginTop: theme.space[3],
               marginBottom: theme.space[6],
               padding: theme.space[4],
-              borderRadius: theme.radius.card,
+              borderRadius: theme.radius.lg,
               borderWidth: 1,
-              borderColor: theme.colors.line,
+              borderColor: theme.colors.separator,
               backgroundColor: theme.colors.surface,
             }}
           >
@@ -71,12 +71,12 @@ export default function NotifyScreen() {
         {t('notify.block')}
       </AppText>
       {state === 'denied' ? (
-        <AppText testID="notify-denied" color="warnText" style={{ marginTop: theme.space[3] }}>
+        <AppText testID="notify-denied" color="warning" style={{ marginTop: theme.space[3] }}>
           {t('notify.denied')}
         </AppText>
       ) : null}
       {state === 'granted' ? (
-        <AppText testID="notify-granted" color="done" style={{ marginTop: theme.space[3] }}>
+        <AppText testID="notify-granted" color="success" style={{ marginTop: theme.space[3] }}>
           {t('notify.granted')}
         </AppText>
       ) : null}

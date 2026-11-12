@@ -52,10 +52,10 @@ export function DigitKeypad({ onKey, testID = 'kp-keys' }: { onKey: (k: DigitKey
                 styles.key,
                 {
                   minHeight: KEY,
-                  borderRadius: theme.radius.button,
+                  borderRadius: theme.radius.md,
                   borderWidth: 1,
-                  borderColor: theme.colors.lineStrong,
-                  backgroundColor: pressed ? theme.colors.line : theme.colors.surface,
+                  borderColor: theme.colors.iconSecondary,
+                  backgroundColor: pressed ? theme.colors.separator : theme.colors.surface,
                 },
               ]}
             >
@@ -86,9 +86,9 @@ export function NumberDisplay({ text, unit, money = true, testID = 'kp-display' 
       accessible
       accessibilityLiveRegion="polite"
       accessibilityLabel={text ? (money ? t('kp.price_a11y', { amount: shown }) : shown) : t('kp.price_empty_a11y')}
-      style={{ borderWidth: 1, borderColor: theme.colors.lineStrong, borderRadius: theme.radius.input, padding: theme.space[3], backgroundColor: theme.colors.bg, alignItems: 'flex-end' }}
+      style={{ borderWidth: 1, borderColor: theme.colors.iconSecondary, borderRadius: theme.radius.sm, padding: theme.space[3], backgroundColor: theme.colors.bg, alignItems: 'flex-end' }}
     >
-      <AmountText testID={`${testID}-text`} variant="title1" maxScale={1.6} inset={theme.screenPadding * 2 + theme.space[3] * 2 + 2} style={{ textAlign: 'right' }}>
+      <AmountText testID={`${testID}-text`} variant="largeTitle" maxScale={1.6} inset={theme.screenPadding * 2 + theme.space[3] * 2 + 2} style={{ textAlign: 'right' }}>
         {shown}
       </AmountText>
     </View>
@@ -123,7 +123,7 @@ export function StatusBar({
       style={{ minHeight: theme.size.minTouch, justifyContent: 'center' }}
     >
       {theme.largeFont ? (
-        <AppText testID={`${testID}-line`} color="accent">{`${t('kp.status_line', { status: word })} ›`}</AppText>
+        <AppText testID={`${testID}-line`} color="brand">{`${t('kp.status_line', { status: word })} ›`}</AppText>
       ) : (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: theme.space[3], rowGap: theme.space[1] }}>
           {STEPS.map((s) => {
@@ -136,11 +136,11 @@ export function StatusBar({
                     height: 12,
                     borderRadius: 6,
                     borderWidth: 2,
-                    borderColor: on ? theme.colors.done : theme.colors.lineStrong,
-                    backgroundColor: on ? theme.colors.done : 'transparent',
+                    borderColor: on ? theme.colors.success : theme.colors.iconSecondary,
+                    backgroundColor: on ? theme.colors.success : 'transparent',
                   }}
                 />
-                <AppText testID={`${testID}-${s}${on ? '-on' : ''}`} variant="meta" color={on ? 'ink' : 'ink2'}>
+                <AppText testID={`${testID}-${s}${on ? '-on' : ''}`} variant="callout" color={on ? 'ink' : 'ink2'}>
                   {label(s)}
                 </AppText>
               </View>
@@ -159,12 +159,12 @@ export function MiniSheet({ type }: { type: string }) {
     <View
       importantForAccessibility="no-hide-descendants"
       accessibilityElementsHidden
-      style={{ width: 48, height: 64, borderWidth: 1, borderColor: theme.colors.lineStrong, borderRadius: 4, backgroundColor: theme.colors.surface, padding: 6, gap: 5 }}
+      style={{ width: 48, height: 64, borderWidth: 1, borderColor: theme.colors.iconSecondary, borderRadius: 4, backgroundColor: theme.colors.surface, padding: 6, gap: 5 }}
     >
       {[1, 0.8, 0.9].map((w, i) => (
-        <View key={i} style={{ height: 3, width: `${w * 100}%`, backgroundColor: theme.colors.line, borderRadius: 2 }} />
+        <View key={i} style={{ height: 3, width: `${w * 100}%`, backgroundColor: theme.colors.separator, borderRadius: 2 }} />
       ))}
-      <AppText variant="meta" maxFontSizeMultiplier={1} style={{ fontSize: 11, lineHeight: 14, marginTop: 2 }} numberOfLines={1}>
+      <AppText variant="callout" maxFontSizeMultiplier={1} style={{ fontSize: 11, lineHeight: 14, marginTop: 2 }} numberOfLines={1}>
         {type}
       </AppText>
     </View>
@@ -176,8 +176,8 @@ export function CheckBadge({ testID }: { testID?: string }) {
   const theme = useTheme();
   const { t } = useTranslation();
   return (
-    <View testID={testID} style={{ backgroundColor: theme.colors.markerSoft, borderRadius: theme.radius.chip, paddingHorizontal: theme.space[2], alignSelf: 'flex-start' }}>
-      <AppText variant="meta" color="warnText">{`⚠ ${t('kp.check')}`}</AppText>
+    <View testID={testID} style={{ backgroundColor: theme.colors.highlightTint, borderRadius: theme.radius.round, paddingHorizontal: theme.space[2], alignSelf: 'flex-start' }}>
+      <AppText variant="callout" color="warning">{`⚠ ${t('kp.check')}`}</AppText>
     </View>
   );
 }

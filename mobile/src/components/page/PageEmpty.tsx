@@ -13,9 +13,9 @@ export function PageEmpty({ lines, title }: { lines: string[]; title?: string })
       testID="page-empty"
       style={{
         backgroundColor: theme.colors.surface,
-        borderColor: theme.colors.line,
+        borderColor: theme.colors.separator,
         borderWidth: 1,
-        borderRadius: theme.radius.card,
+        borderRadius: theme.radius.lg,
         padding: theme.space[4],
         gap: theme.space[2],
       }}
@@ -27,7 +27,7 @@ export function PageEmpty({ lines, title }: { lines: string[]; title?: string })
       ) : null}
       {first ? <AppText>{first}</AppText> : null}
       {rest.map((l) => (
-        <AppText key={l} variant="meta">
+        <AppText key={l} variant="callout">
           {l}
         </AppText>
       ))}

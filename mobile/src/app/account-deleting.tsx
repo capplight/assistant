@@ -6,7 +6,7 @@ import { View } from 'react-native';
 import { kickSync } from '@/services';
 import { restoreAccount, startOver, untilText, useAccount } from '@/account/data';
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/Screen';
 import { useTheme } from '@/theme';
 
@@ -39,19 +39,19 @@ export default function AccountDeletingScreen() {
 
   return (
     <Screen testID="account-deleting-screen">
-      <AppText variant="title1" accessibilityRole="header" style={{ marginBottom: theme.space[3] }}>
+      <AppText variant="largeTitle" accessibilityRole="header" style={{ marginBottom: theme.space[3] }}>
         {over ? t('account.gone_title') : t('account.deleting_title')}
       </AppText>
       <AppText testID="deleting-message">
         {over ? t('account.gone') : deleting?.message || t('account.deleting')}
       </AppText>
       {!over && deleting?.deleteAfter ? (
-        <AppText variant="meta" style={{ marginTop: theme.space[2] }}>
+        <AppText variant="callout" style={{ marginTop: theme.space[2] }}>
           {t('account.restore_until', { until: untilText(deleting.deleteAfter) })}
         </AppText>
       ) : null}
       {note ? (
-        <AppText testID="deleting-note" color="alarm" accessibilityLiveRegion="polite" style={{ marginTop: theme.space[3] }}>
+        <AppText testID="deleting-note" color="danger" accessibilityLiveRegion="polite" style={{ marginTop: theme.space[3] }}>
           {note}
         </AppText>
       ) : null}
@@ -61,7 +61,7 @@ export default function AccountDeletingScreen() {
           <Button
             testID="deleting-start-over"
             label={t('account.start_over')}
-            variant="outline"
+            variant="secondary"
             onPress={() => void startOver().then(() => router.replace('/welcome'))}
           />
         ) : null}

@@ -5,7 +5,7 @@ import { Image, StyleSheet, Switch, TextInput, View } from 'react-native';
 
 import type { LegalForm } from '@/api/types';
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { CheckBadge } from '@/components/kp/KpParts';
 import { ChoiceSheet } from '@/components/page/FieldSheets';
 import { Screen } from '@/components/Screen';
@@ -76,7 +76,7 @@ export default function CompanyScreen() {
     const review = shown.review_fields.includes(k);
     return (
       <View key={k} style={{ gap: theme.space[1] }}>
-        <AppText variant="meta">{t(`kp.f_${k}`)}</AppText>
+        <AppText variant="callout">{t(`kp.f_${k}`)}</AppText>
         <TextInput
           testID={`company-${k}`}
           accessibilityLabel={t(`kp.f_${k}`)}
@@ -91,12 +91,12 @@ export default function CompanyScreen() {
             theme.type.body,
             {
               color: theme.colors.ink,
-              minHeight: theme.size.primaryTouch,
+              minHeight: theme.size.buttonHeight,
               borderWidth: 1,
-              borderColor: review ? theme.colors.warnText : theme.colors.lineStrong,
-              borderRadius: theme.radius.input,
+              borderColor: review ? theme.colors.warning : theme.colors.iconSecondary,
+              borderRadius: theme.radius.sm,
               paddingHorizontal: theme.space[3],
-              backgroundColor: review ? theme.colors.markerSoft : theme.colors.surface,
+              backgroundColor: review ? theme.colors.highlightTint : theme.colors.surface,
             },
           ]}
         />
@@ -125,41 +125,41 @@ export default function CompanyScreen() {
       <Screen testID="company-screen">
         <View style={{ gap: theme.space[4] }}>
           <Button testID="company-back" label={`‹ ${t('kp.back')}`} variant="text" minHeight={theme.size.minTouch} style={{ alignSelf: 'flex-start' }} onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} />
-          <AppText variant="title1" accessibilityRole="header">
+          <AppText variant="largeTitle" accessibilityRole="header">
             {t('kp.company_title')}
           </AppText>
-          <AppText variant="meta">{t('kp.company_hint')}</AppText>
+          <AppText variant="callout">{t('kp.company_hint')}</AppText>
           {field('name')}
           <View style={{ gap: theme.space[1] }}>
-            <AppText variant="meta">{t('kp.f_legal_form')}</AppText>
+            <AppText variant="callout">{t('kp.f_legal_form')}</AppText>
             <Button
               testID="company-legal_form"
               label={shown.legal_form ? t(`kp.lf_${shown.legal_form}`, { defaultValue: shown.legal_form }) : t('kp.client_none')}
-              variant="outline"
+              variant="secondary"
               onPress={() => setLegalOpen(true)}
             />
           </View>
           {MAIN.slice(1).map(field)}
-          <AppText variant="section" accessibilityRole="header">
+          <AppText variant="sectionLabel" accessibilityRole="header">
             {t('kp.bank_title')}
           </AppText>
           {BANK.map(field)}
-          <AppText variant="section" accessibilityRole="header">
+          <AppText variant="sectionLabel" accessibilityRole="header">
             {t('kp.signer_title')}
           </AppText>
           {SIGNER_KEYS.map(field)}
-          <AppText variant="section" accessibilityRole="header">
+          <AppText variant="sectionLabel" accessibilityRole="header">
             {t('kp.license_title')}
           </AppText>
-          <AppText variant="meta">{t('kp.license_hint')}</AppText>
+          <AppText variant="callout">{t('kp.license_hint')}</AppText>
           {LICENSE_KEYS.map(field)}
-          <AppText variant="section" accessibilityRole="header">
+          <AppText variant="sectionLabel" accessibilityRole="header">
             {t('kp.outgoing_title')}
           </AppText>
-          <AppText variant="meta">{t('kp.outgoing_hint')}</AppText>
+          <AppText variant="callout">{t('kp.outgoing_hint')}</AppText>
           {field('outgoing_next')}
 
-          <View style={[styles.row, { gap: theme.space[3], minHeight: theme.size.primaryTouch }]}>
+          <View style={[styles.row, { gap: theme.space[3], minHeight: theme.size.buttonHeight }]}>
             <AppText style={{ flex: 1 }}>{t('kp.vat_payer')}</AppText>
             <Switch
               testID="company-vat-payer"
@@ -169,10 +169,10 @@ export default function CompanyScreen() {
             />
           </View>
 
-          <AppText variant="section" accessibilityRole="header">
+          <AppText variant="sectionLabel" accessibilityRole="header">
             {t('kp.images_title')}
           </AppText>
-          <AppText testID="company-images-kept" variant="meta">
+          <AppText testID="company-images-kept" variant="callout">
             {t('kp.images_kept')}
           </AppText>
           {ROLES.map((role) => {
@@ -181,13 +181,13 @@ export default function CompanyScreen() {
             return (
               <View key={role} testID={`company-img-${role}`} style={[styles.row, { gap: theme.space[3], flexWrap: 'wrap' }]}>
                 {img ? (
-                  <Image source={{ uri: img.uri }} accessibilityIgnoresInvertColors style={{ width: 64, height: 64, borderRadius: 8, borderWidth: 1, borderColor: theme.colors.line }} />
+                  <Image source={{ uri: img.uri }} accessibilityIgnoresInvertColors style={{ width: 64, height: 64, borderRadius: 8, borderWidth: 1, borderColor: theme.colors.separator }} />
                 ) : (
-                  <View style={{ width: 64, height: 64, borderRadius: 8, borderWidth: 1, borderStyle: 'dashed', borderColor: theme.colors.lineStrong }} />
+                  <View style={{ width: 64, height: 64, borderRadius: 8, borderWidth: 1, borderStyle: 'dashed', borderColor: theme.colors.iconSecondary }} />
                 )}
                 <View style={{ flex: 1, minWidth: 140, gap: theme.space[1] }}>
                   <AppText variant="bodyStrong">{t(`kp.img_${role}`)}</AppText>
-                  <AppText testID={`company-img-${role}-state`} variant="meta">
+                  <AppText testID={`company-img-${role}-state`} variant="callout">
                     {img ? (img.state === 'sent' ? t('kp.img_sent') : t('kp.img_waiting')) : has ? t('kp.img_sent') : t('kp.img_none')}
                   </AppText>
                 </View>
@@ -195,7 +195,7 @@ export default function CompanyScreen() {
                   testID={`company-img-${role}-pick`}
                   label={has ? t('kp.img_replace') : t('kp.img_pick')}
                   accessibilityLabel={`${has ? t('kp.img_replace') : t('kp.img_pick')}: ${t(`kp.img_${role}`)}`}
-                  variant="outline"
+                  variant="secondary"
                   minHeight={theme.size.minTouch}
                   onPress={() => void pickImage(role)}
                 />
@@ -203,7 +203,7 @@ export default function CompanyScreen() {
             );
           })}
 
-          <Button testID="company-prices" label={`${t('kp.my_prices')} ›`} variant="outline" onPress={() => router.push('/price-list')} />
+          <Button testID="company-prices" label={`${t('kp.my_prices')} ›`} variant="secondary" onPress={() => router.push('/price-list')} />
         </View>
       </Screen>
       <StandaloneUndoStrip />

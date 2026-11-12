@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme';
 
 import { AppText } from './AppText';
-import { Button } from './Button';
+import { Button } from './ui/Button';
 
 /** An item of the template on top of the shared menu (≤2: Цвет · Приколоть, Категория…). */
 export type MenuExtra = { testID: string; label: string; onPress: () => void; hint?: string };
@@ -63,12 +63,12 @@ export function RecordMenuSheet({
       onPress={onPress}
       style={[
         styles.row,
-        { minHeight: theme.size.primaryTouch, borderBottomColor: theme.colors.line, gap: theme.space[3] },
+        { minHeight: theme.size.buttonHeight, borderBottomColor: theme.colors.separator, gap: theme.space[3] },
       ]}
     >
       <View style={styles.flex}>
         <AppText>{label}</AppText>
-        {hint ? <AppText variant="meta">{hint}</AppText> : null}
+        {hint ? <AppText variant="callout">{hint}</AppText> : null}
       </View>
       <ChevronRight size={22} color={theme.colors.ink2} />
     </Pressable>
@@ -86,7 +86,7 @@ export function RecordMenuSheet({
               borderTopRightRadius: theme.radius.sheet,
               maxHeight: '90%',
             },
-            theme.elevation?.sheet,
+            theme.elevation.floating,
           ]}
         >
           <ScrollView contentContainerStyle={{ padding: theme.space[5], gap: theme.space[2] }}>
@@ -94,7 +94,7 @@ export function RecordMenuSheet({
               {title}
             </AppText>
             {mine ? (
-              <AppText testID="record-menu-mine" variant="meta">
+              <AppText testID="record-menu-mine" variant="callout">
                 {t('move.mine')}
               </AppText>
             ) : null}
@@ -105,8 +105,8 @@ export function RecordMenuSheet({
                 testID="record-menu-up"
                 label={t('move.up')}
                 accessibilityLabel={t('move.up_a11y', { what: title })}
-                variant="outline"
-                icon={<ArrowUp size={22} color={theme.colors.accent} />}
+                variant="secondary"
+                icon={<ArrowUp size={22} color={theme.colors.brand} />}
                 disabled={!canUp}
                 onPress={onUp}
                 style={styles.flex}
@@ -115,8 +115,8 @@ export function RecordMenuSheet({
                 testID="record-menu-down"
                 label={t('move.down')}
                 accessibilityLabel={t('move.down_a11y', { what: title })}
-                variant="outline"
-                icon={<ArrowDown size={22} color={theme.colors.accent} />}
+                variant="secondary"
+                icon={<ArrowDown size={22} color={theme.colors.brand} />}
                 disabled={!canDown}
                 onPress={onDown}
                 style={styles.flex}
@@ -130,10 +130,10 @@ export function RecordMenuSheet({
               testID="record-menu-delete"
               label={t('move.delete')}
               variant="text"
-              labelColor="alarm"
+              labelColor="danger"
               onPress={onDelete}
             />
-            <Button testID="record-menu-close" label={t('common.close')} variant="outline" onPress={onClose} />
+            <Button testID="record-menu-close" label={t('common.close')} variant="secondary" onPress={onClose} />
           </ScrollView>
         </SafeAreaView>
       </View>

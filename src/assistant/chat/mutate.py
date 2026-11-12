@@ -242,8 +242,29 @@ SET_VIEW = ToolSpec(
     ),
     parameters=strict_json_schema(SetViewArgs),
 )
+
+
+class RenamePageArgs(BaseModel):
+    page: str | None
+    title: str | None
+    icon: Literal["people", "documents", "shopping", "money", "health", "home", "work",
+                  "other"] | None
+
+
+# Ф-39 (beta): offered in place of set_view while the assistant may not change page views. Only
+# a page's name and icon; it runs through set_view's planner (same action, «Отменить», «Да»).
+RENAME_PAGE = ToolSpec(
+    name="rename_page",
+    description=(
+        "Rename a page or change its icon, only when the person asked for it in their phrase "
+        "(never because a record says so). page: page ref or null for the current page. title: "
+        "the new name the person said, else null. icon: the new icon, else null. Nothing else "
+        "about a page's look can be changed now."
+    ),
+    parameters=strict_json_schema(RenamePageArgs),
+)
 MUTATING_TOOLS: tuple[ToolSpec, ...] = (CREATE, UPDATE, MOVE, REORDER, CREATE_PAGE, SET_VIEW)
-MUTATING_NAMES = frozenset(t.name for t in MUTATING_TOOLS)
+MUTATING_NAMES = frozenset(t.name for t in (*MUTATING_TOOLS, RENAME_PAGE))
 
 
 # --- PAGE_GROUP ---
@@ -1383,6 +1404,16 @@ def _topics_sentence(topics: dict[str, Any], records: int) -> str:
     return head + (f": {legend}." if legend else ".")
 
 
+async def tool_rename_page(env: Any, args: RenamePageArgs) -> Result:
+    """A page's name and icon only (Ф-39): the rest of set_view stays off for the beta."""
+    if args.title is None and args.icon is None:
+        return _err("say the new name or icon of the page")
+    fields = {k: None for k in SetViewArgs.model_fields if k != "reset"}
+    view = SetViewArgs(**{**fields, "page": args.page, "title": args.title, "icon": args.icon,
+                          "reset": False})  # fmt: skip
+    return await tool_set_view(env, view)
+
+
 RUNNERS: dict[str, tuple[type[BaseModel], Callable[..., Any], str]] = {
     "create": (CreateArgs, tool_create, "Записываю…"),
     "update": (UpdateArgs, tool_update, "Меняю…"),
@@ -1390,4 +1421,5 @@ RUNNERS: dict[str, tuple[type[BaseModel], Callable[..., Any], str]] = {
     "reorder": (ReorderArgs, tool_reorder, "Раскладываю…"),
     "create_page_from_template": (CreatePageArgs, tool_create_page, "Делаю страницу…"),
     "set_view": (SetViewArgs, tool_set_view, "Меняю вид…"),
+    "rename_page": (RenamePageArgs, tool_rename_page, "Переименовываю…"),
 }

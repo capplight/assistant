@@ -33,7 +33,7 @@ from assistant.db.models_pages import Screen
 from assistant.db.models_v2 import RecordKind, RecordSource, RecordStatus
 from assistant.expenses import calc
 from assistant.expenses.parse import NOTE_MAX
-from assistant.pages import lexorank, lock_user, place_item
+from assistant.pages import first_use_page, lexorank, lock_user, place_item
 from assistant.records import content_hash, detect_lang, enqueue_ingest, normalize_text
 
 PAGE_TEMPLATE = "expenses"
@@ -251,7 +251,11 @@ class Created:
     sentence: str = ""
 
 
-async def expenses_page(session: AsyncSession, user_id: int) -> Screen | None:
+async def expenses_page(session: AsyncSession, user_id: int, *,
+                        first_use: bool = False) -> Screen | None:  # fmt: skip
+    """The live «Расходы»; `first_use` (saving an expense): made on the first one (Ф-36)."""
+    if first_use:
+        return (await first_use_page(session, user_id, PAGE_TEMPLATE))[0]
     return await session.scalar(
         select(Screen).where(Screen.user_id == user_id, Screen.template_key == PAGE_TEMPLATE,
                              Screen.deleted_at.is_(None)).order_by(Screen.id).limit(1)
@@ -289,6 +293,10 @@ async def create(session: AsyncSession, user_id: int, spec: NewExpense, *, by: s
     await lock_user(session, user_id)
     if page is LOOKUP:
         await ensure_categories(session, user_id)
+        # before the record is placed: a «Расходы» made now takes it, not «Заметки» (Ф-36)
+        page, made = await first_use_page(session, user_id, PAGE_TEMPLATE)
+    else:
+        made = False
     spent_on = spec.spent_on or today
     own_item = spec.item is not None
     if spec.item is not None:
@@ -324,7 +332,7 @@ async def create(session: AsyncSession, user_id: int, spec: NewExpense, *, by: s
         await enqueue_ingest(session, item)
         await place_item(session, item)  # «Расходы» takes it; «Заметки» leaves it then (rules.py)
     out = Created(entry=entry, item=item)
-    out.page = await expenses_page(session, user_id) if page is LOOKUP else page
+    out.page = page
     if own_item:
         out.inverse = [{"op": "set_expense_live", "id": str(entry.public_id),
                         "item": str(item.public_id), "live": False}]  # fmt: skip
@@ -344,6 +352,10 @@ async def create(session: AsyncSession, user_id: int, spec: NewExpense, *, by: s
                     "title": label(spec.note, spec.payee, spec.category), "kind": "create",
                     "page_id": str(out.page.public_id) if out.page else None,
                     "text": out.sentence}]  # fmt: skip
+    if made and page is not None:  # «Расходы» made on this first expense: the app offers the tab
+        out.changes.append({"item_id": None, "title": page.title, "kind": "create_page",
+                            "page_id": str(page.public_id),
+                            "text": f"Новая страница «{page.title}»"})  # fmt: skip
     return out
 
 

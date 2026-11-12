@@ -15,7 +15,7 @@ import { useTheme } from '@/theme';
 
 import { AmountText } from '../AmountText';
 import { AppText } from '../AppText';
-import { Button } from '../Button';
+import { Button } from '../ui/Button';
 import { Sheet } from './ExpenseParts';
 
 /** Shown on the card at most; the rest behind «Показать все». */
@@ -24,8 +24,8 @@ export const CHECK_CARDS = 3;
 const card = (theme: ReturnType<typeof useTheme>, strong = false) => ({
   backgroundColor: theme.colors.surface,
   borderWidth: strong ? 2 : 1,
-  borderColor: strong ? theme.colors.lineStrong : theme.colors.line,
-  borderRadius: theme.radius.card,
+  borderColor: strong ? theme.colors.iconSecondary : theme.colors.separator,
+  borderRadius: theme.radius.lg,
   padding: theme.space[4],
   gap: theme.space[3],
 });
@@ -67,7 +67,7 @@ export function BringButton({ pageId }: { pageId: string }) {
   ];
   return (
     <>
-      <Button testID="exp-bring" label={t('exp.bring')} variant="outline" icon={<Camera size={24} color={theme.colors.accent} />} onPress={() => setOpen(true)} />
+      <Button testID="exp-bring" label={t('exp.bring')} variant="secondary" icon={<Camera size={24} color={theme.colors.brand} />} onPress={() => setOpen(true)} />
       {open ? (
         <Sheet testID="exp-bring-sheet" title={t('exp.bring_title')} onClose={() => setOpen(false)}>
           {rows.map(({ kind, label, Icon }) => (
@@ -77,20 +77,20 @@ export function BringButton({ pageId }: { pageId: string }) {
               accessibilityRole="button"
               accessibilityLabel={label}
               onPress={() => go(kind)}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: theme.space[3], minHeight: theme.size.primaryTouch }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: theme.space[3], minHeight: theme.size.buttonHeight }}
             >
-              <Icon size={theme.size.cardIcon} color={theme.colors.ink} strokeWidth={2} />
+              <Icon size={theme.size.icon} color={theme.colors.ink} strokeWidth={2} />
               <AppText style={{ flex: 1 }}>{label}</AppText>
             </Pressable>
           ))}
           <View style={{ flexDirection: 'row', gap: theme.space[3], alignItems: 'flex-start', paddingTop: theme.space[2] }}>
-            <Share2 size={theme.size.cardIcon} color={theme.colors.ink2} strokeWidth={2} />
+            <Share2 size={theme.size.icon} color={theme.colors.ink2} strokeWidth={2} />
             <View style={{ flex: 1, gap: theme.space[1] }}>
               <AppText variant="bodyStrong">{t('exp.kaspi_title')}</AppText>
               <AppText>{t('exp.kaspi_1')}</AppText>
               <AppText>{t('exp.kaspi_2')}</AppText>
               <AppText>{t('exp.kaspi_3')}</AppText>
-              <AppText variant="meta">{t('exp.no_bank_link')}</AppText>
+              <AppText variant="callout">{t('exp.no_bank_link')}</AppText>
             </View>
           </View>
         </Sheet>
@@ -124,7 +124,7 @@ export function JobLines({ jobs, today, onType }: { jobs: ReceiptJob[]; today: s
           <View key={j.id} testID={`exp-job-${j.id}`} style={[card(theme), { gap: theme.space[2] }]}>
             <View accessible accessibilityLiveRegion="polite" accessibilityLabel={`${head}. ${status}`}>
               <AppText variant="bodyStrong">{head}</AppText>
-              <AppText testID={`exp-job-status-${j.id}`} color={bad ? 'warnText' : 'ink2'}>
+              <AppText testID={`exp-job-status-${j.id}`} color={bad ? 'warning' : 'ink2'}>
                 {status}
               </AppText>
             </View>
@@ -133,7 +133,7 @@ export function JobLines({ jobs, today, onType }: { jobs: ReceiptJob[]; today: s
               <Button
                 testID={`exp-job-retake-${j.id}`}
                 label={t('exp.job_retake')}
-                variant="outline"
+                variant="secondary"
                 minHeight={theme.size.minTouch}
                 onPress={() => {
                   dismissJob(j.id);
@@ -161,7 +161,7 @@ export function PlanCards({ plans }: { plans: StatementOut[] }) {
         const title = planTitle(st, n.found, n.already, i18n.language, t);
         return (
           <View key={st.id} testID={`exp-plan-${st.id}`} style={card(theme, true)}>
-            <AppText variant="meta">{t('exp.plan_card')}</AppText>
+            <AppText variant="callout">{t('exp.plan_card')}</AppText>
             <AppText variant="bodyStrong">{title}</AppText>
             <Button testID={`exp-plan-open-${st.id}`} label={t('exp.plan_open')} onPress={() => router.push({ pathname: '/statement/[id]', params: { id: st.id } })} />
           </View>
@@ -196,7 +196,7 @@ export function CheckCards({
   const shown = entries.slice(0, CHECK_CARDS);
   return (
     <View testID="exp-check" style={{ gap: theme.space[2] }}>
-      <AppText variant="section" accessibilityRole="header" color="warnText">
+      <AppText variant="sectionLabel" accessibilityRole="header" color="warning">
         {t('exp.check_title')}
       </AppText>
       {shown.map((e) => {
@@ -206,13 +206,13 @@ export function CheckCards({
         const from = sourceWord(e.source, t);
         const dayToo = e.review_fields.includes('spent_on');
         return (
-          <View key={e.id} testID={`exp-check-${e.id}`} style={[card(theme, true), { borderColor: theme.colors.marker }]}>
+          <View key={e.id} testID={`exp-check-${e.id}`} style={[card(theme, true), { borderColor: theme.colors.highlight }]}>
             <View accessible accessibilityLabel={t(dayToo ? 'exp.check_a11y_day' : 'exp.check_a11y', { title, amount, day, from: from ?? '' })}>
-              <AppText variant="meta">{from ? `${title} · ${from}` : title}</AppText>
-              <AmountText testID={`exp-check-amount-${e.id}`} variant="title1" maxScale={1.6} inset={theme.screenPadding * 2 + 40}>
+              <AppText variant="callout">{from ? `${title} · ${from}` : title}</AppText>
+              <AmountText testID={`exp-check-amount-${e.id}`} variant="largeTitle" maxScale={1.6} inset={theme.screenPadding * 2 + 40}>
                 {amount}
               </AmountText>
-              <AppText color={dayToo ? 'warnText' : 'ink2'}>{dayToo ? t('exp.check_day', { day }) : day}</AppText>
+              <AppText color={dayToo ? 'warning' : 'ink2'}>{dayToo ? t('exp.check_day', { day }) : day}</AppText>
             </View>
             <View style={{ flexDirection: theme.largeFont ? 'column' : 'row', gap: theme.space[2] }}>
               <Button
@@ -226,7 +226,7 @@ export function CheckCards({
                 testID={`exp-check-edit-${e.id}`}
                 label={t('exp.check_edit')}
                 accessibilityLabel={t('exp.check_edit_a11y', { amount })}
-                variant="outline"
+                variant="secondary"
                 style={theme.largeFont ? undefined : { flex: 1 }}
                 onPress={() => onEdit(e)}
               />
@@ -270,13 +270,13 @@ export function DuplicateCards({ pairs, today }: { pairs: ExpenseDuplicateOut[];
             {line(d.keep, `exp-dup-keep-${d.id}`)}
             {line(d.other, `exp-dup-other-${d.id}`)}
           </View>
-          <AppText variant="meta">{t('exp.dup_what')}</AppText>
+          <AppText variant="callout">{t('exp.dup_what')}</AppText>
           <View style={{ flexDirection: theme.largeFont ? 'column' : 'row', gap: theme.space[2] }}>
             <Button testID={`exp-dup-merge-${d.id}`} label={t('exp.dup_merge')} style={theme.largeFont ? undefined : { flex: 1 }} onPress={async () => say(await mergeDuplicate(d))} />
             <Button
               testID={`exp-dup-no-${d.id}`}
               label={t('exp.dup_different')}
-              variant="outline"
+              variant="secondary"
               style={theme.largeFont ? undefined : { flex: 1 }}
               onPress={async () => say(await dismissDuplicate(d))}
             />

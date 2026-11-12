@@ -422,3 +422,45 @@ async def create_page(
     session.add(page)
     await session.flush()
     return page
+
+
+async def first_use_page(session: AsyncSession, user_id: int,
+                         key: str) -> tuple[Screen | None, bool]:  # fmt: skip
+    """(the live page of `key` — «shopping», «expenses», «documents» —, made_now). The page is
+    made when this is its first record (Ф-35, Ф-36; settings `pages_on_first_use`,
+    `pages_first_use_keys`).
+
+    A page is made once per kind: never when the person has (or had, and removed) one, nor when
+    the server made it before, nor over the page limit. Then (None, False), and the caller files
+    the record as before. The new page is not part of the record's «Отменить»: it stays.
+    """
+    from assistant.config import get_settings
+    from assistant.db.models import User
+    from assistant.db.models_pages import MAX_PAGES
+
+    live = await session.scalar(
+        select(Screen).where(Screen.user_id == user_id, Screen.template_key == key,
+                             Screen.deleted_at.is_(None)).order_by(Screen.id).limit(1))
+    if live is not None:
+        return live, False
+    s = get_settings()
+    if not s.pages_on_first_use or key not in s.pages_first_use_keys:
+        return None, False
+    await lock_user(session, user_id)
+    user = await session.get(User, user_id)
+    if user is None or key in (user.pages_first_use or []):
+        return None, False
+    had = await session.scalar(select(Screen.id).where(Screen.user_id == user_id,
+                                                       Screen.template_key == key).limit(1))
+    if had is not None:
+        return None, False
+    count = await session.scalar(select(func.count()).select_from(Screen).where(
+        Screen.user_id == user_id, Screen.deleted_at.is_(None))) or 0  # fmt: skip
+    template = await latest_template(session, key)
+    if template is None or count >= MAX_PAGES:
+        return None, False
+    page = await create_page(session, user_id, template, client_id=uuid.uuid4(),
+                             created_by=ScreenCreatedBy.SYSTEM)  # fmt: skip
+    user.pages_first_use = [*(user.pages_first_use or []), key]
+    await fill_page(session, page)
+    return page, True

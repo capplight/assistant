@@ -5,7 +5,7 @@ import { Pressable, View } from 'react-native';
 
 import type { KpVersionRowOut } from '@/api/types';
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/Screen';
 import { StandaloneUndoStrip } from '@/components/UndoStrip';
 import { decToMinor } from '@/kp/calc';
@@ -69,11 +69,11 @@ export default function KpVersionsScreen() {
       <Screen testID="kp-versions-screen">
         <View style={{ gap: theme.space[4] }}>
           <Button testID="kp-versions-back" label={`‹ ${t('kp.back')}`} variant="text" minHeight={theme.size.minTouch} style={{ alignSelf: 'flex-start' }} onPress={back} />
-          <AppText variant="title1" accessibilityRole="header">
+          <AppText variant="largeTitle" accessibilityRole="header">
             {doc ? `${t('kp.versions_title')} · ${kpTitle(doc, t)}` : t('kp.versions_title')}
           </AppText>
           {state === 'offline' ? (
-            <AppText testID="kp-versions-offline" variant="meta">
+            <AppText testID="kp-versions-offline" variant="callout">
               {t('kp.versions_offline')}
             </AppText>
           ) : null}
@@ -100,17 +100,17 @@ export default function KpVersionsScreen() {
                 accessibilityHint={t('kp.v_open_hint')}
                 onPress={() => router.push({ pathname: '/kp/version', params: { doc: docId, n: String(r.n) } })}
                 style={({ pressed }) => ({
-                  minHeight: theme.size.primaryTouch,
+                  minHeight: theme.size.buttonHeight,
                   padding: theme.space[3],
                   gap: theme.space[1],
-                  borderRadius: theme.radius.card,
+                  borderRadius: theme.radius.lg,
                   borderWidth: isSent ? 2 : 1,
-                  borderColor: isSent ? theme.colors.done : theme.colors.line,
-                  backgroundColor: pressed ? theme.colors.line : theme.colors.surface,
+                  borderColor: isSent ? theme.colors.success : theme.colors.separator,
+                  backgroundColor: pressed ? theme.colors.separator : theme.colors.surface,
                 })}
               >
                 <AppText variant="bodyStrong">{line1}</AppText>
-                <AppText variant="meta">{line2}</AppText>
+                <AppText variant="callout">{line2}</AppText>
                 <AppText variant="number" style={{ fontVariant: ['tabular-nums'] }}>
                   {sum}
                 </AppText>

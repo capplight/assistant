@@ -30,7 +30,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TSVECTOR
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.schema import FetchedValue
 
@@ -185,6 +185,9 @@ class User(Base):
     onboarding_path: Mapped[str | None] = mapped_column(Text)
     onboarding_done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     welcome_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # 0025: template keys of pages the server made on first use (Ф-35): each made once
+    pages_first_use: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list,
+                                                       server_default="{}")  # fmt: skip
 
     trips: Mapped[list["Trip"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 

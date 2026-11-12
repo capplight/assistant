@@ -79,8 +79,8 @@ export function SourceChips({
     styles.chip,
     {
       minHeight: theme.size.minTouch,
-      borderRadius: theme.radius.chip,
-      borderColor: theme.colors.lineStrong,
+      borderRadius: theme.radius.round,
+      borderColor: theme.colors.iconSecondary,
       paddingHorizontal: theme.space[3],
       gap: theme.space[1],
     },
@@ -100,7 +100,7 @@ export function SourceChips({
             style={chipStyle}
           >
             <FileText size={18} color={theme.colors.ink2} />
-            <AppText variant="meta" color="ink" numberOfLines={1} style={styles.shrink}>
+            <AppText variant="callout" color="ink" numberOfLines={1} style={styles.shrink}>
               {label}
             </AppText>
           </Pressable>
@@ -114,7 +114,7 @@ export function SourceChips({
           onPress={onMore}
           style={chipStyle}
         >
-          <AppText variant="meta" color="ink">
+          <AppText variant="callout" color="ink">
             {t('answer.more_sources', { n: rest })}
           </AppText>
         </Pressable>
@@ -141,15 +141,15 @@ export function LocalHitChips({ messageId, recordIds, titles }: { messageId: str
             styles.chip,
             {
               minHeight: theme.size.minTouch,
-              borderRadius: theme.radius.chip,
-              borderColor: theme.colors.lineStrong,
+              borderRadius: theme.radius.round,
+              borderColor: theme.colors.iconSecondary,
               paddingHorizontal: theme.space[3],
               gap: theme.space[1],
             },
           ]}
         >
           <FileText size={18} color={theme.colors.ink2} />
-          <AppText variant="meta" color="ink" numberOfLines={1} style={styles.shrink}>
+          <AppText variant="callout" color="ink" numberOfLines={1} style={styles.shrink}>
             {titles[id] ?? ''}
           </AppText>
         </Pressable>

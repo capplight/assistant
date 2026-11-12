@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { StyleSheet, TextInput, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { CheckBadge } from '@/components/kp/KpParts';
 import { Screen } from '@/components/Screen';
 import { VoiceListening } from '@/components/VoiceListening';
@@ -113,7 +113,7 @@ export default function NewKpScreen() {
   const header = (
     <View style={styles.row}>
       <Button testID="kp-new-close" label={`‹ ${t('kp.back')}`} variant="text" minHeight={theme.size.minTouch} onPress={close} />
-      <AppText variant="meta" style={{ marginLeft: 'auto' }}>
+      <AppText variant="callout" style={{ marginLeft: 'auto' }}>
         {t('kp.step', { n: 1 })}
       </AppText>
     </View>
@@ -123,12 +123,12 @@ export default function NewKpScreen() {
   if (!assistantOn()) {
     body = (
       <>
-        <AppText variant="title1" accessibilityRole="header">
+        <AppText variant="largeTitle" accessibilityRole="header">
           {t('kp.no_ai_title')}
         </AppText>
         <AppText testID="kp-new-no-ai">{t('kp.no_ai_body')}</AppText>
-        <Button testID="kp-new-company" label={t('kp.my_company')} variant="outline" onPress={() => router.replace('/company')} />
-        <Button testID="kp-new-prices" label={t('kp.my_prices')} variant="outline" onPress={() => router.replace('/price-list')} />
+        <Button testID="kp-new-company" label={t('kp.my_company')} variant="secondary" onPress={() => router.replace('/company')} />
+        <Button testID="kp-new-prices" label={t('kp.my_prices')} variant="secondary" onPress={() => router.replace('/price-list')} />
       </>
     );
   } else if (job) {
@@ -138,11 +138,11 @@ export default function NewKpScreen() {
       const items = all ? data.items : data.items.slice(0, FIRST_ITEMS);
       body = (
         <>
-          <AppText variant="title1" accessibilityRole="header">
+          <AppText variant="largeTitle" accessibilityRole="header">
             {t('kp.understood')}
           </AppText>
           {job.message ? (
-            <AppText testID="kp-new-partial" color="warnText">
+            <AppText testID="kp-new-partial" color="warning">
               {job.message}
             </AppText>
           ) : null}
@@ -151,7 +151,7 @@ export default function NewKpScreen() {
             {data.client.bin ? <AppText variant="number">{`${t('kp.client_bin')}: ${data.client.bin}`}</AppText> : null}
             {data.client.review.includes('client.bin') ? <CheckBadge testID="kp-new-bin-check" /> : null}
           </View>
-          <AppText variant="section" accessibilityRole="header">
+          <AppText variant="sectionLabel" accessibilityRole="header">
             {t('kp.items_title', { count: data.items.length })}
           </AppText>
           {items.map((it, i) => (
@@ -169,7 +169,7 @@ export default function NewKpScreen() {
               onPress={() => setAll((a) => !a)}
             />
           ) : null}
-          <AppText variant="section" accessibilityRole="header">
+          <AppText variant="sectionLabel" accessibilityRole="header">
             {t('kp.prices_title')}
           </AppText>
           <View testID="kp-new-prices-sum" style={{ gap: theme.space[1] }}>
@@ -177,19 +177,19 @@ export default function NewKpScreen() {
             {v.counts.past_kp > 0 ? <AppText>{t('kp.prices_from_past', { count: v.counts.past_kp })}</AppText> : null}
             {v.counts.manual > 0 ? <AppText>{t('kp.prices_manual', { count: v.counts.manual })}</AppText> : null}
             {v.counts.missing > 0 ? (
-              <AppText testID="kp-new-missing" color="warnText">
+              <AppText testID="kp-new-missing" color="warning">
                 {t('kp.prices_missing', { count: v.counts.missing })}
               </AppText>
             ) : null}
           </View>
           {v.counts.missing > 0 ? (
-            <Button testID="kp-new-fast" label={t('kp.fast_input')} variant="outline" onPress={() => router.push({ pathname: '/kp/prices', params: { doc: doc.id } })} />
+            <Button testID="kp-new-fast" label={t('kp.fast_input')} variant="secondary" onPress={() => router.push({ pathname: '/kp/prices', params: { doc: doc.id } })} />
           ) : null}
           <AppText>{t('kp.vat_line', { mode: vatText(data.vat.mode, v.vatRate, t) })}</AppText>
           {needsProfile ? (
             <View testID="kp-new-needs-profile" style={{ gap: theme.space[2] }}>
-              <AppText color="warnText">{t('kp.company_first_body')}</AppText>
-              <Button testID="kp-new-company-now" label={t('kp.company_fill')} variant="outline" onPress={() => router.push('/company')} />
+              <AppText color="warning">{t('kp.company_first_body')}</AppText>
+              <Button testID="kp-new-company-now" label={t('kp.company_fill')} variant="secondary" onPress={() => router.push('/company')} />
             </View>
           ) : null}
           <Button
@@ -200,13 +200,13 @@ export default function NewKpScreen() {
               router.replace({ pathname: '/kp/[id]', params: { id: doc.id } });
             }}
           />
-          {doc.ai_generated ? <AppText variant="meta">{t('ai.label')}</AppText> : null}
+          {doc.ai_generated ? <AppText variant="callout">{t('ai.label')}</AppText> : null}
         </>
       );
     } else if (job.state === 'failed') {
       body = (
         <>
-          <AppText testID="kp-new-failed" variant="title2" color="warnText" accessibilityLiveRegion="polite">
+          <AppText testID="kp-new-failed" variant="title2" color="warning" accessibilityLiveRegion="polite">
             {job.message ?? t('kp.job_failed')}
           </AppText>
           <Button
@@ -221,7 +221,7 @@ export default function NewKpScreen() {
           <Button
             testID="kp-new-remove"
             label={t('kp.job_remove')}
-            variant="outline"
+            variant="secondary"
             onPress={() => {
               dropJob(job.id);
               close();
@@ -240,19 +240,19 @@ export default function NewKpScreen() {
                 : t('kp.job_reading')
               : t('kp.job_waiting')}
           </AppText>
-          <Button testID="kp-new-leave" label={t('kp.back')} variant="outline" onPress={close} />
+          <Button testID="kp-new-leave" label={t('kp.back')} variant="secondary" onPress={close} />
         </>
       );
     }
   } else if (!profileReady(profile) && !(savedProfile?.secrets_masked && savedProfile.complete) && !companyLater) {
     body = (
       <>
-        <AppText variant="title1" accessibilityRole="header">
+        <AppText variant="largeTitle" accessibilityRole="header">
           {t('kp.company_first_title')}
         </AppText>
         <AppText>{t('kp.company_first_body')}</AppText>
         <Button testID="kp-new-company" label={t('kp.company_fill')} onPress={() => router.push('/company')} />
-        <Button testID="kp-new-company-later" label={t('kp.later')} variant="outline" onPress={() => setCompanyLater(true)} />
+        <Button testID="kp-new-company-later" label={t('kp.later')} variant="secondary" onPress={() => setCompanyLater(true)} />
       </>
     );
   } else if (voice.status === 'listening') {
@@ -279,7 +279,7 @@ export default function NewKpScreen() {
           maxFontSizeMultiplier={MAX_FONT_SCALE}
           style={[
             theme.type.body,
-            { color: theme.colors.ink, minHeight: 160, borderWidth: 1, borderColor: theme.colors.lineStrong, borderRadius: theme.radius.input, padding: theme.space[3], textAlignVertical: 'top', backgroundColor: theme.colors.surface },
+            { color: theme.colors.ink, minHeight: 160, borderWidth: 1, borderColor: theme.colors.iconSecondary, borderRadius: theme.radius.sm, padding: theme.space[3], textAlignVertical: 'top', backgroundColor: theme.colors.surface },
           ]}
         />
         <Button testID="kp-new-text-save" label={t('kp.text_save')} disabled={!text.trim()} onPress={() => void saveText()} />
@@ -289,7 +289,7 @@ export default function NewKpScreen() {
   } else if (mode === 'camera_ask') {
     body = (
       <>
-        <AppText variant="title1" accessibilityRole="header">
+        <AppText variant="largeTitle" accessibilityRole="header">
           {t('exp.camera_title')}
         </AppText>
         <AppText testID="kp-new-camera-why">{t('exp.camera_why')}</AppText>
@@ -306,27 +306,27 @@ export default function NewKpScreen() {
             })()
           }
         />
-        <Button testID="kp-new-camera-gallery" label={t('exp.from_gallery')} variant="outline" onPress={() => { setMode('pick'); void pick('photo'); }} />
+        <Button testID="kp-new-camera-gallery" label={t('exp.from_gallery')} variant="secondary" onPress={() => { setMode('pick'); void pick('photo'); }} />
       </>
     );
   } else {
     body = (
       <>
-        <AppText variant="title1" accessibilityRole="header">
+        <AppText variant="largeTitle" accessibilityRole="header">
           {t('kp.source_title')}
         </AppText>
         {!online ? (
-          <AppText testID="kp-new-offline" color="warnText">
+          <AppText testID="kp-new-offline" color="warning">
             {t('kp.offline_note')}
           </AppText>
         ) : null}
         <Button testID="kp-new-camera" label={t('kp.source_camera')} disabled={busy} onPress={() => void pick('camera')} />
-        <Button testID="kp-new-photo" label={t('kp.source_photo')} variant="outline" disabled={busy} onPress={() => void pick('photo')} />
-        <Button testID="kp-new-pdf" label={t('kp.source_pdf')} variant="outline" disabled={busy} onPress={() => void pick('pdf')} />
-        <Button testID="kp-new-type" label={t('kp.source_text')} variant="outline" disabled={busy} onPress={() => setMode('text')} />
-        <Button testID="kp-new-voice" label={t('kp.source_voice')} variant="outline" disabled={busy} onPress={() => void voice.start()} />
+        <Button testID="kp-new-photo" label={t('kp.source_photo')} variant="secondary" disabled={busy} onPress={() => void pick('photo')} />
+        <Button testID="kp-new-pdf" label={t('kp.source_pdf')} variant="secondary" disabled={busy} onPress={() => void pick('pdf')} />
+        <Button testID="kp-new-type" label={t('kp.source_text')} variant="secondary" disabled={busy} onPress={() => setMode('text')} />
+        <Button testID="kp-new-voice" label={t('kp.source_voice')} variant="secondary" disabled={busy} onPress={() => void voice.start()} />
         {voice.status === 'denied' ? (
-          <AppText testID="kp-new-voice-denied" color="warnText">
+          <AppText testID="kp-new-voice-denied" color="warning">
             {t('kp.voice_denied')}
           </AppText>
         ) : null}

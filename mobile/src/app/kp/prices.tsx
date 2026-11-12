@@ -4,8 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
-import { Checkbox } from '@/components/Checkbox';
+import { Button } from '@/components/ui/Button';
+import { CheckRow as Checkbox } from '@/components/ui/Check';
 import { DigitKeypad, NumberDisplay, pressDigit } from '@/components/kp/KpParts';
 import { Screen } from '@/components/Screen';
 import { StandaloneUndoStrip } from '@/components/UndoStrip';
@@ -75,7 +75,7 @@ export default function FastPricesScreen() {
               </AppText>
               <NumberDisplay testID="kp-fast-display" text={text} />
               {bad ? (
-                <AppText testID="kp-fast-bad" color="warnText" accessibilityLiveRegion="polite">
+                <AppText testID="kp-fast-bad" color="warning" accessibilityLiveRegion="polite">
                   {t('kp.edit_bad')}
                 </AppText>
               ) : null}

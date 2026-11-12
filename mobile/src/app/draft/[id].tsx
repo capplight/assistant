@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { ContactPhoneField } from '@/components/kp/ContactPhoneField';
 import { KpTextField } from '@/components/kp/KpEdits';
 import { CheckBadge } from '@/components/kp/KpParts';
@@ -43,7 +43,7 @@ export default function DraftScreen() {
         <Screen testID="draft-screen">
           <View style={{ gap: theme.space[4] }}>
             <AppText testID="draft-gone">{t('draft.gone')}</AppText>
-            <Button testID="draft-close" label={t('common.close')} variant="outline" onPress={close} />
+            <Button testID="draft-close" label={t('common.close')} variant="secondary" onPress={close} />
           </View>
         </Screen>
         <StandaloneUndoStrip />
@@ -69,14 +69,14 @@ export default function DraftScreen() {
       <Screen testID="draft-screen">
         <View style={{ gap: theme.space[4] }}>
           <View style={styles.row}>
-            <AppText variant="title1" accessibilityRole="header" style={{ flexShrink: 1 }}>
+            <AppText variant="largeTitle" accessibilityRole="header" style={{ flexShrink: 1 }}>
               {email_ ? t('draft.title_mail') : t('draft.title_wa')}
             </AppText>
             <Button testID="draft-close" label={t('common.close')} variant="text" minHeight={theme.size.minTouch} style={{ marginLeft: 'auto' }} onPress={close} />
           </View>
 
           {ask && !answered ? (
-            <View testID="draft-did" style={{ gap: theme.space[3], padding: theme.space[4], borderRadius: theme.radius.card, borderWidth: 2, borderColor: theme.colors.accent }}>
+            <View testID="draft-did" style={{ gap: theme.space[3], padding: theme.space[4], borderRadius: theme.radius.lg, borderWidth: 2, borderColor: theme.colors.brand }}>
               <AppText variant="title2" accessibilityRole="header" accessibilityLiveRegion="polite">
                 {t('send.did_you')}
               </AppText>
@@ -84,7 +84,7 @@ export default function DraftScreen() {
                 <Button
                   testID="draft-did-no"
                   label={t('send.did_no')}
-                  variant="outline"
+                  variant="secondary"
                   style={{ flexGrow: 1 }}
                   onPress={() => {
                     void answerDraft(id, false);
@@ -105,31 +105,31 @@ export default function DraftScreen() {
           ) : null}
           {answered === 'sent' || draft.status === 'sent' ? (
             <View testID="draft-sent" style={{ gap: theme.space[2] }}>
-              <AppText color="done">{t('send.marked_note')}</AppText>
+              <AppText color="success">{t('send.marked_note')}</AppText>
               <Button testID="draft-finish" label={t('send.finish')} onPress={close} />
             </View>
           ) : null}
           {answered === 'not_sent' ? <AppText testID="draft-not-sent">{t('send.not_marked')}</AppText> : null}
 
           <View style={{ gap: theme.space[1] }}>
-            <AppText variant="meta">{t('send.to')}</AppText>
+            <AppText variant="callout">{t('send.to')}</AppText>
             <AppText testID="draft-to" variant="bodyStrong">
               {draft.recipient_name ?? t('send.no_client')}
             </AppText>
-            <AppText variant="meta">{`${t('send.by')}: ${email_ ? t('send.ch_email') : t('send.ch_whatsapp')}`}</AppText>
+            <AppText variant="callout">{`${t('send.by')}: ${email_ ? t('send.ch_email') : t('send.ch_whatsapp')}`}</AppText>
           </View>
 
           <KpTextField testID="draft-text" label={t('send.text')} value={shownText} onChangeText={setText} onEndEditing={commit} onBlur={commit} multiline />
           {draft.review_fields.includes('text') ? (
             <View style={[styles.row, { gap: theme.space[2], flexWrap: 'wrap' }]}>
               <CheckBadge testID="draft-check" />
-              <AppText variant="meta" style={{ flexShrink: 1 }}>
+              <AppText variant="callout" style={{ flexShrink: 1 }}>
                 {t('draft.check_number')}
               </AppText>
             </View>
           ) : null}
           {draft.ai_generated ? (
-            <AppText testID="draft-ai-label" variant="meta">
+            <AppText testID="draft-ai-label" variant="callout">
               {t('ai.label')}
             </AppText>
           ) : null}
@@ -139,7 +139,7 @@ export default function DraftScreen() {
           ) : (
             <ContactPhoneField testID="draft-phone" value={phone} onChange={setPhone} />
           )}
-          <View testID="draft-hint" style={{ padding: theme.space[3], borderRadius: theme.radius.card, borderWidth: 1, borderColor: theme.colors.lineStrong }}>
+          <View testID="draft-hint" style={{ padding: theme.space[3], borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.iconSecondary }}>
             <AppText>{email_ ? t('send.mail_hint') : t('send.wa_hint', { name: draft.recipient_name ?? t('send.no_client') })}</AppText>
           </View>
           <Button
@@ -149,7 +149,7 @@ export default function DraftScreen() {
             onPress={() => void open()}
           />
           {result && result.result !== 'opened' ? (
-            <AppText testID="draft-problem" color="warnText" accessibilityLiveRegion="polite">
+            <AppText testID="draft-problem" color="warning" accessibilityLiveRegion="polite">
               {result.message || t(`draft.err_${result.result}`)}
             </AppText>
           ) : null}

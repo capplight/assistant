@@ -37,7 +37,7 @@ export function RecordRow({
   onPress: () => void;
   /** Search: the place that matched, when the title does not show it. */
   snippet?: string | null;
-  /** Just changed by the assistant: `markerSoft` for 600 ms (2-design `motion.highlight`). */
+  /** Just changed by the assistant: `highlightTint` for 600 ms (2-design `motion.highlight`). */
   highlighted?: boolean;
   moves?: RowMoves;
   /** Being dragged: raised with a shadow (2-design `motion.lift`). */
@@ -82,12 +82,12 @@ export function RecordRow({
       style={[
         styles.card,
         {
-          backgroundColor: highlighted ? theme.colors.markerSoft : theme.colors.surface,
-          borderColor: lifted ? theme.colors.accent : theme.colors.line,
-          borderRadius: theme.radius.card,
+          backgroundColor: highlighted ? theme.colors.highlightTint : theme.colors.surface,
+          borderColor: lifted ? theme.colors.brand : theme.colors.separator,
+          borderRadius: theme.radius.lg,
           marginBottom: theme.space[3],
         },
-        lifted ? [theme.elevation?.sheet, { transform: [{ scale: 1.02 }] }] : null,
+        lifted ? [theme.elevation.floating, { transform: [{ scale: 1.02 }] }] : null,
       ]}
     >
       <Pressable
@@ -103,34 +103,34 @@ export function RecordRow({
         style={({ pressed }) => [
           styles.content,
           {
-            backgroundColor: highlighted ? theme.colors.markerSoft : theme.colors.surface,
-            borderRadius: theme.radius.card,
+            backgroundColor: highlighted ? theme.colors.highlightTint : theme.colors.surface,
+            borderRadius: theme.radius.lg,
             padding: theme.space[4],
             paddingRight: moves ? theme.space[1] : theme.space[4],
-            minHeight: theme.size.primaryTouch,
+            minHeight: theme.size.buttonHeight,
             gap: theme.space[1],
             opacity: pressed ? 0.85 : 1,
           },
         ]}
       >
         <AppText numberOfLines={3}>{title}</AppText>
-        {snippet && snippet !== title ? <AppText variant="meta">{snippet}</AppText> : null}
-        <AppText variant="meta">{source}</AppText>
-        {status ? <AppText variant="meta">{status}</AppText> : null}
-        {record.aiGenerated ? <AppText variant="meta">{t('ai.label_short')}</AppText> : null}
+        {snippet && snippet !== title ? <AppText variant="callout">{snippet}</AppText> : null}
+        <AppText variant="callout">{source}</AppText>
+        {status ? <AppText variant="callout">{status}</AppText> : null}
+        {record.aiGenerated ? <AppText variant="callout">{t('ai.label_short')}</AppText> : null}
         {toCheck ? (
           <View
             testID={`record-check-${record.id}`}
             style={[
               styles.badge,
               {
-                backgroundColor: theme.colors.markerSoft,
-                borderRadius: theme.radius.chip,
+                backgroundColor: theme.colors.highlightTint,
+                borderRadius: theme.radius.round,
                 paddingHorizontal: theme.space[2],
               },
             ]}
           >
-            <AppText variant="meta" color="warnText">
+            <AppText variant="callout" color="warning">
               {t('check.badge')}
             </AppText>
           </View>
@@ -146,7 +146,7 @@ export function RecordRow({
             hitSlop={4}
             style={square}
           >
-            <Ellipsis size={24} color={theme.colors.accent} />
+            <Ellipsis size={24} color={theme.colors.brand} />
           </Pressable>
           {moves.showArrows ? (
             <>
@@ -159,7 +159,7 @@ export function RecordRow({
                 onPress={moves.onUp}
                 style={[square, { opacity: moves.onUp ? 1 : 0.35 }]}
               >
-                <ArrowUp size={24} color={theme.colors.accent} />
+                <ArrowUp size={24} color={theme.colors.brand} />
               </Pressable>
               <Pressable
                 testID={`record-down-${record.id}`}
@@ -170,7 +170,7 @@ export function RecordRow({
                 onPress={moves.onDown}
                 style={[square, { opacity: moves.onDown ? 1 : 0.35 }]}
               >
-                <ArrowDown size={24} color={theme.colors.accent} />
+                <ArrowDown size={24} color={theme.colors.brand} />
               </Pressable>
             </>
           ) : null}

@@ -16,7 +16,7 @@ import { useTheme } from '@/theme';
 import { newId } from '@/utils/id';
 
 import { AppText } from '../AppText';
-import { Button } from '../Button';
+import { Button } from '../ui/Button';
 import type { RowMoves } from '../RecordRow';
 import { EntryList, type EntryCtx } from './EntryList';
 import { AddFieldSheet, ChoiceSheet, FieldValueSheet } from './FieldSheets';
@@ -91,8 +91,8 @@ export function NotebookView({ page, entries, frameTop, ordering }: ViewProps) {
       testID="notebook-mode-menu"
       label={`${t('view.view')}: ${t(`view.layout.${layoutLabel('custom', mode)}`)}`}
       accessibilityLabel={t('view.view_a11y', { view: t(`view.layout.${layoutLabel('custom', mode)}`) })}
-      variant="outline"
-      icon={<ChevronDown size={22} color={theme.colors.accent} />}
+      variant="secondary"
+      icon={<ChevronDown size={22} color={theme.colors.brand} />}
       onPress={() => setChoosing(true)}
     />
   ) : (
@@ -102,7 +102,7 @@ export function NotebookView({ page, entries, frameTop, ordering }: ViewProps) {
           key={m}
           testID={`notebook-mode-${m}`}
           label={t(`view.layout.${layoutLabel('custom', m)}`)}
-          variant={m === mode ? 'primary' : 'outline'}
+          variant={m === mode ? 'primary' : 'secondary'}
           minHeight={theme.size.minTouch}
           accessibilityRole="tab"
           accessibilityState={{ selected: m === mode }}
@@ -115,11 +115,11 @@ export function NotebookView({ page, entries, frameTop, ordering }: ViewProps) {
 
   const tableHead =
     mode === 'table' && !cards && (entries?.length ?? 0) > 0 ? (
-      <View testID="notebook-table-head" accessibilityRole="header" style={[styles.row, styles.cellRow, { borderColor: theme.colors.lineStrong, backgroundColor: theme.colors.bg }]}>
+      <View testID="notebook-table-head" accessibilityRole="header" style={[styles.row, styles.cellRow, { borderColor: theme.colors.iconSecondary, backgroundColor: theme.colors.bg }]}>
         {fields
           .filter((f) => f.type !== 'long_text')
           .map((f) => (
-            <AppText key={f.id} variant="meta" color="ink" style={[styles.cell, { padding: theme.space[2] }]}>
+            <AppText key={f.id} variant="callout" color="ink" style={[styles.cell, { padding: theme.space[2] }]}>
               {fieldTitle(f, i18n.language)}
             </AppText>
           ))}
@@ -141,11 +141,11 @@ export function NotebookView({ page, entries, frameTop, ordering }: ViewProps) {
         <Button
           testID="notebook-add-column"
           label={t('view.add_column')}
-          variant="outline"
+          variant="secondary"
           disabled={!canAdd}
           onPress={() => setAdding(true)}
         />
-        {!canAdd ? <AppText variant="meta">{t('view.err_custom_limit')}</AppText> : null}
+        {!canAdd ? <AppText variant="callout">{t('view.err_custom_limit')}</AppText> : null}
       </View>
     ) : null;
 
@@ -184,7 +184,7 @@ export function NotebookView({ page, entries, frameTop, ordering }: ViewProps) {
         accessibilityLabel={title}
         accessibilityState={{ checked: done }}
         onPress={() => void setFieldValues(page, rec.id, { [DONE_FIELD]: !done }, t(done ? 'view.unticked' : 'view.ticked', { what: title }))}
-        style={{ width: theme.size.primaryTouch, minHeight: theme.size.primaryTouch, alignItems: 'center', justifyContent: 'center' }}
+        style={{ width: theme.size.buttonHeight, minHeight: theme.size.buttonHeight, alignItems: 'center', justifyContent: 'center' }}
       >
         <View
           style={{
@@ -192,8 +192,8 @@ export function NotebookView({ page, entries, frameTop, ordering }: ViewProps) {
             height: 40,
             borderRadius: 8,
             borderWidth: 2,
-            borderColor: done ? theme.colors.ink2 : theme.colors.accent,
-            backgroundColor: done ? theme.colors.line : 'transparent',
+            borderColor: done ? theme.colors.ink2 : theme.colors.brand,
+            backgroundColor: done ? theme.colors.separator : 'transparent',
             alignItems: 'center',
             justifyContent: 'center',
           }}
@@ -226,7 +226,7 @@ export function NotebookView({ page, entries, frameTop, ordering }: ViewProps) {
         <View
           testID={`notebook-row-${rec.id}`}
           onLayout={ctx.onLayout}
-          style={[styles.row, styles.cellRow, { borderColor: theme.colors.line, backgroundColor: ctx.highlighted ? theme.colors.markerSoft : theme.colors.surface }]}
+          style={[styles.row, styles.cellRow, { borderColor: theme.colors.separator, backgroundColor: ctx.highlighted ? theme.colors.highlightTint : theme.colors.surface }]}
         >
           {fields.filter((f) => f.type !== 'long_text').map(cell)}
           <MenuButton rec={rec} title={title} moves={ctx.moves} />
@@ -242,9 +242,9 @@ export function NotebookView({ page, entries, frameTop, ordering }: ViewProps) {
         style={[
           styles.card,
           {
-            backgroundColor: ctx.highlighted ? theme.colors.markerSoft : theme.colors.surface,
-            borderColor: ctx.lifted ? theme.colors.accent : theme.colors.line,
-            borderRadius: theme.radius.card,
+            backgroundColor: ctx.highlighted ? theme.colors.highlightTint : theme.colors.surface,
+            borderColor: ctx.lifted ? theme.colors.brand : theme.colors.separator,
+            borderRadius: theme.radius.lg,
             marginBottom: theme.space[3],
           },
         ]}
@@ -269,12 +269,12 @@ export function NotebookView({ page, entries, frameTop, ordering }: ViewProps) {
               {title}
             </AppText>
             {text && mode !== 'table' ? (
-              <AppText variant="meta" numberOfLines={3}>
+              <AppText variant="callout" numberOfLines={3}>
                 {text}
               </AppText>
             ) : null}
-            {mode !== 'table' && ownLine(rec) ? <AppText variant="meta">{ownLine(rec)}</AppText> : null}
-            {date && mode !== 'table' ? <AppText variant="meta">{date}</AppText> : null}
+            {mode !== 'table' && ownLine(rec) ? <AppText variant="callout">{ownLine(rec)}</AppText> : null}
+            {date && mode !== 'table' ? <AppText variant="callout">{date}</AppText> : null}
           </Pressable>
           {mode === 'table' ? fields.filter((f) => f.id !== 'title' && f.type !== 'long_text').map(cell) : null}
         </View>
@@ -338,7 +338,7 @@ function MenuButton({ rec, title, moves }: { rec: LocalRecord; title: string; mo
   return (
     <View style={{ alignItems: 'center', paddingTop: theme.space[1] }}>
       <Pressable testID={`record-menu-${rec.id}`} accessibilityRole="button" accessibilityLabel={t('move.menu_a11y', { what: title })} onPress={moves.onMenu} style={square}>
-        <Ellipsis size={24} color={theme.colors.accent} />
+        <Ellipsis size={24} color={theme.colors.brand} />
       </Pressable>
       {moves.showArrows ? (
         <>

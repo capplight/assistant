@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { MiniSchema } from '@/components/MiniSchema';
 import { Screen } from '@/components/Screen';
 import { LANGUAGES } from '@/i18n';
@@ -49,10 +49,10 @@ export default function WelcomeScreen() {
             {Array.from({ length: FRAMES }, (_, i) => (
               <View
                 key={i}
-                style={[styles.dot, { backgroundColor: i === frame ? theme.colors.accent : theme.colors.lineStrong }]}
+                style={[styles.dot, { backgroundColor: i === frame ? theme.colors.brand : theme.colors.iconSecondary }]}
               />
             ))}
-            <AppText variant="meta" style={{ marginLeft: theme.space[2] }}>
+            <AppText variant="callout" style={{ marginLeft: theme.space[2] }}>
               {t('tour.step', { n: frame + 1, total: FRAMES })}
             </AppText>
           </View>
@@ -86,14 +86,14 @@ export default function WelcomeScreen() {
                   marginLeft: i === 0 ? 0 : -24,
                   marginTop: i * 6,
                   backgroundColor: theme.colors.surface,
-                  borderColor: theme.colors.line,
+                  borderColor: theme.colors.separator,
                   borderWidth: 1,
-                  borderRadius: theme.radius.card,
+                  borderRadius: theme.radius.lg,
                 }}
               />
             ))}
           </View>
-          <AppText variant="title1" accessibilityRole="header">
+          <AppText variant="largeTitle" accessibilityRole="header">
             {t('tour.welcome')}
           </AppText>
           <AppText>{t('tour.title')}</AppText>
@@ -115,15 +115,15 @@ export default function WelcomeScreen() {
                   style={[
                     styles.segmentItem,
                     {
-                      minHeight: theme.size.primaryTouch,
-                      borderRadius: theme.radius.button,
+                      minHeight: theme.size.buttonHeight,
+                      borderRadius: theme.radius.md,
                       borderWidth: 2,
-                      borderColor: selected ? theme.colors.accent : theme.colors.lineStrong,
+                      borderColor: selected ? theme.colors.brand : theme.colors.iconSecondary,
                       backgroundColor: selected ? theme.colors.surface : 'transparent',
                     },
                   ]}
                 >
-                  <AppText variant={selected ? 'bodyStrong' : 'body'} color={selected ? 'accent' : 'ink'}>
+                  <AppText variant={selected ? 'bodyStrong' : 'body'} color={selected ? 'brand' : 'ink'}>
                     {selected ? '● ' : ''}
                     {t(`lang.${lang}`)}
                   </AppText>
@@ -143,7 +143,7 @@ export default function WelcomeScreen() {
 
       {frame === 1 && (
         <View style={{ gap: theme.space[3] }}>
-          <AppText variant="title1" accessibilityRole="header">
+          <AppText variant="largeTitle" accessibilityRole="header">
             {t('tour.ask')}
           </AppText>
           {TOUR_INTERESTS.map((key) => {
@@ -160,19 +160,19 @@ export default function WelcomeScreen() {
                 style={[
                   styles.interest,
                   {
-                    minHeight: theme.size.primaryTouch,
+                    minHeight: theme.size.buttonHeight,
                     gap: theme.space[3],
-                    borderRadius: theme.radius.card,
+                    borderRadius: theme.radius.lg,
                     borderWidth: 1,
-                    borderColor: checked ? theme.colors.accent : theme.colors.line,
+                    borderColor: checked ? theme.colors.brand : theme.colors.separator,
                     backgroundColor: theme.colors.surface,
                     padding: theme.space[3],
                   },
                 ]}
               >
-                <Icon size={theme.size.cardIcon} color={theme.colors.ink} strokeWidth={2} />
+                <Icon size={theme.size.icon} color={theme.colors.ink} strokeWidth={2} />
                 <AppText style={styles.flex}>{t(INTEREST_KEY[key])}</AppText>
-                <AppText variant="bodyStrong" color="accent">
+                <AppText variant="bodyStrong" color="brand">
                   {checked ? '☑' : '☐'}
                 </AppText>
               </Pressable>
@@ -183,7 +183,7 @@ export default function WelcomeScreen() {
 
       {frame === 2 && (
         <View style={{ gap: theme.space[4] }}>
-          <AppText variant="title1" accessibilityRole="header">
+          <AppText variant="largeTitle" accessibilityRole="header">
             {t('tour.pages_title')}
           </AppText>
           <View style={[styles.row, { gap: theme.space[2], flexWrap: 'wrap' }]}>
@@ -194,14 +194,14 @@ export default function WelcomeScreen() {
                   styles.miniCard,
                   {
                     backgroundColor: theme.colors.surface,
-                    borderColor: theme.colors.line,
-                    borderRadius: theme.radius.card,
+                    borderColor: theme.colors.separator,
+                    borderRadius: theme.radius.lg,
                     padding: theme.space[3],
                   },
                 ]}
               >
                 <MiniSchema kind={k} />
-                <AppText variant="meta" color="ink">
+                <AppText variant="callout" color="ink">
                   {t(`tpl.short.${k}`)}
                 </AppText>
               </View>
@@ -213,14 +213,14 @@ export default function WelcomeScreen() {
             accessibilityLabel={t('tour.demo_result_a11y')}
             style={{
               backgroundColor: theme.colors.surface,
-              borderColor: theme.colors.line,
+              borderColor: theme.colors.separator,
               borderWidth: 1,
-              borderRadius: theme.radius.card,
+              borderRadius: theme.radius.lg,
               padding: theme.space[4],
             }}
           >
             <AppText>{t('tour.demo_result')}</AppText>
-            <AppText variant="meta" style={styles.right}>
+            <AppText variant="callout" style={styles.right}>
               {t('tour.example')}
             </AppText>
           </View>

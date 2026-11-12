@@ -605,7 +605,7 @@ describe('receipt photo, QR, «Проверьте сумму», «Объедин
     await settle(() => text('exp-total') === '5 000 ₸');
   });
 
-  it('200%: the «Проверьте сумму» buttons stack, the amount keeps its 1.6× cap, the bring sheet rows are ≥56 pt', async () => {
+  it('200%: the «Проверьте сумму» buttons stack, the amount keeps its 1.6× cap, the bring sheet rows are ≥48 pt', async () => {
     Dimensions.set({ window: { width: 390, height: 844, scale: 3, fontScale: 2 }, screen: { width: 390, height: 844, scale: 3, fontScale: 2 } });
     resetApp();
     finishOnboarding('full');
@@ -618,6 +618,7 @@ describe('receipt photo, QR, «Проверьте сумму», «Объедин
     await settle(() => screen.queryByTestId('exp-bring-camera') !== null);
     const style = screen.getByTestId('exp-bring-camera').props.style;
     const flat = Array.isArray(style) ? Object.assign({}, ...style) : style;
-    expect(flat.minHeight).toBeGreaterThanOrEqual(56);
+    // Ф-45: platform sizes — rows 50 visible, targets ≥48 (was 56).
+    expect(flat.minHeight).toBeGreaterThanOrEqual(48);
   });
 });

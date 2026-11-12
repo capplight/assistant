@@ -6,7 +6,7 @@ import { useTheme } from '@/theme';
 import { formatTimer } from '@/voice/session';
 
 import { AppText } from './AppText';
-import { Button } from './Button';
+import { Button } from './ui/Button';
 
 type Props = {
   elapsedMs: number;
@@ -34,7 +34,7 @@ export function VoiceListening({ elapsedMs, level, continuing, kkBeta, onDone, o
         <AppText variant="bodyStrong" style={styles.flex}>
           {t('line.listening')}
         </AppText>
-        <AppText variant="meta" testID="voice-timer" accessibilityLabel={t('voice.timer_a11y', { time: timer })}>
+        <AppText variant="callout" testID="voice-timer" accessibilityLabel={t('voice.timer_a11y', { time: timer })}>
           {timer}
         </AppText>
       </View>
@@ -48,7 +48,7 @@ export function VoiceListening({ elapsedMs, level, continuing, kkBeta, onDone, o
               height: ring,
               borderRadius: ring / 2,
               borderWidth: 3,
-              borderColor: theme.colors.accent,
+              borderColor: theme.colors.brand,
               opacity: 0.35 + 0.5 * level,
               transform: [{ scale: 1 + 0.4 * level }],
             },
@@ -57,23 +57,23 @@ export function VoiceListening({ elapsedMs, level, continuing, kkBeta, onDone, o
         <View
           style={[
             styles.center,
-            { width: ring, height: ring, borderRadius: ring / 2, backgroundColor: theme.colors.accent },
+            { width: ring, height: ring, borderRadius: ring / 2, backgroundColor: theme.colors.brand },
           ]}
         >
-          <Mic size={40} color={theme.colors.onAccent} />
+          <Mic size={40} color={theme.colors.onBrand} />
         </View>
       </View>
       {continuing ? (
-        <AppText variant="meta" accessibilityLiveRegion="polite">
+        <AppText variant="callout" accessibilityLiveRegion="polite">
           {t('voice.continue')}
         </AppText>
       ) : null}
-      {kkBeta ? <AppText variant="meta">{t('voice.kk_beta')}</AppText> : null}
+      {kkBeta ? <AppText variant="callout">{t('voice.kk_beta')}</AppText> : null}
       <View style={[styles.row, { gap: theme.space[3] }]}>
         <Button
           testID="assistant-listening-cancel"
           label={t('voice.cancel')}
-          variant="outline"
+          variant="secondary"
           style={styles.flex}
           onPress={onCancel}
         />

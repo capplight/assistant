@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { AppState, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/Screen';
 import { QrCamera } from '@/components/page/QrCamera';
 import { getMedia, type Permission } from '@/expenses/media';
@@ -111,8 +111,8 @@ export default function ReceiptScreen() {
           <AppText variant="title2" accessibilityRole="header" accessibilityLiveRegion="polite">
             {t('exp.qr_hint')}
           </AppText>
-          <AppText variant="meta">{t('exp.qr_offline')}</AppText>
-          <Button testID="receipt-qr-photo" label={t('exp.qr_take_photo')} variant="outline" onPress={() => void pick('camera')} />
+          <AppText variant="callout">{t('exp.qr_offline')}</AppText>
+          <Button testID="receipt-qr-photo" label={t('exp.qr_take_photo')} variant="secondary" onPress={() => void pick('camera')} />
           <Button testID="receipt-cancel" label={t('exp.cancel')} variant="text" onPress={leave} />
         </View>
       </View>
@@ -125,7 +125,7 @@ export default function ReceiptScreen() {
       <View style={{ gap: theme.space[4] }}>
         {badQr ? (
           <>
-            <AppText variant="title1" accessibilityRole="header">
+            <AppText variant="largeTitle" accessibilityRole="header">
               {t('exp.qr_not_receipt_title')}
             </AppText>
             <AppText testID="receipt-qr-bad">{t('exp.qr_not_receipt')}</AppText>
@@ -137,18 +137,18 @@ export default function ReceiptScreen() {
                 setBadQr(false);
               }}
             />
-            <Button testID="receipt-cancel" label={t('exp.cancel')} variant="outline" onPress={leave} />
+            <Button testID="receipt-cancel" label={t('exp.cancel')} variant="secondary" onPress={leave} />
           </>
         ) : needsCamera && perm !== 'granted' && perm !== null ? (
           <>
-            <AppText variant="title1" accessibilityRole="header">
+            <AppText variant="largeTitle" accessibilityRole="header">
               {t('exp.camera_title')}
             </AppText>
             <AppText testID="receipt-camera-why">{t(kind === 'qr' ? 'exp.camera_why_qr' : 'exp.camera_why')}</AppText>
-            <AppText variant="meta">{t('exp.camera_private')}</AppText>
+            <AppText variant="callout">{t('exp.camera_private')}</AppText>
             {blocked ? (
               <>
-                <AppText testID="receipt-camera-blocked" color="warnText">
+                <AppText testID="receipt-camera-blocked" color="warning">
                   {t('exp.camera_blocked')}
                 </AppText>
                 <Button testID="receipt-settings" label={t('exp.camera_settings')} onPress={() => getMedia().openSettings()} />
@@ -156,7 +156,7 @@ export default function ReceiptScreen() {
             ) : (
               <Button testID="receipt-allow" label={t('exp.camera_allow')} onPress={() => void allow()} />
             )}
-            <Button testID="receipt-gallery" label={t('exp.from_gallery')} variant="outline" onPress={() => void pick('photo')} />
+            <Button testID="receipt-gallery" label={t('exp.from_gallery')} variant="secondary" onPress={() => void pick('photo')} />
             <Button testID="receipt-cancel" label={t('exp.not_now')} variant="text" onPress={leave} />
           </>
         ) : (

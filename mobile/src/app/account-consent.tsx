@@ -5,7 +5,7 @@ import { View } from 'react-native';
 
 import { acceptAccountConsent } from '@/account/switch';
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { ConsentForm } from '@/consent/ConsentForm';
 import { useOnboarding } from '@/store/onboarding';
 import { useSession } from '@/store/session';

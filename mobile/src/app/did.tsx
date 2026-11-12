@@ -6,7 +6,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import type { ActionOut } from '@/api/types';
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/Screen';
 import { StandaloneUndoStrip } from '@/components/UndoStrip';
 import { getApi, syncBlocked } from '@/services';
@@ -81,7 +81,7 @@ export default function DidScreen() {
       <View
         key={a.id}
         testID={`did-${a.id}`}
-        style={[styles.row, { borderBottomWidth: 1, borderBottomColor: theme.colors.line, gap: theme.space[2], paddingVertical: theme.space[2] }]}
+        style={[styles.row, { borderBottomWidth: 1, borderBottomColor: theme.colors.separator, gap: theme.space[2], paddingVertical: theme.space[2] }]}
       >
         <View style={styles.flex}>
           <AppText
@@ -90,8 +90,8 @@ export default function DidScreen() {
           >
             {text}
           </AppText>
-          <AppText variant="meta">{`${who} · ${time(a.created_at)}`}</AppText>
-          {a.scope === 'external' ? <AppText variant="meta">{t('did.external')}</AppText> : null}
+          <AppText variant="callout">{`${who} · ${time(a.created_at)}`}</AppText>
+          {a.scope === 'external' ? <AppText variant="callout">{t('did.external')}</AppText> : null}
         </View>
         {canAct && a.undoable && !a.undone_at ? (
           <Button
@@ -130,7 +130,7 @@ export default function DidScreen() {
             minHeight={theme.size.minTouch}
             onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
           />
-          <AppText variant="title1" accessibilityRole="header" style={styles.flex}>
+          <AppText variant="largeTitle" accessibilityRole="header" style={styles.flex}>
             {t('more.did')}
           </AppText>
         </View>
@@ -140,7 +140,7 @@ export default function DidScreen() {
               key={String(on)}
               testID={on ? 'did-important' : 'did-all'}
               label={on ? t('did.only_important') : t('did.all')}
-              variant={onlyImportant === on ? 'primary' : 'outline'}
+              variant={onlyImportant === on ? 'primary' : 'secondary'}
               minHeight={theme.size.minTouch}
               accessibilityState={{ selected: onlyImportant === on }}
               onPress={() => setOnlyImportant(on)}
@@ -150,7 +150,7 @@ export default function DidScreen() {
         {recent.length === 0 && older.length === 0 ? <AppText testID="did-empty">{t('did.empty')}</AppText> : null}
         {recent.map((a) => row(a, true))}
         {older.length > 0 ? (
-          <AppText variant="section" accessibilityRole="header" style={{ marginTop: theme.space[6] }}>
+          <AppText variant="sectionLabel" accessibilityRole="header" style={{ marginTop: theme.space[6] }}>
             {t('did.older')}
           </AppText>
         ) : null}
@@ -159,12 +159,12 @@ export default function DidScreen() {
           testID="did-habits"
           accessibilityRole="button"
           onPress={() => router.push('/habits')}
-          style={[styles.row, { minHeight: theme.size.primaryTouch, marginTop: theme.space[6], gap: theme.space[2] }]}
+          style={[styles.row, { minHeight: theme.size.buttonHeight, marginTop: theme.space[6], gap: theme.space[2] }]}
         >
-          <AppText color="accent" style={styles.flex}>
+          <AppText color="brand" style={styles.flex}>
             {t('habits.title')}
           </AppText>
-          <ChevronRight size={22} color={theme.colors.accent} />
+          <ChevronRight size={22} color={theme.colors.brand} />
         </Pressable>
       </Screen>
       <StandaloneUndoStrip />

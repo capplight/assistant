@@ -63,6 +63,9 @@ search and goes to the trash with «Отменить». Show an expense only whi
 
 ### Where an expense shows
 
+Week 19 (Ф-36): with no «Расходы» yet, the first expense makes it (once; not when the person
+removed one) — see `features.md` «Pages made on first use».
+
 - On the page «Расходы» (`template_key: "expenses"`, layout `builtin:expenses`). Rows are the usual
   `screen_items`; the feed groups them by `spent_on` (newest day first). Inside a day the person may
   reorder rows (the page's own row moves, `pages.md`); moving to another day = changing `spent_on`.
@@ -381,6 +384,9 @@ Same `client_id` again → the first result, `repeated: true`. Errors: `404 not_
 
 ## Fiscal QR
 
+**Off for the beta (Ф-37, week 19):** while `FEATURE_RECEIPT_QR` is false (default) the create call gives
+`403 feature_off`, `details.feature = "receipt_qr"`; the app hides the entry (`GET /v1/features`).
+
 The phone scans the QR on a receipt and sends the link (it does not open it itself).
 
 ### `POST /v1/expenses/from-qr`
@@ -418,6 +424,9 @@ duplicate, fiscal, message, repeated}`.
 - `review_fields`: `["amount"]` (R-36: not typed by the person).
 
 ## Bank statement → plan → one «Да» → one «Отменить»
+
+**Off for the beta (Ф-37, week 19):** while `FEATURE_STATEMENTS_PDF` is false (default) the create call gives
+`403 feature_off`, `details.feature = "statements_pdf"`; the app hides the entry (`GET /v1/features`).
 
 The person shares the PDF from the bank app (Kaspi: «Выписка» → «Поделиться» → our app; Halyk the
 same). The phone sends it as a record (`POST /v1/items {upload_id, source: "share"}`), then:

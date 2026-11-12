@@ -7,7 +7,7 @@ import type { ChatMessage } from '@/store/assistant';
 import { useTheme } from '@/theme';
 
 import { AppText } from './AppText';
-import { Button } from './Button';
+import { Button } from './ui/Button';
 
 /**
  * «Что изменилось» (2-design 6.9): one line per record, ««Плитка, замер» → Ремонт» (ready text
@@ -39,7 +39,7 @@ export function ChangesSheet({
               borderTopRightRadius: theme.radius.sheet,
               maxHeight: '85%',
             },
-            theme.elevation?.sheet,
+            theme.elevation.floating,
           ]}
         >
           <ScrollView contentContainerStyle={{ padding: theme.space[5], gap: theme.space[3] }}>
@@ -54,11 +54,11 @@ export function ChangesSheet({
                 <View
                   key={c.itemId ?? `row-${i}`}
                   testID={`change-${c.itemId ?? i}`}
-                  style={[styles.row, { gap: theme.space[2], borderBottomColor: theme.colors.line, paddingBottom: theme.space[2] }]}
+                  style={[styles.row, { gap: theme.space[2], borderBottomColor: theme.colors.separator, paddingBottom: theme.space[2] }]}
                 >
                   <AppText style={styles.flex}>{line}</AppText>
                   {c.reverted ? (
-                    <AppText variant="meta">{t('changes.reverted')}</AppText>
+                    <AppText variant="callout">{t('changes.reverted')}</AppText>
                   ) : !c.itemId && c.key && action.changes.findIndex((x) => x.key === c.key) === i ? (
                     <Button
                       testID={`change-revert-key-${i}`}
@@ -84,7 +84,7 @@ export function ChangesSheet({
               );
             })}
             {action && action.undoable && !action.undone ? (
-              <Button testID="changes-undo-all" label={t('changes.undo_all')} variant="outline" onPress={onUndoAll} />
+              <Button testID="changes-undo-all" label={t('changes.undo_all')} variant="secondary" onPress={onUndoAll} />
             ) : null}
             <Button testID="changes-close" label={t('common.close')} variant="text" onPress={onClose} />
           </ScrollView>

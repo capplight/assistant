@@ -15,8 +15,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppText } from '@/components/AppText';
 import { answerNotice, useLocalHitTitles } from '@/components/answerText';
 import { AssistantLine } from '@/components/AssistantLine';
+import { ToastLine, useToastAnchor } from '@/components/Toast';
 import { KEYBOARD_BEHAVIOR, useKeyboardHeight } from '@/components/useKeyboard';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { FeedbackSheet } from '@/components/FeedbackSheet';
 import { LocalHitChips, SourceChips } from '@/components/SourceChips';
 import { actionText, canReport, loadHistory, retry, undoAction } from '@/chat/service';
@@ -33,6 +34,7 @@ import { useTheme } from '@/theme';
  */
 export default function ChatScreen() {
   const theme = useTheme();
+  useToastAnchor();
   const keyboard = useKeyboardHeight();
   const { t, i18n } = useTranslation();
   const { focus } = useLocalSearchParams<{ focus?: string }>();
@@ -77,8 +79,8 @@ export default function ChatScreen() {
       style={[styles.root, { backgroundColor: theme.colors.bg }]}
       edges={['top', 'bottom']}
     >
-      <View style={[styles.header, { paddingHorizontal: theme.screenPadding, borderBottomColor: theme.colors.line }]}>
-        <AppText variant="title1" accessibilityRole="header" style={styles.flex}>
+      <View style={[styles.header, { paddingHorizontal: theme.screenPadding, borderBottomColor: theme.colors.separator }]}>
+        <AppText variant="largeTitle" accessibilityRole="header" style={styles.flex}>
           {t('chat.title')}
         </AppText>
         <Button
@@ -104,12 +106,12 @@ export default function ChatScreen() {
                 onLayout={focused ? (e) => setFocusY(e.nativeEvent.layout.y) : undefined}
               >
                 {divider ? (
-                  <AppText variant="meta" accessibilityRole="header" style={styles.center}>
+                  <AppText variant="callout" accessibilityRole="header" style={styles.center}>
                     {t('chat.divider', { page: m.pageTitle, time: time(m.at) })}
                   </AppText>
                 ) : null}
                 {m.role === 'user' ? (
-                  <AppText variant="meta" color="ink">
+                  <AppText variant="callout" color="ink">
                     {t('chat.you', { text: m.text })}
                   </AppText>
                 ) : (
@@ -121,6 +123,7 @@ export default function ChatScreen() {
             );
           })}
         </ScrollView>
+        <ToastLine style={{ marginHorizontal: theme.size.tabBarInset, marginBottom: theme.space[2] }} />
         <AssistantLine scope="all" keyboardHeight={keyboard} />
       </KeyboardAvoidingView>
 
@@ -140,7 +143,7 @@ export default function ChatScreen() {
             <Button
               testID="answer-report"
               label={t('feedback.open')}
-              variant="outline"
+              variant="secondary"
               onPress={() => {
                 setReportFor(menuFor);
                 setMenuFor(null);
@@ -179,16 +182,16 @@ function Answer({ m, onMore }: { m: ChatMessage; onMore: () => void }) {
           ) : null}
         </View>
       ) : null}
-      {m.proposal ? <AppText variant="meta">{m.proposal.question}</AppText> : null}
-      {notice ? <AppText variant={m.text ? 'meta' : 'body'}>{notice}</AppText> : null}
+      {m.proposal ? <AppText variant="callout">{m.proposal.question}</AppText> : null}
+      {notice ? <AppText variant={m.text ? 'callout' : 'body'}>{notice}</AppText> : null}
       {hits.length > 0 ? (
         <>
-          <AppText variant="meta">{t('answer.local_found', { n: hits.length })}</AppText>
+          <AppText variant="callout">{t('answer.local_found', { n: hits.length })}</AppText>
           <LocalHitChips messageId={m.id} recordIds={hits} titles={titles} />
         </>
       ) : null}
       {m.sources && m.sources.length > 0 ? <SourceChips messageId={m.id} sources={m.sources} /> : null}
-      {generated ? <AppText variant="meta">{t('ai.label')}</AppText> : null}
+      {generated ? <AppText variant="callout">{t('ai.label')}</AppText> : null}
       {m.notice === 'maybe_done' ? (
         <Button testID={`chat-did-${m.id}`} label={t('more.did')} variant="text" onPress={() => router.push('/did')} />
       ) : m.status === 'interrupted' ? (

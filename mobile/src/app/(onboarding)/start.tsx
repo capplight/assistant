@@ -64,25 +64,25 @@ export default function StartScreen() {
       style={({ pressed }) => [
         styles.phrase,
         {
-          minHeight: big ? 96 : theme.size.primaryTouch,
-          backgroundColor: big ? theme.colors.accent : theme.colors.surface,
-          borderColor: theme.colors.accent,
+          minHeight: big ? 96 : theme.size.buttonHeight,
+          backgroundColor: big ? theme.colors.brand : theme.colors.surface,
+          borderColor: theme.colors.brand,
           borderWidth: big ? 0 : 2,
-          borderRadius: theme.radius.card,
+          borderRadius: theme.radius.lg,
           padding: theme.space[4],
           gap: theme.space[3],
           opacity: pressed ? 0.9 : 1,
         },
       ]}
     >
-      <View style={[styles.micCircle, { borderColor: big ? theme.colors.onAccent : theme.colors.accent }]}>
-        <MicIcon size={28} color={big ? theme.colors.onAccent : theme.colors.accent} />
+      <View style={[styles.micCircle, { borderColor: big ? theme.colors.onBrand : theme.colors.brand }]}>
+        <MicIcon size={28} color={big ? theme.colors.onBrand : theme.colors.brand} />
       </View>
       <View style={styles.flex}>
-        <AppText variant="button" color={big ? 'onAccent' : 'accent'}>
+        <AppText variant="button" color={big ? 'onBrand' : 'brand'}>
           {noAi ? t('start.phrase_typed') : t('start.phrase')}
         </AppText>
-        <AppText variant="meta" color={big ? 'onAccent' : 'ink2'}>
+        <AppText variant="callout" color={big ? 'onBrand' : 'ink2'}>
           {t('start.phrase_example')}
         </AppText>
       </View>
@@ -97,19 +97,19 @@ export default function StartScreen() {
       style={[
         styles.all,
         {
-          minHeight: big ? 96 : theme.size.primaryTouch,
+          minHeight: big ? 96 : theme.size.buttonHeight,
           marginTop: big ? 0 : theme.space[3],
-          borderRadius: theme.radius.button,
-          borderColor: theme.colors.accent,
-          backgroundColor: big ? theme.colors.accent : 'transparent',
+          borderRadius: theme.radius.md,
+          borderColor: theme.colors.brand,
+          backgroundColor: big ? theme.colors.brand : 'transparent',
           paddingHorizontal: theme.space[4],
         },
       ]}
     >
-      <AppText variant="button" color={big ? 'onAccent' : 'accent'} style={styles.flex}>
+      <AppText variant="button" color={big ? 'onBrand' : 'brand'} style={styles.flex}>
         {t('start.all', { n: TEMPLATES.length })}
       </AppText>
-      <ChevronRight size={24} color={big ? theme.colors.onAccent : theme.colors.accent} />
+      <ChevronRight size={24} color={big ? theme.colors.onBrand : theme.colors.brand} />
     </Pressable>
   );
 
@@ -119,7 +119,7 @@ export default function StartScreen() {
 
   return (
     <Screen testID="start-screen">
-      <AppText variant="title1" accessibilityRole="header" style={{ marginBottom: theme.space[4] }}>
+      <AppText variant="largeTitle" accessibilityRole="header" style={{ marginBottom: theme.space[4] }}>
         {t('start.title')}
       </AppText>
 
@@ -130,7 +130,7 @@ export default function StartScreen() {
       ) : null}
 
       <AppText
-        variant="section"
+        variant="sectionLabel"
         accessibilityRole="header"
         style={{ marginTop: theme.space[8], marginBottom: theme.space[3] }}
       >

@@ -14,7 +14,7 @@ import { stackToPage } from '@/pages/viewService';
 import { useTheme } from '@/theme';
 
 import { AppText } from './AppText';
-import { Button } from './Button';
+import { Button } from './ui/Button';
 import { PageIcon } from './Icon';
 
 const ICON_KEYS = new Set(['documents', 'tasks', 'shopping', 'work', 'money', 'other', 'people', 'health', 'home']);
@@ -69,21 +69,21 @@ export function StackCards({ page, entries, piles = false }: { page: Page; entri
       {repeats > 0 ? (
         <View
           testID="notes-repeats"
-          style={[styles.card, { borderColor: theme.colors.line, backgroundColor: theme.colors.surface, borderRadius: theme.radius.card, padding: theme.space[3], gap: theme.space[2] }]}
+          style={[styles.card, { borderColor: theme.colors.separator, backgroundColor: theme.colors.surface, borderRadius: theme.radius.lg, padding: theme.space[3], gap: theme.space[2] }]}
         >
           <AppText>{t('dup.notes_card', { count: repeats })}</AppText>
           <Button
             testID="notes-repeats-open"
             label={t('dup.look')}
             accessibilityLabel={t('dup.look_a11y')}
-            variant="outline"
+            variant="secondary"
             minHeight={theme.size.minTouch}
             onPress={() => router.push('/duplicates')}
           />
         </View>
       ) : null}
       {stacks.length > 0 ? (
-        <AppText variant="section" accessibilityRole="header">
+        <AppText variant="sectionLabel" accessibilityRole="header">
           {t('stack.section')}
         </AppText>
       ) : null}
@@ -102,9 +102,9 @@ export function StackCards({ page, entries, piles = false }: { page: Page; entri
                 styles.card,
                 grid ? styles.flex : null,
                 {
-                  borderColor: theme.colors.line,
+                  borderColor: theme.colors.separator,
                   backgroundColor: bg,
-                  borderRadius: piles ? theme.radius.note : theme.radius.card,
+                  borderRadius: piles ? theme.radius.md : theme.radius.lg,
                   padding: theme.space[3],
                   gap: theme.space[1],
                 },
@@ -115,7 +115,7 @@ export function StackCards({ page, entries, piles = false }: { page: Page; entri
                 accessibilityRole="button"
                 accessibilityLabel={`${t('stack.count_a11y', { title: name, count })}${ba ? `. ${ba}` : ''}`}
                 onPress={() => open(c)}
-                style={{ minHeight: theme.size.primaryTouch, gap: theme.space[1] }}
+                style={{ minHeight: theme.size.buttonHeight, gap: theme.space[1] }}
               >
                 <View style={[styles.row, { gap: theme.space[2] }]}>
                   <PageIcon name={stackIcon(c)} color={theme.colors.ink} size={24} />
@@ -124,7 +124,7 @@ export function StackCards({ page, entries, piles = false }: { page: Page; entri
                   </AppText>
                   <AppText variant="title2">{String(count)}</AppText>
                 </View>
-                {ba ? <AppText variant="meta">{ba}</AppText> : null}
+                {ba ? <AppText variant="callout">{ba}</AppText> : null}
                 {preview ? <AppText numberOfLines={2}>{preview}</AppText> : null}
               </Pressable>
               <View style={[styles.row, { justifyContent: 'flex-end' }]}>
@@ -139,8 +139,8 @@ export function StackCards({ page, entries, piles = false }: { page: Page; entri
               </View>
             </View>
             {/* the sheet under it (+4): a stack, not a folder; a pile of stickers has two */}
-            <View style={[styles.under, { borderColor: theme.colors.line, borderRadius: piles ? theme.radius.note : theme.radius.card, backgroundColor: piles ? bg : theme.colors.bg }]} />
-            {piles ? <View style={[styles.under2, { borderColor: theme.colors.line, borderRadius: theme.radius.note, backgroundColor: bg }]} /> : null}
+            <View style={[styles.under, { borderColor: theme.colors.separator, borderRadius: piles ? theme.radius.md : theme.radius.lg, backgroundColor: piles ? bg : theme.colors.bg }]} />
+            {piles ? <View style={[styles.under2, { borderColor: theme.colors.separator, borderRadius: theme.radius.md, backgroundColor: bg }]} /> : null}
           </View>
         );
       })}
@@ -159,7 +159,7 @@ export function StackCards({ page, entries, piles = false }: { page: Page; entri
                 onPress={() => open(c)}
                 style={[
                   styles.chip,
-                  { minHeight: theme.size.minTouch, borderColor: theme.colors.lineStrong, borderRadius: theme.radius.button, paddingHorizontal: theme.space[3] },
+                  { minHeight: theme.size.minTouch, borderColor: theme.colors.iconSecondary, borderRadius: theme.radius.md, paddingHorizontal: theme.space[3] },
                 ]}
               >
                 <AppText>{`${name} ${count}`}</AppText>
@@ -182,7 +182,7 @@ export function StackCards({ page, entries, piles = false }: { page: Page; entri
                 <Button
                   testID="stack-menu-open"
                   label={t('stack.open')}
-                  variant="outline"
+                  variant="secondary"
                   onPress={() => {
                     const c = menu;
                     setMenu(null);
@@ -193,7 +193,7 @@ export function StackCards({ page, entries, piles = false }: { page: Page; entri
                   testID="stack-menu-to-page"
                   label={t('stack.to_page')}
                   accessibilityHint={t('stack.to_page_hint')}
-                  variant="outline"
+                  variant="secondary"
                   onPress={() => {
                     const c = menu;
                     setMenu(null);
@@ -213,7 +213,7 @@ export function StackCards({ page, entries, piles = false }: { page: Page; entri
                     void takeApartStack(c);
                   }}
                 />
-                <AppText variant="meta">{t('stack.take_apart_hint')}</AppText>
+                <AppText variant="callout">{t('stack.take_apart_hint')}</AppText>
                 <Button testID="stack-menu-close" label={t('common.close')} variant="text" onPress={() => setMenu(null)} />
               </>
             ) : null}

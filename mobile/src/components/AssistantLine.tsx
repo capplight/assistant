@@ -17,13 +17,16 @@ import { useVoiceRecorder } from '@/voice/useVoiceRecorder';
 
 import { AddSheet } from './AddSheet';
 import { AppText } from './AppText';
-import { Button } from './Button';
+import { Button } from './ui/Button';
 import { useCurrentPage } from './useCurrentPage';
 import { lineInputMaxHeight } from './useKeyboard';
 import { VoiceListening } from './VoiceListening';
 
 /**
- * The persistent assistant line (F-37, R-52, 2-design §4.3): [+] [Про: <page> · field] (mic).
+ * The persistent assistant line — one capsule (design-system §3 AssistantCapsule, ux-audit P0-1):
+ * [+ 36] [Про: <page> ▾ · field] (mic 40), 52 high, `surface` + floating shadow, 8 above the tab bar.
+ * The «Про: …» toggle sits inside the capsule (no row of its own) and steps aside while a phrase is typed;
+ * at ≥150 % font it takes a line of its own inside the capsule, which then grows.
  * Same on every page, above the tabs. A typed phrase goes to the one conversation (src/chat): a
  * text answer shows in the banner above, a change shows on the page with «Отменить»; without the
  * server a note is saved here (offline-first). Voice is still a local record + outbox entry. Voice: fragments ≤3 min, no live transcription (R-17). «Без ИИ»: no mic —
@@ -146,28 +149,19 @@ export function AssistantLine({
       accessibilityLabel={aboutAll ? t('line.about_all_a11y') : t('line.about_a11y', { page: current.title })}
       disabled={scope === 'all'}
       onPress={() => setAboutAll(!aboutAll)}
-      style={[
-        styles.chip,
-        {
-          minHeight: theme.size.minTouch,
-          borderRadius: theme.radius.chip,
-          borderColor: theme.colors.lineStrong,
-          paddingHorizontal: theme.space[3],
-          gap: theme.space[1],
-        },
-      ]}
+      style={[styles.chip, { minHeight: theme.size.minTouch, paddingLeft: theme.space[1], gap: 2 }]}
     >
-      <AppText variant="meta" color="ink" style={styles.shrink}>
+      <AppText variant="callout" color="ink2" style={[styles.shrink, { fontFamily: theme.type.sectionLabel.fontFamily }]}>
         {chipLabel}
       </AppText>
-      <ChevronDown size={18} color={theme.colors.ink2} />
+      <ChevronDown size={theme.size.iconSm} color={theme.colors.iconSecondary} strokeWidth={theme.icon.strokeWidth} />
     </Pressable>
   );
 
   // Week 17: a long phrase wraps and the field grows to a cap (4 lines, 3 at ≥150%, ≤30% of what the
   // keyboard leaves), then scrolls inside; the return key still sends.
   const inputMax = lineInputMaxHeight({
-    lineHeight: theme.type.body.lineHeight ?? 26,
+    lineHeight: theme.type.body.lineHeight ?? 24,
     fontScale: theme.fontScale,
     largeFont: theme.largeFont,
     windowHeight,
@@ -182,7 +176,7 @@ export function AssistantLine({
       accessibilityLabel={t('line.a11y', { page: current.title })}
       accessibilityHint={t(current.hintKey)}
       placeholder={placeholder}
-      placeholderTextColor={theme.colors.ink2}
+      placeholderTextColor={theme.colors.ink3}
       value={text}
       onChangeText={setText}
       onSubmitEditing={send}
@@ -200,16 +194,18 @@ export function AssistantLine({
           color: theme.colors.ink,
           minHeight: theme.size.minTouch,
           maxHeight: inputMax,
-          borderColor: theme.colors.lineStrong,
-          borderRadius: theme.radius.input,
-          paddingHorizontal: theme.space[3],
-          backgroundColor: theme.colors.bg,
+          paddingHorizontal: theme.space[2],
         },
       ]}
     />
   );
 
-  const roundBtn = { width: theme.size.mic, height: theme.size.mic, borderRadius: theme.radius.round };
+  // The Pressable is the 48 target; the visible circle inside is 40 (mic / send) or 36 («+»).
+  const target = { width: theme.size.minTouch, height: theme.size.minTouch };
+  const circle = (d: number, bg: string) => [styles.round, { width: d, height: d, borderRadius: d / 2, backgroundColor: bg }];
+  const mic = theme.size.assistantMic;
+  const iconPx = theme.size.iconSm;
+  const stroke = theme.icon.strokeWidth;
 
   // Right button: «Отправить» when typed; mic otherwise; «Написать» in «Без ИИ» (no voice, R-05).
   const right =
@@ -219,9 +215,11 @@ export function AssistantLine({
         accessibilityRole="button"
         accessibilityLabel={t('line.send')}
         onPress={send}
-        style={[styles.round, roundBtn, { backgroundColor: theme.colors.accent }]}
+        style={[styles.round, target]}
       >
-        <SendHorizontal size={26} color={theme.colors.onAccent} />
+        <View style={circle(mic, theme.colors.brand)}>
+          <SendHorizontal size={iconPx} color={theme.colors.onBrand} strokeWidth={stroke} />
+        </View>
       </Pressable>
     ) : noAi ? (
       <Pressable
@@ -232,9 +230,11 @@ export function AssistantLine({
           if (folded) setOpened(true);
           inputRef.current?.focus();
         }}
-        style={[styles.round, roundBtn, { borderWidth: 2, borderColor: theme.colors.accent }]}
+        style={[styles.round, target]}
       >
-        <PencilLine size={26} color={theme.colors.accent} />
+        <View style={circle(mic, theme.colors.brandTint)}>
+          <PencilLine size={iconPx} color={theme.colors.brand} strokeWidth={stroke} />
+        </View>
       </Pressable>
     ) : (
       <Pressable
@@ -243,9 +243,11 @@ export function AssistantLine({
         accessibilityLabel={t('line.mic')}
         disabled={!consentGiven}
         onPress={startVoice}
-        style={[styles.round, roundBtn, { backgroundColor: theme.colors.accent }, theme.elevation?.mic]}
+        style={[styles.round, target]}
       >
-        <Mic size={28} color={theme.colors.onAccent} />
+        <View style={circle(mic, theme.colors.brand)}>
+          <Mic size={iconPx} color={theme.colors.onBrand} strokeWidth={stroke} />
+        </View>
       </Pressable>
     );
 
@@ -255,18 +257,11 @@ export function AssistantLine({
       accessibilityRole="button"
       accessibilityLabel={t('line.plus_a11y')}
       onPress={() => setAddOpen(true)}
-      style={[
-        styles.round,
-        {
-          width: theme.size.plus,
-          height: theme.size.plus,
-          borderRadius: theme.radius.round,
-          borderWidth: 2,
-          borderColor: theme.colors.lineStrong,
-        },
-      ]}
+      style={[styles.round, target]}
     >
-      <Plus size={26} color={theme.colors.ink} />
+      <View style={circle(theme.size.assistantPlus, theme.colors.surfaceSunken)}>
+        <Plus size={iconPx} color={theme.colors.ink2} strokeWidth={stroke} />
+      </View>
     </Pressable>
   );
 
@@ -274,20 +269,21 @@ export function AssistantLine({
     <View
       testID="assistant-line"
       style={[
-        styles.wrap,
         {
           backgroundColor: theme.colors.surface,
-          borderTopColor: theme.colors.line,
-          paddingHorizontal: theme.space[3],
-          paddingVertical: theme.space[2],
-          gap: theme.space[2],
-          minHeight: theme.size.assistantLine,
+          // Round while one line high; a grown capsule (listening, 200 %, a long phrase) keeps soft corners.
+          borderRadius: theme.size.assistantCapsule / 2,
+          marginHorizontal: theme.size.tabBarInset,
+          padding: 2,
+          gap: theme.space[1],
+          minHeight: theme.size.assistantCapsule,
         },
+        theme.elevation.floating,
       ]}
     >
       {voice.status === 'denied' ? (
-        <View style={[styles.row, { gap: theme.space[2] }]} accessibilityLiveRegion="polite">
-          <AppText variant="meta" style={styles.flex}>
+        <View style={[styles.row, { gap: theme.space[2], paddingLeft: theme.space[3] }]} accessibilityLiveRegion="polite">
+          <AppText variant="callout" style={styles.flex}>
             {t('voice.denied')}
           </AppText>
           <Button
@@ -315,28 +311,27 @@ export function AssistantLine({
           }}
         />
       ) : folded ? (
-        <View testID="assistant-line-folded" style={[styles.row, { gap: theme.space[2], justifyContent: 'space-between' }]}>
+        <View testID="assistant-line-folded" style={[styles.row, { gap: theme.space[2], justifyContent: 'space-between', paddingLeft: theme.space[3] }]}>
           <View style={styles.shrink}>{chip}</View>
           {right}
         </View>
       ) : theme.largeFont ? (
         // ≥150%: two rows — chip, then [+] field (mic)
         <>
-          <View style={styles.row}>{chip}</View>
+          <View style={[styles.row, { paddingHorizontal: theme.space[3] }]}>{chip}</View>
           {/* The field grows upwards; [+] and mic / send stay at its bottom edge, within thumb reach. */}
-          <View testID="assistant-line-row" style={[styles.row, styles.end, { gap: theme.space[2] }]}>
+          <View testID="assistant-line-row" style={[styles.row, styles.end]}>
             {plus}
             <View style={styles.flex}>{field}</View>
             {right}
           </View>
         </>
       ) : (
-        <View testID="assistant-line-row" style={[styles.row, styles.end, { gap: theme.space[2] }]}>
+        <View testID="assistant-line-row" style={[styles.row, styles.end]}>
           {plus}
-          <View style={[styles.flex, { gap: theme.space[1] }]}>
-            {chip}
-            {field}
-          </View>
+          {/* The «Про: …» toggle in the capsule while the field is empty; typing gives the field the room. */}
+          {text.length === 0 ? <View style={styles.chipBox}>{chip}</View> : null}
+          <View style={styles.flex}>{field}</View>
           {right}
         </View>
       )}
@@ -350,12 +345,12 @@ export function AssistantLine({
 }
 
 const styles = StyleSheet.create({
-  wrap: { borderTopWidth: 1 },
   row: { flexDirection: 'row', alignItems: 'center' },
   end: { alignItems: 'flex-end' },
   flex: { flex: 1 },
   shrink: { flexShrink: 1 },
-  chip: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', borderWidth: 1 },
-  input: { borderWidth: 1, paddingVertical: 8 },
+  chip: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start' },
+  chipBox: { flexShrink: 1, maxWidth: '45%' },
+  input: { paddingVertical: 12 },
   round: { alignItems: 'center', justifyContent: 'center' },
 });

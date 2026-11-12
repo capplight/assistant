@@ -8,7 +8,7 @@ import { useShallow } from 'zustand/react/shallow';
 import type { DuplicateGroupOut, DuplicateMemberOut } from '@/api/types';
 import { cleanupPreview } from '@/api/endpoints';
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/Screen';
 import {
   confirmCleanup,
@@ -68,18 +68,18 @@ export default function DuplicatesScreen() {
           minHeight={theme.size.minTouch}
           onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
         />
-        <AppText variant="title1" accessibilityRole="header" style={styles.flex}>
+        <AppText variant="largeTitle" accessibilityRole="header" style={styles.flex}>
           {t('dup.title')}
         </AppText>
       </View>
-      <AppText variant="meta" style={{ marginBottom: theme.space[4] }}>
+      <AppText variant="callout" style={{ marginBottom: theme.space[4] }}>
         {t('dup.hint')}
       </AppText>
 
       {cleanup && preview ? (
         <View
           testID="dup-batch"
-          style={[styles.card, { borderColor: theme.colors.lineStrong, backgroundColor: theme.colors.surface, borderRadius: theme.radius.card, padding: theme.space[4], gap: theme.space[3], marginBottom: theme.space[5] }]}
+          style={[styles.card, { borderColor: theme.colors.iconSecondary, backgroundColor: theme.colors.surface, borderRadius: theme.radius.lg, padding: theme.space[4], gap: theme.space[3], marginBottom: theme.space[5] }]}
         >
           {/* «было 37, стало 1» reads as words to a screen reader (2-design 7.x check list). */}
           <AppText
@@ -93,7 +93,7 @@ export default function DuplicatesScreen() {
           <AppText>{t('dup.batch_detail', { removed: preview.removed, after: preview.after })}</AppText>
           <View style={{ gap: theme.space[2] }}>
             <Button testID="dup-batch-yes" label={t('dup.batch_yes')} onPress={() => void confirmCleanup()} />
-            <Button testID="dup-batch-no" label={t('dup.batch_no')} variant="outline" onPress={() => void rejectCleanup()} />
+            <Button testID="dup-batch-no" label={t('dup.batch_no')} variant="secondary" onPress={() => void rejectCleanup()} />
           </View>
         </View>
       ) : null}
@@ -181,23 +181,23 @@ function GroupCard({
   return (
     <View
       testID={`dup-group-${group.id}`}
-      style={[styles.card, { borderColor: theme.colors.line, backgroundColor: theme.colors.surface, borderRadius: theme.radius.card, padding: theme.space[4], gap: theme.space[2], marginBottom: theme.space[4] }]}
+      style={[styles.card, { borderColor: theme.colors.separator, backgroundColor: theme.colors.surface, borderRadius: theme.radius.lg, padding: theme.space[4], gap: theme.space[2], marginBottom: theme.space[4] }]}
     >
-      <AppText variant="meta">{why ? `${t('dup.keep')} · ${why}` : t('dup.keep')}</AppText>
+      <AppText variant="callout">{why ? `${t('dup.keep')} · ${why}` : t('dup.keep')}</AppText>
       <AppText testID={`dup-keep-${group.id}`} variant="title2">
         {keepTitle}
       </AppText>
-      {date(keep) ? <AppText variant="meta">{date(keep)}</AppText> : null}
-      <AppText variant="meta" style={{ marginTop: theme.space[2] }}>
+      {date(keep) ? <AppText variant="callout">{date(keep)}</AppText> : null}
+      <AppText variant="callout" style={{ marginTop: theme.space[2] }}>
         {t('dup.will_remove', { count: others.length })}
       </AppText>
       {others.slice(0, SHOWN_MEMBERS).map((m) => {
         const title = memberTitle(m, t);
         return (
-          <View key={m.item_id} style={[styles.row, { gap: theme.space[2], borderTopWidth: 1, borderTopColor: theme.colors.line, paddingTop: theme.space[2] }]}>
+          <View key={m.item_id} style={[styles.row, { gap: theme.space[2], borderTopWidth: 1, borderTopColor: theme.colors.separator, paddingTop: theme.space[2] }]}>
             <View style={styles.flex}>
               <AppText>{title}</AppText>
-              {date(m) ? <AppText variant="meta">{date(m)}</AppText> : null}
+              {date(m) ? <AppText variant="callout">{date(m)}</AppText> : null}
             </View>
             <Button
               testID={`dup-keep-this-${m.item_id}`}
@@ -213,14 +213,14 @@ function GroupCard({
           </View>
         );
       })}
-      {others.length > SHOWN_MEMBERS ? <AppText variant="meta">{t('dup.more', { count: others.length - SHOWN_MEMBERS })}</AppText> : null}
+      {others.length > SHOWN_MEMBERS ? <AppText variant="callout">{t('dup.more', { count: others.length - SHOWN_MEMBERS })}</AppText> : null}
       <Pressable
         testID={`dup-mark-${group.id}`}
         accessibilityRole="checkbox"
         accessibilityLabel={t('dup.mark_a11y', { title: keepTitle })}
         accessibilityState={{ checked: marked }}
         onPress={() => onMark(marked ? undefined : keep.item_id)}
-        style={[styles.row, { minHeight: theme.size.primaryTouch, gap: theme.space[2], marginTop: theme.space[2] }]}
+        style={[styles.row, { minHeight: theme.size.buttonHeight, gap: theme.space[2], marginTop: theme.space[2] }]}
       >
         <View
           style={{
@@ -228,13 +228,13 @@ function GroupCard({
             height: 32,
             borderRadius: 6,
             borderWidth: 2,
-            borderColor: theme.colors.accent,
-            backgroundColor: marked ? theme.colors.accent : 'transparent',
+            borderColor: theme.colors.brand,
+            backgroundColor: marked ? theme.colors.brand : 'transparent',
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          {marked ? <Check size={22} color={theme.colors.onAccent} /> : null}
+          {marked ? <Check size={22} color={theme.colors.onBrand} /> : null}
         </View>
         <AppText>{t('dup.mark')}</AppText>
       </Pressable>
@@ -250,7 +250,7 @@ function GroupCard({
           testID={`dup-different-${group.id}`}
           label={t('dup.different')}
           accessibilityLabel={t('dup.different_a11y', { title: keepTitle })}
-          variant="outline"
+          variant="secondary"
           disabled={busy}
           onPress={() => run(() => dismissGroup(group))}
         />

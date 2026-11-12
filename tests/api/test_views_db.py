@@ -266,7 +266,9 @@ async def test_assistant_changes_a_view_at_once_and_asks_for_what_is_mine(env): 
                      call(add_field={"title": "Телефон мастера", "type": "text"}), DONE,
                      call(layout="checklist"),  # asks: the loop stops, no second step
                      call(hide_fields=["Заголовок"]), DONE])
-    async with client(env.make_app(router_with(env.maker, script))) as c:
+    # Ф-39 (week 19): off for the beta; these tests switch it on
+    app = env.make_app(router_with(env.maker, script), feature_assistant_views=True)
+    async with client(app) as c:
         h = await signed_in(c)
         pid = await page(c, h, "Ремонт")
         evs = await say(c, h, "покажи таблицей", page_id=pid)
@@ -303,7 +305,9 @@ async def test_assistant_reset_asks_and_record_text_cannot_change_a_view(env):  
         return [ToolCall("v1", "set_view", sv(reset=True))]
 
     script = Script([call(reset=True), injected, DONE])
-    async with client(env.make_app(router_with(env.maker, script))) as c:
+    # Ф-39 (week 19): off for the beta; these tests switch it on
+    app = env.make_app(router_with(env.maker, script), feature_assistant_views=True)
+    async with client(app) as c:
         h = await signed_in(c)
         pid = await page(c, h, "Дача")
         await view(c, h, pid, layout="table")

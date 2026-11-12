@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Checkbox } from '../Checkbox';
+import { CheckRow as Checkbox } from '../ui/Check';
 import { AppText } from '../AppText';
-import { Button } from '../Button';
+import { Button } from '../ui/Button';
 import { Sheet } from '../page/ExpenseParts';
 import { DigitKeypad, NumberDisplay, pressDigit } from './KpParts';
 
@@ -40,7 +40,7 @@ export function NumberSheet({
     <Sheet testID={testID} title={title} onClose={onClose}>
       <NumberDisplay testID={`${testID}-display`} text={text} unit={unit} money={money} />
       {bad ? (
-        <AppText testID={`${testID}-bad`} color="warnText" accessibilityLiveRegion="polite">
+        <AppText testID={`${testID}-bad`} color="warning" accessibilityLiveRegion="polite">
           {t('kp.edit_bad')}
         </AppText>
       ) : null}

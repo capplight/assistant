@@ -7,14 +7,17 @@ export type AppTextProps = TextProps & {
   color?: keyof ColorTokens;
 };
 
-/** All text goes through here: type scale, theme colour, font scaling capped at 200%. */
-export function AppText({ variant = 'body', color, style, ...rest }: AppTextProps) {
+/** Secondary by default: meta lines and dates. Everything else is `ink`. */
+const SECONDARY: ReadonlySet<TypeToken> = new Set(['callout', 'footnote']);
+
+/** All text goes through here: type scale, theme colour, font scaling capped at 200% (hero sums: `AmountText` fits them to their box). */
+export function AppText({ variant = 'body', color, style, maxFontSizeMultiplier, ...rest }: AppTextProps) {
   const theme = useTheme();
-  const defaultColor: keyof ColorTokens = variant === 'meta' ? 'ink2' : 'ink';
+  const defaultColor: keyof ColorTokens = SECONDARY.has(variant) ? 'ink2' : 'ink';
   return (
     <Text
-      maxFontSizeMultiplier={MAX_FONT_SCALE}
-      style={[theme.type[variant], { color: theme.colors[color ?? defaultColor] }, style]}
+      maxFontSizeMultiplier={maxFontSizeMultiplier ?? MAX_FONT_SCALE}
+      style={[theme.type[variant], { color: theme.colors[color ?? defaultColor] as string }, style]}
       {...rest}
     />
   );

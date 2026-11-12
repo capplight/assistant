@@ -8,6 +8,7 @@ import type { FileOps } from '@/records/capture';
 import { setServicesForTests } from '@/services';
 import { useAssistant } from '@/store/assistant';
 import { useConnectivity } from '@/store/connectivity';
+import { useFeatureStore } from '@/store/features';
 import { useOnboarding } from '@/store/onboarding';
 import { usePages } from '@/store/pages';
 import { useSession } from '@/store/session';
@@ -67,6 +68,7 @@ export let testAlarms = new FakeAlarms();
 /** Reset all local state between tests; returns the in-memory outbox for assertions. Network: offline. */
 export function resetApp(o: { fetch?: FetchLike; push?: FakePush; alarms?: FakeAlarms } = {}): InMemoryOutboxRepository {
   useOnboarding.getState().reset();
+  useFeatureStore.getState().reset();
   useAlarms.getState().reset();
   useTasks.getState().reset();
   useExpenses.getState().reset();

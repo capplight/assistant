@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AccessibilityInfo, StyleSheet, View } from 'react-native';
+import { AccessibilityInfo } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { actionText, undoAction } from '@/chat/service';
@@ -15,9 +15,8 @@ import { useToast } from '@/store/toast';
 import { undoStripMs, useUndo, type ManualStripText } from '@/store/undo';
 import { useTheme } from '@/theme';
 
-import { AppText } from './AppText';
-import { Button } from './Button';
 import { ChangesSheet } from './ChangesSheet';
+import { ToastBar, type ToastAction } from './ui/ToastBar';
 import { useCurrentPage } from './useCurrentPage';
 
 /**
@@ -122,68 +121,35 @@ export function UndoStrip() {
   const canUndo = strip.kind !== 'action' || (!!action?.undoable && !action.undone);
   const hasChanges = strip.kind === 'action' && (action?.changes.length ?? 0) > 0;
 
+  const actions: ToastAction[] = [];
+  if (showOpen && target)
+    actions.push({
+      key: 'open',
+      testID: 'undo-strip-open',
+      label: t('line.open'),
+      accessibilityLabel: t('move.open_a11y', { page: title(target) }),
+      onPress: () => router.navigate({ pathname: '/page/[id]', params: { id: target.id } }),
+    });
+  if (hasChanges) actions.push({ key: 'changes', testID: 'undo-strip-changes', label: t('line.changed'), onPress: () => setChangesOpen(true) });
+  if (canUndo) actions.push({ key: 'undo', testID: 'undo-strip-undo', label: t('common.undo'), onPress: undo });
+
   return (
-    <View
-      testID="undo-strip"
-      accessibilityLiveRegion="polite"
-      style={[
-        styles.box,
-        {
-          backgroundColor: theme.colors.surface,
-          borderTopColor: theme.colors.line,
-          paddingHorizontal: theme.space[3],
-          paddingVertical: theme.space[2],
-          gap: theme.space[1],
-        },
-      ]}
-    >
-      <View style={[styles.row, { gap: theme.space[2], flexDirection: theme.largeFont ? 'column' : 'row' }]}>
-        <AppText testID="undo-strip-text" variant="meta" color="ink" style={theme.largeFont ? undefined : styles.text}>
-          {text}
-        </AppText>
-        <View style={[styles.row, { gap: theme.space[1], flexWrap: 'wrap' }]}>
-          {showOpen && target ? (
-            <Button
-              testID="undo-strip-open"
-              label={t('line.open')}
-              accessibilityLabel={t('move.open_a11y', { page: title(target) })}
-              variant="text"
-              minHeight={theme.size.minTouch}
-              onPress={() => router.navigate({ pathname: '/page/[id]', params: { id: target.id } })}
-            />
-          ) : null}
-          {hasChanges ? (
-            <Button
-              testID="undo-strip-changes"
-              label={t('line.changed')}
-              variant="text"
-              minHeight={theme.size.minTouch}
-              onPress={() => setChangesOpen(true)}
-            />
-          ) : null}
-          {canUndo ? (
-            <Button
-              testID="undo-strip-undo"
-              label={t('common.undo')}
-              variant="text"
-              minHeight={theme.size.minTouch}
-              onPress={undo}
-            />
-          ) : null}
-        </View>
-      </View>
+    <>
+      <ToastBar
+        testID="undo-strip"
+        textTestID="undo-strip-text"
+        text={text}
+        success={strip.kind !== 'deleted'}
+        actions={actions}
+        onClose={() => hide(strip.id)}
+      />
       {strip.kind === 'action' && message ? (
         <ChangesSheet message={changesOpen ? message : null} onClose={() => setChangesOpen(false)} onUndoAll={undo} />
       ) : null}
-    </View>
+    </>
   );
 }
 
-const styles = StyleSheet.create({
-  box: { borderTopWidth: 1 },
-  row: { flexDirection: 'row', alignItems: 'center' },
-  text: { flex: 1 },
-});
 
 /**
  * The strip on a screen outside the main area (S20 «Что я сделал», S30 «Что я для вас настроил»,
@@ -192,7 +158,7 @@ const styles = StyleSheet.create({
 export function StandaloneUndoStrip() {
   const theme = useTheme();
   return (
-    <SafeAreaView edges={['bottom']} style={{ backgroundColor: theme.colors.surface }}>
+    <SafeAreaView edges={['bottom']} style={{ paddingHorizontal: theme.size.tabBarInset, paddingVertical: theme.space[2] }}>
       <UndoStrip />
     </SafeAreaView>
   );

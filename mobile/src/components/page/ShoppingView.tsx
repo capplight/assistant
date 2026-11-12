@@ -16,7 +16,7 @@ import { useTasks } from '@/tasks/store';
 import { useTheme } from '@/theme';
 
 import { AppText } from '../AppText';
-import { Button } from '../Button';
+import { Button } from '../ui/Button';
 import type { MenuExtra } from '../RecordMenuSheet';
 import { useMinuteClock } from '../ReminderLists';
 import { TaskRow } from '../TaskRow';
@@ -131,9 +131,9 @@ export function ShoppingView({ page, entries, frameTop, ordering }: ViewProps) {
           <View
             accessibilityRole="progressbar"
             accessibilityValue={{ min: 0, max: total, now: total - lr.open.length }}
-            style={{ height: 8, borderRadius: 4, backgroundColor: theme.colors.line, overflow: 'hidden' }}
+            style={{ height: 8, borderRadius: 4, backgroundColor: theme.colors.separator, overflow: 'hidden' }}
           >
-            <View style={{ width: `${Math.round(((total - lr.open.length) / total) * 100)}%`, height: 8, backgroundColor: theme.colors.done }} />
+            <View style={{ width: `${Math.round(((total - lr.open.length) / total) * 100)}%`, height: 8, backgroundColor: theme.colors.success }} />
           </View>
         </View>
       ) : null}
@@ -141,8 +141,8 @@ export function ShoppingView({ page, entries, frameTop, ordering }: ViewProps) {
         <Button
           testID="shop-mode"
           label={t('shop.in_store')}
-          icon={<ShoppingCart size={24} color={theme.colors.onAccent} />}
-          minHeight={theme.size.primaryTouch}
+          icon={<ShoppingCart size={24} color={theme.colors.onBrand} />}
+          minHeight={theme.size.buttonHeight}
           onPress={() => setShopMode(page.id)}
         />
       ) : null}
@@ -190,14 +190,14 @@ export function ShoppingView({ page, entries, frameTop, ordering }: ViewProps) {
     const i = named.indexOf(name);
     return (
       <View style={[styles.row, { paddingTop: theme.space[3], gap: theme.space[1] }]}>
-        <AppText testID={`group-${g.key}`} variant="section" accessibilityRole="header" style={styles.flex}>
+        <AppText testID={`group-${g.key}`} variant="sectionLabel" accessibilityRole="header" style={styles.flex}>
           {name}
         </AppText>
         <Button
           testID={`group-up-${name}`}
           label="↑"
           accessibilityLabel={t('shop.group_up_a11y', { name })}
-          variant="outline"
+          variant="secondary"
           disabled={i <= 0}
           minHeight={theme.size.minTouch}
           onPress={() => moveGroup(name, -1)}
@@ -206,7 +206,7 @@ export function ShoppingView({ page, entries, frameTop, ordering }: ViewProps) {
           testID={`group-down-${name}`}
           label="↓"
           accessibilityLabel={t('shop.group_down_a11y', { name })}
-          variant="outline"
+          variant="secondary"
           disabled={i >= named.length - 1}
           minHeight={theme.size.minTouch}
           onPress={() => moveGroup(name, 1)}
@@ -246,7 +246,7 @@ function QtyStepper({ task }: { task: TaskOut }) {
   const theme = useTheme();
   const { t } = useTranslation();
   const n = qtyCount(task.qty);
-  if (n === null) return task.qty ? <AppText variant="meta">{task.qty}</AppText> : null;
+  if (n === null) return task.qty ? <AppText variant="callout">{task.qty}</AppText> : null;
   const set = (m: number) => void changeTask(task.id, { qty: qtyText(m) }, t('shop.qty_set', { title: task.title, n: m }));
   const btn = (testID: string, label: string, disabled: boolean, onPress: () => void, icon: ReactNode) => (
     <Pressable
@@ -259,9 +259,9 @@ function QtyStepper({ task }: { task: TaskOut }) {
       style={{
         width: theme.size.minTouch,
         height: theme.size.minTouch,
-        borderRadius: theme.radius.button,
+        borderRadius: theme.radius.md,
         borderWidth: 1,
-        borderColor: theme.colors.lineStrong,
+        borderColor: theme.colors.iconSecondary,
         alignItems: 'center',
         justifyContent: 'center',
         opacity: disabled ? 0.35 : 1,
@@ -272,11 +272,11 @@ function QtyStepper({ task }: { task: TaskOut }) {
   );
   return (
     <View style={[styles.row, { gap: theme.space[1] }]}>
-      {btn(`qty-minus-${task.id}`, t('shop.qty_less_a11y', { title: task.title }), n <= 1, () => set(n - 1), <Minus size={22} color={theme.colors.accent} />)}
+      {btn(`qty-minus-${task.id}`, t('shop.qty_less_a11y', { title: task.title }), n <= 1, () => set(n - 1), <Minus size={22} color={theme.colors.brand} />)}
       <AppText testID={`qty-${task.id}`} variant="number" accessibilityLabel={t('shop.qty_a11y', { n })} style={{ minWidth: 28, textAlign: 'center' }}>
         {String(n)}
       </AppText>
-      {btn(`qty-plus-${task.id}`, t('shop.qty_more_a11y', { title: task.title }), n >= 999, () => set(n + 1), <Plus size={22} color={theme.colors.accent} />)}
+      {btn(`qty-plus-${task.id}`, t('shop.qty_more_a11y', { title: task.title }), n >= 999, () => set(n + 1), <Plus size={22} color={theme.colors.brand} />)}
     </View>
   );
 }
@@ -309,34 +309,34 @@ function ShopMode({ open, left, onExit }: { open: { where: string | null; rows: 
         <Button
           testID="shop-exit"
           label={t('shop.exit')}
-          variant="outline"
-          icon={<ChevronLeft size={24} color={theme.colors.accent} />}
-          minHeight={theme.size.primaryTouch}
+          variant="secondary"
+          icon={<ChevronLeft size={24} color={theme.colors.brand} />}
+          minHeight={theme.size.buttonHeight}
           onPress={onExit}
         />
-        <AppText testID="shop-mode-left" variant="title1" accessibilityLiveRegion="polite">
+        <AppText testID="shop-mode-left" variant="largeTitle" accessibilityLiveRegion="polite">
           {t('shop.left_short', { left })}
         </AppText>
       </View>
       {asking ? (
-        <View testID="shop-still" accessibilityLiveRegion="polite" style={{ gap: theme.space[2], padding: theme.space[3], borderWidth: 2, borderColor: theme.colors.accent, borderRadius: theme.radius.card, marginBottom: theme.space[3] }}>
+        <View testID="shop-still" accessibilityLiveRegion="polite" style={{ gap: theme.space[2], padding: theme.space[3], borderWidth: 2, borderColor: theme.colors.brand, borderRadius: theme.radius.lg, marginBottom: theme.space[3] }}>
           <AppText variant="title2">{t('shop.still_q')}</AppText>
           <View style={{ flexDirection: theme.largeFont ? 'column' : 'row', gap: theme.space[2] }}>
             <Button testID="shop-still-yes" label={t('shop.still_yes')} style={theme.largeFont ? undefined : styles.flex} onPress={() => { setAsking(false); touched(); }} />
-            <Button testID="shop-still-exit" label={t('shop.exit')} variant="outline" style={theme.largeFont ? undefined : styles.flex} onPress={onExit} />
+            <Button testID="shop-still-exit" label={t('shop.exit')} variant="secondary" style={theme.largeFont ? undefined : styles.flex} onPress={onExit} />
           </View>
         </View>
       ) : null}
       <ScrollView contentContainerStyle={{ paddingBottom: theme.space[6] }}>
         {left === 0 ? (
-          <AppText testID="shop-all-done" variant="title1">
+          <AppText testID="shop-all-done" variant="largeTitle">
             {t('shop.all_done')}
           </AppText>
         ) : null}
         {open.map((g) => (
           <View key={g.where ?? '-'}>
             {g.where ? (
-              <AppText variant="section" accessibilityRole="header" style={{ paddingTop: theme.space[3] }}>
+              <AppText variant="sectionLabel" accessibilityRole="header" style={{ paddingTop: theme.space[3] }}>
                 {g.where}
               </AppText>
             ) : null}

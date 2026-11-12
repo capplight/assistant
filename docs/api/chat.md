@@ -92,7 +92,36 @@ Request (`application/json`):
 | `lang` | `ru` or `kk`, optional | Language of the phrase. Default: the account locale. The answer is in this language. |
 | `input_kind` | `typed` (default), `voice`, `share` | How the phrase was entered (for «Переписка»). |
 
-Errors before the stream: `401`, `403 consent_required`, `422 validation_error`.
+Errors before the stream: `401`, `403 consent_required`, `422 validation_error`,
+`429 chat_rate_limited` / `429 chat_daily_limit` (below).
+
+### Message limit (week 18, founder 2026-11-12)
+
+Per person, by `users.profile` (settings `CHAT_RATE_PER_MINUTE`, `CHAT_RATE_PER_DAY`, JSON maps;
+the numbers are a proposal):
+
+| Profile | Per minute | Per day |
+|---|---|---|
+| `regular`, `work` (and any other) | 10 | 300 |
+| `family_beta` | 30 | 2000 |
+
+- Counted: phrases the person sent (`POST /v1/chat/messages` without `choice`) in the last 60 s
+  and since local midnight in `BUDGET_TZ` (Asia/Almaty). Not counted, never refused: taps on a
+  proposal (`choice`), a resend of the same `client_id` (it gets the first reply), and everything
+  the server does by itself (resumes, deferred answers, jobs, imports).
+- Over a limit: `429`, header `Retry-After` and body `retry_after` (seconds), nothing is saved.
+  `chat_rate_limited`: «Слишком много сообщений подряд. Подождите немного и напишите снова.»
+  (≤60 s); `chat_daily_limit`: «На сегодня сообщений достаточно — продолжим завтра.» (until
+  midnight). `message_kk` comes too. The phone keeps the phrase in the line (or the outbox) and
+  shows the message; it does not retry by itself before `retry_after`.
+
+### Page views (Ф-39, beta)
+
+While `assistant_views` is off (`features.md`) the model step has no `set_view` tool and code does
+not run «раскрась по темам»: a phrase about a page's look (layout, fields, sort, groups, colours,
+board) gets «Так пока не умею — вид страницы меняется в «⋯».» and changes nothing. Renaming a page
+or changing its icon («переименуй страницу в Дача») still works: the step gets `rename_page`
+(name, icon only), which writes the same `screen_view_change` action with «Отменить».
 
 Response: `200`, `Content-Type: text/event-stream`. Each event:
 

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { FlatList, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/Screen';
 import { purgeAt } from '@/db/records';
 import { recordTitle, sourceLine } from '@/records/format';
@@ -28,7 +28,7 @@ export default function TrashScreen() {
         keyExtractor={(r) => r.id}
         contentContainerStyle={{ paddingVertical: theme.space[4] }}
         ListHeaderComponent={
-          <AppText variant="title1" accessibilityRole="header" style={{ marginBottom: theme.space[4] }}>
+          <AppText variant="largeTitle" accessibilityRole="header" style={{ marginBottom: theme.space[4] }}>
             {t('trash.title')}
           </AppText>
         }
@@ -45,22 +45,22 @@ export default function TrashScreen() {
               testID={`trash-${item.id}`}
               style={{
                 backgroundColor: theme.colors.surface,
-                borderColor: theme.colors.line,
+                borderColor: theme.colors.separator,
                 borderWidth: 1,
-                borderRadius: theme.radius.card,
+                borderRadius: theme.radius.lg,
                 padding: theme.space[4],
                 marginBottom: theme.space[3],
                 gap: theme.space[1],
               }}
             >
               <AppText numberOfLines={3}>{title}</AppText>
-              <AppText variant="meta">{sourceLine(item, i18n.language, t)}</AppText>
-              <AppText variant="meta">{t('trash.days_left', { n: days })}</AppText>
+              <AppText variant="callout">{sourceLine(item, i18n.language, t)}</AppText>
+              <AppText variant="callout">{t('trash.days_left', { n: days })}</AppText>
               <Button
                 testID={`trash-restore-${item.id}`}
                 label={t('trash.restore')}
                 accessibilityLabel={`${t('trash.restore')}: ${title}`}
-                variant="outline"
+                variant="secondary"
                 style={{ marginTop: theme.space[2] }}
                 onPress={() => {
                   showToast(t('trash.restored'));

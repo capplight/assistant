@@ -343,7 +343,7 @@ describe('«Заметки» — the sticker wall «Ряды»', () => {
     await renderRouter(APP_DIR, { initialUrl: `/page/${notes.id}` });
     await settle(() => screen.queryByTestId('sticker-band-n1') !== null);
     expect(bg('sticker-band-n1')).toBe(lightNoteColors.pink);
-    expect(bg('sticker-n1')).toBe('#FFFDF8');
+    expect(bg('sticker-n1')).toBe(lightNoteColors.white);
   });
 });
 

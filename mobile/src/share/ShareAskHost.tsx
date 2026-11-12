@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { AppText } from '@/components/AppText';
 import { Sheet } from '@/components/page/ExpenseParts';
 import { readAsReceipt, readAsStatement } from '@/expenses/receipts';
@@ -34,7 +34,7 @@ export function ShareAskHost() {
         <Button
           testID="share-ask-statement"
           label={t('exp.share_statement')}
-          variant="outline"
+          variant="secondary"
           onPress={() => {
             close();
             void readAsStatement(ask.recordId).then((job) => router.push({ pathname: '/statement/[id]', params: { id: job.id } }));

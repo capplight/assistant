@@ -6,7 +6,7 @@ import { View } from 'react-native';
 import type { StatementRowOut } from '@/api/types';
 import { AmountText } from '@/components/AmountText';
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/Screen';
 import { StandaloneUndoStrip } from '@/components/UndoStrip';
 import { formatMinor, toMinor } from '@/expenses/calc';
@@ -65,7 +65,7 @@ export default function StatementScreen() {
       if (job?.state === 'failed') {
         return (
           <>
-            <AppText variant="title1" accessibilityRole="header">
+            <AppText variant="largeTitle" accessibilityRole="header">
               {t('exp.statement_failed_title')}
             </AppText>
             <AppText testID="plan-failed">{job.message ?? t('exp.statement_failed')}</AppText>
@@ -75,22 +75,22 @@ export default function StatementScreen() {
       }
       return (
         <>
-          <AppText testID="plan-reading" variant="title1" accessibilityRole="header" accessibilityLiveRegion="polite">
+          <AppText testID="plan-reading" variant="largeTitle" accessibilityRole="header" accessibilityLiveRegion="polite">
             {online ? t('exp.statement_reading') : t('exp.statement_waits')}
           </AppText>
           <AppText>{t('exp.statement_nothing_yet')}</AppText>
-          <Button testID="plan-done" label={t('common.ok')} variant="outline" onPress={done} />
+          <Button testID="plan-done" label={t('common.ok')} variant="secondary" onPress={done} />
         </>
       );
     }
     if (st.status === 'confirmed') {
       return (
         <>
-          <AppText testID="plan-confirmed" variant="title1" accessibilityRole="header" accessibilityLiveRegion="polite">
+          <AppText testID="plan-confirmed" variant="largeTitle" accessibilityRole="header" accessibilityLiveRegion="polite">
             {t('exp.statement_added', { count: n?.add ?? 0 })}
           </AppText>
           {st.rows_similar > 0 ? <AppText>{t('exp.plan_similar_after', { count: st.rows_similar })}</AppText> : null}
-          {st.action_id ? <Button testID="plan-undo" label={t('common.undo')} variant="outline" onPress={() => void undoStatement(st.id)} /> : null}
+          {st.action_id ? <Button testID="plan-undo" label={t('common.undo')} variant="secondary" onPress={() => void undoStatement(st.id)} /> : null}
           <Button testID="plan-done" label={t('exp.plan_done')} onPress={done} />
         </>
       );
@@ -99,7 +99,7 @@ export default function StatementScreen() {
       const key = st.status === 'undone' ? 'exp.plan_undone' : st.status === 'rejected' ? 'exp.plan_rejected' : 'exp.plan_expired';
       return (
         <>
-          <AppText testID={`plan-${st.status}`} variant="title1" accessibilityRole="header" accessibilityLiveRegion="polite">
+          <AppText testID={`plan-${st.status}`} variant="largeTitle" accessibilityRole="header" accessibilityLiveRegion="polite">
             {t(key)}
           </AppText>
           <Button testID="plan-done" label={t('exp.plan_done')} onPress={done} />
@@ -111,13 +111,13 @@ export default function StatementScreen() {
     const a = n!.adds;
     return (
       <>
-        <AppText testID="plan-title" variant="title1" accessibilityRole="header">
+        <AppText testID="plan-title" variant="largeTitle" accessibilityRole="header">
           {title}
         </AppText>
-        {st.bank && BANKS[st.bank] ? <AppText variant="meta">{BANKS[st.bank]}</AppText> : null}
+        {st.bank && BANKS[st.bank] ? <AppText variant="callout">{BANKS[st.bank]}</AppText> : null}
         {a ? (
-          <View testID="plan-numbers" style={{ gap: theme.space[2], borderWidth: 2, borderColor: theme.colors.lineStrong, borderRadius: theme.radius.card, padding: theme.space[4], backgroundColor: theme.colors.surface }}>
-            <AppText variant="meta">{t('exp.plan_spent')}</AppText>
+          <View testID="plan-numbers" style={{ gap: theme.space[2], borderWidth: 2, borderColor: theme.colors.iconSecondary, borderRadius: theme.radius.lg, padding: theme.space[4], backgroundColor: theme.colors.surface }}>
+            <AppText variant="callout">{t('exp.plan_spent')}</AppText>
             <AmountText testID="plan-spent" variant="amount" maxScale={1.6} inset={theme.screenPadding * 2 + theme.space[4] * 2 + 4}>
               {formatMinor(n!.spent ?? 0n, cur)}
             </AmountText>
@@ -133,13 +133,13 @@ export default function StatementScreen() {
           </AppText>
         ) : st.check ? (
           <View testID="plan-check-bad" style={{ gap: theme.space[1] }}>
-            <AppText color="warnText" variant="bodyStrong">
+            <AppText color="warning" variant="bodyStrong">
               {t('exp.plan_check_bad')}
             </AppText>
             {st.check.lines
               .filter((l) => !l.ok)
               .map((l) => (
-                <AppText key={l.key} color="warnText">
+                <AppText key={l.key} color="warning">
                   {t('exp.plan_check_line', { title: l.title, bank: l.bank ?? '—', ours: l.ours ?? '—' })}
                 </AppText>
               ))}
@@ -148,14 +148,14 @@ export default function StatementScreen() {
           <AppText testID="plan-check-none">{t('exp.plan_check_none')}</AppText>
         )}
         {n!.matches === false ? (
-          <AppText testID="plan-mismatch" color="warnText">
+          <AppText testID="plan-mismatch" color="warning">
             {t('exp.plan_mismatch')}
           </AppText>
         ) : null}
         {st.rows_similar > 0 ? <AppText testID="plan-similar">{t('exp.plan_similar', { count: st.rows_similar })}</AppText> : null}
-        <AppText variant="meta">{t('exp.plan_one_undo')}</AppText>
+        <AppText variant="callout">{t('exp.plan_one_undo')}</AppText>
         {note ? (
-          <AppText testID="plan-note" color="warnText" accessibilityLiveRegion="polite">
+          <AppText testID="plan-note" color="warning" accessibilityLiveRegion="polite">
             {note}
           </AppText>
         ) : null}
@@ -172,7 +172,7 @@ export default function StatementScreen() {
         <Button
           testID="plan-no"
           label={t('common.not_now')}
-          variant="outline"
+          variant="secondary"
           disabled={busy}
           onPress={async () => {
             setBusy(true);
@@ -233,11 +233,11 @@ function PlanRow({ r, lang }: { r: StatementRowOut; lang: string }) {
       testID={`plan-row-${r.n}`}
       accessible
       accessibilityLabel={[dayName(r.date, lang), what, amount, tag].filter(Boolean).join('. ')}
-      style={{ flexDirection: 'row', gap: theme.space[2], minHeight: theme.size.minTouch, alignItems: 'center', borderBottomWidth: 1, borderColor: theme.colors.line, opacity: r.state === 'existing' ? 0.6 : 1 }}
+      style={{ flexDirection: 'row', gap: theme.space[2], minHeight: theme.size.minTouch, alignItems: 'center', borderBottomWidth: 1, borderColor: theme.colors.separator, opacity: r.state === 'existing' ? 0.6 : 1 }}
     >
       <View style={{ flex: 1 }}>
         <AppText>{what}</AppText>
-        <AppText variant="meta">{tag ? `${dayName(r.date, lang)} · ${tag}` : dayName(r.date, lang)}</AppText>
+        <AppText variant="callout">{tag ? `${dayName(r.date, lang)} · ${tag}` : dayName(r.date, lang)}</AppText>
       </View>
       <AppText variant="number">{amount}</AppText>
     </View>

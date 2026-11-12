@@ -806,12 +806,14 @@ describe('on screen', () => {
     const tasks = page('tasks').id;
     await fireEvent.press(screen.getByTestId(`my-pages-menu-${tasks}`));
     await fireEvent.press(screen.getByTestId('my-pages-sheet-remove'));
-    await settle(() => !tabs().includes(`tab-${tasks}`));
+    await settle(() => !tabOrder().includes('tasks'));
     expect(screen.getByTestId('undo-strip-text').props.children).toBe(
       'Страница «Дела и напоминания» убрана. Записи остались.',
     );
     await fireEvent.press(screen.getByTestId('undo-strip-undo'));
-    await settle(() => tabs().includes(`tab-${tasks}`));
+    // Back as the third page: past the two tabs (design-system TabBar: ≤4 tabs), so it lives in «Ещё».
+    await settle(() => tabOrder().includes('tasks'));
     expect(tabOrder()).toEqual(['notes', 'expenses', 'tasks']);
+    expect(tabs()).not.toContain(`tab-${tasks}`);
   });
 });

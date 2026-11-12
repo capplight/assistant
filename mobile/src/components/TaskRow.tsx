@@ -7,7 +7,7 @@ import type { TaskOut } from '@/api/types';
 import { useTheme } from '@/theme';
 
 import { AppText } from './AppText';
-import { Button } from './Button';
+import { Button } from './ui/Button';
 
 /**
  * One row with a box (2-design S12 / «Покупки»): the box is 32 pt, the whole row is the ≥56 pt
@@ -34,12 +34,12 @@ export function TaskRow({
   meta?: string | null;
   /** «⋯ Ещё»: Выше / Ниже / Переместить… — the order on the page is the person's (F-41). */
   onMenu?: () => void;
-  /** Just added by the assistant: `markerSoft` for 600 ms. */
+  /** Just added by the assistant: `highlightTint` for 600 ms. */
   highlighted?: boolean;
   /** Week 11а: the planner's box is 40 pt (template-screens 2.3). */
   box?: number;
   /** Overdue: the line under the title in red, with words (not only colour). */
-  metaColor?: 'alarm';
+  metaColor?: 'danger';
   /** «Я в магазине»: `title1`, a 72 pt row, the whole row is the tick. */
   big?: boolean;
   /** «− 2 +» (Покупки) in place of « · 2» after the title. */
@@ -57,8 +57,8 @@ export function TaskRow({
         alignItems: 'center',
         gap: theme.space[2],
         borderBottomWidth: 1,
-        borderBottomColor: theme.colors.line,
-        backgroundColor: highlighted ? theme.colors.markerSoft : undefined,
+        borderBottomColor: theme.colors.separator,
+        backgroundColor: highlighted ? theme.colors.highlightTint : undefined,
       }}
     >
       <Pressable
@@ -72,7 +72,7 @@ export function TaskRow({
           flexDirection: 'row',
           alignItems: 'center',
           gap: theme.space[3],
-          minHeight: big ? 72 : theme.size.primaryTouch,
+          minHeight: big ? 72 : theme.size.buttonHeight,
           paddingVertical: theme.space[2],
         }}
       >
@@ -84,7 +84,7 @@ export function TaskRow({
             borderRadius: 6,
             alignItems: 'center',
             justifyContent: 'center',
-            borderColor: done ? theme.colors.ink2 : theme.colors.lineStrong,
+            borderColor: done ? theme.colors.ink2 : theme.colors.iconSecondary,
             backgroundColor: done ? theme.colors.ink2 : theme.colors.surface,
           }}
         >
@@ -101,7 +101,7 @@ export function TaskRow({
             {shownTitle}
           </AppText>
           {meta ? (
-            <AppText variant="meta" color={metaColor ?? 'ink2'}>
+            <AppText variant="callout" color={metaColor ?? 'ink2'}>
               {meta}
             </AppText>
           ) : null}
@@ -126,7 +126,7 @@ export function TaskRow({
           onPress={onMenu}
           style={{ width: theme.size.minTouch, height: theme.size.minTouch, alignItems: 'center', justifyContent: 'center' }}
         >
-          <Ellipsis size={24} color={theme.colors.accent} />
+          <Ellipsis size={24} color={theme.colors.brand} />
         </Pressable>
       ) : null}
     </View>

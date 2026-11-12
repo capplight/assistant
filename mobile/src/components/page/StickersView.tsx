@@ -18,7 +18,7 @@ import { unverifiedCount } from '@/records/review';
 import { NOTE_COLOR_KEYS, useTheme } from '@/theme';
 
 import { AppText } from '../AppText';
-import { Button } from '../Button';
+import { Button } from '../ui/Button';
 import type { MenuExtra } from '../RecordMenuSheet';
 import type { RowMoves } from '../RecordRow';
 import { StackCards } from '../StackCards';
@@ -153,13 +153,13 @@ export function StickersView({ page, entries, frameTop, ordering }: ViewProps) {
       {frameTop}
       <ModeSwitch board={board} onPick={(on) => void changeView(page, { kind: 'board', on })} />
       {boardAsRows ? (
-        <AppText testID="notes-board-rows" variant="meta" accessibilityLiveRegion="polite">
+        <AppText testID="notes-board-rows" variant="callout" accessibilityLiveRegion="polite">
           {t(theme.largeFont ? 'notes.board_as_rows_large' : 'notes.board_as_rows_reader')}
         </AppText>
       ) : null}
       <StackCards page={page} entries={entries} piles />
       {rows.length > 0 && pileTitles.size > 0 ? (
-        <AppText variant="section" accessibilityRole="header">
+        <AppText variant="sectionLabel" accessibilityRole="header">
           {t('notes.stickers')}
         </AppText>
       ) : null}
@@ -250,16 +250,16 @@ function Sticker({ entry, ctx, large, index, total }: { entry: PageEntry; ctx: E
         styles.sticker,
         {
           backgroundColor: bg,
-          borderRadius: theme.radius.note,
-          borderColor: ctx.highlighted ? theme.colors.marker : theme.colors.line,
+          borderRadius: theme.radius.md,
+          borderColor: ctx.highlighted ? theme.colors.highlight : theme.colors.separator,
           borderWidth: ctx.highlighted ? 3 : 1,
-          minHeight: large ? theme.size.primaryTouch : 160,
+          minHeight: large ? theme.size.buttonHeight : 160,
           marginBottom: large ? theme.space[3] : 0,
         },
       ]}
     >
       {large && color && color !== 'white' ? (
-        <View testID={`sticker-band-${rec.id}`} style={[styles.band, { backgroundColor: theme.notes[color], borderRightWidth: 1, borderRightColor: theme.colors.lineStrong }]} />
+        <View testID={`sticker-band-${rec.id}`} style={[styles.band, { backgroundColor: theme.notes[color], borderRightWidth: 1, borderRightColor: theme.colors.iconSecondary }]} />
       ) : null}
       <Pressable
         testID={`record-${rec.id}`}
@@ -277,8 +277,8 @@ function Sticker({ entry, ctx, large, index, total }: { entry: PageEntry; ctx: E
             paddingLeft: large ? theme.space[4] + 8 : theme.space[3],
             gap: theme.space[1],
             opacity: pressed ? 0.85 : 1,
-            // Changed by the assistant: `markerSoft` for 600 ms (2-design `motion.highlight`).
-            ...(ctx.highlighted ? { backgroundColor: theme.colors.markerSoft } : {}),
+            // Changed by the assistant: `highlightTint` for 600 ms (2-design `motion.highlight`).
+            ...(ctx.highlighted ? { backgroundColor: theme.colors.highlightTint } : {}),
           },
         ]}
       >
@@ -291,18 +291,18 @@ function Sticker({ entry, ctx, large, index, total }: { entry: PageEntry; ctx: E
           {first}
         </AppText>
         {rest.length > 0 ? <AppText numberOfLines={large ? undefined : 3}>{rest.join('\n').trim()}</AppText> : null}
-        {status ? <AppText variant="meta">{status}</AppText> : null}
-        {rec.aiGenerated ? <AppText variant="meta">{t('ai.label_short')}</AppText> : null}
+        {status ? <AppText variant="callout">{status}</AppText> : null}
+        {rec.aiGenerated ? <AppText variant="callout">{t('ai.label_short')}</AppText> : null}
         {toCheck ? (
-          <View testID={`record-check-${rec.id}`} style={{ alignSelf: 'flex-start', backgroundColor: theme.colors.markerSoft, borderRadius: theme.radius.chip, paddingHorizontal: theme.space[2] }}>
-            <AppText variant="meta" color="warnText">
+          <View testID={`record-check-${rec.id}`} style={{ alignSelf: 'flex-start', backgroundColor: theme.colors.highlightTint, borderRadius: theme.radius.round, paddingHorizontal: theme.space[2] }}>
+            <AppText variant="callout" color="warning">
               {t('check.badge')}
             </AppText>
           </View>
         ) : null}
       </Pressable>
       <View style={[styles.row, { paddingLeft: large ? theme.space[4] + 8 : theme.space[3], flexWrap: 'wrap' }]}>
-        <AppText variant="meta" style={styles.flex}>
+        <AppText variant="callout" style={styles.flex}>
           {sourceLine(rec, i18n.language, t)}
         </AppText>
         {moves?.showArrows ? (
@@ -316,7 +316,7 @@ function Sticker({ entry, ctx, large, index, total }: { entry: PageEntry; ctx: E
               onPress={moves.onUp}
               style={[square, { opacity: moves.onUp ? 1 : 0.35 }]}
             >
-              <ArrowUp size={24} color={theme.colors.accent} />
+              <ArrowUp size={24} color={theme.colors.brand} />
             </Pressable>
             <Pressable
               testID={`record-down-${rec.id}`}
@@ -327,7 +327,7 @@ function Sticker({ entry, ctx, large, index, total }: { entry: PageEntry; ctx: E
               onPress={moves.onDown}
               style={[square, { opacity: moves.onDown ? 1 : 0.35 }]}
             >
-              <ArrowDown size={24} color={theme.colors.accent} />
+              <ArrowDown size={24} color={theme.colors.brand} />
             </Pressable>
           </>
         ) : null}
@@ -339,7 +339,7 @@ function Sticker({ entry, ctx, large, index, total }: { entry: PageEntry; ctx: E
             onPress={moves.onMenu}
             style={square}
           >
-            <Ellipsis size={24} color={theme.colors.accent} />
+            <Ellipsis size={24} color={theme.colors.brand} />
           </Pressable>
         ) : null}
       </View>
@@ -347,7 +347,7 @@ function Sticker({ entry, ctx, large, index, total }: { entry: PageEntry; ctx: E
       <View
         importantForAccessibility="no-hide-descendants"
         accessibilityElementsHidden
-        style={[styles.fold, { backgroundColor: theme.colors.bg, borderColor: theme.colors.line }]}
+        style={[styles.fold, { backgroundColor: theme.colors.bg, borderColor: theme.colors.separator }]}
       />
     </View>
   );
@@ -364,7 +364,7 @@ function ModeSwitch({ board, onPick }: { board: boolean; onPick: (board: boolean
           key={String(on)}
           testID={`notes-mode-${on ? 'board' : 'rows'}`}
           label={t(on ? 'notes.mode_board' : 'notes.mode_rows')}
-          variant={on === board ? 'primary' : 'outline'}
+          variant={on === board ? 'primary' : 'secondary'}
           minHeight={theme.size.minTouch}
           accessibilityRole="tab"
           accessibilityState={{ selected: on === board }}
@@ -395,7 +395,7 @@ function ColorSheet({ title, current, onPick, onClose }: { title: string; curren
             <AppText variant="title2" accessibilityRole="header">
               {t('notes.color_title')}
             </AppText>
-            <AppText variant="meta" numberOfLines={2}>
+            <AppText variant="callout" numberOfLines={2}>
               {title}
             </AppText>
             <View accessibilityRole="radiogroup" style={[styles.row, { flexWrap: 'wrap', gap: theme.space[3] }]}>
@@ -410,7 +410,7 @@ function ColorSheet({ title, current, onPick, onClose }: { title: string; curren
                     accessibilityLabel={name}
                     accessibilityState={{ checked: on }}
                     onPress={() => onPick(c)}
-                    style={{ alignItems: 'center', gap: theme.space[1], minWidth: 72, minHeight: theme.size.primaryTouch }}
+                    style={{ alignItems: 'center', gap: theme.space[1], minWidth: 72, minHeight: theme.size.buttonHeight }}
                   >
                     <View
                       style={{
@@ -419,21 +419,21 @@ function ColorSheet({ title, current, onPick, onClose }: { title: string; curren
                         borderRadius: theme.radius.round,
                         backgroundColor: theme.notes[c],
                         borderWidth: on ? 3 : 1,
-                        borderColor: on ? theme.colors.accent : theme.colors.lineStrong,
+                        borderColor: on ? theme.colors.brand : theme.colors.iconSecondary,
                         alignItems: 'center',
                         justifyContent: 'center',
                       }}
                     >
                       {on ? <Check size={24} color={theme.colors.ink} strokeWidth={3} /> : null}
                     </View>
-                    <AppText variant={on ? 'bodyStrong' : 'meta'} color="ink">
+                    <AppText variant={on ? 'bodyStrong' : 'callout'} color="ink">
                       {name}
                     </AppText>
                   </Pressable>
                 );
               })}
             </View>
-            <Button testID="color-close" label={t('common.close')} variant="outline" onPress={onClose} />
+            <Button testID="color-close" label={t('common.close')} variant="secondary" onPress={onClose} />
           </ScrollView>
         </SafeAreaView>
       </View>
@@ -450,13 +450,13 @@ function EmptyWall() {
       <View
         style={[
           styles.sticker,
-          { backgroundColor: theme.notes.yellow, borderRadius: theme.radius.note, borderColor: theme.colors.line, borderWidth: 1, opacity: 0.7, padding: theme.space[4], minHeight: 120 },
+          { backgroundColor: theme.notes.yellow, borderRadius: theme.radius.md, borderColor: theme.colors.separator, borderWidth: 1, opacity: 0.7, padding: theme.space[4], minHeight: 120 },
         ]}
       >
         <AppText>{t('notes.empty')}</AppText>
       </View>
-      <AppText variant="meta">{t('notes.example_1')}</AppText>
-      <AppText variant="meta">{t('notes.example_2')}</AppText>
+      <AppText variant="callout">{t('notes.example_1')}</AppText>
+      <AppText variant="callout">{t('notes.example_2')}</AppText>
     </View>
   );
 }

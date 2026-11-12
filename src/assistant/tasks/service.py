@@ -21,7 +21,7 @@ from assistant.db.models_actions import Initiator
 from assistant.db.models_pages import Screen
 from assistant.db.models_tasks import ListKey, Task
 from assistant.db.models_v2 import RecordKind, RecordSource, RecordStatus
-from assistant.pages import lock_user, place_item
+from assistant.pages import first_use_page, lock_user, place_item
 from assistant.records import content_hash, detect_lang, enqueue_ingest, normalize_text
 from assistant.tasks.parse import QTY_MAX, TITLE_MAX, TaskSpec
 
@@ -57,7 +57,7 @@ def lower_first(title: str) -> str:
 
 
 async def list_page(session: AsyncSession, user_id: int, list_key: str) -> Screen | None:
-    """The live page this list shows on, or None (no page is made for it, R-55)."""
+    """The live page this list shows on, or None (`add` makes «Покупки» on its first thing)."""
     for key in LIST_PAGES[list_key]:
         page = await session.scalar(
             select(Screen).where(Screen.user_id == user_id, Screen.template_key == key,
@@ -75,6 +75,12 @@ def sentence_for(page: Screen | None, list_key: str, titles: Sequence[str]) -> s
     if page.template_key == "tasks" and list_key == ListKey.TODO:
         return f"Добавил в дела: {what}."
     return f"Добавил в {page.title}: {what}."
+
+
+def page_made_change(page: Screen) -> dict[str, Any]:
+    """The `changes` row of a page made on first use: the app can offer to show its tab."""
+    return {"item_id": None, "title": page.title, "kind": "create_page",
+            "page_id": str(page.public_id), "text": f"Новая страница «{page.title}»"}
 
 
 @dataclass
@@ -99,8 +105,13 @@ async def add(session: AsyncSession, user_id: int, specs: Sequence[TaskSpec], *,
     if not specs:
         return out
     list_key = specs[0].list_key
-    page = await list_page(session, user_id, list_key)
+    page, made = None, False
+    if list_key == ListKey.SHOPPING:  # «Покупки» is made on its first thing (Ф-35)
+        page, made = await first_use_page(session, user_id, "shopping")
+    page = page or await list_page(session, user_id, list_key)
     out.page = page
+    if made and page is not None:
+        out.changes.append(page_made_change(page))
     titles: list[str] = []
     for spec in specs:
         title = clean_title(spec.title)

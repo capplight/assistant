@@ -5,7 +5,7 @@ import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import type { PriceItemOut } from '@/api/types';
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { CheckBadge } from '@/components/kp/KpParts';
 import { NumberSheet } from '@/components/kp/NumberSheet';
 import { Sheet } from '@/components/page/ExpenseParts';
@@ -53,10 +53,10 @@ export default function PriceListScreen() {
       <Screen testID="prices-screen">
         <View style={{ gap: theme.space[4] }}>
           <Button testID="prices-back" label={`‹ ${t('kp.back')}`} variant="text" minHeight={theme.size.minTouch} style={{ alignSelf: 'flex-start' }} onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} />
-          <AppText variant="title1" accessibilityRole="header">
+          <AppText variant="largeTitle" accessibilityRole="header">
             {t('kp.prices_screen')}
           </AppText>
-          <AppText testID="prices-count" variant="meta">
+          <AppText testID="prices-count" variant="callout">
             {[t('kp.prices_count', { count: list.length }), updatedAt ? t('kp.prices_updated', { date: shortDate(updatedAt, i18n.language) }) : null].filter(Boolean).join(' · ')}
           </AppText>
           <Button testID="prices-add" label={t('kp.add_one')} onPress={() => setAdding(true)} />
@@ -69,7 +69,7 @@ export default function PriceListScreen() {
               value={q}
               onChangeText={setQ}
               maxFontSizeMultiplier={MAX_FONT_SCALE}
-              style={[theme.type.body, { color: theme.colors.ink, minHeight: theme.size.primaryTouch, borderWidth: 1, borderColor: theme.colors.lineStrong, borderRadius: theme.radius.input, paddingHorizontal: theme.space[3], backgroundColor: theme.colors.surface }]}
+              style={[theme.type.body, { color: theme.colors.ink, minHeight: theme.size.buttonHeight, borderWidth: 1, borderColor: theme.colors.iconSecondary, borderRadius: theme.radius.sm, paddingHorizontal: theme.space[3], backgroundColor: theme.colors.surface }]}
             />
           ) : (
             <AppText testID="prices-empty">{t('kp.prices_empty')}</AppText>
@@ -82,32 +82,32 @@ export default function PriceListScreen() {
               accessibilityRole="button"
               accessibilityLabel={t('kp.price_row_a11y', { name: p.name, price: priceMoney(p.price), unit: p.unit ? t('kp.per_unit_a11y', { unit: p.unit }) : '', review: p.review ? t('kp.check') : '' })}
               onPress={() => setMenu(p)}
-              style={{ minHeight: theme.size.primaryTouch, borderBottomWidth: 1, borderBottomColor: theme.colors.line, paddingVertical: theme.space[2], gap: theme.space[1] }}
+              style={{ minHeight: theme.size.buttonHeight, borderBottomWidth: 1, borderBottomColor: theme.colors.separator, paddingVertical: theme.space[2], gap: theme.space[1] }}
             >
               <View style={[styles.row, { flexWrap: 'wrap', gap: theme.space[2] }]}>
                 <AppText style={{ flexGrow: 1, flexShrink: 1 }}>{p.name}</AppText>
-                <AppText variant="number" style={{ backgroundColor: p.review ? theme.colors.markerSoft : 'transparent' }}>{`${priceMoney(p.price)}${unit(p)} ›`}</AppText>
+                <AppText variant="number" style={{ backgroundColor: p.review ? theme.colors.highlightTint : 'transparent' }}>{`${priceMoney(p.price)}${unit(p)} ›`}</AppText>
               </View>
               {p.review ? <CheckBadge /> : null}
             </Pressable>
           ))}
           {pastShown.length > 0 ? (
             <>
-              <AppText variant="section" accessibilityRole="header" style={{ marginTop: theme.space[4] }}>
+              <AppText variant="sectionLabel" accessibilityRole="header" style={{ marginTop: theme.space[4] }}>
                 {t('kp.prices_past', { count: pastShown.length })}
               </AppText>
               {pastShown.map((p) => (
-                <View key={`${p.name}|${p.unit ?? ""}`} testID={`price-past-${p.name}`} style={{ gap: theme.space[1], borderBottomWidth: 1, borderBottomColor: theme.colors.line, paddingVertical: theme.space[2] }}>
+                <View key={`${p.name}|${p.unit ?? ""}`} testID={`price-past-${p.name}`} style={{ gap: theme.space[1], borderBottomWidth: 1, borderBottomColor: theme.colors.separator, paddingVertical: theme.space[2] }}>
                   <View style={[styles.row, { flexWrap: 'wrap', gap: theme.space[2] }]}>
                     <AppText style={{ flexGrow: 1, flexShrink: 1 }}>{p.name}</AppText>
                     <AppText variant="number">{`${priceMoney(p.price)}${unit(p)}`}</AppText>
                   </View>
-                  {p.client ? <AppText variant="meta">{t('kp.past_from', { client: p.client })}</AppText> : null}
+                  {p.client ? <AppText variant="callout">{t('kp.past_from', { client: p.client })}</AppText> : null}
                   <Button
                     testID={`price-past-${p.name}-add`}
                     label={t('kp.prices_add_to_list')}
                     accessibilityLabel={`${t('kp.prices_add_to_list')}: ${p.name}`}
-                    variant="outline"
+                    variant="secondary"
                     minHeight={theme.size.minTouch}
                     onPress={() => void addPrices([{ name: p.name, unit: p.unit, price: p.price }])}
                   />
@@ -124,9 +124,9 @@ export default function PriceListScreen() {
           <AppText variant="number">{`${priceMoney(menu.price)}${unit(menu)}`}</AppText>
           <Button testID="price-menu-change" label={t('kp.change_price', { price: priceMoney(menu.price) })} onPress={() => { setEditing(menu); setMenu(null); }} />
           {menu.review ? (
-            <Button testID="price-menu-verify" label={t('kp.verify')} variant="outline" onPress={() => { void changePrice(menu.id, {}, { verify: true }); setMenu(null); }} />
+            <Button testID="price-menu-verify" label={t('kp.verify')} variant="secondary" onPress={() => { void changePrice(menu.id, {}, { verify: true }); setMenu(null); }} />
           ) : null}
-          <Button testID="price-menu-delete" label={t('kp.price_edit_delete')} variant="text" labelColor="alarm" onPress={() => { void removePrice(menu.id); setMenu(null); }} />
+          <Button testID="price-menu-delete" label={t('kp.price_edit_delete')} variant="text" labelColor="danger" onPress={() => { void removePrice(menu.id); setMenu(null); }} />
         </Sheet>
       ) : null}
       {editing ? (
@@ -161,7 +161,7 @@ function AddPriceSheet({ onClose }: { onClose: () => void }) {
   const [bad, setBad] = useState(false);
   const input = (testID: string, label: string, value: string, set: (s: string) => void, numeric = false) => (
     <View style={{ gap: theme.space[1] }}>
-      <AppText variant="meta">{label}</AppText>
+      <AppText variant="callout">{label}</AppText>
       <TextInput
         testID={testID}
         accessibilityLabel={label}
@@ -172,7 +172,7 @@ function AddPriceSheet({ onClose }: { onClose: () => void }) {
         }}
         keyboardType={numeric ? 'decimal-pad' : 'default'}
         maxFontSizeMultiplier={MAX_FONT_SCALE}
-        style={[theme.type.body, { color: theme.colors.ink, minHeight: theme.size.primaryTouch, borderWidth: 1, borderColor: theme.colors.lineStrong, borderRadius: theme.radius.input, paddingHorizontal: theme.space[3], backgroundColor: theme.colors.bg }]}
+        style={[theme.type.body, { color: theme.colors.ink, minHeight: theme.size.buttonHeight, borderWidth: 1, borderColor: theme.colors.iconSecondary, borderRadius: theme.radius.sm, paddingHorizontal: theme.space[3], backgroundColor: theme.colors.bg }]}
       />
     </View>
   );
@@ -182,7 +182,7 @@ function AddPriceSheet({ onClose }: { onClose: () => void }) {
       {input('price-add-unit', t('kp.add_unit'), unit, setUnit)}
       {input('price-add-price', t('kp.add_price'), price, setPrice, true)}
       {bad ? (
-        <AppText testID="price-add-bad" color="warnText" accessibilityLiveRegion="polite">
+        <AppText testID="price-add-bad" color="warning" accessibilityLiveRegion="polite">
           {t('kp.add_bad')}
         </AppText>
       ) : null}

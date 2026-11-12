@@ -39,6 +39,8 @@ pytestmark = [
     pytest.mark.db,
     pytest.mark.skipif(not os.environ.get("DATABASE_URL"), reason="DATABASE_URL not set"),
 ]
+# Ф-37 (week 19): statements and QR are off for the beta; these tests switch them on.
+ON = {"feature_statements_pdf": True, "feature_receipt_qr": True}
 OCT = "2026-10-15"
 
 
@@ -110,7 +112,7 @@ async def test_statement_plan_one_yes_totals_match_the_bank_one_undo(env9):
     bank = {"Покупки": sum((r.amount for r in rows if r.label == "Покупка"), Decimal(0)),
             "Разное": sum((r.amount for r in rows if r.label == "Разное"), Decimal(0)),
             "Пополнения": sum((r.amount for r in rows if r.label == "Пополнение"), Decimal(0))}
-    async with client(env9.make_app()) as c:
+    async with client(env9.make_app(**ON)) as c:
         h = await signed_in(c, BASE)  # no ai_cross_border: a known bank needs no model
         page = (await add_page(c, h, "expenses"))["page"]["id"]
         item = await upload_item(c, h, pdf, "application/pdf")
@@ -173,7 +175,7 @@ async def test_statement_plan_one_yes_totals_match_the_bank_one_undo(env9):
 
 async def test_reimport_and_typed_ones_already_there_are_not_created(env9):
     rows = october_rows(seed=5, n=30)
-    async with client(env9.make_app()) as c:
+    async with client(env9.make_app(**ON)) as c:
         h = await signed_in(c, BASE)
         item = await upload_item(c, h, kaspi_pdf(rows), "application/pdf")
         purchase = next(r for r in rows if r.label == "Покупка" and r.amount < 0)
@@ -201,7 +203,7 @@ async def test_reimport_and_typed_ones_already_there_are_not_created(env9):
 
 
 async def test_reject_saves_nothing_and_clears_the_rows(env9):
-    async with client(env9.make_app()) as c:
+    async with client(env9.make_app(**ON)) as c:
         h = await signed_in(c, BASE)
         item = await upload_item(c, h, halyk_pdf(halyk_rows()), "application/pdf")
         out = await plan(c, h, item["id"])
@@ -221,7 +223,7 @@ async def test_reject_saves_nothing_and_clears_the_rows(env9):
 
 
 async def test_halyk_fees_and_a_summary_that_does_not_match(env9):
-    async with client(env9.make_app()) as c:
+    async with client(env9.make_app(**ON)) as c:
         h = await signed_in(c, BASE)
         item = await upload_item(c, h, halyk_pdf(halyk_rows()), "application/pdf")
         st = (await plan(c, h, item["id"]))["statement"]
@@ -248,7 +250,7 @@ async def test_unknown_bank_needs_the_model_and_each_row_is_checked(env9):
     lines = ["ТОО Тестовый Банк", "Выписка по счёту", "01.10.2026 Оплата Кофейня 1 500,00",
              "02.10.2026 Зачисление 20 000,00", "03.10.2026 Оплата Аптека 2 750,25"]
     data = text_pdf(lines)
-    async with client(env9.make_app()) as c:
+    async with client(env9.make_app(**ON)) as c:
         h = await signed_in(c, BASE)
         item = await upload_item(c, h, data, "application/pdf")
         r = await c.post("/v1/expenses/statements", json={"client_id": str(uuid.uuid4()),
@@ -263,7 +265,7 @@ async def test_unknown_bank_needs_the_model_and_each_row_is_checked(env9):
         StatementRow(line=5, date="2026-10-03", amount="9999.00", sign="-",
                      description="Оплата Аптека"),  # not on that line: dropped
     ]))  # fmt: skip
-    async with client(env9.make_app(router9(env9.maker, script))) as c:
+    async with client(env9.make_app(router9(env9.maker, script), **ON)) as c:
         h = await signed_in(c)
         item = await upload_item(c, h, data, "application/pdf")
         st = (await plan(c, h, item["id"]))["statement"]
@@ -290,7 +292,7 @@ def magnum(**kw: Any) -> ReceiptReply:
 
 async def test_receipt_photo_then_statement_one_payment_merged_once(env9):
     script = Script13(receipt=magnum())
-    app = env9.make_app(router9(env9.maker, script))
+    app = env9.make_app(router9(env9.maker, script), **ON)
     async with client(app) as c:
         h = await signed_in(c)
         page = (await add_page(c, h, "expenses"))["page"]["id"]
@@ -360,7 +362,7 @@ async def test_receipt_photo_then_statement_one_payment_merged_once(env9):
 
 async def test_receipt_without_consent_or_with_a_wrong_number_is_the_form(env9):
     script = Script13(receipt=magnum(total="1500.00"))  # not on the receipt
-    app = env9.make_app(router9(env9.maker, script))
+    app = env9.make_app(router9(env9.maker, script), **ON)
     async with client(app) as c:
         h = await signed_in(c)
         photo = await upload_item(c, h, b"\xff\xd8receipt-two", "image/jpeg", "camera")
@@ -370,7 +372,7 @@ async def test_receipt_without_consent_or_with_a_wrong_number_is_the_form(env9):
         assert r.json()["status"] == "form" and r.json()["expense"] is None
         assert r.json()["message"] == "Не разобрал сумму на чеке — наберите её на клавишах."
     script = Script13(receipt=magnum())
-    app = env9.make_app(router9(env9.maker, script))
+    app = env9.make_app(router9(env9.maker, script), **ON)
     async with client(app) as c:
         h = await signed_in(c, BASE)  # no ai_cross_border: nothing goes to the model
         photo = await upload_item(c, h, b"\xff\xd8receipt-three", "image/jpeg", "camera")
@@ -379,7 +381,7 @@ async def test_receipt_without_consent_or_with_a_wrong_number_is_the_form(env9):
                                                          "item_id": photo["id"]}, headers=h)
         assert r.json()["status"] == "form" and script.n("ReceiptReply") == 0
     # Ф-1 on: code reads the labelled total itself, no model
-    app = env9.make_app(router9(env9.maker, script), expenses_rules_first=True)
+    app = env9.make_app(router9(env9.maker, script), expenses_rules_first=True, **ON)
     async with client(app) as c:
         h = await signed_in(c, BASE)
         photo = await upload_item(c, h, b"\xff\xd8receipt-four", "image/jpeg", "camera")
@@ -400,7 +402,7 @@ async def test_shared_kaspi_receipt_pdf_is_masked_before_the_model(env9):
     script = Script13(receipt=ReceiptReply(
         is_receipt=True, total="7450.00", currency="KZT", date="2026-11-03",
         payee="ТОО ЦВЕТЫ ТЕСТ", category="cafe_gifts", lines=[], confidence=0.95))
-    app = env9.make_app(router9(env9.maker, script))
+    app = env9.make_app(router9(env9.maker, script), **ON)
     async with client(app) as c:
         h = await signed_in(c)
         pdf = await upload_item(c, h, text_pdf(lines), "application/pdf")
@@ -422,7 +424,7 @@ async def test_fiscal_qr_amount_from_the_link_page_only_from_the_allowlist(env9)
     script = Script13(receipt=ReceiptReply(
         is_receipt=True, total="3400.50", currency="KZT", date="2026-11-04", payee="ТОО ТЕСТ",
         category="groceries", lines=[], confidence=0.9))
-    app = env9.make_app(router9(env9.maker, script))
+    app = env9.make_app(router9(env9.maker, script), **ON)
     app.state.ctx.ofd = FakeOfdReader({url: "ТОО ТЕСТ\nИТОГО 3 400,50\n04.11.2026 19:15"})
     async with client(app) as c:
         h = await signed_in(c)
@@ -444,7 +446,7 @@ async def test_fiscal_qr_amount_from_the_link_page_only_from_the_allowlist(env9)
                                                            "url": url}, headers=h)
         assert again.json()["status"] == "exists" and again.json()["expense"]["id"] == exp["id"]
 
-    app = env9.make_app()
+    app = env9.make_app(**ON)
     app.state.ctx.ofd = FakeOfdReader({})  # the OFD page is down; no consent either
     async with client(app) as c:
         h = await signed_in(c, BASE)

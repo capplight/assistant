@@ -1970,3 +1970,21 @@ export type DeletionOut = {
   grace_days: number;
   message_ru: string;
 };
+
+// --- week 19: beta scope `GET /v1/features` (docs/api/features.md) ---
+
+/** The server's feature switches (Ф-33…Ф-44). No sign-in, nothing personal. */
+export type FeaturesOut = {
+  statements_pdf: boolean;
+  receipt_qr: boolean;
+  board: boolean;
+  assistant_views: boolean;
+  page_settings_full: boolean;
+  telegram_login: boolean;
+  personal_mail: boolean;
+  setup_for_other: boolean;
+  /** The `screen` value of `POST /v1/consents` sent by «Начать». */
+  consent_screen: string;
+  today: { tips_days: number; tips_per_day: number; proposals: boolean; tiles: boolean };
+  pages: { default: string[]; first_use: string[] };
+};

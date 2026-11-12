@@ -12,7 +12,7 @@ import type { Tile } from '@/today/tiles';
 import { useTheme } from '@/theme';
 
 import { AppText } from './AppText';
-import { Button } from './Button';
+import { Button } from './ui/Button';
 
 /**
  * «Сегодня» as a tear-off sheet (template-screens 2.7): the day's number large on a «листок»,
@@ -47,7 +47,7 @@ export function TodayHeader({ now, greeting }: { now: number; greeting: string }
           width: theme.size.minTouch,
           height: theme.size.minTouch,
           borderRadius: theme.radius.round,
-          borderColor: theme.colors.lineStrong,
+          borderColor: theme.colors.iconSecondary,
         },
       ]}
     >
@@ -64,7 +64,7 @@ export function TodayHeader({ now, greeting }: { now: number; greeting: string }
           </AppText>
           {avatar}
         </View>
-        <AppText variant="title1">{greeting}</AppText>
+        <AppText variant="largeTitle">{greeting}</AppText>
       </View>
     );
   }
@@ -80,18 +80,18 @@ export function TodayHeader({ now, greeting }: { now: number; greeting: string }
           styles.sheet,
           {
             backgroundColor: theme.colors.surface,
-            borderColor: theme.colors.lineStrong,
-            borderRadius: theme.radius.card,
+            borderColor: theme.colors.iconSecondary,
+            borderRadius: theme.radius.lg,
             paddingVertical: theme.space[2],
             paddingHorizontal: theme.space[3],
           },
         ]}
       >
-        <View style={[styles.perforation, { borderColor: theme.colors.line }]} />
-        <AppText variant="display" style={styles.center}>
+        <View style={[styles.perforation, { borderColor: theme.colors.separator }]} />
+        <AppText variant="largeTitle" style={styles.center}>
           {String(d.getDate())}
         </AppText>
-        <AppText variant="meta" color="ink" style={styles.center}>
+        <AppText variant="callout" color="ink" style={styles.center}>
           {monthWord}
         </AppText>
       </View>
@@ -138,8 +138,8 @@ export function NextCard({
       testID="today-next"
       style={{
         borderWidth: 2,
-        borderColor: theme.colors.accent,
-        borderRadius: theme.radius.card,
+        borderColor: theme.colors.brand,
+        borderRadius: theme.radius.lg,
         backgroundColor: theme.colors.surface,
         padding: theme.space[4],
         gap: theme.space[3],
@@ -147,11 +147,11 @@ export function NextCard({
       }}
     >
       <View accessible accessibilityLabel={label}>
-        <AppText variant="section" color="accent">
+        <AppText variant="sectionLabel" color="brand">
           {when ? `${t('today.next')} · ${when}` : t('today.next')}
         </AppText>
         <View style={[styles.row, { gap: theme.space[2], marginTop: theme.space[2] }]}>
-          {next.kind === 'reminder' ? <BellRing size={24} color={next.alarm ? theme.colors.alarm : theme.colors.ink} /> : null}
+          {next.kind === 'reminder' ? <BellRing size={24} color={next.alarm ? theme.colors.danger : theme.colors.ink} /> : null}
           <AppText variant="title2" style={styles.flex}>
             {time ? `${time} ${next.title}` : next.title}
           </AppText>
@@ -169,7 +169,7 @@ export function NextCard({
           <Button
             testID="today-next-snooze"
             label={t('alarm.snooze')}
-            variant="outline"
+            variant="secondary"
             style={theme.largeFont ? undefined : { flex: 1 }}
             onPress={onSnooze}
           />
@@ -196,7 +196,7 @@ export function PageTiles({ tiles }: { tiles: Tile[] }) {
   const menuPage = menu ? pageOf(menu.pageId) : undefined;
   return (
     <View testID="today-tiles" style={{ marginBottom: theme.space[6] }}>
-      <AppText variant="section" accessibilityRole="header" style={{ marginBottom: theme.space[3] }}>
+      <AppText variant="sectionLabel" accessibilityRole="header" style={{ marginBottom: theme.space[3] }}>
         {t('today.on_pages')}
       </AppText>
       <View style={{ flexDirection: theme.largeFont ? 'column' : 'row', gap: theme.space[3] }}>
@@ -210,8 +210,8 @@ export function PageTiles({ tiles }: { tiles: Tile[] }) {
               style={[
                 styles.tile,
                 {
-                  borderColor: theme.colors.line,
-                  borderRadius: theme.radius.card,
+                  borderColor: theme.colors.separator,
+                  borderRadius: theme.radius.lg,
                   backgroundColor: theme.colors.surface,
                   flex: theme.largeFont ? undefined : 1,
                 },
@@ -253,7 +253,7 @@ export function PageTiles({ tiles }: { tiles: Tile[] }) {
       </View>
       <Modal visible={menu !== null} transparent animationType="fade" onRequestClose={() => setMenu(null)}>
         <Pressable style={[styles.backdrop, { backgroundColor: theme.colors.scrim }]} onPress={() => setMenu(null)} accessibilityLabel={t('common.close')}>
-          <SafeAreaView edges={['bottom']} style={{ backgroundColor: theme.colors.surface, padding: theme.space[4], gap: theme.space[2] }}>
+          <SafeAreaView edges={['bottom']} style={[{ backgroundColor: theme.colors.surfaceRaised, borderTopLeftRadius: theme.radius.sheet, borderTopRightRadius: theme.radius.sheet, padding: theme.space[5], gap: theme.space[2] }, theme.elevation.floating]}>
             {menu ? (
               <>
                 <AppText variant="title2" accessibilityRole="header">
@@ -261,7 +261,7 @@ export function PageTiles({ tiles }: { tiles: Tile[] }) {
                 </AppText>
                 <Button
                   testID="tile-pin"
-                  variant="outline"
+                  variant="secondary"
                   label={menu.pinned ? t('today.tile_unpin') : t('today.tile_pin')}
                   onPress={() => {
                     setMenu(null);
@@ -270,7 +270,7 @@ export function PageTiles({ tiles }: { tiles: Tile[] }) {
                 />
                 <Button
                   testID="tile-hide"
-                  variant="outline"
+                  variant="secondary"
                   label={t('today.tile_hide')}
                   onPress={() => {
                     setMenu(null);

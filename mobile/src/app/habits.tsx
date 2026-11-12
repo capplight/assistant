@@ -8,7 +8,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { ApiError } from '@/api/errors';
 import type { HabitOut } from '@/api/types';
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { PageIcon } from '@/components/Icon';
 import { Screen } from '@/components/Screen';
 import { StandaloneUndoStrip } from '@/components/UndoStrip';
@@ -109,11 +109,11 @@ export default function HabitsScreen() {
             minHeight={theme.size.minTouch}
             onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
           />
-          <AppText variant="title1" accessibilityRole="header" style={styles.flex}>
+          <AppText variant="largeTitle" accessibilityRole="header" style={styles.flex}>
             {t('habits.title')}
           </AppText>
         </View>
-        <AppText variant="meta" style={{ marginBottom: theme.space[4] }}>
+        <AppText variant="callout" style={{ marginBottom: theme.space[4] }}>
           {t('habits.hint')}
         </AppText>
         {offline && list.length === 0 ? <AppText testID="habits-offline">{t('habits.offline')}</AppText> : null}
@@ -124,7 +124,7 @@ export default function HabitsScreen() {
             <View
               key={h.id}
               testID={`habit-${h.id}`}
-              style={{ borderBottomWidth: 1, borderBottomColor: theme.colors.line, gap: theme.space[1], paddingVertical: theme.space[2] }}
+              style={{ borderBottomWidth: 1, borderBottomColor: theme.colors.separator, gap: theme.space[1], paddingVertical: theme.space[2] }}
             >
               <AppText>{text}</AppText>
               <View style={[styles.row, { gap: theme.space[2], flexWrap: 'wrap' }]}>
@@ -164,7 +164,7 @@ export default function HabitsScreen() {
                     testID={`habit-page-${p.id}`}
                     accessibilityRole="button"
                     onPress={() => editing && void move(editing, p)}
-                    style={[styles.row, { minHeight: theme.size.primaryTouch, gap: theme.space[3], borderBottomWidth: 1, borderBottomColor: theme.colors.line }]}
+                    style={[styles.row, { minHeight: theme.size.buttonHeight, gap: theme.space[3], borderBottomWidth: 1, borderBottomColor: theme.colors.separator }]}
                   >
                     <PageIcon name={p.icon} color={theme.colors.ink} size={24} />
                     <AppText style={styles.flex}>{title(p)}</AppText>

@@ -72,7 +72,8 @@ src/
     account-consent.tsx      S05 again, for an account with no consent of its own
     chat.tsx                 «Переписка» (S36, full screen placeholder)
   components/                AssistantLine, AnswerBanner, BottomTabs, AddSheet, TemplateCard, …
-  theme/                     tokens from 2-design §2: colors (light/dark), typography, spacing, radii, motion
+  components/ui/             UI kit «Мята / Глубина» (Button, Card, ListRow, Sheet, Header, TabBar, …) — see its README
+  theme/                     «Мята» (light) / «Глубина» (dark) tokens by role, type, spacing, radii, elevation, motion; `useLayout()`
   i18n/                      i18next; locales/ru.json (default), locales/kk.json (DRAFT)
   store/                     zustand stores: onboarding, pages, assistant (persisted via expo-sqlite kv-store)
   api/                       /v1 client: config, tokens (secure-store), errors, endpoints, types
@@ -92,6 +93,16 @@ src/
   alarms/                    week 8: port (FakeAlarms), native + notification adapters, planner, S15 steps, service
 modules/alarms/              native Expo module: Android (Kotlin) AlarmManager + S14 + battery-guide, iOS (Swift) AlarmKit
 ```
+
+## Design system «Мята / Глубина» — phase 1 (foundation)
+
+Ф-45 / Ф-46, `../docs/design/system/design-system.md`. Tokens by role in `src/theme` (old names removed, mechanical
+renames across all screens), Lucide icons at 20 / 24 / 28 with stroke 1.75, the UI kit in `src/components/ui`
+(rules for screen agents and the list of what is still to move: `src/components/ui/README.md`), and the adaptive
+toolkit `useLayout()` (compact < 360 · regular · expanded ≥ 600 · two panes ≥ 840, gutters 12 / 16 / 20, content ≤ 600,
+note / tile columns, safe areas). Tabs: Сегодня + 2 pages + Ещё (1 page at ≥150 %). The assistant line is one capsule.
+Tests: `__tests__/ui.test.tsx` (tokens, contrast, kit at 320 / 360 / 412 / 600 / 840 × 1.0 / 1.3 / 2.0) and
+`__tests__/adaptive.test.tsx` (the app at the same matrix). **Checked by Jest only — not on a device.**
 
 ## Week 17: KK review, 200% on every screen, the line above the keyboard
 

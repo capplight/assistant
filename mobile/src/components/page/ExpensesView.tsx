@@ -19,7 +19,7 @@ import { useTheme } from '@/theme';
 
 import { AmountText } from '../AmountText';
 import { AppText } from '../AppText';
-import { Button } from '../Button';
+import { Button } from '../ui/Button';
 import { RecordRow } from '../RecordRow';
 import { useMinuteClock } from '../ReminderLists';
 import { BringButton, CheckCards, DuplicateCards, JobLines, PlanCards, sourceWord } from './ExpenseInbox';
@@ -181,12 +181,12 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
         <Button
           testID="exp-enter"
           label={t('exp.enter')}
-          minHeight={theme.size.primaryTouch}
+          minHeight={theme.size.buttonHeight}
           onPress={() => (theme.largeFont ? setFullEntry(true) : setEntryOpen(true))}
         />
       )}
       {open ? (
-        <AppText variant="meta" testID="exp-or-say">
+        <AppText variant="callout" testID="exp-or-say">
           {empty ? t('exp.empty_hint') : t('exp.or_say')}
         </AppText>
       ) : null}
@@ -194,7 +194,7 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
       {empty ? <Button testID="exp-kaspi" label={t('exp.kaspi_link')} variant="text" minHeight={theme.size.minTouch} onPress={() => setKaspi(true)} style={styles.start} /> : null}
       {catBars.length > 0 ? (
         <View testID="exp-bars" style={{ gap: theme.space[3] }}>
-          <AppText variant="section" accessibilityRole="header">
+          <AppText variant="sectionLabel" accessibilityRole="header">
             {t('exp.by_category')}
           </AppText>
           {catBars.map((bar) => (
@@ -211,14 +211,14 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
                   {formatMinor(bar.minor)}
                 </AppText>
               </View>
-              <View style={{ height: 10, borderRadius: 5, backgroundColor: theme.colors.line, overflow: 'hidden' }}>
-                <View style={{ width: `${Math.max(2, bar.share)}%`, height: 10, backgroundColor: theme.colors.accent }} />
+              <View style={{ height: 10, borderRadius: 5, backgroundColor: theme.colors.separator, overflow: 'hidden' }}>
+                <View style={{ width: `${Math.max(2, bar.share)}%`, height: 10, backgroundColor: theme.colors.brand }} />
               </View>
             </View>
           ))}
         </View>
       ) : null}
-      <AppText variant="section" accessibilityRole="header">
+      <AppText variant="sectionLabel" accessibilityRole="header">
         {t('exp.feed')}
       </AppText>
       {days.length === 0 && !empty ? <AppText testID="exp-feed-none">{t('exp.feed_none')}</AppText> : null}
@@ -229,11 +229,11 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
     if (item.type === 'day') {
       return (
         <View testID={`exp-day-${item.day.date}`} style={[styles.row, { alignItems: 'center', gap: theme.space[2], paddingTop: theme.space[4], paddingBottom: theme.space[2] }]}>
-          <View style={[styles.flex, styles.dash, { borderColor: theme.colors.lineStrong }]} />
+          <View style={[styles.flex, styles.dash, { borderColor: theme.colors.iconSecondary }]} />
           <AppText variant="bodyStrong" accessibilityRole="header">
             {dayLabel(item.day.date, today, lang, t)}
           </AppText>
-          <View style={[styles.flex, styles.dash, { borderColor: theme.colors.lineStrong }]} />
+          <View style={[styles.flex, styles.dash, { borderColor: theme.colors.iconSecondary }]} />
         </View>
       );
     }
@@ -241,7 +241,7 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
       <View>
         <FeedLine e={item.e} today={today} marked={marked === item.e.id || marked === `local:${item.e.client_id}`} onMenu={() => setMenu(item.e.id)} />
         {item.last ? (
-          <View style={[styles.row, styles.dashTop, { borderColor: theme.colors.lineStrong, paddingVertical: theme.space[2] }]}>
+          <View style={[styles.row, styles.dashTop, { borderColor: theme.colors.iconSecondary, paddingVertical: theme.space[2] }]}>
             <AppText testID={`exp-day-total-${item.day.date}`} variant="number" style={[styles.flex, styles.right]}>
               {t('exp.day_total', { amount: formatMinor(item.day.total) })}
             </AppText>
@@ -257,7 +257,7 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
   const footer =
     others.length > 0 ? (
       <View testID="exp-others" style={{ gap: theme.space[2], paddingTop: theme.space[6] }}>
-        <AppText variant="section" accessibilityRole="header">
+        <AppText variant="sectionLabel" accessibilityRole="header">
           {t('exp.other_records')}
         </AppText>
         {others.map((x) => (
@@ -349,9 +349,9 @@ function PeriodSegments({ value, onChange }: { value: Kind; onChange: (k: Kind) 
               minHeight: theme.size.minTouch,
               alignItems: 'center',
               justifyContent: 'center',
-              borderRadius: theme.radius.button,
+              borderRadius: theme.radius.md,
               borderWidth: on ? 3 : 1,
-              borderColor: on ? theme.colors.accent : theme.colors.lineStrong,
+              borderColor: on ? theme.colors.brand : theme.colors.iconSecondary,
               backgroundColor: on ? theme.colors.surface : 'transparent',
             }}
           >
@@ -401,7 +401,7 @@ function BoardCard({
   return (
     <View
       testID="exp-board"
-      style={{ backgroundColor: theme.colors.surface, borderWidth: 2, borderColor: theme.colors.lineStrong, borderRadius: theme.radius.card, padding: theme.space[4], gap: theme.space[2] }}
+      style={{ backgroundColor: theme.colors.surface, borderWidth: 2, borderColor: theme.colors.iconSecondary, borderRadius: theme.radius.lg, padding: theme.space[4], gap: theme.space[2] }}
     >
       <View style={[styles.row, { alignItems: 'center' }]}>
         {arrow(-1)}
@@ -410,7 +410,7 @@ function BoardCard({
         </AppText>
         {arrow(1)}
       </View>
-      <AppText variant="meta" style={styles.right}>
+      <AppText variant="callout" style={styles.right}>
         {t('exp.total')}
       </AppText>
       <AmountText
@@ -425,12 +425,12 @@ function BoardCard({
         {amount}
       </AmountText>
       {!main || main.count === 0 ? (
-        <AppText testID="exp-empty-total" variant="meta" style={styles.right}>
+        <AppText testID="exp-empty-total" variant="callout" style={styles.right}>
           {t('exp.empty_total')}
         </AppText>
       ) : (
         <View style={[styles.row, { justifyContent: 'flex-end', flexWrap: 'wrap', gap: theme.space[2], alignItems: 'center' }]}>
-          <AppText testID="exp-count" variant="meta">
+          <AppText testID="exp-count" variant="callout">
             {t('exp.count', { count: main.count })}
           </AppText>
           {b.review > 0 || onlyToCheck ? (
@@ -442,7 +442,7 @@ function BoardCard({
               onPress={onToCheck}
               style={{ minHeight: theme.size.minTouch, justifyContent: 'center' }}
             >
-              <AppText color="warnText" variant="bodyStrong">
+              <AppText color="warning" variant="bodyStrong">
                 {onlyToCheck ? t('exp.to_check_all') : t('exp.to_check', { n: b.review })}
               </AppText>
             </Pressable>
@@ -450,12 +450,12 @@ function BoardCard({
         </View>
       )}
       {main && main.income > 0n ? (
-        <AppText testID="exp-income" variant="meta" style={styles.right}>
+        <AppText testID="exp-income" variant="callout" style={styles.right}>
           {t('exp.income', { amount: formatMinor(main.income, main.currency) })}
         </AppText>
       ) : null}
       {b.apart.length > 0 ? (
-        <AppText testID="exp-apart" variant="meta" style={styles.right}>
+        <AppText testID="exp-apart" variant="callout" style={styles.right}>
           {t('exp.apart', { list: b.apart.map((x) => formatMinor(x.total, x.currency)).join(', ') })}
         </AppText>
       ) : null}
@@ -484,7 +484,7 @@ function InlineEntry({ today, chips, onSave, onFold }: { today: string; chips: C
   const { t } = useTranslation();
   const st = useEntryState(today);
   return (
-    <View style={{ backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.line, borderRadius: theme.radius.card, padding: theme.space[3], gap: theme.space[2] }}>
+    <View style={{ backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.separator, borderRadius: theme.radius.lg, padding: theme.space[3], gap: theme.space[2] }}>
       <EntryPanel
         sum={st.sum}
         day={st.day}
@@ -567,29 +567,29 @@ function FeedLine({ e, today, marked, onMenu }: { e: ExpenseOut; today: string; 
         {
           alignItems: 'center',
           gap: theme.space[2],
-          minHeight: theme.size.primaryTouch,
+          minHeight: theme.size.buttonHeight,
           paddingVertical: theme.space[2],
           paddingHorizontal: theme.space[1],
-          backgroundColor: marked ? theme.colors.markerSoft : 'transparent',
-          borderRadius: theme.radius.input,
+          backgroundColor: marked ? theme.colors.highlightTint : 'transparent',
+          borderRadius: theme.radius.sm,
           flexWrap: theme.largeFont ? 'wrap' : 'nowrap',
         },
       ]}
     >
       <View testID={`exp-row-label-${e.id}`} accessible accessibilityLabel={label} style={[styles.flex, { minWidth: theme.largeFont ? '60%' : undefined }]}>
         <AppText variant="bodyStrong">{title}</AppText>
-        <AppText variant="meta">{meta}</AppText>
+        <AppText variant="callout">{meta}</AppText>
       </View>
       <View style={{ alignItems: 'flex-end' }}>
         <AppText
           testID={`exp-row-amount-${e.id}`}
           variant="number"
-          style={toCheck ? { backgroundColor: theme.colors.markerSoft, paddingHorizontal: theme.space[1], borderRadius: 4 } : undefined}
+          style={toCheck ? { backgroundColor: theme.colors.highlightTint, paddingHorizontal: theme.space[1], borderRadius: 4 } : undefined}
         >
           {formatMinor(signed, e.currency)}
         </AppText>
         {toCheck ? (
-          <AppText variant="meta" color="warnText">
+          <AppText variant="callout" color="warning">
             {`⚠ ${t('exp.check')}`}
           </AppText>
         ) : null}
@@ -638,7 +638,7 @@ function ExpenseSheet({
     <Sheet testID="exp-sheet" title={`${title} · ${amount}`} onClose={onClose}>
       {e.line_items && e.line_items.length > 0 ? (
         <View testID="exp-sheet-lines" style={{ gap: theme.space[1] }}>
-          <AppText variant="section">{t('exp.sheet_lines')}</AppText>
+          <AppText variant="sectionLabel">{t('exp.sheet_lines')}</AppText>
           {e.line_items.map((l, i) => (
             <View key={`${i}:${l.name}`} style={[styles.row, { gap: theme.space[2] }]}>
               <AppText style={styles.flex}>{l.qty ? `${l.name} × ${l.qty}` : l.name}</AppText>
@@ -646,14 +646,14 @@ function ExpenseSheet({
             </View>
           ))}
           {e.review_fields.includes('line_items') ? (
-            <AppText color="warnText" variant="meta">
+            <AppText color="warning" variant="callout">
               {t('exp.sheet_lines_check')}
             </AppText>
           ) : null}
         </View>
       ) : null}
-      {e.expression ? <AppText variant="meta">{t('exp.sheet_from', { expression: e.expression.replace(/-/g, '−') })}</AppText> : null}
-      <AppText variant="section">{t('exp.sheet_category')}</AppText>
+      {e.expression ? <AppText variant="callout">{t('exp.sheet_from', { expression: e.expression.replace(/-/g, '−') })}</AppText> : null}
+      <AppText variant="sectionLabel">{t('exp.sheet_category')}</AppText>
       <CategoryChips
         testID="exp-sheet-cat"
         categories={chips}
@@ -663,7 +663,7 @@ function ExpenseSheet({
           void changeExpense(e.id, { category_key: c.key, category_id: c.id }, t('exp.cat_set', { title, category: categoryTitle(c, lang) }));
         }}
       />
-      <AppText variant="section">{t('exp.sheet_day')}</AppText>
+      <AppText variant="sectionLabel">{t('exp.sheet_day')}</AppText>
       <DayChip
         testID="exp-sheet-day"
         value={e.spent_on}
@@ -675,7 +675,7 @@ function ExpenseSheet({
           testID="exp-sheet-verify"
           label={t('exp.sheet_verify')}
           accessibilityHint={t('exp.sheet_verify_hint')}
-          variant="outline"
+          variant="secondary"
           onPress={() => {
             onClose();
             void changeExpense(e.id, { review_fields: [] }, t('exp.verified', { amount }));
@@ -703,14 +703,14 @@ function ExpenseSheet({
           />
         </View>
       ) : (
-        <Button testID="exp-sheet-amount" label={t('exp.sheet_amount')} variant="outline" onPress={() => setEditing(true)} />
+        <Button testID="exp-sheet-amount" label={t('exp.sheet_amount')} variant="secondary" onPress={() => setEditing(true)} />
       )}
-      {hasRecord ? <Button testID="exp-sheet-open" label={t('exp.sheet_open')} variant="outline" onPress={onOpenRecord} /> : null}
+      {hasRecord ? <Button testID="exp-sheet-open" label={t('exp.sheet_open')} variant="secondary" onPress={onOpenRecord} /> : null}
       <Button
         testID="exp-sheet-delete"
         label={t('exp.sheet_delete')}
         variant="text"
-        labelColor="alarm"
+        labelColor="danger"
         onPress={() => {
           onClose();
           void deleteExpense(e.id, t('exp.deleted', { amount }));
@@ -735,7 +735,7 @@ function CategoryOrder({ chips, pending }: { chips: Category[]; pending: string[
   };
   return (
     <View testID="exp-cat-order" style={{ gap: theme.space[2] }}>
-      <AppText variant="meta">{t('exp.order_hint')}</AppText>
+      <AppText variant="callout">{t('exp.order_hint')}</AppText>
       {chips.map((c, i) => {
         const name = categoryTitle(c, i18n.language);
         return (
@@ -746,9 +746,9 @@ function CategoryOrder({ chips, pending }: { chips: Category[]; pending: string[
             <Button
               testID={`exp-order-up-${c.key}`}
               label=""
-              icon={<ArrowUp size={22} color={theme.colors.accent} />}
+              icon={<ArrowUp size={22} color={theme.colors.brand} />}
               accessibilityLabel={t('exp.cat_up_a11y', { title: name })}
-              variant="outline"
+              variant="secondary"
               minHeight={theme.size.minTouch}
               disabled={i === 0}
               onPress={() => move(i, -1)}
@@ -756,9 +756,9 @@ function CategoryOrder({ chips, pending }: { chips: Category[]; pending: string[
             <Button
               testID={`exp-order-down-${c.key}`}
               label=""
-              icon={<ArrowDown size={22} color={theme.colors.accent} />}
+              icon={<ArrowDown size={22} color={theme.colors.brand} />}
               accessibilityLabel={t('exp.cat_down_a11y', { title: name })}
-              variant="outline"
+              variant="secondary"
               minHeight={theme.size.minTouch}
               disabled={i === chips.length - 1}
               onPress={() => move(i, 1)}

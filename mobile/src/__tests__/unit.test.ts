@@ -64,16 +64,25 @@ describe('templates and premarks', () => {
 });
 
 describe('theme tokens', () => {
-  it('match 2-design §2.1 key values', () => {
-    expect(lightColors.bg).toBe('#F6F3EC');
-    expect(lightColors.accent).toBe('#2F4BD8');
-    expect(darkColors.bg).toBe('#16151A');
-    expect(darkColors.accent).toBe('#8FA2FF');
+  it('match the «Мята / Глубина» system (design-system §2, Ф-46)', () => {
+    expect(lightColors.bg).toBe('#E2F2E9');
+    expect(lightColors.brand).toBe('#0A7553');
+    expect(lightColors.highlight).toBe('#FFC845');
+    expect(darkColors.bg).toBe('#0F2C33');
+    expect(darkColors.brand).toBe('#4CCB9D');
+    expect(darkColors.highlight).toBe('#FFB547');
   });
 
-  it('body text is ≥18 and nothing is below 15', () => {
-    expect(type.body.fontSize).toBeGreaterThanOrEqual(18);
-    for (const t of Object.values(type)) expect(t.fontSize).toBeGreaterThanOrEqual(15);
+  it('platform sizes (Ф-45): body 16–17, buttons never larger than body, nothing below 11, no uppercase', () => {
+    expect(type.body.fontSize).toBeGreaterThanOrEqual(16);
+    expect(type.body.fontSize).toBeLessThanOrEqual(17);
+    expect(type.button.fontSize).toBeLessThanOrEqual(type.body.fontSize!);
+    for (const t of Object.values(type)) {
+      expect(t.fontSize).toBeGreaterThanOrEqual(11);
+      expect(t.textTransform).toBeUndefined();
+      // Room for the tails of қ ң ғ ұ.
+      expect(t.lineHeight! / t.fontSize!).toBeGreaterThanOrEqual(1.1);
+    }
   });
 });
 

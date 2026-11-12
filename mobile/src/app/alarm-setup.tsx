@@ -8,7 +8,7 @@ import { drain, refreshCaps, replan, startTest, testTimedOut } from '@/alarms/se
 import { noAlarmScreen, setupSteps, silentModeWarning, type SetupStep, type StepKey } from '@/alarms/setup';
 import { useAlarms } from '@/alarms/store';
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/Screen';
 import { getAlarmPort } from '@/services';
 import { useTheme } from '@/theme';
@@ -106,16 +106,16 @@ export default function AlarmSetupScreen() {
         </View>
       }
     >
-      <AppText variant="title1" accessibilityRole="header" style={{ marginBottom: theme.space[4] }}>
+      <AppText variant="largeTitle" accessibilityRole="header" style={{ marginBottom: theme.space[4] }}>
         {t('setup.title')}
       </AppText>
       {caps && noAlarmScreen(caps) ? (
-        <AppText testID="setup-no-module" color="warnText" style={{ marginBottom: theme.space[4] }}>
+        <AppText testID="setup-no-module" color="warning" style={{ marginBottom: theme.space[4] }}>
           {t('setup.no_module')}
         </AppText>
       ) : null}
       {caps && silentModeWarning(caps) ? (
-        <AppText testID="setup-ios-silent" color="warnText" style={{ marginBottom: theme.space[4] }}>
+        <AppText testID="setup-ios-silent" color="warning" style={{ marginBottom: theme.space[4] }}>
           {t('setup.ios_silent')}
         </AppText>
       ) : null}
@@ -124,7 +124,7 @@ export default function AlarmSetupScreen() {
           key={s.key}
           testID={`setup-step-${s.key}`}
           accessible={false}
-          style={{ paddingVertical: theme.space[3], borderBottomWidth: 1, borderBottomColor: theme.colors.line, gap: theme.space[2] }}
+          style={{ paddingVertical: theme.space[3], borderBottomWidth: 1, borderBottomColor: theme.colors.separator, gap: theme.space[2] }}
         >
           <AppText
             variant="bodyStrong"
@@ -133,16 +133,16 @@ export default function AlarmSetupScreen() {
             {`${i + 1}  ${t(TITLE[s.key])}`}
           </AppText>
           {s.done ? (
-            <AppText testID={`setup-done-${s.key}`} color="done">
+            <AppText testID={`setup-done-${s.key}`} color="success">
               {`✓ ${t('setup.step_done')}`}
             </AppText>
           ) : (
             <>
-              <AppText variant="meta">{hint(s.key)}</AppText>
+              <AppText variant="callout">{hint(s.key)}</AppText>
               <Button
                 testID={`setup-open-${s.key}`}
                 label={s.target === null ? t('setup.allow') : t('setup.open')}
-                variant="outline"
+                variant="secondary"
                 onPress={() => void run(s)}
               />
               {s.confirmByHand && opened.includes(s.key) ? (
@@ -153,32 +153,32 @@ export default function AlarmSetupScreen() {
         </View>
       ))}
       <View style={{ marginTop: theme.space[5], gap: theme.space[2] }} accessibilityLiveRegion="polite">
-        {test.state === 'idle' ? <AppText variant="meta">{t('setup.test_hint')}</AppText> : null}
+        {test.state === 'idle' ? <AppText variant="callout">{t('setup.test_hint')}</AppText> : null}
         {test.state === 'waiting' ? (
           <AppText testID="setup-test-waiting">{t('setup.test_waiting', { time: timeText(test.dueAt) })}</AppText>
         ) : null}
         {test.state === 'ok' ? (
-          <AppText testID="setup-test-ok" variant="bodyStrong" color="done">
+          <AppText testID="setup-test-ok" variant="bodyStrong" color="success">
             {t('setup.test_ok')}
           </AppText>
         ) : null}
         {test.state === 'failed' ? (
           <>
-            <AppText testID="setup-test-failed" color="alarm">
+            <AppText testID="setup-test-failed" color="danger">
               {t('setup.test_failed')}
             </AppText>
             {SUPPORT_WHATSAPP ? (
               <Button
                 testID="setup-write"
                 label={t('setup.write_wa')}
-                variant="outline"
+                variant="secondary"
                 onPress={() => void Linking.openURL(`https://wa.me/${SUPPORT_WHATSAPP}`)}
               />
             ) : null}
           </>
         ) : null}
         {useAlarms.getState().laterAt && steps.some((s) => !s.done) ? (
-          <AppText variant="meta" color="warnText">
+          <AppText variant="callout" color="warning">
             {t('setup.later_line')}
           </AppText>
         ) : null}

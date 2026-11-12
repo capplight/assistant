@@ -6,7 +6,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { PageIcon } from '@/components/Icon';
 import { AddFieldSheet, ChoiceSheet } from '@/components/page/FieldSheets';
 import { effectiveLayout, hasTool } from '@/components/page/registry';
@@ -103,14 +103,14 @@ export default function PageSettingsScreen() {
   ];
 
   const section = (key: string) => (
-    <AppText variant="section" accessibilityRole="header" style={{ marginTop: theme.space[5] }}>
+    <AppText variant="sectionLabel" accessibilityRole="header" style={{ marginTop: theme.space[5] }}>
       {t(key)}
     </AppText>
   );
 
   return (
     <SafeAreaView testID="page-settings" edges={['top']} style={[styles.root, { backgroundColor: theme.colors.bg }]}>
-      <View style={[styles.row, { paddingHorizontal: theme.screenPadding, gap: theme.space[2], borderBottomWidth: 1, borderBottomColor: theme.colors.line }]}>
+      <View style={[styles.row, { paddingHorizontal: theme.screenPadding, gap: theme.space[2], borderBottomWidth: 1, borderBottomColor: theme.colors.separator }]}>
         <Button testID="settings-back" label={`‹ ${t('common.back')}`} variant="text" minHeight={theme.size.minTouch} onPress={close} />
         <AppText variant="title2" accessibilityRole="header" style={[styles.flex, { textAlign: 'center' }]}>
           {t('view.settings')}
@@ -125,12 +125,12 @@ export default function PageSettingsScreen() {
             .filter((f) => f.visible)
             .map((f) => `${fname(f)}: ${exampleValue(f)}`)
             .join('. ')}
-          style={[styles.card, { borderColor: theme.colors.line, backgroundColor: theme.colors.surface, borderRadius: theme.radius.card, padding: theme.space[4], gap: theme.space[1] }]}
+          style={[styles.card, { borderColor: theme.colors.separator, backgroundColor: theme.colors.surface, borderRadius: theme.radius.lg, padding: theme.space[4], gap: theme.space[1] }]}
         >
           {listed
             .filter((f) => f.visible)
             .map((f, i) => (
-              <AppText key={f.id} testID={`settings-example-${f.id}`} variant={i === 0 ? 'bodyStrong' : 'meta'} color="ink">
+              <AppText key={f.id} testID={`settings-example-${f.id}`} variant={i === 0 ? 'bodyStrong' : 'callout'} color="ink">
                 {i === 0 ? exampleValue(f) : `${fname(f)}: ${exampleValue(f)}`}
               </AppText>
             ))}
@@ -149,10 +149,10 @@ export default function PageSettingsScreen() {
           style={[
             theme.type.body,
             {
-              minHeight: theme.size.primaryTouch,
+              minHeight: theme.size.buttonHeight,
               borderWidth: 1,
-              borderColor: theme.colors.lineStrong,
-              borderRadius: theme.radius.input,
+              borderColor: theme.colors.iconSecondary,
+              borderRadius: theme.radius.sm,
               paddingHorizontal: theme.space[3],
               color: theme.colors.ink,
               backgroundColor: theme.colors.surface,
@@ -171,16 +171,16 @@ export default function PageSettingsScreen() {
               accessibilityState={{ checked: page.icon === k }}
               onPress={() => void changeView(page, { kind: 'icon', icon: k })}
               style={{
-                width: theme.size.primaryTouch,
-                height: theme.size.primaryTouch,
+                width: theme.size.buttonHeight,
+                height: theme.size.buttonHeight,
                 alignItems: 'center',
                 justifyContent: 'center',
-                borderRadius: theme.radius.button,
+                borderRadius: theme.radius.md,
                 borderWidth: page.icon === k ? 2 : 1,
-                borderColor: page.icon === k ? theme.colors.accent : theme.colors.line,
+                borderColor: page.icon === k ? theme.colors.brand : theme.colors.separator,
               }}
             >
-              <PageIcon name={k} size={26} color={page.icon === k ? theme.colors.accent : theme.colors.ink} />
+              <PageIcon name={k} size={26} color={page.icon === k ? theme.colors.brand : theme.colors.ink} />
             </Pressable>
           ))}
         </View>
@@ -195,14 +195,14 @@ export default function PageSettingsScreen() {
             <View
               key={f.id}
               testID={`settings-field-${f.id}`}
-              style={[styles.row, { minHeight: theme.size.primaryTouch, gap: theme.space[2], borderBottomWidth: 1, borderBottomColor: theme.colors.line, flexWrap: theme.largeFont ? 'wrap' : 'nowrap' }]}
+              style={[styles.row, { minHeight: theme.size.buttonHeight, gap: theme.space[2], borderBottomWidth: 1, borderBottomColor: theme.colors.separator, flexWrap: theme.largeFont ? 'wrap' : 'nowrap' }]}
             >
               {f.required ? (
                 <View accessible accessibilityLabel={a11y} style={[styles.row, styles.flex, { gap: theme.space[2], minHeight: theme.size.minTouch }]}>
                   <Lock size={22} color={theme.colors.ink2} />
                   <View style={styles.flex}>
                     <AppText>{label}</AppText>
-                    <AppText testID={`settings-field-lock-${f.id}`} variant="meta">
+                    <AppText testID={`settings-field-lock-${f.id}`} variant="callout">
                       {t('view.required')}
                     </AppText>
                   </View>
@@ -222,17 +222,17 @@ export default function PageSettingsScreen() {
                       height: 32,
                       borderRadius: 6,
                       borderWidth: 2,
-                      borderColor: theme.colors.accent,
-                      backgroundColor: f.visible ? theme.colors.accent : 'transparent',
+                      borderColor: theme.colors.brand,
+                      backgroundColor: f.visible ? theme.colors.brand : 'transparent',
                       alignItems: 'center',
                       justifyContent: 'center',
                     }}
                   >
-                    {f.visible ? <Check size={22} color={theme.colors.onAccent} /> : null}
+                    {f.visible ? <Check size={22} color={theme.colors.onBrand} /> : null}
                   </View>
                   <View style={styles.flex}>
                     <AppText color={f.visible ? 'ink' : 'ink2'}>{label}</AppText>
-                    {f.custom ? <AppText variant="meta">{typeName(f)}</AppText> : null}
+                    {f.custom ? <AppText variant="callout">{typeName(f)}</AppText> : null}
                   </View>
                 </Pressable>
               )}
@@ -246,7 +246,7 @@ export default function PageSettingsScreen() {
                   onPress={() => void changeView(page, { kind: 'field_move', fieldId: f.id, step: -1 })}
                   style={[styles.square, { width: theme.size.minTouch, height: theme.size.minTouch, opacity: i === 0 ? 0.35 : 1 }]}
                 >
-                  <ArrowUp size={24} color={theme.colors.accent} />
+                  <ArrowUp size={24} color={theme.colors.brand} />
                 </Pressable>
                 <Pressable
                   testID={`settings-field-down-${f.id}`}
@@ -257,7 +257,7 @@ export default function PageSettingsScreen() {
                   onPress={() => void changeView(page, { kind: 'field_move', fieldId: f.id, step: 1 })}
                   style={[styles.square, { width: theme.size.minTouch, height: theme.size.minTouch, opacity: i === listed.length - 1 ? 0.35 : 1 }]}
                 >
-                  <ArrowDown size={24} color={theme.colors.accent} />
+                  <ArrowDown size={24} color={theme.colors.brand} />
                 </Pressable>
                 {f.custom ? (
                   <Button
@@ -277,12 +277,12 @@ export default function PageSettingsScreen() {
           <Button
             testID="settings-add-field"
             label={t('view.add_field')}
-            variant="outline"
-            minHeight={theme.size.primaryTouch}
+            variant="secondary"
+            minHeight={theme.size.buttonHeight}
             disabled={ownCount >= MAX_CUSTOM_FIELDS}
             onPress={() => setAdding(true)}
           />
-          <AppText testID="settings-own-count" variant="meta">
+          <AppText testID="settings-own-count" variant="callout">
             {ownCount >= MAX_CUSTOM_FIELDS ? t('view.err_custom_limit') : t('view.own_count', { count: ownCount, max: MAX_CUSTOM_FIELDS })}
           </AppText>
         </View>
@@ -297,16 +297,16 @@ export default function PageSettingsScreen() {
               accessibilityState={{ checked: layout === l }}
               onPress={() => void changeView(page, { kind: 'layout', layout: l })}
               style={{
-                minHeight: theme.size.primaryTouch,
-                borderRadius: theme.radius.button,
+                minHeight: theme.size.buttonHeight,
+                borderRadius: theme.radius.md,
                 borderWidth: layout === l ? 2 : 1,
-                borderColor: layout === l ? theme.colors.accent : theme.colors.line,
+                borderColor: layout === l ? theme.colors.brand : theme.colors.separator,
                 paddingHorizontal: theme.space[3],
                 justifyContent: 'center',
               }}
             >
-              <AppText color={layout === l ? 'accent' : 'ink'}>{`${layout === l ? '● ' : '○ '}${t(`view.layout.${layoutLabel(page.templateKey, l)}`)}`}</AppText>
-              {l === 'list' && page.templateKey !== 'custom' ? <AppText variant="meta">{t('view.simple_hint')}</AppText> : null}
+              <AppText color={layout === l ? 'brand' : 'ink'}>{`${layout === l ? '● ' : '○ '}${t(`view.layout.${layoutLabel(page.templateKey, l)}`)}`}</AppText>
+              {l === 'list' && page.templateKey !== 'custom' ? <AppText variant="callout">{t('view.simple_hint')}</AppText> : null}
             </Pressable>
           ))}
         </View>
@@ -320,7 +320,7 @@ export default function PageSettingsScreen() {
                   key={String(on)}
                   testID={`settings-notes-${on ? 'board' : 'rows'}`}
                   label={t(on ? 'notes.mode_board' : 'notes.mode_rows')}
-                  variant={on === board ? 'primary' : 'outline'}
+                  variant={on === board ? 'primary' : 'secondary'}
                   minHeight={theme.size.minTouch}
                   accessibilityRole="tab"
                   accessibilityState={{ selected: on === board }}
@@ -412,10 +412,10 @@ function SettingRow({ testID, label, value, onPress }: { testID: string; label: 
       accessibilityRole="button"
       accessibilityLabel={`${label}: ${value}`}
       onPress={onPress}
-      style={[styles.row, { minHeight: theme.size.primaryTouch, gap: theme.space[2], borderBottomWidth: 1, borderBottomColor: theme.colors.line, flexWrap: 'wrap' }]}
+      style={[styles.row, { minHeight: theme.size.buttonHeight, gap: theme.space[2], borderBottomWidth: 1, borderBottomColor: theme.colors.separator, flexWrap: 'wrap' }]}
     >
       <AppText style={styles.flex}>{label}</AppText>
-      <AppText color="accent">{`${value} ›`}</AppText>
+      <AppText color="brand">{`${value} ›`}</AppText>
     </Pressable>
   );
 }
@@ -436,7 +436,7 @@ function ConfirmSheet({ title, body, yes, onYes, onNo }: { title: string; body: 
             {title}
           </AppText>
           <AppText>{body}</AppText>
-          <Button testID="confirm-no" label={t('view.no')} variant="outline" onPress={onNo} />
+          <Button testID="confirm-no" label={t('view.no')} variant="secondary" onPress={onNo} />
           <Button testID="confirm-yes" label={yes} onPress={onYes} />
         </SafeAreaView>
       </View>

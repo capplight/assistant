@@ -14,7 +14,7 @@ import { useToast } from '@/store/toast';
 import { useTheme } from '@/theme';
 
 import { AppText } from './AppText';
-import { Button } from './Button';
+import { Button } from './ui/Button';
 import { PageIcon } from './Icon';
 import { PageNameSheet } from './PageNameSheet';
 
@@ -94,13 +94,13 @@ export function MovePageSheet({
           styles.segment,
           {
             minHeight: theme.size.minTouch,
-            borderRadius: theme.radius.button,
-            backgroundColor: on ? theme.colors.accent : 'transparent',
+            borderRadius: theme.radius.md,
+            backgroundColor: on ? theme.colors.brand : 'transparent',
             paddingHorizontal: theme.space[2],
           },
         ]}
       >
-        <AppText variant="button" color={on ? 'onAccent' : 'accent'} style={styles.center}>
+        <AppText variant="button" color={on ? 'onBrand' : 'brand'} style={styles.center}>
           {label}
         </AppText>
       </Pressable>
@@ -120,14 +120,14 @@ export function MovePageSheet({
               borderTopRightRadius: theme.radius.sheet,
               maxHeight: '90%',
             },
-            theme.elevation?.sheet,
+            theme.elevation.floating,
           ]}
         >
           <ScrollView contentContainerStyle={{ padding: theme.space[5], gap: theme.space[3] }}>
             <AppText variant="title2" accessibilityRole="header">
               {mode === 'move' ? t('move.sheet_move') : t('move.sheet_also')}
             </AppText>
-            <AppText variant="meta" numberOfLines={2}>
+            <AppText variant="callout" numberOfLines={2}>
               «{recordTitle}»
             </AppText>
             <View
@@ -135,8 +135,8 @@ export function MovePageSheet({
               style={[
                 styles.segments,
                 {
-                  borderColor: theme.colors.accent,
-                  borderRadius: theme.radius.button,
+                  borderColor: theme.colors.brand,
+                  borderRadius: theme.radius.md,
                   gap: theme.space[1],
                   padding: 2,
                   flexDirection: theme.largeFont ? 'column' : 'row',
@@ -164,8 +164,8 @@ export function MovePageSheet({
                   style={[
                     styles.row,
                     {
-                      minHeight: theme.size.primaryTouch,
-                      borderBottomColor: theme.colors.line,
+                      minHeight: theme.size.buttonHeight,
+                      borderBottomColor: theme.colors.separator,
                       gap: theme.space[3],
                       opacity: disabled ? 0.55 : 1,
                     },
@@ -175,24 +175,24 @@ export function MovePageSheet({
                     style={[
                       mode === 'move' ? styles.radio : styles.box,
                       {
-                        borderColor: on ? theme.colors.accent : theme.colors.lineStrong,
-                        backgroundColor: on ? theme.colors.accent : theme.colors.surface,
+                        borderColor: on ? theme.colors.brand : theme.colors.iconSecondary,
+                        backgroundColor: on ? theme.colors.brand : theme.colors.surface,
                       },
                     ]}
                   >
-                    {on ? <Check size={18} color={theme.colors.onAccent} strokeWidth={3} /> : null}
+                    {on ? <Check size={18} color={theme.colors.onBrand} strokeWidth={3} /> : null}
                   </View>
                   <PageIcon name={p.icon} size={24} color={theme.colors.ink} />
                   <View style={styles.flex}>
                     <AppText>{title(p)}</AppText>
-                    {note ? <AppText variant="meta">{note}</AppText> : null}
+                    {note ? <AppText variant="callout">{note}</AppText> : null}
                   </View>
                 </Pressable>
               );
             })}
             <Button testID="move-new-page" label={t('move.new_page')} variant="text" onPress={() => setNaming(true)} />
             <Button testID="move-go" label={go} disabled={targets.length === 0} onPress={() => onDone(mode, targets)} />
-            <Button testID="move-close" label={t('common.close')} variant="outline" onPress={onClose} />
+            <Button testID="move-close" label={t('common.close')} variant="secondary" onPress={onClose} />
           </ScrollView>
         </SafeAreaView>
       </View>

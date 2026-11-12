@@ -127,7 +127,7 @@ class ConsentGrantIn(BaseModel):
 
 class ConsentsIn(BaseModel):
     consents: list[ConsentGrantIn] = Field(min_length=1, max_length=10)
-    screen: Literal["S05", "settings", "import"]
+    screen: Literal["S05", "welcome", "settings", "import"]  # welcome: «Начать» (Ф-34)
     age_confirmed_18: bool = False  # required true when `terms` is granted
 
 

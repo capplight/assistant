@@ -51,6 +51,15 @@ consents of **the account the tokens are for**, the same values as `GET /v1/cons
 `account_switched`, to decide about S05: the last two rows of the table are also accounts that may
 have no consent.
 
+## First launch without S05 (Ф-34, week 19)
+
+There is no separate consent screen: the welcome screen has the line «Нажимая «Начать», вы
+принимаете Политику конфиденциальности и Условия» with links. «Начать» sends the same
+`POST /v1/consents` as S05 did (each text's `kind`, `version`, `text_hash`, `locale`;
+`age_confirmed_18: true` with `terms`), with `"screen": "welcome"`. Allowed `screen` values:
+`S05`, `welcome`, `settings`, `import`. Texts, versions, hashes and the consent gate are unchanged
+(`GET /v1/features` → `consent_screen`).
+
 ## Consent on another account
 
 Consents stay with the account that gave them. Nothing is copied on a switch, and the anonymous

@@ -238,7 +238,7 @@ async def confirm(session: AsyncSession, user_id: int, st: StatementImport,
                   pending: PendingAction, *, now: datetime, today: date) -> Confirmed:  # fmt: skip
     """Run the plan (the caller checked the pending action is open). One action, one undo."""
     cats = {c.key: c for c in await service.categories(session, user_id)}
-    page = await service.expenses_page(session, user_id)
+    page = await service.expenses_page(session, user_id, first_use=True)
     live_refs = set((await session.scalars(
         select(ExpenseEntry.source_ref).join(Item, Item.id == ExpenseEntry.item_id)
         .where(ExpenseEntry.user_id == user_id, ExpenseEntry.deleted_at.is_(None),

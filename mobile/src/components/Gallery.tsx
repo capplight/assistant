@@ -8,7 +8,7 @@ import { GALLERY_ORDER, getTemplate, type TemplateKey } from '@/pages/templates'
 import { useTheme } from '@/theme';
 
 import { AppText } from './AppText';
-import { Button } from './Button';
+import { Button } from './ui/Button';
 import { Screen } from './Screen';
 import { TemplateCard } from './TemplateCard';
 
@@ -43,7 +43,7 @@ export function Gallery({ mode, initial, existing = [], doneLine, onDone, onSkip
       testID="gallery-screen"
       footer={
         <View style={{ gap: theme.space[2] }}>
-          {mode !== 'add' ? <AppText variant="meta">{t('gallery.today_fixed')}</AppText> : null}
+          {mode !== 'add' ? <AppText variant="callout">{t('gallery.today_fixed')}</AppText> : null}
           <Button
             testID="gallery-ok"
             label={mode === 'add' ? t('gallery.add', { n }) : t('gallery.ok')}
@@ -64,15 +64,15 @@ export function Gallery({ mode, initial, existing = [], doneLine, onDone, onSkip
           onPress={() => router.back()}
           style={[styles.back, { minHeight: theme.size.minTouch }]}
         >
-          <ChevronLeft size={24} color={theme.colors.accent} />
-          <AppText color="accent">{t('common.back')}</AppText>
+          <ChevronLeft size={24} color={theme.colors.brand} />
+          <AppText color="brand">{t('common.back')}</AppText>
         </Pressable>
       ) : doneLine ? (
-        <AppText testID="gallery-done-line" color="done" style={{ marginBottom: theme.space[2] }}>
+        <AppText testID="gallery-done-line" color="success" style={{ marginBottom: theme.space[2] }}>
           {doneLine}
         </AppText>
       ) : null}
-      <AppText variant="title1" accessibilityRole="header">
+      <AppText variant="largeTitle" accessibilityRole="header">
         {t('gallery.title')}
       </AppText>
       <AppText color="ink2" style={{ marginBottom: theme.space[4] }}>
@@ -88,20 +88,20 @@ export function Gallery({ mode, initial, existing = [], doneLine, onDone, onSkip
         style={[
           styles.today,
           {
-            minHeight: theme.size.primaryTouch,
+            minHeight: theme.size.buttonHeight,
             gap: theme.space[3],
             padding: theme.space[3],
             marginBottom: theme.space[3],
-            borderRadius: theme.radius.card,
-            borderColor: theme.colors.line,
+            borderRadius: theme.radius.lg,
+            borderColor: theme.colors.separator,
             backgroundColor: theme.colors.surface,
           },
         ]}
       >
-        <Sun size={theme.size.cardIcon} color={theme.colors.ink} />
+        <Sun size={theme.size.icon} color={theme.colors.ink} />
         <View style={styles.flex}>
           <AppText variant="title2">{t('tpl.today')}</AppText>
-          <AppText variant="meta">{t('gallery.today_always')}</AppText>
+          <AppText variant="callout">{t('gallery.today_always')}</AppText>
         </View>
         <AppText variant="bodyStrong" color="ink2">
           ✓

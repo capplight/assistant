@@ -6,7 +6,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import type { ActionOut, SuggestionOut } from '@/api/types';
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { PendingAnswerCard } from '@/components/PendingAnswerCard';
 import { AlarmRiskBanner } from '@/components/ReminderCards';
 import { MissedList, ReminderRows, useMinuteClock, useMissed } from '@/components/ReminderLists';
@@ -124,7 +124,7 @@ export default function TodayScreen() {
     missed:
       missed.length > 0 ? (
         <View key="missed">
-          <AppText variant="section" accessibilityRole="header" color="alarm" style={{ marginBottom: theme.space[3] }}>
+          <AppText variant="sectionLabel" accessibilityRole="header" color="danger" style={{ marginBottom: theme.space[3] }}>
             {t('missed.section')}
           </AppText>
           <MissedList rows={missed} now={now} />
@@ -132,15 +132,15 @@ export default function TodayScreen() {
       ) : null,
     today: (
       <View key="today" style={{ marginBottom: theme.space[6] }}>
-        <AppText variant="section" accessibilityRole="header" style={{ marginBottom: theme.space[3] }}>
+        <AppText variant="sectionLabel" accessibilityRole="header" style={{ marginBottom: theme.space[3] }}>
           {t('today.today')}
         </AppText>
         <View
           style={{
             backgroundColor: theme.colors.surface,
-            borderColor: theme.colors.line,
+            borderColor: theme.colors.separator,
             borderWidth: 1,
-            borderRadius: theme.radius.card,
+            borderRadius: theme.radius.lg,
             paddingHorizontal: theme.space[4],
             paddingVertical: theme.space[2],
           }}
@@ -155,7 +155,7 @@ export default function TodayScreen() {
               accessibilityRole="button"
               accessibilityHint={shopPage ? t('today.shopping_hint') : undefined}
               onPress={shopPage ? () => router.navigate({ pathname: '/page/[id]', params: { id: shopPage.id } }) : undefined}
-              style={[styles.row, { minHeight: theme.size.primaryTouch, gap: theme.space[2] }]}
+              style={[styles.row, { minHeight: theme.size.buttonHeight, gap: theme.space[2] }]}
             >
               <AppText style={styles.flex}>
                 {t('today.shopping', { titles: toBuy.slice(0, 5).map((x) => x.title).join(', '), n: toBuy.length })}
@@ -168,7 +168,7 @@ export default function TodayScreen() {
               {last?.empty && last.example ? t('today.free_example', { example: last.example }) : t('today.free')}
             </AppText>
           ) : next && rings.length - (next.kind === 'reminder' ? 1 : 0) === 0 && listTodos.length === 0 && toBuy.length === 0 ? (
-            <AppText testID="today-rest-empty" variant="meta" style={{ paddingVertical: theme.space[2] }}>
+            <AppText testID="today-rest-empty" variant="callout" style={{ paddingVertical: theme.space[2] }}>
               {t('today.nothing_else')}
             </AppText>
           ) : null}
@@ -176,7 +176,7 @@ export default function TodayScreen() {
         <Button
           testID="today-new-reminder"
           label={t('today.new_reminder')}
-          variant="outline"
+          variant="secondary"
           style={{ marginTop: theme.space[3] }}
           onPress={() => router.push('/reminder-new')}
         />
@@ -187,7 +187,7 @@ export default function TodayScreen() {
     proposals:
       proposals.length > 0 ? (
         <View key="proposals" style={{ marginBottom: theme.space[6], gap: theme.space[3] }}>
-          <AppText variant="section" accessibilityRole="header">
+          <AppText variant="sectionLabel" accessibilityRole="header">
             {t('today.suggest')}
           </AppText>
           {proposals.map((s) => (
@@ -228,7 +228,7 @@ function DoneForYou({ list }: { list: ActionOut[] }) {
     <View style={{ marginBottom: theme.space[6] }}>
       {list.length > 0 ? (
         <>
-          <AppText variant="section" accessibilityRole="header" style={{ marginBottom: theme.space[3] }}>
+          <AppText variant="sectionLabel" accessibilityRole="header" style={{ marginBottom: theme.space[3] }}>
             {t('today.did')}
           </AppText>
           {list.map((a) => {
@@ -237,7 +237,7 @@ function DoneForYou({ list }: { list: ActionOut[] }) {
               <View
                 key={a.id}
                 testID={`did-today-${a.id}`}
-                style={[styles.row, { gap: theme.space[2], borderBottomColor: theme.colors.line, borderBottomWidth: 1, minHeight: theme.size.primaryTouch }]}
+                style={[styles.row, { gap: theme.space[2], borderBottomColor: theme.colors.separator, borderBottomWidth: 1, minHeight: theme.size.buttonHeight }]}
               >
                 <AppText style={styles.flex}>{text}</AppText>
                 {a.undoable ? (
@@ -265,12 +265,12 @@ function DoneForYou({ list }: { list: ActionOut[] }) {
         testID="today-did-all"
         accessibilityRole="button"
         onPress={() => router.push('/did')}
-        style={[styles.row, { minHeight: theme.size.primaryTouch, gap: theme.space[2] }]}
+        style={[styles.row, { minHeight: theme.size.buttonHeight, gap: theme.space[2] }]}
       >
-        <AppText color="accent" style={styles.flex}>
+        <AppText color="brand" style={styles.flex}>
           {t('more.did')}
         </AppText>
-        <ChevronRight size={22} color={theme.colors.accent} />
+        <ChevronRight size={22} color={theme.colors.brand} />
       </Pressable>
     </View>
   );
@@ -286,8 +286,8 @@ function SuggestionCard({ s }: { s: SuggestionOut }) {
       testID={`suggestion-${s.id}`}
       style={{
         borderWidth: 1,
-        borderColor: theme.colors.line,
-        borderRadius: theme.radius.card,
+        borderColor: theme.colors.separator,
+        borderRadius: theme.radius.lg,
         backgroundColor: theme.colors.surface,
         padding: theme.space[4],
         gap: theme.space[3],
@@ -306,7 +306,7 @@ function SuggestionCard({ s }: { s: SuggestionOut }) {
         <Button
           testID={`suggestion-no-${s.id}`}
           label={s.no_label ?? t('common.not_now')}
-          variant="outline"
+          variant="secondary"
           style={theme.largeFont ? undefined : { flex: 1 }}
           onPress={() => void sayNo(s)}
         />

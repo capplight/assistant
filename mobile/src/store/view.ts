@@ -20,7 +20,7 @@ type ViewState = {
   selected: string | null;
   /** A finger is on the page list (scrolling or holding). */
   touching: boolean;
-  /** Server item ids marked `markerSoft` until `until` (ms). */
+  /** Server item ids marked `highlightTint` until `until` (ms). */
   highlight: { ids: string[]; until: number } | null;
   /** «Какую? → выбрать»: the next tap on a record answers the assistant. */
   picking: { messageId: string; pageId: string } | null;

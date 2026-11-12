@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { RecordRow } from '@/components/RecordRow';
 import { Screen } from '@/components/Screen';
 import { FindField, SearchMore } from '@/components/SearchResults';
@@ -45,12 +45,12 @@ export default function SearchScreen() {
   return (
     <Screen testID="search-screen" edges={['top']}>
       <View style={{ gap: theme.space[4], marginBottom: theme.space[4] }}>
-        <AppText variant="title1" accessibilityRole="header">
+        <AppText variant="largeTitle" accessibilityRole="header">
           {t('search.title')}
         </AppText>
         <FindField testID="search-field" label={t('search.field')} value={q} onChange={setQ} />
         {found.length > 0 ? (
-          <AppText testID="search-found" variant="section" accessibilityRole="header" accessibilityLiveRegion="polite">
+          <AppText testID="search-found" variant="sectionLabel" accessibilityRole="header" accessibilityLiveRegion="polite">
             {t('search.found', { n: found.length })}
           </AppText>
         ) : null}

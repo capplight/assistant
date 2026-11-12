@@ -60,14 +60,14 @@ export const lightColors: ColorTokens = {
   iconSecondary: '#728E81', // ≥3.3 on surface (non-text)
   brand: '#0A7553', // 4.9 bg · 5.6 surface
   brandPressed: '#06573D',
-  brandTint: '#CDEBDB',
+  brandTint: '#D2EEDF',
   onBrand: '#FFFFFF', // 5.7
   highlight: '#FFC845',
   highlightTint: '#FFF2CC',
   onHighlight: '#0E2A1F', // 9.9
   onHighlight2: '#3D4A2A',
   success: '#0A7553',
-  successTint: '#CDEBDB',
+  successTint: '#D2EEDF',
   warning: '#9A6400', // 4.9 surface
   warningTint: '#FFF2CC',
   danger: '#C4343D', // 4.6 bg · 5.2 surface
@@ -91,14 +91,14 @@ export const darkColors: ColorTokens = {
   iconSecondary: '#7FA3A3',
   brand: '#4CCB9D', // 7.2 bg · 5.5 surface
   brandPressed: '#7ADDB8',
-  brandTint: '#1E5248',
+  brandTint: '#1C4D44',
   onBrand: '#06261C', // 7.9
   highlight: '#FFB547',
   highlightTint: '#4A3C22',
   onHighlight: '#12262B', // 8.9
   onHighlight2: '#3A3420',
   success: '#4CCB9D',
-  successTint: '#1E5248',
+  successTint: '#1C4D44',
   warning: '#FFB547',
   warningTint: '#4A3C22',
   danger: '#FF8C86', // ≥5 surface

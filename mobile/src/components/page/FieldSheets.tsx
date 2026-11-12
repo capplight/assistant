@@ -9,7 +9,7 @@ import type { FieldValue } from '@/pages/facets';
 import { MAX_FONT_SCALE, useTheme } from '@/theme';
 
 import { AppText } from '../AppText';
-import { Button } from '../Button';
+import { Button } from '../ui/Button';
 
 /** A bottom sheet with the app's look (paper surface, 20 pt radius). */
 function Sheet({ testID, children, onClose }: { testID: string; children: ReactNode; onClose: () => void }) {
@@ -28,7 +28,7 @@ function Sheet({ testID, children, onClose }: { testID: string; children: ReactN
               padding: theme.space[5],
               gap: theme.space[3],
             },
-            theme.elevation?.sheet,
+            theme.elevation.floating,
           ]}
         >
           {children}
@@ -55,10 +55,10 @@ function Input({ testID, label, value, onChange, numeric, placeholder }: { testI
       style={[
         theme.type.body,
         {
-          minHeight: theme.size.primaryTouch,
+          minHeight: theme.size.buttonHeight,
           borderWidth: 1,
-          borderColor: theme.colors.lineStrong,
-          borderRadius: theme.radius.input,
+          borderColor: theme.colors.iconSecondary,
+          borderRadius: theme.radius.sm,
           paddingHorizontal: theme.space[3],
           color: theme.colors.ink,
           backgroundColor: theme.colors.bg,
@@ -82,9 +82,9 @@ export function AddFieldSheet({ onAdd, onClose }: { onAdd: (title: string, type:
       <AppText variant="title2" accessibilityRole="header">
         {t('view.new_field')}
       </AppText>
-      <AppText variant="meta">{t('view.field_name')}</AppText>
+      <AppText variant="callout">{t('view.field_name')}</AppText>
       <Input testID="add-field-name" label={t('view.field_name')} value={title} onChange={setTitle} placeholder={t('view.field_name_example')} />
-      <AppText variant="meta">{t('view.field_type')}</AppText>
+      <AppText variant="callout">{t('view.field_type')}</AppText>
       <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.space[2] }}>
         {CUSTOM_FIELD_TYPES.map((k) => (
           <Pressable
@@ -94,22 +94,22 @@ export function AddFieldSheet({ onAdd, onClose }: { onAdd: (title: string, type:
             accessibilityState={{ checked: type === k }}
             onPress={() => setType(k)}
             style={{
-              minHeight: theme.size.primaryTouch,
+              minHeight: theme.size.buttonHeight,
               minWidth: theme.largeFont ? '100%' : '30%',
               flexGrow: 1,
               borderWidth: type === k ? 2 : 1,
-              borderColor: type === k ? theme.colors.accent : theme.colors.lineStrong,
-              borderRadius: theme.radius.button,
+              borderColor: type === k ? theme.colors.brand : theme.colors.iconSecondary,
+              borderRadius: theme.radius.md,
               paddingHorizontal: theme.space[3],
               justifyContent: 'center',
             }}
           >
-            <AppText color={type === k ? 'accent' : 'ink'}>{`${type === k ? '● ' : '○ '}${t(`view.type.${k}`)}`}</AppText>
+            <AppText color={type === k ? 'brand' : 'ink'}>{`${type === k ? '● ' : '○ '}${t(`view.type.${k}`)}`}</AppText>
           </Pressable>
         ))}
       </View>
       <Button testID="add-field-add" label={t('view.add')} disabled={!title.trim()} onPress={() => onAdd(title.trim(), type)} />
-      <Button testID="add-field-close" label={t('common.close')} variant="outline" onPress={onClose} />
+      <Button testID="add-field-close" label={t('common.close')} variant="secondary" onPress={onClose} />
     </Sheet>
   );
 }
@@ -141,8 +141,8 @@ export function FieldValueSheet({
       </AppText>
       {type === 'bool' ? (
         <View style={{ gap: theme.space[2] }}>
-          <Button testID="field-value-yes" label={t('common.yes')} variant={value === true ? 'primary' : 'outline'} onPress={() => onSave(true)} />
-          <Button testID="field-value-no" label={t('view.no')} variant={value === false ? 'primary' : 'outline'} onPress={() => onSave(false)} />
+          <Button testID="field-value-yes" label={t('common.yes')} variant={value === true ? 'primary' : 'secondary'} onPress={() => onSave(true)} />
+          <Button testID="field-value-no" label={t('view.no')} variant={value === false ? 'primary' : 'secondary'} onPress={() => onSave(false)} />
         </View>
       ) : (
         <>
@@ -157,7 +157,7 @@ export function FieldValueSheet({
           <Button testID="field-value-save" label={t('page.name_save')} onPress={() => onSave(text.trim() ? text.trim() : null)} />
         </>
       )}
-      <Button testID="field-value-close" label={t('common.close')} variant="outline" onPress={onClose} />
+      <Button testID="field-value-close" label={t('common.close')} variant="secondary" onPress={onClose} />
     </Sheet>
   );
 }
@@ -193,16 +193,16 @@ export function ChoiceSheet({
           accessibilityState={{ checked: o.key === value }}
           onPress={() => onPick(o.key)}
           style={{
-            minHeight: theme.size.primaryTouch,
+            minHeight: theme.size.buttonHeight,
             borderBottomWidth: 1,
-            borderBottomColor: theme.colors.line,
+            borderBottomColor: theme.colors.separator,
             justifyContent: 'center',
           }}
         >
-          <AppText color={o.key === value ? 'accent' : 'ink'}>{`${o.key === value ? '● ' : '○ '}${o.label}`}</AppText>
+          <AppText color={o.key === value ? 'brand' : 'ink'}>{`${o.key === value ? '● ' : '○ '}${o.label}`}</AppText>
         </Pressable>
       ))}
-      <Button testID={`${testID}-close`} label={t('common.close')} variant="outline" onPress={onClose} />
+      <Button testID={`${testID}-close`} label={t('common.close')} variant="secondary" onPress={onClose} />
     </Sheet>
   );
 }

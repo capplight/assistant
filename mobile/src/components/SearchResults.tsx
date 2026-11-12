@@ -29,9 +29,9 @@ export function FindField({
       style={[
         styles.field,
         {
-          minHeight: theme.size.primaryTouch,
-          borderColor: theme.colors.lineStrong,
-          borderRadius: theme.radius.input,
+          minHeight: theme.size.buttonHeight,
+          borderColor: theme.colors.iconSecondary,
+          borderRadius: theme.radius.sm,
           backgroundColor: theme.colors.surface,
           paddingHorizontal: theme.space[3],
           gap: theme.space[2],
@@ -48,7 +48,7 @@ export function FindField({
         onChangeText={onChange}
         returnKeyType="search"
         maxFontSizeMultiplier={MAX_FONT_SCALE}
-        style={[theme.type.body, styles.input, { color: theme.colors.ink, minHeight: theme.size.primaryTouch }]}
+        style={[theme.type.body, styles.input, { color: theme.colors.ink, minHeight: theme.size.buttonHeight }]}
       />
     </View>
   );
@@ -84,18 +84,18 @@ export function ServerResultRow({ result, pageId, q }: { result: ServerResult; p
         styles.card,
         {
           backgroundColor: theme.colors.surface,
-          borderColor: theme.colors.line,
-          borderRadius: theme.radius.card,
+          borderColor: theme.colors.separator,
+          borderRadius: theme.radius.lg,
           padding: theme.space[4],
           marginBottom: theme.space[3],
-          minHeight: theme.size.primaryTouch,
+          minHeight: theme.size.buttonHeight,
           gap: theme.space[1],
         },
       ]}
     >
       <AppText numberOfLines={3}>{title}</AppText>
-      {hit.title ? <AppText variant="meta">{hit.snippet}</AppText> : null}
-      {hit.ai_label ? <AppText variant="meta">{hit.ai_label}</AppText> : null}
+      {hit.title ? <AppText variant="callout">{hit.snippet}</AppText> : null}
+      {hit.ai_label ? <AppText variant="callout">{hit.ai_label}</AppText> : null}
     </Pressable>
   );
 }
@@ -122,7 +122,7 @@ export function SearchMore({
         <ServerResultRow key={r.key} result={r} pageId={pageId} q={q} />
       ))}
       {meaning.length > 0 ? (
-        <AppText testID="search-more-title" variant="section" accessibilityRole="header">
+        <AppText testID="search-more-title" variant="sectionLabel" accessibilityRole="header">
           {t('search.found_more', { n: meaning.length })}
         </AppText>
       ) : null}
@@ -130,12 +130,12 @@ export function SearchMore({
         <ServerResultRow key={r.key} result={r} pageId={pageId} q={q} />
       ))}
       {state === 'loading' ? (
-        <AppText testID="search-looking" variant="meta">
+        <AppText testID="search-looking" variant="callout">
           {t('search.looking')}
         </AppText>
       ) : null}
       {state === 'offline' ? (
-        <AppText testID="search-offline" variant="meta" accessibilityLiveRegion="polite">
+        <AppText testID="search-offline" variant="callout" accessibilityLiveRegion="polite">
           {t('search.offline')}
         </AppText>
       ) : null}

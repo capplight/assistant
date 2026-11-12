@@ -12,7 +12,7 @@ import { useTasks } from '@/tasks/store';
 import { useTheme } from '@/theme';
 
 import { AppText } from '../AppText';
-import { Button } from '../Button';
+import { Button } from '../ui/Button';
 import { MissedList, ReminderRows, Segments, useMinuteClock, useMissed } from '../ReminderLists';
 import { StackCards } from '../StackCards';
 import { EntryList } from './EntryList';
@@ -78,14 +78,14 @@ export function ClassicView({ page, entries, frameTop, ordering, simple = false 
           ) : (
             <>
               <ReminderRows segment={segment} now={now} canDelete />
-              <Button testID="tasks-new-reminder" label={t('today.new_reminder')} variant="outline" onPress={() => router.push('/reminder-new')} />
+              <Button testID="tasks-new-reminder" label={t('today.new_reminder')} variant="secondary" onPress={() => router.push('/reminder-new')} />
             </>
           )}
         </View>
       ) : null}
       {!listMode && !simple ? <StackCards page={page} entries={entries} /> : null}
       {!listMode && !simple && entries && entries.length > 0 ? (
-        <AppText variant="section" accessibilityRole="header">
+        <AppText variant="sectionLabel" accessibilityRole="header">
           {t('page.recent')}
         </AppText>
       ) : null}

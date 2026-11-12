@@ -51,8 +51,8 @@ export default function MoreScreen() {
       style={[
         styles.row,
         {
-          minHeight: theme.size.primaryTouch,
-          borderBottomColor: theme.colors.line,
+          minHeight: theme.size.buttonHeight,
+          borderBottomColor: theme.colors.separator,
           gap: theme.space[3],
           paddingVertical: theme.space[2],
         },
@@ -60,7 +60,7 @@ export default function MoreScreen() {
     >
       <View style={styles.flex}>
         <AppText color={onPress ? 'ink' : 'ink2'}>{label}</AppText>
-        {meta ? <AppText variant="meta">{meta}</AppText> : null}
+        {meta ? <AppText variant="callout">{meta}</AppText> : null}
       </View>
       {onPress ? <ChevronRight size={22} color={theme.colors.ink2} /> : null}
     </Pressable>
@@ -70,12 +70,12 @@ export default function MoreScreen() {
 
   return (
     <Screen testID="page-more" edges={['top']}>
-      <AppText variant="title1" accessibilityRole="header" style={{ marginBottom: theme.space[4] }}>
+      <AppText variant="largeTitle" accessibilityRole="header" style={{ marginBottom: theme.space[4] }}>
         {t('more.title')}
       </AppText>
       {overflow.length > 0 ? (
         <View style={{ marginBottom: theme.space[6] }}>
-          <AppText variant="section" accessibilityRole="header">
+          <AppText variant="sectionLabel" accessibilityRole="header">
             {t('more.other_pages')}
           </AppText>
           {overflow.map((p) => (
@@ -86,7 +86,7 @@ export default function MoreScreen() {
               onPress={() => router.navigate({ pathname: '/page/[id]', params: { id: p.id } })}
               style={[
                 styles.row,
-                { minHeight: theme.size.primaryTouch, borderBottomColor: theme.colors.line, gap: theme.space[3] },
+                { minHeight: theme.size.buttonHeight, borderBottomColor: theme.colors.separator, gap: theme.space[3] },
               ]}
             >
               <PageIcon name={p.icon} color={theme.colors.ink} size={24} />
@@ -125,9 +125,9 @@ export default function MoreScreen() {
         testID="more-delete_account"
         accessibilityRole="button"
         onPress={() => router.push('/delete-account')}
-        style={[styles.row, { minHeight: theme.size.primaryTouch, borderBottomColor: theme.colors.line, paddingVertical: theme.space[2] }]}
+        style={[styles.row, { minHeight: theme.size.buttonHeight, borderBottomColor: theme.colors.separator, paddingVertical: theme.space[2] }]}
       >
-        <AppText color="alarm" style={styles.flex}>
+        <AppText color="danger" style={styles.flex}>
           {t('account.delete')}
         </AppText>
       </Pressable>

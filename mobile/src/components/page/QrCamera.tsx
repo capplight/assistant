@@ -33,7 +33,7 @@ export function QrCamera(p: Props) {
         }}
       />
       <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.center]}>
-        <View style={{ width: 240, height: 240, borderWidth: 4, borderColor: theme.colors.onAccent, borderRadius: theme.radius.card }} />
+        <View style={{ width: 240, height: 240, borderWidth: 4, borderColor: theme.colors.onBrand, borderRadius: theme.radius.lg }} />
       </View>
     </View>
   );

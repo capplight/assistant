@@ -195,6 +195,21 @@ export function createOut(item: unknown, created = true) {
 }
 
 /** A server that accepts everything: auth, consents, devices, uploads, items (idempotent), sync. */
+/** `GET /v1/features` as the server answers by default (features.md). Tests override with `.on('GET /features', …)`. */
+export const FEATURES_BODY = {
+  statements_pdf: false,
+  receipt_qr: false,
+  board: false,
+  assistant_views: false,
+  page_settings_full: false,
+  telegram_login: false,
+  personal_mail: false,
+  setup_for_other: false,
+  consent_screen: 'welcome',
+  today: { tips_days: 7, tips_per_day: 1, proposals: false, tiles: false },
+  pages: { default: ['today', 'notes', 'tasks'], first_use: ['shopping', 'expenses', 'documents'] },
+};
+
 export function happyServer(): FakeServer {
   const s = new FakeServer();
   const items = new Map<string, ReturnType<typeof itemOut>>();
@@ -204,7 +219,8 @@ export function happyServer(): FakeServer {
     const clientId = (path.split('/')[2] ?? '').replace(/^srv-/, '');
     return { ...(items.get(clientId) ?? itemOut(clientId, s)), seq: s, ...extra };
   };
-  s.on('POST /auth/anonymous', () => ({ status: 200, body: { ...tokenPair(), created: true } }))
+  s.on('GET /features', () => ({ status: 200, body: FEATURES_BODY }))
+    .on('POST /auth/anonymous', () => ({ status: 200, body: { ...tokenPair(), created: true } }))
     .on('POST /auth/refresh', () => ({ status: 200, body: tokenPair() }))
     .on('POST /consents', () => ({
       status: 200,

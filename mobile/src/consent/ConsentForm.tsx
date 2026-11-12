@@ -4,8 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
-import { Checkbox } from '@/components/Checkbox';
+import { Button } from '@/components/ui/Button';
+import { CheckRow as Checkbox } from '@/components/ui/Check';
 import { Screen } from '@/components/Screen';
 import { buildConsentRequest, bundledConsentTextsSync, loadConsentTexts, type ConsentTexts } from './texts';
 import { CONSENT_RETENTION_DAYS_PLACEHOLDER } from '@/i18n';
@@ -67,7 +67,7 @@ export function ConsentForm({
   const providers = texts.ai_cross_border.providers.join(', ') || t('consent.recipients');
 
   const divider = (
-    <View style={{ height: 1, backgroundColor: theme.colors.lineStrong, marginVertical: theme.space[4] }} />
+    <View style={{ height: 1, backgroundColor: theme.colors.iconSecondary, marginVertical: theme.space[4] }} />
   );
   const link = (label: string) => (
     // TODO: open Terms / Policy / «How the assistant works» full text (2-design §7.5)
@@ -76,7 +76,7 @@ export function ConsentForm({
       accessibilityLabel={label}
       style={{ minHeight: theme.size.minTouch, justifyContent: 'center' }}
     >
-      <AppText color="accent" style={styles.underline}>
+      <AppText color="brand" style={styles.underline}>
         {label}
       </AppText>
     </Pressable>
@@ -85,11 +85,11 @@ export function ConsentForm({
   return (
     <Screen testID="consent-screen">
       {intro}
-      <AppText variant="title1" accessibilityRole="header" style={{ marginBottom: theme.space[5] }}>
+      <AppText variant="largeTitle" accessibilityRole="header" style={{ marginBottom: theme.space[5] }}>
         {t('consent.title')}
       </AppText>
 
-      <AppText variant="section" accessibilityRole="header">
+      <AppText variant="sectionLabel" accessibilityRole="header">
         {t('consent.storage_title')}
       </AppText>
       <AppText style={{ marginTop: theme.space[2] }}>{t('consent.storage_body')}</AppText>
@@ -97,7 +97,7 @@ export function ConsentForm({
 
       {divider}
 
-      <AppText variant="section" accessibilityRole="header">
+      <AppText variant="sectionLabel" accessibilityRole="header">
         {t('consent.cross_title')}
       </AppText>
       <AppText style={{ marginTop: theme.space[2] }}>
@@ -111,18 +111,18 @@ export function ConsentForm({
         style={[styles.row, { minHeight: theme.size.minTouch, gap: theme.space[1] }]}
       >
         {showRecipients ? (
-          <ChevronDown size={22} color={theme.colors.accent} />
+          <ChevronDown size={22} color={theme.colors.brand} />
         ) : (
-          <ChevronRight size={22} color={theme.colors.accent} />
+          <ChevronRight size={22} color={theme.colors.brand} />
         )}
-        <AppText color="accent">{t('consent.recipients_toggle')}</AppText>
+        <AppText color="brand">{t('consent.recipients_toggle')}</AppText>
       </Pressable>
       {/* Recipients are always named on the screen; the toggle only adds the explanation. */}
       <AppText variant="bodyStrong" testID="consent-recipients">
         {providers}
       </AppText>
-      {showRecipients ? <AppText variant="meta">{t('consent.recipients_note')}</AppText> : null}
-      <AppText variant="meta" style={{ marginTop: theme.space[2] }}>
+      {showRecipients ? <AppText variant="callout">{t('consent.recipients_note')}</AppText> : null}
+      <AppText variant="callout" style={{ marginTop: theme.space[2] }}>
         {texts.push_content.text}
       </AppText>
       <Checkbox testID="consent-cross" label={texts.ai_cross_border.text} checked={cross} onChange={setCross} />
@@ -139,7 +139,7 @@ export function ConsentForm({
       <View style={{ gap: theme.space[3], marginTop: theme.space[5] }}>
         <Button
           testID="consent-agree"
-          variant="outline"
+          variant="secondary"
           label={t('consent.agree')}
           accessibilityLabel={t('consent.agree_a11y')}
           disabled={!storage || !cross || busy}
@@ -147,15 +147,15 @@ export function ConsentForm({
         />
         <Button
           testID="consent-no-ai"
-          variant="outline"
+          variant="secondary"
           label={t('consent.no_ai')}
           accessibilityLabel={t('consent.no_ai_a11y')}
           disabled={!storage || busy}
           onPress={() => accept('no_ai')}
         />
-        <AppText variant="meta">{t('consent.no_ai_hint')}</AppText>
+        <AppText variant="callout">{t('consent.no_ai_hint')}</AppText>
         {!storage ? (
-          <AppText variant="meta" color="warnText" accessibilityLiveRegion="polite">
+          <AppText variant="callout" color="warning" accessibilityLiveRegion="polite">
             {t('consent.need_storage')}
           </AppText>
         ) : null}

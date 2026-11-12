@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, TextInput, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/Screen';
 import { suggestedPages } from '@/pages/premarks';
 import { useAlarms } from '@/alarms/store';
@@ -46,7 +46,7 @@ export default function PhraseScreen() {
 
   return (
     <Screen testID="phrase-screen">
-      <AppText variant="title1" accessibilityRole="header" style={{ marginBottom: theme.space[5] }}>
+      <AppText variant="largeTitle" accessibilityRole="header" style={{ marginBottom: theme.space[5] }}>
         {noAi ? t('phrase.title_typed') : t('phrase.title')}
       </AppText>
       <View style={{ gap: theme.space[3] }}>
@@ -57,12 +57,12 @@ export default function PhraseScreen() {
             accessibilityRole="button"
             onPress={() => submit(ex)}
             style={{
-              minHeight: theme.size.primaryTouch,
+              minHeight: theme.size.buttonHeight,
               justifyContent: 'center',
               padding: theme.space[4],
-              borderRadius: theme.radius.card,
+              borderRadius: theme.radius.lg,
               borderWidth: 1,
-              borderColor: theme.colors.line,
+              borderColor: theme.colors.separator,
               backgroundColor: theme.colors.surface,
             }}
           >
@@ -83,10 +83,10 @@ export default function PhraseScreen() {
           theme.type.body,
           {
             marginTop: theme.space[6],
-            minHeight: theme.size.primaryTouch,
+            minHeight: theme.size.buttonHeight,
             borderWidth: 1,
-            borderColor: theme.colors.lineStrong,
-            borderRadius: theme.radius.input,
+            borderColor: theme.colors.iconSecondary,
+            borderRadius: theme.radius.sm,
             paddingHorizontal: theme.space[3],
             color: theme.colors.ink,
             backgroundColor: theme.colors.surface,

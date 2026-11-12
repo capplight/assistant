@@ -9,6 +9,7 @@ import type {
   EventsIn,
   ExportOut,
   ExportStatus,
+  FeaturesOut,
   OnboardingConfigOut,
   PagesBatchIn,
   PagesBatchOut,
@@ -961,6 +962,52 @@ export function todayTileOut(v: unknown): TodayTileOut | null {
 
 const START_PATHS: StartPath[] = ['gallery', 'blank', 'phrase_first'];
 const startPath = (v: unknown): StartPath | null => (START_PATHS.includes(v as StartPath) ? (v as StartPath) : null);
+
+/** Founder's decisions Ф-33…Ф-44: what the app uses with no answer yet (offline, first launch). */
+export const FEATURE_DEFAULTS: FeaturesOut = {
+  statements_pdf: false,
+  receipt_qr: false,
+  board: false,
+  assistant_views: false,
+  page_settings_full: false,
+  telegram_login: false,
+  personal_mail: false,
+  setup_for_other: false,
+  consent_screen: 'welcome',
+  today: { tips_days: 7, tips_per_day: 1, proposals: false, tiles: false },
+  pages: { default: ['today', 'notes', 'tasks'], first_use: ['shopping', 'expenses', 'documents'] },
+};
+
+/** `GET /v1/features` (features.md): a missing or odd field keeps its default; unknown fields are ignored. */
+export function featuresOut(v: unknown): FeaturesOut {
+  const o = obj(v) ?? {};
+  const d = FEATURE_DEFAULTS;
+  const flag = (x: unknown, def: boolean) => (typeof x === 'boolean' ? x : def);
+  const count = (x: unknown, def: number) => (typeof x === 'number' && Number.isFinite(x) && x >= 0 ? Math.floor(x) : def);
+  const today = obj(o.today) ?? {};
+  const pages = obj(o.pages) ?? {};
+  return {
+    statements_pdf: flag(o.statements_pdf, d.statements_pdf),
+    receipt_qr: flag(o.receipt_qr, d.receipt_qr),
+    board: flag(o.board, d.board),
+    assistant_views: flag(o.assistant_views, d.assistant_views),
+    page_settings_full: flag(o.page_settings_full, d.page_settings_full),
+    telegram_login: flag(o.telegram_login, d.telegram_login),
+    personal_mail: flag(o.personal_mail, d.personal_mail),
+    setup_for_other: flag(o.setup_for_other, d.setup_for_other),
+    consent_screen: str(o.consent_screen) ?? d.consent_screen,
+    today: {
+      tips_days: count(today.tips_days, d.today.tips_days),
+      tips_per_day: count(today.tips_per_day, d.today.tips_per_day),
+      proposals: flag(today.proposals, d.today.proposals),
+      tiles: flag(today.tiles, d.today.tiles),
+    },
+    pages: {
+      default: Array.isArray(pages.default) ? strs(pages.default) : d.pages.default,
+      first_use: Array.isArray(pages.first_use) ? strs(pages.first_use) : d.pages.first_use,
+    },
+  };
+}
 
 export function onboardingConfigOut(v: unknown): OnboardingConfigOut {
   const o = obj(v) ?? {};
@@ -2740,6 +2787,12 @@ export class Api {
   async authedFile(path: string): Promise<{ url: string; headers: Record<string, string> }> {
     const session = await this.client.tokens.getSession();
     return { url: this.client.url(path.replace(/^\/v1(?=\/)/, '')), headers: session ? { Authorization: `Bearer ${session.accessToken}` } : {} };
+  }
+
+  // week 19: beta scope (features.md) — no sign-in.
+
+  async features(): Promise<FeaturesOut> {
+    return featuresOut(await this.client.request<unknown>('GET', '/features', { auth: false }));
   }
 
   // week 16: first launch (routes/onboarding.py)

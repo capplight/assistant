@@ -25,6 +25,7 @@ from assistant.api.routes import (
     events,
     expense_docs,
     expenses,
+    features,
     imports,
     items,
     kp,
@@ -131,7 +132,8 @@ def create_app(
     # week 16: /pages/batch and /pages/{id}/today-tile before the pages router's /{page_id}
     for router in (onboarding.router, onboarding.pages_router, account.router):
         v1.include_router(router)
-    for router in (auth.router, consents.router, devices.router, uploads.router, items.router,
+    for router in (auth.router, consents.router, features.router, devices.router, uploads.router,
+                   items.router,
                    pages.items_router, pages.habits_router, views.router, pages.router,
                    pages.templates_router, sync.router, me.router, misc.ai, chat.router,
                    chat.feedback_router,

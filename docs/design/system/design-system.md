@@ -45,7 +45,7 @@
 | `ink2` | `#47665A` | `#A7C2BF` | ≥5:1 на фоне и на карточке |
 | `ink3` (даты, неактивное) | `#587669` | `#93B4B2` | 4,9 / 5,0 **только на `surface`** |
 | `separator` · `iconSecondary` | `#DAEAE1` · `#728E81` | `#24515A` · `#7FA3A3` | иконки ≥3:1 |
-| `brand` · `brandPressed` · `brandTint` · `onBrand` | `#0A7553` · `#06573D` · `#CDEBDB` · `#FFFFFF` | `#4CCB9D` · `#7ADDB8` · `#1E5248` · `#06261C` | onBrand 5,7 / 7,9 |
+| `brand` · `brandPressed` · `brandTint` · `onBrand` | `#0A7553` · `#06573D` · `#D2EEDF` · `#FFFFFF` | `#4CCB9D` · `#7ADDB8` · `#1C4D44` · `#06261C` | onBrand 5,7 / 7,9 |
 | `highlight` · `highlightTint` · `onHighlight` | `#FFC845` · `#FFF2CC` · `#0E2A1F` | `#FFB547` · `#4A3C22` · `#12262B` | 9,9 / 8,9 |
 | `success` | = brand | = brand | — |
 | `warning` (текст) | `#9A6400` | `#FFB547` | 4,9 |

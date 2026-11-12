@@ -12,7 +12,7 @@ import { useTheme } from '@/theme';
 
 import { answerNotice, useLocalHitTitles } from './answerText';
 import { AppText } from './AppText';
-import { Button } from './Button';
+import { Button } from './ui/Button';
 import { LocalHitChips, SourceChips } from './SourceChips';
 import { useCurrentPage } from './useCurrentPage';
 
@@ -54,14 +54,13 @@ export function AnswerBanner() {
   const box = [
     styles.box,
     {
-      backgroundColor: theme.colors.surface,
-      borderColor: theme.colors.line,
-      borderRadius: theme.radius.card,
+      // Design-system §3 AnswerSheet look, compact: raised surface, radius 24, floating shadow, no border.
+      backgroundColor: theme.colors.surfaceRaised,
+      borderRadius: theme.radius.sheet,
       padding: theme.space[4],
-      marginHorizontal: theme.space[3],
-      marginBottom: theme.space[2],
       gap: theme.space[2],
     },
+    theme.elevation.floating,
   ];
   const buttonsRow = [styles.row, { gap: theme.space[2], flexDirection: theme.largeFont ? ('column' as const) : ('row' as const), flexWrap: 'wrap' as const }];
 
@@ -100,13 +99,13 @@ export function AnswerBanner() {
         </AppText>
       ) : null}
       {notice ? (
-        <AppText testID="answer-notice" variant={message.text ? 'meta' : 'body'} numberOfLines={onlyNotice ? undefined : 2}>
+        <AppText testID="answer-notice" variant={message.text ? 'callout' : 'body'} numberOfLines={onlyNotice ? undefined : 2}>
           {notice}
         </AppText>
       ) : null}
       {hits.length > 0 ? (
         <>
-          <AppText variant="meta">{t('answer.local_found', { n: hits.length })}</AppText>
+          <AppText variant="callout">{t('answer.local_found', { n: hits.length })}</AppText>
           <LocalHitChips messageId={message.id} recordIds={hits} titles={titles} />
         </>
       ) : null}
@@ -114,7 +113,7 @@ export function AnswerBanner() {
         <SourceChips messageId={message.id} sources={message.sources} max={2} onMore={openAnswer} />
       ) : null}
       {message.status === 'done' && message.aiGenerated && message.text ? (
-        <AppText testID="answer-ai-label" variant="meta" /* the «ИИ» label is shown whole, never cut (2-design §8) */>
+        <AppText testID="answer-ai-label" variant="callout" /* the «ИИ» label is shown whole, never cut (2-design §8) */>
           {t('ai.label_short')}
         </AppText>
       ) : null}
@@ -125,17 +124,17 @@ export function AnswerBanner() {
       ) : null}
       {message.notice === 'offline_reminder' ? (
         <View style={buttonsRow}>
-          <Button testID="answer-set-by-hand" label={t('rem.set_by_hand')} variant="outline" style={theme.largeFont ? undefined : styles.flex} onPress={setByHand} />
+          <Button testID="answer-set-by-hand" label={t('rem.set_by_hand')} variant="secondary" style={theme.largeFont ? undefined : styles.flex} onPress={setByHand} />
           <Button testID="answer-ok" label={t('common.ok')} variant="text" style={theme.largeFont ? undefined : styles.flex} onPress={close} />
         </View>
       ) : onlyNotice ? (
-        <Button testID="answer-ok" label={t('common.ok')} variant="outline" onPress={close} />
+        <Button testID="answer-ok" label={t('common.ok')} variant="secondary" onPress={close} />
       ) : (
         <View style={buttonsRow}>
           <Button
             testID="answer-open"
             label={t('answer.open')}
-            variant="outline"
+            variant="secondary"
             style={theme.largeFont ? undefined : styles.flex}
             onPress={openAnswer}
           />
@@ -177,8 +176,8 @@ function ProposalPrompt({ message, box }: { message: ChatMessage; box: object[] 
               <Button
                 testID={`proposal-${o.id}`}
                 label={o.label}
-                variant={isDefault ? 'primary' : o.kind === 'cancel' || o.kind === 'no' ? 'text' : 'outline'}
-                labelColor={p.kind === 'delete' && o.kind === 'yes' && !isDefault ? 'alarm' : undefined}
+                variant={isDefault ? 'primary' : o.kind === 'cancel' || o.kind === 'no' ? 'text' : 'secondary'}
+                labelColor={p.kind === 'delete' && o.kind === 'yes' && !isDefault ? 'danger' : undefined}
                 onPress={() => void answerProposal(message.id, o.id)}
               />
             </View>
@@ -190,7 +189,7 @@ function ProposalPrompt({ message, box }: { message: ChatMessage; box: object[] 
 }
 
 const styles = StyleSheet.create({
-  box: { borderWidth: 1 },
+  box: {},
   row: {},
   flex: { flex: 1 },
 });

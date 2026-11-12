@@ -6,7 +6,7 @@ import { Pressable, TextInput, View } from 'react-native';
 import { confirmDeletion, loadDeletionState, sendDeletionCode } from '@/account/data';
 import type { DeletionStateOut } from '@/api/types';
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/Screen';
 import { useOnboarding } from '@/store/onboarding';
 import { MAX_FONT_SCALE, useTheme } from '@/theme';
@@ -75,10 +75,10 @@ export default function DeleteAccountScreen() {
   const field = [
     theme.type.body,
     {
-      minHeight: theme.size.primaryTouch,
+      minHeight: theme.size.buttonHeight,
       borderWidth: 1,
-      borderColor: theme.colors.lineStrong,
-      borderRadius: theme.radius.input,
+      borderColor: theme.colors.iconSecondary,
+      borderRadius: theme.radius.sm,
       paddingHorizontal: theme.space[3],
       color: theme.colors.ink,
       backgroundColor: theme.colors.surface,
@@ -94,9 +94,9 @@ export default function DeleteAccountScreen() {
       disabled={disabled}
       onPress={onPress}
       style={{
-        minHeight: theme.size.primaryTouch,
-        borderRadius: theme.radius.button,
-        backgroundColor: theme.colors.alarm,
+        minHeight: theme.size.buttonHeight,
+        borderRadius: theme.radius.md,
+        backgroundColor: theme.colors.danger,
         alignItems: 'center',
         justifyContent: 'center',
         paddingHorizontal: theme.space[4],
@@ -113,13 +113,13 @@ export default function DeleteAccountScreen() {
   return (
     <Screen testID="delete-account-screen">
       <Button testID="delete-cancel" label={t('account.cancel')} variant="text" minHeight={theme.size.minTouch} onPress={() => router.back()} style={{ alignSelf: 'flex-start' }} />
-      <AppText variant="title1" accessibilityRole="header" style={{ marginBottom: theme.space[3] }}>
+      <AppText variant="largeTitle" accessibilityRole="header" style={{ marginBottom: theme.space[3] }}>
         {t('account.delete')}
       </AppText>
       <AppText>{t('account.first_download')}</AppText>
-      <Button testID="delete-download" label={t('account.export')} variant="outline" onPress={() => router.push('/my-data')} style={{ marginTop: theme.space[2] }} />
+      <Button testID="delete-download" label={t('account.export')} variant="secondary" onPress={() => router.push('/my-data')} style={{ marginTop: theme.space[2] }} />
 
-      <AppText variant="section" accessibilityRole="header" style={{ marginTop: theme.space[6], marginBottom: theme.space[2] }}>
+      <AppText variant="sectionLabel" accessibilityRole="header" style={{ marginTop: theme.space[6], marginBottom: theme.space[2] }}>
         {t('account.what_happens')}
       </AppText>
       <View testID="delete-points" style={{ gap: theme.space[2] }}>
@@ -127,12 +127,12 @@ export default function DeleteAccountScreen() {
           <AppText key={i}>{`• ${p}`}</AppText>
         ))}
       </View>
-      <AppText testID="delete-irreversible" variant="bodyStrong" color="alarm" style={{ marginTop: theme.space[4] }}>
+      <AppText testID="delete-irreversible" variant="bodyStrong" color="danger" style={{ marginTop: theme.space[4] }}>
         {graceDays > 0 ? t('account.irreversible', { count: graceDays }) : t('account.irreversible_now')}
       </AppText>
 
       {loaded && !state ? (
-        <AppText testID="delete-offline" color="alarm" style={{ marginTop: theme.space[4] }}>
+        <AppText testID="delete-offline" color="danger" style={{ marginTop: theme.space[4] }}>
           {t('account.offline')}
         </AppText>
       ) : null}
@@ -175,11 +175,11 @@ export default function DeleteAccountScreen() {
         alarmButton('delete-confirm', t('account.yes_delete'), () => void run(() => confirmDeletion({ confirm: true })), busy || !state)
       )}
       {error ? (
-        <AppText testID="delete-error" color="alarm" accessibilityLiveRegion="polite" style={{ marginTop: theme.space[2] }}>
+        <AppText testID="delete-error" color="danger" accessibilityLiveRegion="polite" style={{ marginTop: theme.space[2] }}>
           {error}
         </AppText>
       ) : null}
-      <Button testID="delete-cancel-bottom" label={t('account.cancel')} variant="outline" onPress={() => router.back()} style={{ marginTop: theme.space[4] }} />
+      <Button testID="delete-cancel-bottom" label={t('account.cancel')} variant="secondary" onPress={() => router.back()} style={{ marginTop: theme.space[4] }} />
     </Screen>
   );
 }

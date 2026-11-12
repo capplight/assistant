@@ -24,6 +24,8 @@ pytestmark = [
     pytest.mark.db,
     pytest.mark.skipif(not os.environ.get("DATABASE_URL"), reason="DATABASE_URL not set"),
 ]
+# Week 18: the corpus sends many phrases from one person; the message limit is not tested here.
+NO_LIMIT = {"chat_rate_per_minute": {}, "chat_rate_per_day": {}}
 
 ANSWER = ChatReply(answer="В записи текст документа.", citations=[], insufficient=False)
 
@@ -54,7 +56,7 @@ async def _state(maker, uid: int) -> tuple:  # type: ignore[no-untyped-def]
 
 async def test_every_corpus_case_changes_nothing(env):  # noqa: F811
     script = Script()
-    async with client(env.make_app(router_with(env.maker, script))) as c:
+    async with client(env.make_app(router_with(env.maker, script), **NO_LIMIT)) as c:
         h = await signed_in(c)
         uid = await user_pk(c, h, env.maker)
         pid = await page(c, h, "Дом")
@@ -86,7 +88,7 @@ async def test_every_corpus_case_changes_nothing(env):  # noqa: F811
 
 async def test_shared_text_is_data_and_never_repeated(env):  # noqa: F811
     script = Script()
-    app = env.make_app(router_with(env.maker, script))
+    app = env.make_app(router_with(env.maker, script), **NO_LIMIT)
     async with client(app) as c:
         h = await signed_in(c)
         uid = await user_pk(c, h, env.maker)
@@ -130,7 +132,7 @@ async def test_shared_text_is_data_and_never_repeated(env):  # noqa: F811
 async def test_a_record_cannot_reach_another_persons_records(env):  # noqa: F811
     reveal = next(x for x in CASES if x["attack"] == "reveal")
     script = Script()
-    async with client(env.make_app(router_with(env.maker, script))) as c:
+    async with client(env.make_app(router_with(env.maker, script), **NO_LIMIT)) as c:
         other = await signed_in(c)
         await record(c, other, env.maker, "ЧУЖОЙ-СЕКРЕТ: код сейфа у соседа")
         h = await signed_in(c)

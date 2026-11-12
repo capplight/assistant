@@ -6,6 +6,7 @@ import { amountEm, fitAmount } from '@/components/AmountText';
 import { aboveLineMaxHeight, KEYBOARD_BEHAVIOR, lineInputMaxHeight } from '@/components/useKeyboard';
 import { usePages } from '@/store/pages';
 import { useUndo } from '@/store/undo';
+import { type as typeScale } from '@/theme';
 import { APP_DIR, finishOnboarding, resetApp } from '@/testing/helpers';
 import { auditLayout, NARROW, resetWindow, setWindow } from '@/testing/layoutAudit';
 
@@ -66,7 +67,7 @@ describe('the assistant line above the keyboard at 200%, 320 × 568', () => {
     expect(input.props.scrollEnabled).toBe(true);
     expect(input.props.submitBehavior).toBe('submit');
     const style = StyleSheet.flatten(input.props.style);
-    const cap = lineInputMaxHeight({ lineHeight: 26, fontScale: 2, largeFont: true, windowHeight: NARROW.height, keyboardHeight: KB, padding: 16 });
+    const cap = lineInputMaxHeight({ lineHeight: typeScale.body.lineHeight!, fontScale: 2, largeFont: true, windowHeight: NARROW.height, keyboardHeight: KB, padding: 16 });
     expect(style.maxHeight).toBe(cap);
     expect(cap).toBeGreaterThanOrEqual(48);
     expect(cap).toBeLessThanOrEqual((NARROW.height - KB) * 0.3 + 1);
@@ -92,7 +93,7 @@ describe('the assistant line above the keyboard at 200%, 320 × 568', () => {
     expect(screen.getByTestId('bottom-tabs')).toBeTruthy();
     // Keyboard closed: the cap is 30% of the window (3 lines at 200% would be 172).
     expect(StyleSheet.flatten(screen.getByTestId('assistant-input').props.style).maxHeight).toBe(
-      lineInputMaxHeight({ lineHeight: 26, fontScale: 2, largeFont: true, windowHeight: NARROW.height, keyboardHeight: 0, padding: 16 }),
+      lineInputMaxHeight({ lineHeight: typeScale.body.lineHeight!, fontScale: 2, largeFont: true, windowHeight: NARROW.height, keyboardHeight: 0, padding: 16 }),
     );
   });
 
@@ -128,7 +129,7 @@ describe('the assistant line above the keyboard at 200%, 320 × 568', () => {
     await renderRouter(APP_DIR, { initialUrl: '/chat' });
     await kb.open(KB);
     const style = StyleSheet.flatten(screen.getByTestId('assistant-input').props.style);
-    expect(style.maxHeight).toBe(lineInputMaxHeight({ lineHeight: 26, fontScale: 2, largeFont: true, windowHeight: NARROW.height, keyboardHeight: KB, padding: 16 }));
+    expect(style.maxHeight).toBe(lineInputMaxHeight({ lineHeight: typeScale.body.lineHeight!, fontScale: 2, largeFont: true, windowHeight: NARROW.height, keyboardHeight: KB, padding: 16 }));
   });
 
   it('caps: 4 lines at 100%, 3 at ≥150%, never past 30% of the room, never under 48', () => {

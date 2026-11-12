@@ -9,7 +9,7 @@ import { cleanupPreview } from '@/api/endpoints';
 import { ApiError } from '@/api/errors';
 import type { ConsentTextOut, ImportOut } from '@/api/types';
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/Screen';
 import {
   cancelImport,
@@ -134,7 +134,7 @@ export default function ImportScreen() {
 
   const errorText = (code: string | null) => t(`import.err_${code && ERRORS[code] ? ERRORS[code] : 'generic'}`);
 
-  const card = { borderColor: theme.colors.line, backgroundColor: theme.colors.surface, borderRadius: theme.radius.card, padding: theme.space[4], gap: theme.space[2] };
+  const card = { borderColor: theme.colors.separator, backgroundColor: theme.colors.surface, borderRadius: theme.radius.lg, padding: theme.space[4], gap: theme.space[2] };
 
   let body: React.ReactNode;
   if (row && !row.importId && !row.error) {
@@ -149,7 +149,7 @@ export default function ImportScreen() {
       <View testID="import-failed" style={[styles.card, card]} accessibilityLiveRegion="polite">
         <AppText variant="title2">{t('import.failed')}</AppText>
         <AppText>{errorText(row?.error ?? imp?.error ?? null)}</AppText>
-        <Button testID="import-again" label={t('import.again')} variant="outline" onPress={() => useDedup.getState().set({ importRow: null })} />
+        <Button testID="import-again" label={t('import.again')} variant="secondary" onPress={() => useDedup.getState().set({ importRow: null })} />
       </View>
     );
   } else if (imp && running) {
@@ -158,7 +158,7 @@ export default function ImportScreen() {
         <AppText variant="title2">
           {imp.total > 0 ? t('import.progress', { done: imp.processed, total: imp.total }) : t('import.reading')}
         </AppText>
-        <Button testID="import-stop" label={t('import.stop')} variant="outline" onPress={() => void cancelImport(imp.id)} />
+        <Button testID="import-stop" label={t('import.stop')} variant="secondary" onPress={() => void cancelImport(imp.id)} />
       </View>
     );
   } else if (imp) {
@@ -169,7 +169,7 @@ export default function ImportScreen() {
         <View testID="import-tg" style={[styles.card, card]}>
           <AppText variant="title2">{t('import.file_title')}</AppText>
           <AppText>{t('import.file_hint')}</AppText>
-          <AppText variant="section" accessibilityRole="header" style={{ marginTop: theme.space[2] }}>
+          <AppText variant="sectionLabel" accessibilityRole="header" style={{ marginTop: theme.space[2] }}>
             {t('import.how')}
           </AppText>
           {[1, 2, 3, 4, 5].map((n) => (
@@ -177,7 +177,7 @@ export default function ImportScreen() {
           ))}
         </View>
         <Button testID="import-pick" label={t('import.pick')} disabled={busy} onPress={() => void pick()} />
-        <AppText variant="meta">{t('import.again_hint')}</AppText>
+        <AppText variant="callout">{t('import.again_hint')}</AppText>
       </View>
     );
   }
@@ -192,11 +192,11 @@ export default function ImportScreen() {
           minHeight={theme.size.minTouch}
           onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
         />
-        <AppText variant="title1" accessibilityRole="header" style={styles.flex}>
+        <AppText variant="largeTitle" accessibilityRole="header" style={styles.flex}>
           {t('import.title')}
         </AppText>
       </View>
-      <AppText variant="section" accessibilityRole="header" style={{ marginBottom: theme.space[2] }}>
+      <AppText variant="sectionLabel" accessibilityRole="header" style={{ marginBottom: theme.space[2] }}>
         {t('import.tg_section')}
       </AppText>
       {body}
@@ -214,7 +214,7 @@ export default function ImportScreen() {
               <AppText testID="import-consent-text">{consent?.text ?? ''}</AppText>
               {/* Both answers equally visible: consent must be free. */}
               <Button testID="import-consent-yes" label={t('import.consent_yes')} onPress={() => void agree()} />
-              <Button testID="import-consent-no" label={t('import.consent_no')} variant="outline" onPress={() => setConsent(null)} />
+              <Button testID="import-consent-no" label={t('import.consent_no')} variant="secondary" onPress={() => setConsent(null)} />
             </ScrollView>
           </SafeAreaView>
         </View>
@@ -230,7 +230,7 @@ function Summary({ imp, cleanupLive }: { imp: ImportOut; cleanupLive: boolean })
   const cleanup = useDedup((s) => s.cleanup);
   const preview = cleanupLive ? cleanupPreview(cleanup) : null;
   const media = Object.entries(imp.skipped_media);
-  const card = { borderColor: theme.colors.line, backgroundColor: theme.colors.surface, borderRadius: theme.radius.card, padding: theme.space[4], gap: theme.space[2] };
+  const card = { borderColor: theme.colors.separator, backgroundColor: theme.colors.surface, borderRadius: theme.radius.lg, padding: theme.space[4], gap: theme.space[2] };
   return (
     <View style={{ gap: theme.space[4] }}>
       <View testID="import-summary" style={[styles.card, card]} accessibilityLiveRegion="polite">
@@ -255,20 +255,20 @@ function Summary({ imp, cleanupLive }: { imp: ImportOut; cleanupLive: boolean })
           <AppText variant="title2">{t('import.cleanup', { count: preview.removed })}</AppText>
           <AppText>{t('dup.batch_detail', { removed: preview.removed, after: preview.after })}</AppText>
           <Button testID="import-cleanup-yes" label={t('dup.batch_yes')} onPress={() => void confirmCleanup()} />
-          <Button testID="import-cleanup-no" label={t('common.not_now')} variant="outline" onPress={() => void rejectCleanup()} />
+          <Button testID="import-cleanup-no" label={t('common.not_now')} variant="secondary" onPress={() => void rejectCleanup()} />
         </View>
       ) : null}
       {imp.similar_groups > 0 ? (
         <View style={[styles.card, card]}>
           <AppText>{t('import.similar', { count: imp.similar_groups })}</AppText>
-          <Button testID="import-similar" label={t('dup.look')} accessibilityLabel={t('dup.look_a11y')} variant="outline" onPress={() => router.push('/duplicates')} />
+          <Button testID="import-similar" label={t('dup.look')} accessibilityLabel={t('dup.look_a11y')} variant="secondary" onPress={() => router.push('/duplicates')} />
         </View>
       ) : null}
       {imp.action_id ? (
         <Button testID="import-undo" label={t('import.undo_import')} variant="text" onPress={() => void undoImport(imp)} />
       ) : null}
-      <Button testID="import-again" label={t('import.again')} variant="outline" onPress={() => useDedup.getState().set({ importRow: null })} />
-      <AppText variant="meta">{t('import.again_hint')}</AppText>
+      <Button testID="import-again" label={t('import.again')} variant="secondary" onPress={() => useDedup.getState().set({ importRow: null })} />
+      <AppText variant="callout">{t('import.again_hint')}</AppText>
     </View>
   );
 }

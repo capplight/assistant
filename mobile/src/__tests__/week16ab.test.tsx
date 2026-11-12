@@ -26,6 +26,7 @@ import { applyChange, EMPTY_VIEW, viewBody } from '@/pages/viewModel';
 import { getSyncEngine, notifyDataChanged } from '@/services';
 import { usePages, type Page } from '@/store/pages';
 import { useUndo } from '@/store/undo';
+import { gutterFor } from '@/theme';
 import { happyServer, itemOut, linkOut, type FakeServer } from '@/testing/fakeServer';
 import { APP_DIR, finishOnboarding, resetApp, settle, testPages, testRecords } from '@/testing/helpers';
 
@@ -38,7 +39,8 @@ import { APP_DIR, finishOnboarding, resetApp, settle, testPages, testRecords } f
 
 const iso = (ms: number) => new Date(ms).toISOString();
 /** Window 390 wide, screen padding 20 on each side (the board's width before its first layout). */
-const S = (390 - 40) / BOARD_W;
+/** The board is the window minus the screen gutters (16 at 390 since the «Мята» system), drawn at width / 360. */
+const S = (390 - 2 * gutterFor(390)) / BOARD_W;
 
 function action(id: string, summary: string) {
   return {

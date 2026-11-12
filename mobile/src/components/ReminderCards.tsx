@@ -12,7 +12,7 @@ import { useAlarms } from '@/alarms/store';
 import { useTheme } from '@/theme';
 
 import { AppText } from './AppText';
-import { Button } from './Button';
+import { Button } from './ui/Button';
 
 /**
  * «Будильники могут не сработать на этом телефоне [Исправить]» (alarm.risk, 2-design 4.8): a step
@@ -36,12 +36,12 @@ export function AlarmRiskBanner() {
         gap: theme.space[2],
         padding: theme.space[3],
         marginBottom: theme.space[4],
-        borderRadius: theme.radius.card,
-        backgroundColor: theme.colors.markerSoft,
+        borderRadius: theme.radius.lg,
+        backgroundColor: theme.colors.highlightTint,
       }}
     >
       <AppText style={{ flex: theme.largeFont ? undefined : 1 }}>{`⚠ ${t('alarm.risk')}`}</AppText>
-      <Button testID="alarm-risk-fix" label={t('alarm.fix')} variant="outline" minHeight={theme.size.minTouch} onPress={() => router.push('/alarm-setup')} />
+      <Button testID="alarm-risk-fix" label={t('alarm.fix')} variant="secondary" minHeight={theme.size.minTouch} onPress={() => router.push('/alarm-setup')} />
     </View>
   );
 }
@@ -60,7 +60,7 @@ export function UpcomingReminders() {
   const late = useAlarms((s) => lateRisk(s.caps));
   return (
     <View style={{ marginBottom: theme.space[6] }}>
-      <AppText variant="section" accessibilityRole="header" style={{ marginBottom: theme.space[3] }}>
+      <AppText variant="sectionLabel" accessibilityRole="header" style={{ marginBottom: theme.space[3] }}>
         {t('today.upcoming')}
       </AppText>
       {list.map((a) => {
@@ -71,11 +71,11 @@ export function UpcomingReminders() {
             key={a.group}
             testID={`upcoming-${a.group}`}
             accessibilityLabel={`${level}. ${timeText(a.fireAt)}. ${a.title}. ${dayText(a.fireAt, now)}`}
-            style={{ minHeight: theme.size.minTouch, justifyContent: 'center', borderBottomWidth: 1, borderBottomColor: theme.colors.line, paddingVertical: theme.space[2] }}
+            style={{ minHeight: theme.size.minTouch, justifyContent: 'center', borderBottomWidth: 1, borderBottomColor: theme.colors.separator, paddingVertical: theme.space[2] }}
           >
-            <AppText color={a.level === 'alarm' ? 'alarm' : 'ink'}>{line}</AppText>
+            <AppText color={a.level === 'alarm' ? 'danger' : 'ink'}>{line}</AppText>
             {late ? (
-              <AppText variant="meta" color="warnText">
+              <AppText variant="callout" color="warning">
                 {t('rem.late_risk')}
               </AppText>
             ) : null}
@@ -85,7 +85,7 @@ export function UpcomingReminders() {
       <Button
         testID="today-new-reminder"
         label={t('today.new_reminder')}
-        variant="outline"
+        variant="secondary"
         style={{ marginTop: theme.space[3] }}
         onPress={() => router.push('/reminder-new')}
       />
@@ -110,11 +110,11 @@ export function ReminderDraftStrip() {
     <View
       testID="reminder-draft"
       accessibilityLiveRegion="polite"
-      style={{ marginHorizontal: theme.space[3], marginBottom: theme.space[2], padding: theme.space[3], gap: theme.space[2], borderRadius: theme.radius.card, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.line }}
+      style={{ marginHorizontal: theme.space[3], marginBottom: theme.space[2], padding: theme.space[3], gap: theme.space[2], borderRadius: theme.radius.lg, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.separator }}
     >
       <AppText numberOfLines={3}>{t('rem.draft_ready', { text: ready.text })}</AppText>
       <View style={{ flexDirection: theme.largeFont ? 'column' : 'row', gap: theme.space[2] }}>
-        <Button testID="reminder-draft-open" label={t('rem.check')} variant="outline" style={theme.largeFont ? undefined : { flex: 1 }} onPress={open} />
+        <Button testID="reminder-draft-open" label={t('rem.check')} variant="secondary" style={theme.largeFont ? undefined : { flex: 1 }} onPress={open} />
         <Button testID="reminder-draft-close" label={t('rem.close')} variant="text" style={theme.largeFont ? undefined : { flex: 1 }} onPress={() => dropPhrase(ready.id)} />
       </View>
     </View>

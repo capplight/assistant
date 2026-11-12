@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { KpTextField } from '@/components/kp/KpEdits';
 import { Screen } from '@/components/Screen';
 import { assistantOn, createDraft } from '@/kp/service';
@@ -41,7 +41,7 @@ export default function NewDraftScreen() {
     <Screen testID="draft-new">
       <View style={{ gap: theme.space[4] }}>
         <Button testID="draft-new-back" label={`‹ ${t('kp.back')}`} variant="text" minHeight={theme.size.minTouch} style={{ alignSelf: 'flex-start' }} onPress={close} />
-        <AppText variant="title1" accessibilityRole="header">
+        <AppText variant="largeTitle" accessibilityRole="header">
           {name ? t('draft.new_title_to', { name }) : t('draft.new_title')}
         </AppText>
         {!assistantOn() ? (
@@ -59,16 +59,16 @@ export default function NewDraftScreen() {
                   onPress={() => setChannel(c)}
                   style={{
                     flexGrow: 1,
-                    minHeight: theme.size.primaryTouch,
+                    minHeight: theme.size.buttonHeight,
                     justifyContent: 'center',
                     paddingHorizontal: theme.space[4],
-                    borderRadius: theme.radius.button,
+                    borderRadius: theme.radius.md,
                     borderWidth: 2,
-                    borderColor: channel === c ? theme.colors.accent : theme.colors.lineStrong,
-                    backgroundColor: channel === c ? theme.colors.accent : theme.colors.surface,
+                    borderColor: channel === c ? theme.colors.brand : theme.colors.iconSecondary,
+                    backgroundColor: channel === c ? theme.colors.brand : theme.colors.surface,
                   }}
                 >
-                  <AppText color={channel === c ? 'onAccent' : 'ink'} style={{ textAlign: 'center' }}>
+                  <AppText color={channel === c ? 'onBrand' : 'ink'} style={{ textAlign: 'center' }}>
                     {`${channel === c ? '● ' : '○ '}${t(c === 'email' ? 'send.ch_email' : 'send.ch_whatsapp')}`}
                   </AppText>
                 </Pressable>
@@ -76,7 +76,7 @@ export default function NewDraftScreen() {
             </View>
             <Button testID="draft-new-make" label={busy ? t('draft.writing') : t('draft.make')} disabled={busy || !request.trim()} onPress={() => void make()} />
             {note ? (
-              <AppText testID="draft-new-note" color="warnText" accessibilityLiveRegion="polite">
+              <AppText testID="draft-new-note" color="warning" accessibilityLiveRegion="polite">
                 {note}
               </AppText>
             ) : null}

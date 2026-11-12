@@ -12,7 +12,7 @@ import { AppText } from './AppText';
 export function MiniSchema({ kind }: { kind: TemplateKey }) {
   const theme = useTheme();
   const bar = (w: number | `${number}%`) => (
-    <View style={{ height: 8, width: w, borderRadius: 4, backgroundColor: theme.colors.line, marginBottom: 6 }} />
+    <View style={{ height: 8, width: w, borderRadius: 4, backgroundColor: theme.colors.separator, marginBottom: 6 }} />
   );
   const box = (checked: boolean, key: number) => (
     <View
@@ -22,8 +22,8 @@ export function MiniSchema({ kind }: { kind: TemplateKey }) {
         height: 16,
         borderRadius: 3,
         borderWidth: 2,
-        borderColor: theme.colors.lineStrong,
-        backgroundColor: checked ? theme.colors.lineStrong : 'transparent',
+        borderColor: theme.colors.iconSecondary,
+        backgroundColor: checked ? theme.colors.iconSecondary : 'transparent',
         marginRight: 6,
       }}
     />
@@ -32,7 +32,7 @@ export function MiniSchema({ kind }: { kind: TemplateKey }) {
   switch (kind) {
     case 'custom':
       content = (
-        <View style={[styles.dashed, { borderColor: theme.colors.lineStrong, borderRadius: theme.radius.input }]}>
+        <View style={[styles.dashed, { borderColor: theme.colors.iconSecondary, borderRadius: theme.radius.sm }]}>
           <AppText variant="title2" color="ink2">
             +
           </AppText>

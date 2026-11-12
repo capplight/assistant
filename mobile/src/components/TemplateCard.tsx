@@ -49,9 +49,9 @@ export function TemplateCard({ templateKey, checked, title, hint, onPress, testI
         {
           minHeight: 180,
           padding: theme.space[4],
-          borderRadius: theme.radius.card,
+          borderRadius: theme.radius.lg,
           backgroundColor: theme.colors.surface,
-          borderColor: checked ? theme.colors.accent : theme.colors.line,
+          borderColor: checked ? theme.colors.brand : theme.colors.separator,
           borderWidth: checked ? 2 : 1,
           opacity: pressed ? 0.85 : 1,
         },
@@ -66,13 +66,13 @@ export function TemplateCard({ templateKey, checked, title, hint, onPress, testI
             style={[
               styles.mark,
               {
-                borderColor: checked ? theme.colors.accent : theme.colors.lineStrong,
-                backgroundColor: checked ? theme.colors.accent : 'transparent',
+                borderColor: checked ? theme.colors.brand : theme.colors.iconSecondary,
+                backgroundColor: checked ? theme.colors.brand : 'transparent',
               },
             ]}
           >
             {checked ? (
-              <AppText variant="bodyStrong" color="onAccent">
+              <AppText variant="bodyStrong" color="onBrand">
                 ✓
               </AppText>
             ) : null}
@@ -82,9 +82,9 @@ export function TemplateCard({ templateKey, checked, title, hint, onPress, testI
       <AppText variant="title2" style={{ marginTop: theme.space[2] }}>
         {name}
       </AppText>
-      <AppText variant="meta">{benefit}</AppText>
+      <AppText variant="callout">{benefit}</AppText>
       {exists ? (
-        <AppText variant="meta" color="done" style={{ marginTop: theme.space[1] }}>
+        <AppText variant="callout" color="success" style={{ marginTop: theme.space[1] }}>
           {`${t('gallery.exists')} ✓`}
         </AppText>
       ) : null}

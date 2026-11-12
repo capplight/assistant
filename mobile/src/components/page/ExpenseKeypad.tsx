@@ -59,13 +59,13 @@ export function ExpenseKeypad({
                     styles.key,
                     {
                       minHeight: KEY_SIZE,
-                      borderRadius: theme.radius.button,
-                      backgroundColor: theme.colors.accent,
+                      borderRadius: theme.radius.md,
+                      backgroundColor: theme.colors.brand,
                       opacity: !canSave ? 0.45 : pressed ? 0.85 : 1,
                     },
                   ]}
                 >
-                  <AppText variant="button" color="onAccent" maxFontSizeMultiplier={KEY_LABEL_SCALE} style={styles.center}>
+                  <AppText variant="button" color="onBrand" maxFontSizeMultiplier={KEY_LABEL_SCALE} style={styles.center}>
                     {saveLabel}
                   </AppText>
                 </Pressable>
@@ -83,10 +83,10 @@ export function ExpenseKeypad({
                   styles.key,
                   {
                     minHeight: KEY_SIZE,
-                    borderRadius: theme.radius.button,
+                    borderRadius: theme.radius.md,
                     borderWidth: op ? 2 : 1,
-                    borderColor: op ? theme.colors.accent : theme.colors.lineStrong,
-                    backgroundColor: pressed ? theme.colors.line : theme.colors.surface,
+                    borderColor: op ? theme.colors.brand : theme.colors.iconSecondary,
+                    backgroundColor: pressed ? theme.colors.separator : theme.colors.surface,
                   },
                 ]}
               >
@@ -95,7 +95,7 @@ export function ExpenseKeypad({
                 ) : (
                   <AppText
                     variant="title2"
-                    color={op ? 'accent' : 'ink'}
+                    color={op ? 'brand' : 'ink'}
                     maxFontSizeMultiplier={KEY_LABEL_SCALE}
                     style={[styles.center, { fontVariant: ['tabular-nums'] }]}
                   >

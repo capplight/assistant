@@ -27,7 +27,7 @@ from assistant.api.schemas import (
     FeedbackOut,
     PendingBannerOut,
 )
-from assistant.chat import ChatRequest, ChatService, store
+from assistant.chat import ChatRequest, ChatService, RateLimited, store
 from assistant.db.models import Item
 from assistant.db.models_chat import (
     Conversation,
@@ -84,7 +84,10 @@ async def post_message(body: ChatMessageIn, user: AiUser, db: Db, ctx: Ctx) -> S
         selected_item_id=body.selected_item_id, lang=body.lang, input_kind=body.input_kind,
         choice=body.choice.model_dump() if body.choice else None,
     )  # fmt: skip
-    reply_id, run = await service.start(user.id, user.locale, req)
+    try:
+        reply_id, run = await service.start(user.id, user.locale, req)
+    except RateLimited as exc:  # week 18: per-person limit, friendly 429 + Retry-After
+        raise ApiError(429, exc.code, retry_after=exc.retry_after) from exc
     if run is not None:
         return _stream(run.follow(0))
     return _stream(service.resume(user.id, reply_id, 0))

@@ -231,6 +231,8 @@ async def from_item(body: FromItemIn, user: GatedUser, db: Db, ctx: Ctx, kinds: 
 @router.post("/from-qr")
 async def from_qr(body: FromQrIn, user: GatedUser, db: Db, ctx: Ctx, kinds: Kinds,
                   response: Response) -> dict[str, Any]:  # fmt: skip
+    if not ctx.settings.feature_receipt_qr:  # Ф-37: after the beta
+        raise ApiError(403, "feature_off", details={"feature": "receipt_qr"})
     now = _now()
     try:
         fiscal = ofd.parse_link(body.url, ctx.settings.expenses_ofd_domains)
@@ -333,6 +335,8 @@ async def _statement(db: Db, user_id: int, sid: uuid.UUID, lock: bool = False) -
 @router.post("/statements", status_code=201)
 async def create_statement(body: StatementIn, user: GatedUser, db: Db, ctx: Ctx, kinds: Kinds,
                            response: Response) -> dict[str, Any]:  # fmt: skip
+    if not ctx.settings.feature_statements_pdf:  # Ф-37: after the beta
+        raise ApiError(403, "feature_off", details={"feature": "statements_pdf"})
     now = _now()
     first = await db.scalar(select(StatementImport).where(
         StatementImport.user_id == user.id, StatementImport.client_id == body.client_id))

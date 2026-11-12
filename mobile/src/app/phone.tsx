@@ -10,7 +10,7 @@ import { s15AfterPhone } from '@/alarms/setup';
 import { useAlarms } from '@/alarms/store';
 import { errorMessage, NetworkError } from '@/api/errors';
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/Screen';
 import { useOnboarding } from '@/store/onboarding';
 import { useSession } from '@/store/session';
@@ -133,10 +133,10 @@ export default function PhoneScreen() {
   const fieldStyle = [
     theme.type.body,
     {
-      minHeight: theme.size.primaryTouch,
+      minHeight: theme.size.buttonHeight,
       borderWidth: 1,
-      borderColor: theme.colors.lineStrong,
-      borderRadius: theme.radius.input,
+      borderColor: theme.colors.iconSecondary,
+      borderRadius: theme.radius.sm,
       paddingHorizontal: theme.space[3],
       color: theme.colors.ink,
       backgroundColor: theme.colors.surface,
@@ -144,7 +144,7 @@ export default function PhoneScreen() {
   ];
 
   const errorLine = error ? (
-    <AppText testID="phone-error" color="alarm" accessibilityLiveRegion="polite">
+    <AppText testID="phone-error" color="danger" accessibilityLiveRegion="polite">
       {error}
     </AppText>
   ) : null;
@@ -153,7 +153,7 @@ export default function PhoneScreen() {
     <Screen testID="phone-screen">
       {step === 'phone' ? (
         <View style={{ gap: theme.space[4] }}>
-          <AppText variant="title1" accessibilityRole="header">
+          <AppText variant="largeTitle" accessibilityRole="header">
             {expired ? t('phone.expired_title') : t('phone.title')}
           </AppText>
           {expired ? <AppText testID="phone-expired">{t('phone.expired_body')}</AppText> : null}
@@ -167,14 +167,14 @@ export default function PhoneScreen() {
                 setError(null);
               }}
               style={{
-                minHeight: theme.size.primaryTouch,
-                minWidth: theme.size.primaryTouch,
+                minHeight: theme.size.buttonHeight,
+                minWidth: theme.size.buttonHeight,
                 paddingHorizontal: theme.space[3],
                 alignItems: 'center',
                 justifyContent: 'center',
                 borderWidth: 1,
-                borderColor: theme.colors.lineStrong,
-                borderRadius: theme.radius.input,
+                borderColor: theme.colors.iconSecondary,
+                borderRadius: theme.radius.sm,
               }}
             >
               <AppText variant="number">{dial}</AppText>
@@ -195,14 +195,14 @@ export default function PhoneScreen() {
           </View>
           {errorLine}
           <Button testID="phone-get-code" label={t('phone.get_code')} disabled={busy || !number} onPress={requestCode} />
-          <Button testID="phone-later" label={t('phone.later')} variant="outline" onPress={leave} />
-          <AppText variant="meta">{expired ? t('phone.expired_later') : t('phone.warn')}</AppText>
+          <Button testID="phone-later" label={t('phone.later')} variant="secondary" onPress={leave} />
+          <AppText variant="callout">{expired ? t('phone.expired_later') : t('phone.warn')}</AppText>
         </View>
       ) : null}
 
       {step === 'code' ? (
         <View style={{ gap: theme.space[4] }}>
-          <AppText variant="title1" accessibilityRole="header">
+          <AppText variant="largeTitle" accessibilityRole="header">
             {t('phone.code_title')}
           </AppText>
           <AppText>{t('phone.code_sent', { phone })}</AppText>
@@ -234,13 +234,13 @@ export default function PhoneScreen() {
               setStep('phone');
             }}
           />
-          <Button testID="phone-code-later" label={t('phone.later')} variant="outline" onPress={leave} />
+          <Button testID="phone-code-later" label={t('phone.later')} variant="secondary" onPress={leave} />
         </View>
       ) : null}
 
       {step === 'name' ? (
         <View style={{ gap: theme.space[4] }}>
-          <AppText variant="title1" accessibilityRole="header">
+          <AppText variant="largeTitle" accessibilityRole="header">
             {t('phone.name_title')}
           </AppText>
           <TextInput

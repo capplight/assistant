@@ -44,6 +44,9 @@ Show a task only while its record is live (`items[].deleted_at` null), like page
 
 ### Where a task shows
 
+Week 19 (Ф-35): with no «Покупки» yet, the first thing to buy makes it (once; not when the person
+removed one) — see `features.md` «Pages made on first use». Otherwise as below.
+
 - On the page «Покупки» (`template_key: "shopping"`) for `shopping`, on «Дела и напоминания»
   (`tasks`) for `todo`. A `shopping` task goes to «Дела и напоминания» when the person has no
   «Покупки» page (US-10). With neither page it is still saved (in «Заметки», search, «Сегодня»);
@@ -241,6 +244,12 @@ taps [Да]. Limits are the server's (config `suggestions.*`), the phone just sh
 - «Сохраните записи — укажите номер» (`link_phone`, anonymous accounts): from day 3 and the 20th
   record, ≤1 a week, ≤3 times in all (R-08).
 - Suggestions never make a push (so nothing in quiet hours either).
+
+**Beta scope (Ф-42, week 19, `features.md`):** one tip a day (`TODAY_TIPS_PER_DAY=1`) and only in
+the account's first 7 days (`TODAY_TIPS_DAYS`), then none; data and page proposals are off
+(`FEATURE_TODAY_PROPOSALS`: `proposals: []`, none are made); page tiles are off
+(`FEATURE_TODAY_TILES`: `page_tiles: []`, pinned ones too). The rules above apply inside these
+caps when a switch is on.
 
 ### Suggestion
 

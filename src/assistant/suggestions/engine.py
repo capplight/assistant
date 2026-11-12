@@ -12,7 +12,8 @@ The assistant never acts here: a suggestion only asks, and nothing changes until
 - Nothing here sends a push, so quiet hours need no rule.
 
 `current()` runs when «Сегодня» opens (short transaction, no model call). Settings:
-`suggestions_*` in config.
+`suggestions_*` in config. Beta scope (Ф-42): ≤`today_tips_per_day` tip and only in the first
+`today_tips_days` days; data and page proposals only with `feature_today_proposals`.
 """
 
 import uuid
@@ -294,6 +295,9 @@ async def _eligible(session: AsyncSession, user: User, key: str,
 
 async def _pick_tip(session: AsyncSession, user: User, now: datetime, day_start: datetime,
                     settings: Settings) -> Suggestion | None:  # fmt: skip
+    age = now - user.created_at
+    if settings.today_tips_days and age >= timedelta(days=settings.today_tips_days):
+        return None  # Ф-42: tips only in the account's first week
     on_screen = await session.scalar(
         select(Suggestion).where(Suggestion.user_id == user.id,
                                  Suggestion.kind == SuggestionKind.TIP,
@@ -303,9 +307,10 @@ async def _pick_tip(session: AsyncSession, user: User, now: datetime, day_start:
     )  # fmt: skip
     if on_screen is not None:
         return on_screen
-    new_account = now - user.created_at < timedelta(days=settings.suggestions_new_days)
+    new_account = age < timedelta(days=settings.suggestions_new_days)
     per_day = (settings.suggestions_tips_per_day_new if new_account
                else settings.suggestions_tips_per_day)  # fmt: skip
+    per_day = min(per_day, settings.today_tips_per_day)  # Ф-42: one tip
     shown_today = await session.scalar(
         select(func.count()).select_from(Suggestion)
         .where(Suggestion.user_id == user.id, Suggestion.kind == SuggestionKind.TIP,
@@ -344,6 +349,10 @@ async def current(session: AsyncSession, user_id: int, now: datetime,
     assert user is not None
     day_start = _today_start(now, user.tz or "Asia/Almaty")
     await _expire(session, user_id, now, day_start)
+    if not settings.feature_today_proposals:  # Ф-42: no proposals for the beta
+        tip = await _pick_tip(session, user, now, day_start, settings)
+        await session.flush()
+        return [], tip
     await _new_proposals(session, user_id, now, settings)
     await _page_proposals(session, user, now, settings)
     proposals = list(await session.scalars(

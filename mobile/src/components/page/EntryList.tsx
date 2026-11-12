@@ -268,7 +268,7 @@ export function EntryList({
                 <View style={style} onLayout={measure}>
                   <AppText
                     testID={`group-${item.key}`}
-                    variant="section"
+                    variant="sectionLabel"
                     accessibilityRole="header"
                     style={{ paddingTop: theme.space[3], paddingBottom: theme.space[2] }}
                   >

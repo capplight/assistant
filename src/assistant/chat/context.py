@@ -245,6 +245,13 @@ async def book_for(sessionmaker: async_sessionmaker[AsyncSession], user_id: int,
     return book
 
 
+# Ф-39: while the assistant may not change page views (no set_view tool offered).
+VIEW_OFF_LINE = ("Вид страницы (поля, колонки, сортировка, группировка, цвета, доска, таблица) "
+                 "ты пока не меняешь. Если человек просит об этом, ответь коротко: «Так пока не "
+                 "умею — вид страницы меняется в «⋯».» Записи при этом не меняй. Название и "
+                 "значок страницы менять можно: rename_page.")
+
+
 async def assemble(
     sessionmaker: async_sessionmaker[AsyncSession], embedder: ChunkEmbedder, turn: TurnInput, *,
     now: datetime | None = None, max_input_tokens: int = 12000, embed_timeout_s: float = 0.5,
@@ -261,7 +268,8 @@ async def assemble(
         selected = await _selected(session, turn, book)
         summary, history = await _history(session, turn, book, ZoneInfo(tz))
         view_line = None
-        if page is not None and tools is not READ_TOOLS:  # week 11: for set_view
+        views = any(t.name == "set_view" for t in tools)
+        if page is not None and views:  # week 11: for set_view
             from assistant.pages.view import describe
 
             view_line = await describe(session, page.pk)
@@ -295,6 +303,8 @@ async def assemble(
     if tools is not READ_TOOLS:
         context.append("Изменения: человек в этой фразе просит что-то изменить; инструменты "
                        "изменений доступны.")  # fmt: skip
+        if not views:  # Ф-39: no set_view for the beta
+            context.append(VIEW_OFF_LINE)
     else:
         context.append("Изменения: в этой фразе человек ничего менять не просил; только ответ.")
     if summary:

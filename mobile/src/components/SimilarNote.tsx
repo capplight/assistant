@@ -9,7 +9,7 @@ import { formatShortDate } from '@/records/format';
 import { useTheme } from '@/theme';
 
 import { AppText } from './AppText';
-import { Button } from './Button';
+import { Button } from './ui/Button';
 
 /**
  * S09: «Похоже на запись от 12 окт. Объединить?» (2-design 7, string 26) when the record is in a
@@ -32,7 +32,7 @@ export function SimilarNote({ serverId }: { serverId: string | null }) {
         testID="record-similar-open"
         label={t('dup.look')}
         accessibilityLabel={t('dup.look_a11y')}
-        variant="outline"
+        variant="secondary"
         minHeight={theme.size.minTouch}
         onPress={() => router.push('/duplicates')}
       />

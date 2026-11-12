@@ -31,6 +31,11 @@ jest.mock('@expo-google-fonts/onest', () => ({
 
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
 
+jest.mock('expo-haptics', () => ({
+  impactAsync: jest.fn(async () => undefined),
+  ImpactFeedbackStyle: { Light: 'light', Medium: 'medium', Heavy: 'heavy' },
+}));
+
 jest.mock('expo-localization', () => ({ getLocales: () => [{ languageCode: 'ru' }] }));
 
 // RN's Jest preset reports fontScale 2 by default; tests run at 100% unless they opt into large font.

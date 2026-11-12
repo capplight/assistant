@@ -6,7 +6,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AmountText } from '@/components/AmountText';
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { PhraseChangeBox, PhraseLine } from '@/components/kp/KpEdits';
 import { AddLineSheet, VolumeSheet } from '@/components/kp/KpLineSheets';
 import { CheckBadge } from '@/components/kp/KpParts';
@@ -77,9 +77,9 @@ export default function KpScreen() {
   if (!doc || !data) {
     return (
       <Screen testID="kp-missing">
-        <AppText variant="title1">{doc ? kpTitle(doc, t) : t('kp.not_found')}</AppText>
+        <AppText variant="largeTitle">{doc ? kpTitle(doc, t) : t('kp.not_found')}</AppText>
         {doc ? <AppText testID="kp-no-version">{t('kp.no_version')}</AppText> : null}
-        <Button testID="kp-back" label={t('kp.back')} variant="outline" onPress={back} />
+        <Button testID="kp-back" label={t('kp.back')} variant="secondary" onPress={back} />
       </Screen>
     );
   }
@@ -113,21 +113,21 @@ export default function KpScreen() {
               onPress={back}
               style={{ minHeight: theme.size.minTouch, minWidth: theme.size.minTouch, flexDirection: 'row', alignItems: 'center' }}
             >
-              <ChevronLeft size={28} color={theme.colors.accent} />
-              <AppText color="accent">{t('kp.back')}</AppText>
+              <ChevronLeft size={28} color={theme.colors.brand} />
+              <AppText color="brand">{t('kp.back')}</AppText>
             </Pressable>
-            <AppText variant="meta" style={{ marginLeft: 'auto' }}>
+            <AppText variant="callout" style={{ marginLeft: 'auto' }}>
               {t('kp.step', { n: 2 })}
             </AppText>
           </View>
-          <AppText variant="title1" accessibilityRole="header">
+          <AppText variant="largeTitle" accessibilityRole="header">
             {[t('kp.kp_plain'), data.client.name].filter(Boolean).join(' · ')}
           </AppText>
           <AppText testID="kp-total" variant="title2" accessibilityLiveRegion="polite" style={{ fontVariant: ['tabular-nums'] }}>
             {totals ? t(data.vat.mode === 'none' ? 'kp.total' : 'kp.total_with_vat', { amount: money(totals.total) }) : ''}
           </AppText>
           {version ? (
-            <AppText testID="kp-version-line" variant="meta">
+            <AppText testID="kp-version-line" variant="callout">
               {sentAt
                 ? t('kp.version_sent', { n: version.n, date: shortDate(sentAt, i18n.language) })
                 : sentN !== null && version.n > sentN
@@ -137,16 +137,16 @@ export default function KpScreen() {
           ) : null}
           {change && change.n === version?.n && !waiting ? <PhraseChangeBox docId={doc.id} change={change} before={before} after={data} /> : null}
           {waiting ? (
-            <AppText testID="kp-waiting" variant="meta">
+            <AppText testID="kp-waiting" variant="callout">
               {t('kp.waiting_sync')}
             </AppText>
           ) : null}
           {missing > 0 ? (
-            <View style={{ gap: theme.space[2], padding: theme.space[3], backgroundColor: theme.colors.markerSoft, borderRadius: theme.radius.card }}>
-              <AppText testID="kp-missing-count" color="warnText">
+            <View style={{ gap: theme.space[2], padding: theme.space[3], backgroundColor: theme.colors.highlightTint, borderRadius: theme.radius.lg }}>
+              <AppText testID="kp-missing-count" color="warning">
                 {t('kp.total_missing', { count: missing })}
               </AppText>
-              <Button testID="kp-fast" label={t('kp.fast_input')} variant="outline" onPress={() => router.push({ pathname: '/kp/prices', params: { doc: doc.id } })} />
+              <Button testID="kp-fast" label={t('kp.fast_input')} variant="secondary" onPress={() => router.push({ pathname: '/kp/prices', params: { doc: doc.id } })} />
             </View>
           ) : null}
 
@@ -167,10 +167,10 @@ export default function KpScreen() {
                   testID={`kp-line-${i}`}
                   style={{
                     borderBottomWidth: 1,
-                    borderBottomColor: theme.colors.line,
+                    borderBottomColor: theme.colors.separator,
                     paddingBottom: theme.space[3],
                     gap: theme.space[1],
-                    backgroundColor: lit.has(it.id) ? theme.colors.markerSoft : undefined,
+                    backgroundColor: lit.has(it.id) ? theme.colors.highlightTint : undefined,
                   }}
                 >
                   <View
@@ -198,7 +198,7 @@ export default function KpScreen() {
                           ? t('kp.line_calc', { qty, unit, price: priceMoney(it.unit_price), sum })
                           : t('kp.line_no_price', { qty, unit })}
                     </AppText>
-                    <AppText testID={`kp-line-${i}-source`} variant="meta" color={label.kind === 'missing' || label.check ? 'warnText' : 'ink2'}>
+                    <AppText testID={`kp-line-${i}-source`} variant="callout" color={label.kind === 'missing' || label.check ? 'warning' : 'ink2'}>
                       {label.check ? `⚠ ${label.text}` : label.text}
                     </AppText>
                   </View>
@@ -212,7 +212,7 @@ export default function KpScreen() {
                           : t(lump ? 'kp.change_amount' : 'kp.change_price', { price: priceMoney(it.unit_price) })
                       }
                       accessibilityLabel={t(lump ? 'kp.change_amount_a11y' : 'kp.change_price_a11y', { name: it.name })}
-                      variant={it.unit_price === null ? 'primary' : 'outline'}
+                      variant={it.unit_price === null ? 'primary' : 'secondary'}
                       minHeight={theme.size.minTouch}
                       style={{ flexGrow: 1 }}
                       disabled={pendingLine}
@@ -223,7 +223,7 @@ export default function KpScreen() {
                         testID={`kp-line-${i}-volume-edit`}
                         label={volume ? t('kp.change_volume', { volume }) : t('kp.set_volume')}
                         accessibilityLabel={t('kp.change_volume_a11y', { name: it.name })}
-                        variant="outline"
+                        variant="secondary"
                         minHeight={theme.size.minTouch}
                         style={{ flexGrow: 1 }}
                         disabled={pendingLine}
@@ -234,7 +234,7 @@ export default function KpScreen() {
                         testID={`kp-line-${i}-qty`}
                         label={t('kp.change_qty', { qty: `${qty} ${unit}`.trim() })}
                         accessibilityLabel={t('kp.change_qty_a11y', { name: it.name })}
-                        variant="outline"
+                        variant="secondary"
                         minHeight={theme.size.minTouch}
                         style={{ flexGrow: 1 }}
                         disabled={pendingLine}
@@ -248,7 +248,7 @@ export default function KpScreen() {
             <Button
               testID="kp-add-line"
               label={t('kp.add_line')}
-              variant="outline"
+              variant="secondary"
               minHeight={theme.size.minTouch}
               onPress={() => setAdding(true)}
             />
@@ -273,9 +273,9 @@ export default function KpScreen() {
           />
 
           {needsProfile || required.length > 0 ? (
-            <View testID="kp-required" style={{ gap: theme.space[2], padding: theme.space[3], backgroundColor: theme.colors.markerSoft, borderRadius: theme.radius.card }}>
-              <AppText color="warnText">{t('kp.fields_missing', { list: required.map((f) => t(`kp.req_${f.replace('.', '_')}`, { defaultValue: f })).join(', ') || t('kp.req_seller_name') })}</AppText>
-              <Button testID="kp-required-company" label={t('kp.company_fill')} variant="outline" onPress={() => router.push('/company')} />
+            <View testID="kp-required" style={{ gap: theme.space[2], padding: theme.space[3], backgroundColor: theme.colors.highlightTint, borderRadius: theme.radius.lg }}>
+              <AppText color="warning">{t('kp.fields_missing', { list: required.map((f) => t(`kp.req_${f.replace('.', '_')}`, { defaultValue: f })).join(', ') || t('kp.req_seller_name') })}</AppText>
+              <Button testID="kp-required-company" label={t('kp.company_fill')} variant="secondary" onPress={() => router.push('/company')} />
             </View>
           ) : null}
           <PhraseLine docId={doc.id} assistant={assistantOn()} />
@@ -287,11 +287,11 @@ export default function KpScreen() {
             onPress={() => router.push({ pathname: '/kp/versions', params: { doc: doc.id } })}
           />
           <View style={[styles.row, { flexWrap: 'wrap', gap: theme.space[2] }]}>
-            <Button testID="kp-pdf" label={pdf === 'busy' ? t('kp.pdf_busy') : t('kp.pdf')} variant="outline" style={{ flexGrow: 1 }} disabled={pdf === 'busy'} onPress={() => void getFile('pdf')} />
-            <Button testID="kp-docx" label={t('kp.docx')} variant="outline" style={{ flexGrow: 1 }} disabled={pdf === 'busy'} onPress={() => void getFile('docx')} />
+            <Button testID="kp-pdf" label={pdf === 'busy' ? t('kp.pdf_busy') : t('kp.pdf')} variant="secondary" style={{ flexGrow: 1 }} disabled={pdf === 'busy'} onPress={() => void getFile('pdf')} />
+            <Button testID="kp-docx" label={t('kp.docx')} variant="secondary" style={{ flexGrow: 1 }} disabled={pdf === 'busy'} onPress={() => void getFile('docx')} />
           </View>
           {pdf && pdf !== 'busy' ? (
-            <AppText testID="kp-pdf-result" accessibilityLiveRegion="polite" color={pdf.result === 'shared' ? 'done' : 'warnText'}>
+            <AppText testID="kp-pdf-result" accessibilityLiveRegion="polite" color={pdf.result === 'shared' ? 'success' : 'warning'}>
               {pdf.result === 'fields'
                 ? t('kp.fields_missing', { list: (pdf.fields ?? []).map((f) => t(`kp.req_${f.replace('.', '_')}`, { defaultValue: f })).join(', ') })
                 : pdf.result === 'shared' && pdf.format === 'docx'
@@ -301,7 +301,7 @@ export default function KpScreen() {
           ) : null}
           <Button testID="kp-more" label={t('kp.more')} variant="text" minHeight={theme.size.minTouch} onPress={() => setMore(true)} />
           {doc.ai_generated ? (
-            <AppText testID="kp-ai-label" variant="meta">
+            <AppText testID="kp-ai-label" variant="callout">
               {t('ai.label')}
             </AppText>
           ) : null}
@@ -363,7 +363,7 @@ export default function KpScreen() {
           <Button
             testID="kp-write"
             label={t('draft.write_client')}
-            variant="outline"
+            variant="secondary"
             onPress={() => {
               setMore(false);
               router.push({ pathname: '/draft/new', params: { doc: doc.id } });

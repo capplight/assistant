@@ -10,8 +10,8 @@ import { useToast } from '@/store/toast';
 import { MAX_FONT_SCALE, useTheme } from '@/theme';
 
 import { AppText } from './AppText';
-import { Button } from './Button';
-import { Checkbox } from './Checkbox';
+import { Button } from './ui/Button';
+import { CheckRow as Checkbox } from './ui/Check';
 
 const REASONS: FeedbackReason[] = ['wrong', 'offensive', 'other'];
 
@@ -56,7 +56,7 @@ export function FeedbackSheet({ message, onClose }: { message: ChatMessage | nul
                 borderTopRightRadius: theme.radius.sheet,
                 maxHeight: '90%',
               },
-              theme.elevation?.sheet,
+              theme.elevation.floating,
             ]}
           >
             <ScrollView contentContainerStyle={{ padding: theme.space[5], gap: theme.space[2] }}>
@@ -74,15 +74,15 @@ export function FeedbackSheet({ message, onClose }: { message: ChatMessage | nul
                       accessibilityState={{ checked: on }}
                       accessibilityLabel={t(`feedback.reason.${r}`)}
                       onPress={() => setReason(r)}
-                      style={[styles.row, { minHeight: theme.size.primaryTouch, gap: theme.space[3] }]}
+                      style={[styles.row, { minHeight: theme.size.buttonHeight, gap: theme.space[3] }]}
                     >
                       <View
                         style={[
                           styles.radio,
-                          { borderColor: on ? theme.colors.accent : theme.colors.lineStrong, borderRadius: theme.radius.round },
+                          { borderColor: on ? theme.colors.brand : theme.colors.iconSecondary, borderRadius: theme.radius.round },
                         ]}
                       >
-                        {on ? <View style={[styles.dot, { backgroundColor: theme.colors.accent, borderRadius: theme.radius.round }]} /> : null}
+                        {on ? <View style={[styles.dot, { backgroundColor: theme.colors.brand, borderRadius: theme.radius.round }]} /> : null}
                       </View>
                       <AppText style={styles.flex}>{t(`feedback.reason.${r}`)}</AppText>
                     </Pressable>
@@ -102,10 +102,10 @@ export function FeedbackSheet({ message, onClose }: { message: ChatMessage | nul
                 style={[
                   theme.type.body,
                   {
-                    minHeight: theme.size.primaryTouch * 1.5,
+                    minHeight: theme.size.buttonHeight * 1.5,
                     borderWidth: 1,
-                    borderColor: theme.colors.lineStrong,
-                    borderRadius: theme.radius.input,
+                    borderColor: theme.colors.iconSecondary,
+                    borderRadius: theme.radius.sm,
                     padding: theme.space[3],
                     color: theme.colors.ink,
                     backgroundColor: theme.colors.bg,
@@ -114,7 +114,7 @@ export function FeedbackSheet({ message, onClose }: { message: ChatMessage | nul
                 ]}
               />
               <Checkbox testID="feedback-allow" label={t('feedback.allow')} checked={allow} onChange={setAllow} />
-              <AppText variant="meta">{t('feedback.where')}</AppText>
+              <AppText variant="callout">{t('feedback.where')}</AppText>
               <Button testID="feedback-send" label={t('feedback.send')} disabled={!reason} onPress={() => void send()} />
               <Button testID="feedback-cancel" label={t('common.close')} variant="text" onPress={close} />
             </ScrollView>

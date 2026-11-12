@@ -23,7 +23,7 @@ export default function AllRecordsScreen() {
         keyExtractor={(r) => r.id}
         contentContainerStyle={{ paddingVertical: theme.space[4] }}
         ListHeaderComponent={
-          <AppText variant="title1" accessibilityRole="header" style={{ marginBottom: theme.space[4] }}>
+          <AppText variant="largeTitle" accessibilityRole="header" style={{ marginBottom: theme.space[4] }}>
             {t('more.all_records')}
           </AppText>
         }
@@ -32,9 +32,9 @@ export default function AllRecordsScreen() {
             <View
               style={{
                 backgroundColor: theme.colors.surface,
-                borderColor: theme.colors.line,
+                borderColor: theme.colors.separator,
                 borderWidth: 1,
-                borderRadius: theme.radius.card,
+                borderRadius: theme.radius.lg,
                 padding: theme.space[4],
               }}
             >

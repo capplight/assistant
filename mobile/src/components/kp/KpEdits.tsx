@@ -9,7 +9,7 @@ import { useToast } from '@/store/toast';
 import { MAX_FONT_SCALE, useTheme } from '@/theme';
 
 import { AppText } from '../AppText';
-import { Button } from '../Button';
+import { Button } from '../ui/Button';
 
 /**
  * Week 15 (S17, R-30): a change by a phrase. «Скажите, что изменить» → the server (KP_EDIT) →
@@ -22,7 +22,7 @@ export function KpTextField({ label, testID, style, multiline, ...rest }: TextIn
   const theme = useTheme();
   return (
     <View style={{ gap: theme.space[1] }}>
-      <AppText variant="meta">{label}</AppText>
+      <AppText variant="callout">{label}</AppText>
       <TextInput
         testID={testID}
         accessibilityLabel={label}
@@ -33,10 +33,10 @@ export function KpTextField({ label, testID, style, multiline, ...rest }: TextIn
           theme.type.body,
           {
             color: theme.colors.ink,
-            minHeight: multiline ? theme.size.primaryTouch * 2 : theme.size.primaryTouch,
+            minHeight: multiline ? theme.size.buttonHeight * 2 : theme.size.buttonHeight,
             borderWidth: 1,
-            borderColor: theme.colors.lineStrong,
-            borderRadius: theme.radius.input,
+            borderColor: theme.colors.iconSecondary,
+            borderRadius: theme.radius.sm,
             paddingHorizontal: theme.space[3],
             paddingVertical: multiline ? theme.space[2] : 0,
             backgroundColor: theme.colors.surface,
@@ -69,7 +69,7 @@ export function PhraseLine({ docId, assistant }: { docId: string; assistant: boo
   if (!assistant) {
     // «Без ИИ»: a phrase needs the assistant; every field still changes by hand.
     return (
-      <AppText testID="kp-phrase-no-ai" variant="meta">
+      <AppText testID="kp-phrase-no-ai" variant="callout">
         {t('kp.phrase_no_ai')}
       </AppText>
     );
@@ -104,12 +104,12 @@ export function PhraseLine({ docId, assistant }: { docId: string; assistant: boo
       <Button
         testID="kp-phrase-send"
         label={busy ? t('kp.phrase_busy') : t('kp.phrase_send')}
-        variant="outline"
+        variant="secondary"
         disabled={busy || !text.trim()}
         onPress={() => void send()}
       />
       {note ? (
-        <AppText testID="kp-phrase-note" color="warnText" accessibilityLiveRegion="polite">
+        <AppText testID="kp-phrase-note" color="warning" accessibilityLiveRegion="polite">
           {note}
         </AppText>
       ) : null}
@@ -117,7 +117,7 @@ export function PhraseLine({ docId, assistant }: { docId: string; assistant: boo
   );
 }
 
-/** «Изменил: … Итого: было → стало ₸ [Что изменилось] [Отменить]» (markerSoft, string 40). */
+/** «Изменил: … Итого: было → стало ₸ [Что изменилось] [Отменить]» (highlightTint, string 40). */
 export function PhraseChangeBox({ docId, change, before, after }: { docId: string; change: PhraseChange; before: KpDataOut | null; after: KpDataOut }) {
   const theme = useTheme();
   const { t } = useTranslation();
@@ -133,7 +133,7 @@ export function PhraseChangeBox({ docId, change, before, after }: { docId: strin
     else toast.show(t('kp.undo_done'), 3000);
   };
   return (
-    <View testID="kp-change" style={{ gap: theme.space[2], padding: theme.space[3], backgroundColor: theme.colors.markerSoft, borderRadius: theme.radius.card }}>
+    <View testID="kp-change" style={{ gap: theme.space[2], padding: theme.space[3], backgroundColor: theme.colors.highlightTint, borderRadius: theme.radius.lg }}>
       <AppText testID="kp-change-text" accessibilityLiveRegion="polite">
         {line}
       </AppText>
@@ -146,7 +146,7 @@ export function PhraseChangeBox({ docId, change, before, after }: { docId: strin
               </AppText>
             ))
           ) : (
-            <AppText variant="meta">{t('kp.diff_unknown')}</AppText>
+            <AppText variant="callout">{t('kp.diff_unknown')}</AppText>
           )}
         </View>
       ) : null}
@@ -159,7 +159,7 @@ export function PhraseChangeBox({ docId, change, before, after }: { docId: strin
           accessibilityState={{ expanded: open }}
           onPress={() => setOpen((x) => !x)}
         />
-        <Button testID="kp-change-undo" label={t('common.undo')} variant="outline" minHeight={theme.size.minTouch} onPress={() => void undo()} />
+        <Button testID="kp-change-undo" label={t('common.undo')} variant="secondary" minHeight={theme.size.minTouch} onPress={() => void undo()} />
       </View>
     </View>
   );

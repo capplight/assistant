@@ -53,7 +53,7 @@ PHONE = "+7 701 123 45 67"
 @dataclass
 class Env:
     maker: Any
-    make_app: Any  # (ai_router or None) -> FastAPI
+    make_app: Any  # (ai_router or None, **settings) -> FastAPI
 
 
 @pytest.fixture
@@ -68,8 +68,8 @@ async def env(tmp_path: Path):
             await s.commit()
         apps = []
 
-        def make_app(ai_router: Any = None):  # type: ignore[no-untyped-def]
-            app = create_app(make_settings(), sessionmaker=maker, sms=FakeSmsSender(),
+        def make_app(ai_router: Any = None, **kw: Any):  # type: ignore[no-untyped-def]
+            app = create_app(make_settings(**kw), sessionmaker=maker, sms=FakeSmsSender(),
                              storage=make_storage(tmp_path), ai_router=ai_router)  # fmt: skip
             apps.append(app)
             return app

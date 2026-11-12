@@ -14,7 +14,7 @@ import { useView } from '@/store/view';
 import { useTheme } from '@/theme';
 
 import { AppText } from '../AppText';
-import { Button } from '../Button';
+import { Button } from '../ui/Button';
 import { PageIcon } from '../Icon';
 import { PageNameSheet } from '../PageNameSheet';
 import { Screen } from '../Screen';
@@ -71,7 +71,7 @@ export function PageFrame({ page }: { page: Page }) {
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.space[3], flexWrap: 'wrap' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.space[3], flexGrow: 1, flexShrink: 1, minWidth: '50%' }}>
           <PageIcon name={page.icon} color={theme.colors.ink} size={28} />
-          <AppText testID="page-title" variant="title1" accessibilityRole="header" style={{ flexShrink: 1 }}>
+          <AppText testID="page-title" variant="largeTitle" accessibilityRole="header" style={{ flexShrink: 1 }}>
             {title(page)}
           </AppText>
           {page.templateKey === 'custom' ? (
@@ -82,7 +82,7 @@ export function PageFrame({ page }: { page: Page }) {
               onPress={() => setRenaming(true)}
               style={{ width: theme.size.minTouch, height: theme.size.minTouch, alignItems: 'center', justifyContent: 'center' }}
             >
-              <PencilLine size={24} color={theme.colors.accent} />
+              <PencilLine size={24} color={theme.colors.brand} />
             </Pressable>
           ) : null}
         </View>
@@ -109,7 +109,7 @@ export function PageFrame({ page }: { page: Page }) {
       </View>
       <FindField testID="page-find" label={t('page.find')} value={q} onChange={(value) => setFind({ pageId: page.id, q: value })} />
       {ordering ? (
-        <AppText testID="page-order-hint" variant="meta" accessibilityLiveRegion="polite">
+        <AppText testID="page-order-hint" variant="callout" accessibilityLiveRegion="polite">
           {t('page.order_hint')}
         </AppText>
       ) : null}

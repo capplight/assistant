@@ -24,6 +24,18 @@ export type Allow = { rule: Rule; testID: RegExp; why: string };
 
 export const NARROW = { width: 320, height: 568 };
 
+/**
+ * The adaptive matrix (design-system §4 + founder requirement): small phones 320 / 360, a regular 412, a small
+ * tablet / foldable 600, a large tablet / landscape 840 — each at font scale 1.0, 1.3 and 2.0.
+ */
+export const AUDIT_WIDTHS = [320, 360, 412, 600, 840] as const;
+export const AUDIT_FONT_SCALES = [1, 1.3, 2] as const;
+/** A plausible window height for a width (portrait phones, a landscape-ish 840). */
+export const heightFor = (width: number) => (width >= 840 ? 1180 : width >= 600 ? 960 : width <= 320 ? 568 : 780);
+export const AUDIT_MATRIX: { width: number; height: number; fontScale: number }[] = AUDIT_WIDTHS.flatMap((width) =>
+  AUDIT_FONT_SCALES.map((fontScale) => ({ width, height: heightFor(width), fontScale })),
+);
+
 /** The window the app sees: `useWindowDimensions().fontScale`, `PixelRatio.getFontScale()` and the width. */
 export function setWindow(o: { fontScale: number; width?: number; height?: number }): void {
   const dims = { width: o.width ?? 390, height: o.height ?? 844, scale: 2, fontScale: o.fontScale };

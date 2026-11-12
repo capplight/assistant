@@ -5,7 +5,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import type { KpFileFormat, KpSendChannel } from '@/api/types';
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { ContactPhoneField } from '@/components/kp/ContactPhoneField';
 import { KpTextField } from '@/components/kp/KpEdits';
 import { Screen } from '@/components/Screen';
@@ -47,7 +47,7 @@ export default function KpSendScreen() {
     return (
       <Screen testID="kp-send-screen">
         <AppText testID="kp-send-missing">{t('kp.no_version')}</AppText>
-        <Button testID="kp-send-close" label={t('common.close')} variant="outline" onPress={close} />
+        <Button testID="kp-send-close" label={t('common.close')} variant="secondary" onPress={close} />
       </Screen>
     );
   }
@@ -105,7 +105,7 @@ export default function KpSendScreen() {
     <Screen testID="kp-send-screen">
       <View style={{ gap: theme.space[4] }}>
         <View style={styles.row}>
-          <AppText variant="title1" accessibilityRole="header" style={{ flexShrink: 1 }}>
+          <AppText variant="largeTitle" accessibilityRole="header" style={{ flexShrink: 1 }}>
             {t('send.title')}
           </AppText>
           <Button testID="kp-send-close" label={t('common.close')} variant="text" minHeight={theme.size.minTouch} style={{ marginLeft: 'auto' }} onPress={close} />
@@ -113,23 +113,23 @@ export default function KpSendScreen() {
 
         {ask ? (
           // Back from WhatsApp / mail: the one question, [Да] not focused first (S25).
-          <View testID="kp-send-did" style={{ gap: theme.space[3], padding: theme.space[4], borderRadius: theme.radius.card, borderWidth: 2, borderColor: theme.colors.accent }}>
+          <View testID="kp-send-did" style={{ gap: theme.space[3], padding: theme.space[4], borderRadius: theme.radius.lg, borderWidth: 2, borderColor: theme.colors.brand }}>
             <AppText variant="title2" accessibilityRole="header" accessibilityLiveRegion="polite">
               {t('send.did_you')}
             </AppText>
             <AppText>{t('send.did_you_body', { n: pending.n })}</AppText>
             <View style={[styles.row, { gap: theme.space[3], flexWrap: 'wrap' }]}>
-              <Button testID="kp-send-did-no" label={t('send.did_no')} variant="outline" style={{ flexGrow: 1 }} onPress={no} />
+              <Button testID="kp-send-did-no" label={t('send.did_no')} variant="secondary" style={{ flexGrow: 1 }} onPress={no} />
               <Button testID="kp-send-did-yes" label={t('send.did_yes')} style={{ flexGrow: 1 }} onPress={() => void yes()} />
             </View>
           </View>
         ) : null}
         {done === 'sent' ? (
           <View testID="kp-send-done" style={{ gap: theme.space[3] }}>
-            <AppText color="done" accessibilityLiveRegion="polite">
+            <AppText color="success" accessibilityLiveRegion="polite">
               {t('send.marked', { date: shortDate(new Date().toISOString(), i18n.language) })}
             </AppText>
-            <AppText variant="meta">{t('send.marked_note')}</AppText>
+            <AppText variant="callout">{t('send.marked_note')}</AppText>
             <Button testID="kp-send-finish" label={t('send.finish')} onPress={close} />
           </View>
         ) : null}
@@ -146,15 +146,15 @@ export default function KpSendScreen() {
           <AppText testID="kp-send-total" variant="title2" style={{ fontVariant: ['tabular-nums'] }}>
             {total ? t('send.sum', { amount: total }) : t('send.sum_missing', { count: missing })}
           </AppText>
-          {waiting ? <AppText variant="meta">{t('kp.waiting_sync')}</AppText> : null}
+          {waiting ? <AppText variant="callout">{t('kp.waiting_sync')}</AppText> : null}
         </View>
 
         {saw !== null ? (
-          <View testID="kp-send-saw" style={{ padding: theme.space[3], backgroundColor: theme.colors.markerSoft, borderRadius: theme.radius.card }}>
+          <View testID="kp-send-saw" style={{ padding: theme.space[3], backgroundColor: theme.colors.highlightTint, borderRadius: theme.radius.lg }}>
             <AppText>{t('send.client_saw', { n: saw })}</AppText>
           </View>
         ) : sentN !== null && sentN === n ? (
-          <AppText testID="kp-send-again" variant="meta">
+          <AppText testID="kp-send-again" variant="callout">
             {t('send.already_sent', { n })}
           </AppText>
         ) : null}
@@ -168,7 +168,7 @@ export default function KpSendScreen() {
         />
 
         <View style={{ gap: theme.space[1] }}>
-          <AppText variant="meta">{t('send.to')}</AppText>
+          <AppText variant="callout">{t('send.to')}</AppText>
           <AppText testID="kp-send-client" variant="bodyStrong">
             {clientName}
           </AppText>
@@ -198,17 +198,17 @@ export default function KpSendScreen() {
           <Button testID="kp-send-text-reset" label={t('send.text_reset')} variant="text" minHeight={theme.size.minTouch} onPress={() => saveSendDraft(docId, { text: null })} />
         ) : null}
 
-        <View testID="kp-send-hint" style={{ padding: theme.space[3], borderRadius: theme.radius.card, borderWidth: 1, borderColor: theme.colors.lineStrong }}>
+        <View testID="kp-send-hint" style={{ padding: theme.space[3], borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.iconSecondary }}>
           <AppText>{hint}</AppText>
         </View>
         <Button testID="kp-send-open" label={busy ? t('send.busy') : openLabel} disabled={busy || missing > 0} onPress={() => void open()} />
         {missing > 0 ? (
-          <AppText testID="kp-send-missing-prices" color="warnText">
+          <AppText testID="kp-send-missing-prices" color="warning">
             {t('kp.pdf_missing')}
           </AppText>
         ) : null}
         {problem ? (
-          <AppText testID="kp-send-problem" color="warnText" accessibilityLiveRegion="polite">
+          <AppText testID="kp-send-problem" color="warning" accessibilityLiveRegion="polite">
             {problem}
           </AppText>
         ) : null}
@@ -216,9 +216,9 @@ export default function KpSendScreen() {
         {draft.channel === 'whatsapp' ? (
           <View style={{ gap: theme.space[2] }}>
             <ContactPhoneField testID="kp-send-phone" value={draft.phone} onChange={(x) => saveSendDraft(docId, { phone: x })} />
-            <Button testID="kp-send-text-only" label={t('send.text_only')} variant="outline" onPress={() => void textOnly()} />
+            <Button testID="kp-send-text-only" label={t('send.text_only')} variant="secondary" onPress={() => void textOnly()} />
             {textNote ? (
-              <AppText testID="kp-send-text-note" color="warnText">
+              <AppText testID="kp-send-text-note" color="warning">
                 {textNote}
               </AppText>
             ) : null}
@@ -246,7 +246,7 @@ function Choice({
   const theme = useTheme();
   return (
     <View testID={testID} accessibilityRole="radiogroup" accessibilityLabel={title} style={{ gap: theme.space[1] }}>
-      <AppText variant="meta">{title}</AppText>
+      <AppText variant="callout">{title}</AppText>
       <View style={[styles.row, { flexWrap: 'wrap', gap: theme.space[2] }]}>
         {options.map((o) => {
           const on = o.key === value;
@@ -259,17 +259,17 @@ function Choice({
               accessibilityState={{ checked: on }}
               onPress={() => onPick(o.key)}
               style={{
-                minHeight: theme.size.primaryTouch,
+                minHeight: theme.size.buttonHeight,
                 paddingHorizontal: theme.space[4],
                 justifyContent: 'center',
-                borderRadius: theme.radius.button,
+                borderRadius: theme.radius.md,
                 borderWidth: 2,
-                borderColor: on ? theme.colors.accent : theme.colors.lineStrong,
-                backgroundColor: on ? theme.colors.accent : theme.colors.surface,
+                borderColor: on ? theme.colors.brand : theme.colors.iconSecondary,
+                backgroundColor: on ? theme.colors.brand : theme.colors.surface,
                 flexGrow: 1,
               }}
             >
-              <AppText color={on ? 'onAccent' : 'ink'} style={{ textAlign: 'center' }}>{`${on ? '● ' : '○ '}${o.label}`}</AppText>
+              <AppText color={on ? 'onBrand' : 'ink'} style={{ textAlign: 'center' }}>{`${on ? '● ' : '○ '}${o.label}`}</AppText>
             </Pressable>
           );
         })}

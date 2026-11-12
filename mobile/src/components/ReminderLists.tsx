@@ -26,7 +26,7 @@ import { useUndo } from '@/store/undo';
 import { useTheme } from '@/theme';
 
 import { AppText } from './AppText';
-import { Button } from './Button';
+import { Button } from './ui/Button';
 
 /** The clock for lists that change with time (a reminder passes, a row becomes «Пропущено»). */
 export function useMinuteClock(): number {
@@ -87,13 +87,13 @@ export function MissedList({ rows, now }: { rows: MissedRow[]; now: number }) {
             accessibilityLabel={line}
             style={{
               borderWidth: 2,
-              borderColor: theme.colors.alarm,
-              borderRadius: theme.radius.card,
+              borderColor: theme.colors.danger,
+              borderRadius: theme.radius.lg,
               padding: theme.space[3],
               gap: theme.space[2],
             }}
           >
-            <AppText color="alarm" variant="bodyStrong">
+            <AppText color="danger" variant="bodyStrong">
               {line}
             </AppText>
             <View style={{ flexDirection: theme.largeFont ? 'column' : 'row', gap: theme.space[2] }}>
@@ -108,7 +108,7 @@ export function MissedList({ rows, now }: { rows: MissedRow[]; now: number }) {
                 testID={`missed-move-${row.key}`}
                 label={t('missed.move')}
                 accessibilityLabel={t('missed.move_a11y', { title: row.title })}
-                variant="outline"
+                variant="secondary"
                 style={theme.largeFont ? undefined : { flex: 1 }}
                 onPress={() =>
                   router.push({
@@ -192,19 +192,19 @@ export function ReminderRows({
               accessibilityLabel={`${level}. ${time}. ${a.title}`}
               style={{
                 flex: 1,
-                minHeight: theme.size.primaryTouch,
+                minHeight: theme.size.buttonHeight,
                 justifyContent: 'center',
                 borderBottomWidth: 1,
-                borderBottomColor: theme.colors.line,
+                borderBottomColor: theme.colors.separator,
                 paddingVertical: theme.space[2],
               }}
             >
               <AppText
-                color={a.level === 'alarm' ? 'alarm' : 'ink'}
+                color={a.level === 'alarm' ? 'danger' : 'ink'}
               >{`${a.level === 'alarm' ? '🔔 ' : ''}${time} ${a.title}`}</AppText>
-              <AppText variant="meta">{level}</AppText>
+              <AppText variant="callout">{level}</AppText>
               {late ? (
-                <AppText variant="meta" color="warnText">
+                <AppText variant="callout" color="warning">
                   {t('rem.late_risk')}
                 </AppText>
               ) : null}
@@ -215,7 +215,7 @@ export function ReminderRows({
                 label={t('rem.delete')}
                 accessibilityLabel={t('rem.delete_a11y', { title: a.title })}
                 variant="text"
-                labelColor="alarm"
+                labelColor="danger"
                 minHeight={theme.size.minTouch}
                 onPress={() => void removeReminder(reminderId, a.title, t)}
               />
@@ -263,16 +263,16 @@ export function Segments({
               minHeight: theme.size.minTouch,
               alignItems: 'center',
               justifyContent: 'center',
-              borderRadius: theme.radius.button,
+              borderRadius: theme.radius.md,
               borderWidth: on ? 3 : 1,
-              borderColor: on ? theme.colors.accent : theme.colors.lineStrong,
+              borderColor: on ? theme.colors.brand : theme.colors.iconSecondary,
               backgroundColor: on ? theme.colors.surface : 'transparent',
               paddingHorizontal: theme.space[2],
             }}
           >
             <AppText
               variant={on ? 'bodyStrong' : 'body'}
-              color={it.key === 'missed' && missedCount > 0 ? 'alarm' : 'ink'}
+              color={it.key === 'missed' && missedCount > 0 ? 'danger' : 'ink'}
             >
               {it.label}
             </AppText>

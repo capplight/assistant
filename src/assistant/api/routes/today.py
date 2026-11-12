@@ -253,7 +253,8 @@ async def today(user: GatedUser, db: Db, ctx: Ctx) -> TodayOut:
         select(Reminder.id).where(Reminder.user_id == user.id, Reminder.deleted_at.is_(None),
                                   Reminder.kind == AppReminderKind.NORMAL).limit(1))  # fmt: skip
 
-    tiles = await page_tiles(db, u, now, day)
+    # Ф-42: no page tiles for the beta (pinned ones too)
+    tiles = await page_tiles(db, u, now, day) if ctx.settings.feature_today_tiles else []
     sections = [name for name, has in (
         ("banner", banner is not None), ("missed", bool(missed)),
         ("today", bool(due or todo or shopping)), ("page_tiles", bool(tiles)),

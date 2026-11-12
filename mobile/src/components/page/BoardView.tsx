@@ -50,7 +50,7 @@ import { HIGHLIGHT_MS, useView } from '@/store/view';
 import { useTheme } from '@/theme';
 
 import { AppText } from '../AppText';
-import { Button } from '../Button';
+import { Button } from '../ui/Button';
 import { MovePageSheet, type MoveMode } from '../MovePageSheet';
 import { RecordMenuSheet, type MenuExtra } from '../RecordMenuSheet';
 import { stickerLabel } from './stickerLabel';
@@ -491,9 +491,9 @@ const BoardSticker = memo(function BoardSticker({
           height: size,
           zIndex: lifted ? 100_000 : z + 1,
           elevation: lifted ? 8 : 1,
-          backgroundColor: lit ? theme.colors.markerSoft : theme.notes[color ?? 'white'],
-          borderRadius: theme.radius.note,
-          borderColor: lit || lifted ? theme.colors.marker : theme.colors.line,
+          backgroundColor: lit ? theme.colors.highlightTint : theme.notes[color ?? 'white'],
+          borderRadius: theme.radius.md,
+          borderColor: lit || lifted ? theme.colors.highlight : theme.colors.separator,
           borderWidth: lit || lifted ? 3 : 1,
         },
         drag ? { transform: drag.getTranslateTransform() } : null,
@@ -522,7 +522,7 @@ const BoardSticker = memo(function BoardSticker({
         {rest.length > 0 ? <AppText numberOfLines={2}>{rest.join('\n').trim()}</AppText> : null}
       </Pressable>
       <View style={[styles.row, { paddingLeft: theme.space[2] }]}>
-        <AppText variant="meta" numberOfLines={1} style={styles.flex}>
+        <AppText variant="callout" numberOfLines={1} style={styles.flex}>
           {sourceLine(rec, i18n.language, t)}
         </AppText>
         <Pressable
@@ -532,7 +532,7 @@ const BoardSticker = memo(function BoardSticker({
           onPress={() => onMenu(id)}
           style={{ width: theme.size.minTouch, height: theme.size.minTouch, alignItems: 'center', justifyContent: 'center' }}
         >
-          <Ellipsis size={24} color={theme.colors.accent} />
+          <Ellipsis size={24} color={theme.colors.brand} />
         </Pressable>
       </View>
     </Animated.View>
@@ -564,8 +564,8 @@ function ArrowsSheet({
       testID={`board-${dir}`}
       label={t(`notes.board_${dir}`)}
       accessibilityLabel={t(`notes.board_${dir}_a11y`, { what: title })}
-      variant="outline"
-      icon={<Icon size={28} color={theme.colors.accent} />}
+      variant="secondary"
+      icon={<Icon size={28} color={theme.colors.brand} />}
       disabled={!canNudge(place, dir)}
       onPress={() => onArrow(dir)}
       style={big}
@@ -583,7 +583,7 @@ function ArrowsSheet({
             <AppText variant="title2" accessibilityRole="header">
               {t('notes.board_move')}
             </AppText>
-            <AppText variant="meta" numberOfLines={2}>
+            <AppText variant="callout" numberOfLines={2}>
               {title}
             </AppText>
             {theme.largeFont ? (
@@ -605,8 +605,8 @@ function ArrowsSheet({
                 </View>
               </>
             )}
-            <Button testID="board-top" label={t('notes.board_top')} variant="outline" disabled={onTop} onPress={() => onArrow('top')} />
-            <Button testID="board-move-close" label={t('common.close')} variant="outline" onPress={onClose} />
+            <Button testID="board-top" label={t('notes.board_top')} variant="secondary" disabled={onTop} onPress={() => onArrow('top')} />
+            <Button testID="board-move-close" label={t('common.close')} variant="secondary" onPress={onClose} />
           </ScrollView>
         </SafeAreaView>
       </View>

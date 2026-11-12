@@ -9,7 +9,7 @@ import { clampSnoozeMinutes } from '@/alarms/port';
 import { act } from '@/alarms/service';
 import { useAlarms } from '@/alarms/store';
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/Screen';
 import { useToast } from '@/store/toast';
 import { useTheme } from '@/theme';
@@ -59,31 +59,31 @@ export default function AlarmScreen() {
 
   return (
     <Screen testID="alarm-screen">
-      <AppText variant="meta" color="alarm" accessibilityRole="header">
+      <AppText variant="callout" color="danger" accessibilityRole="header">
         {`🔔 ${t('alarm.heading')}`}
       </AppText>
-      <AppText style={{ fontSize: 72, lineHeight: 80, fontFamily: theme.type.display.fontFamily }}>{timeText(due)}</AppText>
-      <AppText testID="alarm-title" variant="title1" style={{ marginBottom: theme.space[6] }}>
+      <AppText style={{ fontSize: 72, lineHeight: 80, fontFamily: theme.type.largeTitle.fontFamily }}>{timeText(due)}</AppText>
+      <AppText testID="alarm-title" variant="largeTitle" style={{ marginBottom: theme.space[6] }}>
         {reminder.title}
       </AppText>
       <View style={{ gap: theme.space[3] }}>
         <Button testID="alarm-done" label={t('alarm.done')} minHeight={72} onPress={() => void done()} />
-        <Button testID="alarm-snooze" label={t('alarm.snooze')} variant="outline" minHeight={64} onPress={() => void snooze(10)} />
+        <Button testID="alarm-snooze" label={t('alarm.snooze')} variant="secondary" minHeight={64} onPress={() => void snooze(10)} />
         {phone ? (
           <Button
             testID="alarm-call"
             label={`${t('alarm.call')} ${phone}`}
-            variant="outline"
+            variant="secondary"
             onPress={() => void Linking.openURL(`tel:${phone.replace(/[^\d+]/g, '')}`)}
           />
         ) : null}
         <Button testID="alarm-other" label={t('alarm.other_time')} variant="text" onPress={() => setOther((v) => !v)} />
         {other ? (
           <View style={{ gap: theme.space[2] }}>
-            <Button testID="alarm-in-5" label={t('alarm.in_5')} variant="outline" onPress={() => void snooze(5)} />
-            <Button testID="alarm-in-30" label={t('alarm.in_30')} variant="outline" onPress={() => void snooze(30)} />
-            <Button testID="alarm-in-60" label={t('alarm.in_60')} variant="outline" onPress={() => void snooze(60)} />
-            <Button testID="alarm-tomorrow" label={t('alarm.tomorrow')} variant="outline" onPress={() => void snooze(tomorrow())} />
+            <Button testID="alarm-in-5" label={t('alarm.in_5')} variant="secondary" onPress={() => void snooze(5)} />
+            <Button testID="alarm-in-30" label={t('alarm.in_30')} variant="secondary" onPress={() => void snooze(30)} />
+            <Button testID="alarm-in-60" label={t('alarm.in_60')} variant="secondary" onPress={() => void snooze(60)} />
+            <Button testID="alarm-tomorrow" label={t('alarm.tomorrow')} variant="secondary" onPress={() => void snooze(tomorrow())} />
           </View>
         ) : null}
       </View>

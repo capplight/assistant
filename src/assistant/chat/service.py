@@ -46,13 +46,14 @@ from assistant.ai import (
     LLMTask,
     Masker,
     StreamInterrupted,
+    ToolSpec,
 )
 from assistant.ai.policy import StrongReason, StrongRequest
 from assistant.ai.prompting import TaskInputs, ToolRound
 from assistant.ai.router import Router
 from assistant.ai.store import period_starts
 from assistant.ai.types import ToolResult
-from assistant.chat import jobs, store
+from assistant.chat import jobs, limits, store
 from assistant.chat.context import (
     PROMPT_VERSION,
     Assembled,
@@ -75,6 +76,7 @@ from assistant.chat.intent import (
 from assistant.chat.mutate import (
     MUTATING_NAMES,
     MUTATING_TOOLS,
+    RENAME_PAGE,
     CreateArgs,
     MutationState,
     UpdateArgs,
@@ -135,6 +137,9 @@ TEXT_NOT_CHANGED = {"ru": "Не понял, что изменить. Скажи�
                     "kk": "Не понял, что изменить. Скажите, пожалуйста, ещё раз."}  # fmt: skip
 TEXT_NOTHING_HERE = {"ru": "Здесь пока нет записей.", "kk": "Здесь пока нет записей."}
 TEXT_WHICH = {"ru": "Какую?", "kk": "Какую?"}  # kk: until reviewed (R-39)
+# Ф-39 (beta): the assistant does not change page views; context.VIEW_OFF_LINE says the same
+TEXT_VIEW_OFF = {"ru": "Так пока не умею — вид страницы меняется в «⋯».",
+                 "kk": "Әзірге бұлай істей алмаймын — бет көрінісі «⋯» ішінде өзгереді."}
 # Week 9: «напомни …» from the line. Questions («напомни, как зовут мастера?») are not reminders.
 _REMIND = re.compile(
     r"^(?:пожалуйста[,\s]+)?(?:напомн(?:и|ите)|разбуд(?:и|ите)|не\s+да(?:й|йте)\s+(?:мне\s+)?"
@@ -418,6 +423,8 @@ class ChatService:
                     raise LookupError("message without an answer")
                 live = self.runs.get(reply.public_id)
                 return reply.public_id, live if live and not live.finished else None
+            if req.choice is None:  # a phrase the person sends (a tap is not counted)
+                await limits.check(session, user_id, datetime.now(UTC), self.s)
             page_pk = await self._page_pk(session, user_id, req.page_id)
             visible = await self._item_pks(session, user_id, req.visible_item_ids[:40])
             selected = await self._item_pks(session, user_id, [req.selected_item_id]) \
@@ -557,7 +564,7 @@ class ChatService:
             # the answer waits as a banner (+ push). Anything that needs «Да» or «Какую?» still
             # waits for the person: it is saved as a proposal, nothing is done.
             change = reading.intent == Intent.CHANGE
-            tools = (*READ_TOOLS, *MUTATING_TOOLS) if change else READ_TOOLS
+            tools = (*READ_TOOLS, *self._mutating()) if change else READ_TOOLS
             ctx, env = await assemble(
                 self.sessionmaker, self.embedder, turn, now=self.clock(),
                 max_input_tokens=self.s.chat_max_input_tokens,
@@ -591,6 +598,14 @@ class ChatService:
         finally:
             run.finish()
             asyncio.get_running_loop().call_later(RUN_KEEP_S, self.runs.pop, run.reply_id, None)
+
+    def _mutating(self) -> tuple[ToolSpec, ...]:
+        """The change tools a step is offered. Ф-39: while `feature_assistant_views` is off the
+        assistant does not change page views: `rename_page` (name, icon) replaces `set_view`;
+        the context tells it what to say about the rest."""
+        if self.s.feature_assistant_views:
+            return MUTATING_TOOLS
+        return (*(t for t in MUTATING_TOOLS if t.name != "set_view"), RENAME_PAGE)
 
     def _mutation(self, run: ReplyRun, turn: TurnInput, book: SourceBook, allowed: bool,
                   deictic: bool) -> MutationState:  # fmt: skip
@@ -661,6 +676,8 @@ class ChatService:
             run.emit("tool_activity", {"tool": "reorder", "text": "Раскладываю…",
                                        "page_id": str(m.page.id)})  # fmt: skip
             await start_reorder(env, m.page, fp.how, None)
+        elif fp.tool == "color_topics" and not self.s.feature_assistant_views:
+            m.note = TEXT_VIEW_OFF[turn.lang]  # Ф-39: views change in «⋯» for the beta
         elif fp.tool == "color_topics" and m.page is not None and m.page.template_key == "notes":
             run.emit("tool_activity", {"tool": "set_view", "text": "Раскрашиваю…",
                                        "page_id": str(m.page.id)})  # fmt: skip
@@ -948,7 +965,7 @@ class ChatService:
         seen: set[str] = set()
         tool_log: list[dict[str, Any]] = []
         reply: ChatReply | None = None
-        tools = (*READ_TOOLS, *MUTATING_TOOLS) if change else READ_TOOLS
+        tools = (*READ_TOOLS, *self._mutating()) if change else READ_TOOLS
         allowed = {t.name for t in tools}
         strong = self._strong(turn, book, reading)
         round_tokens = 0

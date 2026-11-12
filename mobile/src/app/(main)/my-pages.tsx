@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useShallow } from 'zustand/react/shallow';
 
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { PageIcon } from '@/components/Icon';
 import { PageNameSheet } from '@/components/PageNameSheet';
 import { Screen } from '@/components/Screen';
@@ -54,17 +54,17 @@ export default function MyPagesScreen() {
         onPress={() => void stepPage(p.id, step)}
         style={[styles.square, { width: theme.size.minTouch, height: theme.size.minTouch, opacity: can ? 1 : 0.35 }]}
       >
-        <Icon size={24} color={theme.colors.accent} />
+        <Icon size={24} color={theme.colors.brand} />
       </Pressable>
     );
   };
 
   const card = {
     backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.line,
-    borderRadius: theme.radius.card,
+    borderColor: theme.colors.separator,
+    borderRadius: theme.radius.lg,
     paddingHorizontal: theme.space[3],
-    minHeight: theme.size.primaryTouch,
+    minHeight: theme.size.buttonHeight,
     marginBottom: theme.space[2],
     gap: theme.space[2],
   };
@@ -78,20 +78,20 @@ export default function MyPagesScreen() {
             label={t('common.back')}
             variant="text"
             minHeight={theme.size.minTouch}
-            icon={<ChevronLeft size={22} color={theme.colors.accent} />}
+            icon={<ChevronLeft size={22} color={theme.colors.brand} />}
             onPress={() => router.navigate('/more')}
             style={styles.back}
           />
-          <AppText variant="title1" accessibilityRole="header">
+          <AppText variant="largeTitle" accessibilityRole="header">
             {t('pages.my')}
           </AppText>
-          <AppText variant="meta" style={{ marginBottom: theme.space[4] }}>
+          <AppText variant="callout" style={{ marginBottom: theme.space[4] }}>
             {t('pages.in_tabs', { n: inTabs })}
           </AppText>
           <View testID="my-pages-today" style={[styles.row, styles.border, card]}>
             <PageIcon name="today" size={24} color={theme.colors.ink} />
             <AppText style={styles.flex}>{t('tpl.today')}</AppText>
-            <AppText variant="meta">{t('pages.today_fixed')}</AppText>
+            <AppText variant="callout">{t('pages.today_fixed')}</AppText>
           </View>
           {pages.map((p, i) => {
             const shift = drag.shift(i);
@@ -100,7 +100,7 @@ export default function MyPagesScreen() {
                 {i === inTabs ? (
                   <AppText
                     testID="my-pages-tabs-end"
-                    variant="meta"
+                    variant="callout"
                     style={{ marginVertical: theme.space[2], textAlign: 'center' }}
                   >
                     {t('pages.tabs_end')}
@@ -114,7 +114,7 @@ export default function MyPagesScreen() {
                     styles.border,
                     card,
                     shift ? { transform: [{ translateY: shift }], zIndex: drag.isDragged(i) ? 10 : 0 } : null,
-                    drag.isDragged(i) ? [{ borderColor: theme.colors.accent }, theme.elevation?.sheet] : null,
+                    drag.isDragged(i) ? [{ borderColor: theme.colors.brand }, theme.elevation.floating] : null,
                   ]}
                 >
                   <Pressable
@@ -130,7 +130,7 @@ export default function MyPagesScreen() {
                     onPress={() => router.navigate({ pathname: '/page/[id]', params: { id: p.id } })}
                     onLongPress={() => drag.start(i, (to) => void movePage(p.id, to))}
                     delayLongPress={400}
-                    style={[styles.row, styles.flex, { minHeight: theme.size.primaryTouch, gap: theme.space[3] }]}
+                    style={[styles.row, styles.flex, { minHeight: theme.size.buttonHeight, gap: theme.space[3] }]}
                   >
                     <PageIcon name={p.icon} size={24} color={theme.colors.ink} />
                     <AppText style={styles.flex}>{title(p)}</AppText>
@@ -144,7 +144,7 @@ export default function MyPagesScreen() {
                     onPress={() => setMenuFor(p)}
                     style={[styles.square, { width: theme.size.minTouch, height: theme.size.minTouch }]}
                   >
-                    <Ellipsis size={24} color={theme.colors.accent} />
+                    <Ellipsis size={24} color={theme.colors.brand} />
                   </Pressable>
                 </View>
               </Fragment>
@@ -153,7 +153,7 @@ export default function MyPagesScreen() {
           <Button
             testID="my-pages-add"
             label={`+ ${t('pages.add')}`}
-            variant="outline"
+            variant="secondary"
             disabled={total >= MAX_PAGES}
             onPress={() => setNaming({ page: null })}
             style={{ marginTop: theme.space[3] }}
@@ -166,10 +166,10 @@ export default function MyPagesScreen() {
             disabled={total >= MAX_PAGES}
             onPress={() => router.push('/pages-gallery')}
           />
-          <AppText testID="my-pages-count" variant="meta" style={{ marginTop: theme.space[2] }}>
+          <AppText testID="my-pages-count" variant="callout" style={{ marginTop: theme.space[2] }}>
             {t('pages.count', { n: total })}
           </AppText>
-          {total >= MAX_PAGES ? <AppText variant="meta">{t('gallery.limit')}</AppText> : null}
+          {total >= MAX_PAGES ? <AppText variant="callout">{t('gallery.limit')}</AppText> : null}
         </ScrollView>
       </View>
       {menuFor ? (
@@ -243,23 +243,23 @@ function PageMenu({
               padding: theme.space[5],
               gap: theme.space[2],
             },
-            theme.elevation?.sheet,
+            theme.elevation.floating,
           ]}
         >
           <AppText variant="title2" accessibilityRole="header">
             {name}
           </AppText>
-          <Button testID="my-pages-sheet-open" label={t('pages.open')} variant="outline" onPress={onOpen} />
-          <Button testID="my-pages-sheet-rename" label={t('pages.rename')} variant="outline" onPress={onRename} />
+          <Button testID="my-pages-sheet-open" label={t('pages.open')} variant="secondary" onPress={onOpen} />
+          <Button testID="my-pages-sheet-rename" label={t('pages.rename')} variant="secondary" onPress={onRename} />
           <Button
             testID="my-pages-sheet-remove"
             label={t('pages.remove')}
             accessibilityHint={t('pages.remove_hint')}
             variant="text"
-            labelColor="alarm"
+            labelColor="danger"
             onPress={onRemove}
           />
-          <AppText variant="meta">{t('pages.remove_hint')}</AppText>
+          <AppText variant="callout">{t('pages.remove_hint')}</AppText>
           <Button testID="my-pages-sheet-close" label={t('common.close')} variant="text" onPress={onClose} />
         </SafeAreaView>
       </View>

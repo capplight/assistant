@@ -11,3 +11,4 @@ Items the founder accepted for now and wants revisited later.
 - **Design pass (founder):** «дизайн ужасный — грубо и серо». Later: several designer agents make an iOS-like interface — beautiful, simple, clear. Founder's priority after the functional weeks; not started.
 - **Week 18:** a provider whose SDK fails to import (ModuleNotFoundError) must count as a provider failure and fall through to the fallback in the chain; on the device test the chat showed «связь прервалась» instead of answering via Groq.
 - **Week 18:** per-person message rate limit (per minute + per day) on the chat/AI path (founder 2026-11-12).
+- **Editor pass on all app text (founder 2026-11-13):** after the redesign, an editor rewrites every user-facing string (RU, then KK via the review CSV) — short, clear, consistent. Not started.

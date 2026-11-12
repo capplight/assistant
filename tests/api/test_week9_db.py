@@ -348,7 +348,9 @@ async def test_today_empty_tip_and_not_now_pause(env9):
 
 
 async def test_today_sections_tasks_reminders_proposals(env9):
-    async with client(env9.make_app()) as c:
+    # week 19 (Ф-42): proposals and later tips are off for the beta; this checks R-35 itself
+    async with client(env9.make_app(feature_today_proposals=True, today_tips_days=0,
+                                    today_tips_per_day=2)) as c:
         h = await signed_in(c, kinds=("pd_processing", "terms"))
         uid = await _age(env9.maker, 1, c, h)
         today = datetime.now(UTC).date().isoformat()

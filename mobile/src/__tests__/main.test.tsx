@@ -12,8 +12,8 @@ describe('main navigation', () => {
     finishOnboarding();
   });
 
-  it('renders tabs: Сегодня + up to 3 pages + Ещё with labels', async () => {
-    usePages.getState().addPage('shopping'); // 4th page → goes to «Ещё»
+  it('renders tabs: Сегодня + up to 2 pages + Ещё with labels — never more than 4 (design-system TabBar)', async () => {
+    usePages.getState().addPage('shopping'); // 3rd and 4th pages → go to «Ещё»
     await renderRouter(APP_DIR, { initialUrl: '/' });
     const tabs = within(screen.getByTestId('bottom-tabs'));
     const labels = tabs.getAllByRole('tab').map((el) => el.props.accessibilityLabel as string);
@@ -21,7 +21,6 @@ describe('main navigation', () => {
       'Сегодня, вкладка',
       'Заметки, вкладка',
       'Дела, вкладка',
-      'Расходы, вкладка',
       'Ещё, вкладка',
     ]);
     expect(tabs.getByText('Сегодня')).toBeTruthy();
@@ -43,7 +42,8 @@ describe('main navigation', () => {
 
     check('Про: Сегодня');
     const expected = ['Про: Заметки', 'Про: Дела и напоминания', 'Про: Расходы'];
-    for (const [i, page] of pages.entries()) {
+    // Pages past the two tabs live in «Ещё»; the line names whichever page is open.
+    for (const [i, page] of pages.slice(0, 2).entries()) {
       await fireEvent.press(screen.getByTestId(`tab-${page.id}`));
       expect(r.getPathname()).toBe(`/page/${page.id}`);
       expect(screen.getByTestId(`tab-${page.id}`)).toBeSelected();
@@ -97,14 +97,14 @@ describe('main navigation', () => {
     expect(screen.getByTestId('assistant-write')).toBeTruthy();
   });
 
-  it('large font (≥150%): two pages in tabs, the third moves to «Ещё»', async () => {
+  it('large font (≥150%): one page in tabs, the rest move to «Ещё»', async () => {
     const spy = jest
       .spyOn(Dimensions, 'get')
       .mockImplementation(() => ({ width: 360, height: 640, scale: 2, fontScale: 1.6 }));
     try {
       await renderRouter(APP_DIR, { initialUrl: '/' });
       const tabs = within(screen.getByTestId('bottom-tabs')).getAllByRole('tab');
-      expect(tabs).toHaveLength(4);
+      expect(tabs).toHaveLength(3);
     } finally {
       spy.mockRestore();
     }

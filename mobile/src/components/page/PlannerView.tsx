@@ -24,7 +24,7 @@ import { useTasks } from '@/tasks/store';
 import { useTheme } from '@/theme';
 
 import { AppText } from '../AppText';
-import { Button } from '../Button';
+import { Button } from '../ui/Button';
 import type { MenuExtra } from '../RecordMenuSheet';
 import { MissedList, removeReminder, Segments, useMinuteClock, useMissed } from '../ReminderLists';
 import { TaskRow } from '../TaskRow';
@@ -167,7 +167,7 @@ export function PlannerView({ page, entries, frameTop, ordering }: ViewProps) {
           showReturn
           box={40}
           meta={task.due_date && !row.done ? dueText(task.due_date, today, t) : null}
-          metaColor={overdue ? 'alarm' : undefined}
+          metaColor={overdue ? 'danger' : undefined}
           highlighted={ctx.highlighted}
           onToggle={() => void setDone(task.id, !row.done)}
           onMenu={ctx.moves?.onMenu}
@@ -212,7 +212,7 @@ export function PlannerView({ page, entries, frameTop, ordering }: ViewProps) {
             return (
               <View key={s.key}>
                 {first ? (
-                  <AppText variant="section" accessibilityRole="header" style={{ paddingTop: theme.space[3], paddingBottom: theme.space[1] }}>
+                  <AppText variant="sectionLabel" accessibilityRole="header" style={{ paddingTop: theme.space[3], paddingBottom: theme.space[1] }}>
                     {dayText(s.at, now)}
                   </AppText>
                 ) : null}
@@ -231,7 +231,7 @@ export function PlannerView({ page, entries, frameTop, ordering }: ViewProps) {
         {segment === 'today'
           ? ackedToday.map((s) => <SlotRow key={s.key} slot={s} late={false} task={null} onMenu={() => undefined} onMissed={() => undefined} />)
           : null}
-        <Button testID="tasks-new-reminder" label={t('today.new_reminder')} variant="outline" onPress={() => router.push('/reminder-new')} />
+        <Button testID="tasks-new-reminder" label={t('today.new_reminder')} variant="secondary" onPress={() => router.push('/reminder-new')} />
       </View>
     );
 
@@ -259,10 +259,10 @@ function NowLine({ now }: { now: number }) {
   const { t } = useTranslation();
   return (
     <View testID="planner-now" accessibilityLiveRegion="none" style={[styles.row, { gap: theme.space[2], paddingVertical: theme.space[2] }]}>
-      <AppText variant="bodyStrong" color="accent">
+      <AppText variant="bodyStrong" color="brand">
         {t('planner.now', { time: hhmm(now) })}
       </AppText>
-      {theme.largeFont ? null : <View style={{ flex: 1, height: 3, backgroundColor: theme.colors.accent, borderRadius: 2 }} />}
+      {theme.largeFont ? null : <View style={{ flex: 1, height: 3, backgroundColor: theme.colors.brand, borderRadius: 2 }} />}
     </View>
   );
 }
@@ -294,15 +294,15 @@ function SlotRow({
     router.push({ pathname: '/reminder-new', params: { text: slot.title, ...(slot.reminderId ? { editId: slot.reminderId } : {}) } });
   };
   const grey = slot.acked || done;
-  const color = grey ? 'ink2' : slot.missed ? 'alarm' : 'ink';
+  const color = grey ? 'ink2' : slot.missed ? 'danger' : 'ink';
   return (
     <View
       style={[
         styles.row,
         {
           borderBottomWidth: 1,
-          borderBottomColor: theme.colors.line,
-          ...(slot.missed ? { borderLeftWidth: 4, borderLeftColor: theme.colors.alarm, paddingLeft: theme.space[2] } : {}),
+          borderBottomColor: theme.colors.separator,
+          ...(slot.missed ? { borderLeftWidth: 4, borderLeftColor: theme.colors.danger, paddingLeft: theme.space[2] } : {}),
         },
       ]}
     >
@@ -313,9 +313,9 @@ function SlotRow({
           accessibilityState={{ checked: done }}
           accessibilityLabel={`${time}. ${task.title}. ${done ? t('tasks.done') : t('tasks.not_done')}`}
           onPress={() => void setDone(task.id, !done)}
-          style={{ width: theme.size.primaryTouch, height: theme.size.primaryTouch, alignItems: 'center', justifyContent: 'center' }}
+          style={{ width: theme.size.buttonHeight, height: theme.size.buttonHeight, alignItems: 'center', justifyContent: 'center' }}
         >
-          <View style={{ width: 40, height: 40, borderWidth: 2, borderRadius: 6, borderColor: done ? theme.colors.ink2 : theme.colors.lineStrong, backgroundColor: done ? theme.colors.ink2 : theme.colors.surface, alignItems: 'center', justifyContent: 'center' }}>
+          <View style={{ width: 40, height: 40, borderWidth: 2, borderRadius: 6, borderColor: done ? theme.colors.ink2 : theme.colors.iconSecondary, backgroundColor: done ? theme.colors.ink2 : theme.colors.surface, alignItems: 'center', justifyContent: 'center' }}>
             {done ? <Check size={28} color={theme.colors.surface} strokeWidth={3} /> : null}
           </View>
         </Pressable>
@@ -325,7 +325,7 @@ function SlotRow({
         accessibilityRole="button"
         accessibilityLabel={label}
         onPress={open}
-        style={[styles.flex, { minHeight: theme.size.primaryTouch, paddingVertical: theme.space[2] }, theme.largeFont ? null : styles.row]}
+        style={[styles.flex, { minHeight: theme.size.buttonHeight, paddingVertical: theme.space[2] }, theme.largeFont ? null : styles.row]}
       >
         {theme.largeFont ? (
           <AppText variant="bodyStrong" color={color}>
@@ -343,16 +343,16 @@ function SlotRow({
           {theme.largeFont ? null : (
             <View style={[styles.row, { gap: theme.space[1] }]}>
               {slot.level === 'alarm' ? <Bell size={16} color={theme.colors.ink2} /> : null}
-              <AppText variant="meta">{level}</AppText>
+              <AppText variant="callout">{level}</AppText>
             </View>
           )}
           {state ? (
-            <AppText variant="meta" color={slot.missed && !grey ? 'alarm' : 'ink2'}>
+            <AppText variant="callout" color={slot.missed && !grey ? 'danger' : 'ink2'}>
               {state}
             </AppText>
           ) : null}
           {late && !slot.missed ? (
-            <AppText variant="meta" color="warnText">
+            <AppText variant="callout" color="warning">
               {t('rem.late_risk')}
             </AppText>
           ) : null}
@@ -366,7 +366,7 @@ function SlotRow({
           onPress={onMenu}
           style={{ width: theme.size.minTouch, height: theme.size.minTouch, alignItems: 'center', justifyContent: 'center' }}
         >
-          <Ellipsis size={24} color={theme.colors.accent} />
+          <Ellipsis size={24} color={theme.colors.brand} />
         </Pressable>
       )}
     </View>
@@ -399,7 +399,7 @@ function SlotMenu({ slot, onClose }: { slot: Slot; onClose: () => void }) {
     useUndo.getState().showCustom(t('planner.moved', { title: reminder.title, time: hhmm(was.dueAt + ms) }), () => void moveReminder(id, was));
   };
   const row = (testID: string, label: string, onPress: () => void) => (
-    <Button key={testID} testID={testID} label={label} variant="outline" onPress={onPress} />
+    <Button key={testID} testID={testID} label={label} variant="secondary" onPress={onPress} />
   );
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
@@ -413,7 +413,7 @@ function SlotMenu({ slot, onClose }: { slot: Slot; onClose: () => void }) {
             <AppText variant="title2" accessibilityRole="header" numberOfLines={3}>
               {`${hhmm(slot.at)} ${slot.title}`}
             </AppText>
-            <AppText variant="section" accessibilityRole="header">
+            <AppText variant="sectionLabel" accessibilityRole="header">
               {t('planner.move_time')}
             </AppText>
             {row('slot-plus15', t('planner.plus15'), () => void shift(15 * 60_000))}
@@ -426,7 +426,7 @@ function SlotMenu({ slot, onClose }: { slot: Slot; onClose: () => void }) {
                 label={t('rem.delete')}
                 accessibilityLabel={t('rem.delete_a11y', { title: slot.title })}
                 variant="text"
-                labelColor="alarm"
+                labelColor="danger"
                 onPress={() => {
                   onClose();
                   void removeReminder(slot.reminderId!, slot.title, t);
@@ -448,7 +448,7 @@ function EmptyDay() {
   return (
     <View testID="planner-empty" style={{ gap: theme.space[2], paddingVertical: theme.space[2] }}>
       {['09:00', '12:00', '18:00'].map((h) => (
-        <View key={h} importantForAccessibility="no-hide-descendants" style={[styles.row, { borderBottomWidth: 1, borderBottomColor: theme.colors.line, minHeight: 40, opacity: 0.5 }]}>
+        <View key={h} importantForAccessibility="no-hide-descendants" style={[styles.row, { borderBottomWidth: 1, borderBottomColor: theme.colors.separator, minHeight: 40, opacity: 0.5 }]}>
           <AppText variant="number" color="ink2">
             {h}
           </AppText>

@@ -23,7 +23,7 @@ export default function PageScreen() {
   if (!page) {
     return (
       <Screen testID="page-missing" edges={['top']}>
-        <AppText variant="title1">{t('page.not_found')}</AppText>
+        <AppText variant="largeTitle">{t('page.not_found')}</AppText>
       </Screen>
     );
   }

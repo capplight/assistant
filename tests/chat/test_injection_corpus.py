@@ -27,7 +27,7 @@ import yaml
 from assistant.ai import Masker, TaskInputs, ToolCall, UntrustedPart
 from assistant.ai.prompting import _TAG_RE, build_messages
 from assistant.chat.intent import Intent, rules_first
-from assistant.chat.mutate import MUTATING_NAMES, MUTATING_TOOLS
+from assistant.chat.mutate import MUTATING_NAMES, MUTATING_TOOLS, RENAME_PAGE
 from assistant.chat.sources import SourceBook
 from assistant.chat.tools import READ_TOOLS, ToolEnv, execute
 
@@ -156,7 +156,8 @@ def test_no_tool_sends_shares_fetches_or_changes_reminders():
                      "create_page_from_template", "set_view"}
     assert not any(re.search(r"send|share|fetch|url|http|remind|export|delete_forever", n)
                    for n in names)  # fmt: skip
-    assert MUTATING_NAMES == names - {"search", "list_page", "aggregate"}
+    assert MUTATING_NAMES == names - {"search", "list_page", "aggregate"} | {"rename_page"}
+    assert not re.search(r"send|share|fetch|url|http|remind|export", RENAME_PAGE.name)
     for t in (*READ_TOOLS, *MUTATING_TOOLS):  # reveal: no tool can name another person
         props = set(t.parameters.get("properties") or {})
         assert not props & {"user", "user_id", "owner", "account"}, t.name
