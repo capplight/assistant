@@ -146,7 +146,8 @@ def _m(**kw: object) -> ReminderParseOut:
         ("в пятницу в 18:00 концерт", _m(date="2026-11-12", time="18:00"), "weekday"),
         ("20 ноября в 10:00 день рождения", _m(date="2026-11-21", time="10:00"), "day_month"),
         ("через 2 часа позвонить", _m(date="2026-11-08", time="13:00"), "relative"),
-        ("в 9 врач", _m(date="2026-11-09", time="10:00"), "hour"),
+        # week 17: a bare «в 9» is now asked by code (test_ambiguous_hour_unit.py)
+        ("в 9 вечера врач", _m(date="2026-11-09", time="10:00"), "hour"),
         ("завтра в 9:00 врач", _m(date="2026-11-09", time="09:00", offsets=[30]), "offsets"),
         ("завтра в 9:00 врач", _m(date="2031-11-09", time="09:00"), "day_word"),
     ],

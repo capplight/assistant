@@ -26,6 +26,7 @@ from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from assistant.ai import LLMTask, TaskInputs, UntrustedPart
+from assistant.chat.context import SHARED_IN_HISTORY
 from assistant.db import queue
 from assistant.db.models import Job, JobStatus
 from assistant.logs import error_text
@@ -102,7 +103,7 @@ async def run_summarize(sessionmaker: async_sessionmaker[AsyncSession], router: 
         if conv is None:
             return False
         rows = (await s.execute(text("""
-            SELECT id, role, content FROM conversation_messages
+            SELECT id, role, content, input_kind FROM conversation_messages
             WHERE conversation_id = :c AND id > :upto AND role IN ('user', 'assistant')
               AND state = 'done' AND content <> '' AND deleted_at IS NULL
             ORDER BY id
@@ -112,7 +113,8 @@ async def run_summarize(sessionmaker: async_sessionmaker[AsyncSession], router: 
     if not fold or router is None:
         return False
     lines = "\n".join(("Человек: " if r.role == "user" else "Помощник: ")
-                      + " ".join(r.content.split())[:600] for r in fold)  # fmt: skip
+                      + (SHARED_IN_HISTORY if r.role == "user" and r.input_kind == "share"
+                         else " ".join(r.content.split())[:600]) for r in fold)  # fmt: skip
     untrusted = [UntrustedPart("Сообщения", lines)]
     if conv.summary:
         untrusted.insert(0, UntrustedPart("Свёртка до сих пор", conv.summary))

@@ -393,6 +393,41 @@ def _resolve_date(f: _Found, at: time, now_local: datetime) -> date | None:
     return today if later_today else today + timedelta(days=1)
 
 
+# A day part said anywhere in the phrase settles «в 7» (RU, KK pending native review).
+_DAYPART_ANY = re.compile(
+    r"(?<![\w])(утром|утра|вечером|вечера|ночью|ночи|дн[её]м|полдень|полночь|после\s+обеда|"
+    r"таңертең\w*|таңғы|таңда|кешке|кешкі|кеште|түнде|түнгі|түскі|түстен|күндіз\w*)(?![\w])")
+# Kazakh hour: «сағат 7-де», «7-де», «сағат 7» (not «7:30-да», «18.11»; pending native review).
+_KK_HOUR = re.compile(r"(?<![\w:.])(?:сағат\s+)?(\d{1,2})\s*-?\s*(?:де|да|те|та)(?![\w])"
+                      r"|(?<![\w])сағат\s+(\d{1,2})(?![\w:.\d])")
+
+
+def ambiguous_hour(text: str) -> list[time] | None:
+    """The two readings of a bare hour in the person's own phrase, likelier first («в 7» →
+    7:00 / 19:00; «в 3» → 15:00 / 3:00), or None when the phrase settles it: a day part (утра,
+    вечером, таңертең, кешке…), the 24-hour form («в 19», «19:00», «в 07»), or no hour at all.
+    Founder 2026-11-09: such an hour is always asked, so the model path uses this too
+    (reminders.parse), whatever the model put in its fields. Same scanner and `_clock` as
+    `parse`; Kazakh «сағат 7-де» is read by `_KK_HOUR` (the scanner is Russian only)."""
+    low = _normalize(text)
+    if _DAYPART_ANY.search(low):
+        return None
+    f = _scan(low)
+    if f is not None and f.hour is not None:
+        if f.times != 1 or f.time_default is not None:
+            return None
+        opts = _clock(f)
+        return opts if opts is not None and len(opts) == 2 else None
+    m = _KK_HOUR.search(low)
+    if m is None:
+        return None
+    hour = m.group(1) or m.group(2)
+    if hour.startswith("0") and len(hour) == 2:
+        return None  # «07-де»: the 24-hour form
+    opts = _clock(_Found(hour=int(hour)))
+    return opts if opts is not None and len(opts) == 2 else None
+
+
 def parse(text: str, now: datetime, tz: str) -> RulesResult | None:
     """Read a simple phrase, or None (not sure: the caller asks the model or shows the form)."""
     if not text or len(text) > 500:

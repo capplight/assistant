@@ -1,4 +1,5 @@
-"""AI layer schema (migration 0005): provider_usage, budgets, usage_counters, ai_provider_state.
+"""AI layer schema (migration 0005): provider_usage, budgets, usage_counters, ai_provider_state;
+ops_alerts (0024, week 17: cost/fallback alerts, stored once per dedup key).
 
 Spec 3-engineering 3.8. Enums are text + CHECK; allowed values are in assistant.ai.types
 (Outcome, BudgetClass) and assistant.ai.store (Scope, Period) and must match 0005.
@@ -18,6 +19,7 @@ from sqlalchemy import (
     Text,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from assistant.db.models import Base
@@ -135,3 +137,22 @@ class AIBatchRequest(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),
                                                  server_default=func.now())  # fmt: skip
     done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class OpsAlert(Base):
+    """An operations alert (migration 0024): stored once per `dedup_key`, sent once
+    (`sent_at`); repeats only bump `hits` / `last_at`. `details` holds numbers, never content."""
+
+    __tablename__ = "ops_alerts"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    kind: Mapped[str] = mapped_column(Text)
+    dedup_key: Mapped[str] = mapped_column(Text, unique=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    details: Mapped[dict] = mapped_column(JSONB, default=dict)
+    hits: Mapped[int] = mapped_column(Integer, default=1)
+    first_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),
+                                               server_default=func.now())  # fmt: skip
+    last_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),
+                                              server_default=func.now())  # fmt: skip
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

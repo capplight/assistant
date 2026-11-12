@@ -17,6 +17,7 @@ import { kickSync, syncBlocked } from '@/services';
 import { localDate } from '@/tasks/rows';
 import { useTheme } from '@/theme';
 
+import { AmountText } from '../AmountText';
 import { AppText } from '../AppText';
 import { Button } from '../Button';
 import { RecordRow } from '../RecordRow';
@@ -412,16 +413,17 @@ function BoardCard({
       <AppText variant="meta" style={styles.right}>
         {t('exp.total')}
       </AppText>
-      <AppText
+      <AmountText
         testID="exp-total"
         variant="amount"
-        maxFontSizeMultiplier={1.6}
+        maxScale={1.6}
+        inset={theme.screenPadding * 2 + theme.space[4] * 2 + 4}
         accessibilityLabel={t('exp.total_a11y', { period: title, amount: spokenAmount(minorToDecimal(spent), currency) })}
         accessibilityLiveRegion="polite"
         style={styles.right}
       >
         {amount}
-      </AppText>
+      </AmountText>
       {!main || main.count === 0 ? (
         <AppText testID="exp-empty-total" variant="meta" style={styles.right}>
           {t('exp.empty_total')}

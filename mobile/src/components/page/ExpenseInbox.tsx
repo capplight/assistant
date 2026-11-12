@@ -13,6 +13,7 @@ import { useConnectivity } from '@/store/connectivity';
 import { useToast } from '@/store/toast';
 import { useTheme } from '@/theme';
 
+import { AmountText } from '../AmountText';
 import { AppText } from '../AppText';
 import { Button } from '../Button';
 import { Sheet } from './ExpenseParts';
@@ -208,9 +209,9 @@ export function CheckCards({
           <View key={e.id} testID={`exp-check-${e.id}`} style={[card(theme, true), { borderColor: theme.colors.marker }]}>
             <View accessible accessibilityLabel={t(dayToo ? 'exp.check_a11y_day' : 'exp.check_a11y', { title, amount, day, from: from ?? '' })}>
               <AppText variant="meta">{from ? `${title} · ${from}` : title}</AppText>
-              <AppText testID={`exp-check-amount-${e.id}`} variant="title1" maxFontSizeMultiplier={1.6}>
+              <AmountText testID={`exp-check-amount-${e.id}`} variant="title1" maxScale={1.6} inset={theme.screenPadding * 2 + 40}>
                 {amount}
-              </AppText>
+              </AmountText>
               <AppText color={dayToo ? 'warnText' : 'ink2'}>{dayToo ? t('exp.check_day', { day }) : day}</AppText>
             </View>
             <View style={{ flexDirection: theme.largeFont ? 'column' : 'row', gap: theme.space[2] }}>

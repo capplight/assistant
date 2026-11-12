@@ -258,6 +258,11 @@ def _from_model(ctx: _Ctx, out: ReminderParseOut, **kw: Any) -> ParseOutcome:
         clocks = [_hhmm(out.time)] if out.time else []
     if any(c is None for c in clocks):
         return ParseOutcome("form", "llm", "check_failed", checks_failed=("time_format",), **kw)
+    # Founder 2026-11-09: a bare «в 7» / «сағат 7-де» in the person's phrase is always asked
+    # («7:00 или 19:00?»), whatever the model wrote: code reads the phrase (rules.ambiguous_hour).
+    forced = rules.ambiguous_hour(ctx.text)
+    if forced is not None:
+        clocks = list(forced)
     assumed = not clocks
     times: list[time] = [c for c in clocks if c is not None] or [rules.DEFAULT_TIME]
     offsets = tuple(sorted(set(out.offsets)))
@@ -279,6 +284,9 @@ def _from_model(ctx: _Ctx, out: ReminderParseOut, **kw: Any) -> ParseOutcome:
             except ValueError:
                 failed.append("date_format")
                 continue
+            if (forced is not None and day == ctx.now_local.date()
+                    and datetime.combine(day, at) <= ctx.now_local):  # fmt: skip
+                day += timedelta(days=1)  # «в 7» at 10:00: 7:00 is tomorrow (as the rules)
         local = datetime.combine(day, at)
         problems = check_model_reading(ctx.text, out, local, ctx.now_local, rule)
         # A past moment is «past», not a failed check, unless something else is wrong too.

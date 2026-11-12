@@ -10,6 +10,7 @@ import { display, evaluate, press, type Key } from '@/expenses/expression';
 import { dayLabel } from '@/expenses/feed';
 import { useTheme } from '@/theme';
 
+import { AmountText } from '../AmountText';
 import { AppText } from '../AppText';
 import { Button } from '../Button';
 import { ExpenseKeypad } from './ExpenseKeypad';
@@ -51,9 +52,9 @@ export function SumDisplay({ text, testID = 'exp-sum' }: { text: string; testID?
         alignItems: 'flex-end',
       }}
     >
-      <AppText testID={`${testID}-text`} variant="title1" maxFontSizeMultiplier={1.6} style={styles.right}>
+      <AmountText testID={`${testID}-text`} variant="title1" maxScale={1.6} inset={theme.screenPadding * 2 + theme.space[3] * 2 + 2} style={styles.right}>
         {`${shown} ₸`}
-      </AppText>
+      </AmountText>
       {compound && total ? (
         <AppText testID={`${testID}-total`} variant="number" style={styles.right}>
           {`= ${total}`}

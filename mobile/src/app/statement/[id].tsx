@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
 import type { StatementRowOut } from '@/api/types';
+import { AmountText } from '@/components/AmountText';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
@@ -117,9 +118,9 @@ export default function StatementScreen() {
         {a ? (
           <View testID="plan-numbers" style={{ gap: theme.space[2], borderWidth: 2, borderColor: theme.colors.lineStrong, borderRadius: theme.radius.card, padding: theme.space[4], backgroundColor: theme.colors.surface }}>
             <AppText variant="meta">{t('exp.plan_spent')}</AppText>
-            <AppText testID="plan-spent" variant="amount" maxFontSizeMultiplier={1.6}>
+            <AmountText testID="plan-spent" variant="amount" maxScale={1.6} inset={theme.screenPadding * 2 + theme.space[4] * 2 + 4}>
               {formatMinor(n!.spent ?? 0n, cur)}
-            </AppText>
+            </AmountText>
             {a.refund > 0n ? <AppText testID="plan-refund">{t('exp.plan_refund', { amount: formatMinor(a.refund, cur) })}</AppText> : null}
             {a.income > 0n ? <AppText testID="plan-income">{t('exp.plan_income', { amount: formatMinor(a.income, cur) })}</AppText> : null}
             {a.transfers > 0n ? <AppText testID="plan-transfers">{t('exp.plan_transfers', { amount: formatMinor(a.transfers, cur) })}</AppText> : null}

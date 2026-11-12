@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import { ChevronDown, Mic, PencilLine, Plus, SendHorizontal } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View, useWindowDimensions } from 'react-native';
 
 import { sendFromLine } from '@/chat/service';
 import { getCapture } from '@/services';
@@ -19,6 +19,7 @@ import { AddSheet } from './AddSheet';
 import { AppText } from './AppText';
 import { Button } from './Button';
 import { useCurrentPage } from './useCurrentPage';
+import { lineInputMaxHeight } from './useKeyboard';
 import { VoiceListening } from './VoiceListening';
 
 /**
@@ -28,8 +29,13 @@ import { VoiceListening } from './VoiceListening';
  * server a note is saved here (offline-first). Voice is still a local record + outbox entry. Voice: fragments ≤3 min, no live transcription (R-17). «Без ИИ»: no mic —
  * «Написать» focuses the field (R-05) — and questions are a search by words, no AI call.
  */
-export function AssistantLine({ scope, compact = false }: { scope?: 'all'; compact?: boolean } = {}) {
+export function AssistantLine({
+  scope,
+  compact = false,
+  keyboardHeight = 0,
+}: { scope?: 'all'; compact?: boolean; keyboardHeight?: number } = {}) {
   const theme = useTheme();
+  const { height: windowHeight } = useWindowDimensions();
   const { t } = useTranslation();
   const current = useCurrentPage();
   const noAi = useOnboarding(selectNoAi);
@@ -158,6 +164,17 @@ export function AssistantLine({ scope, compact = false }: { scope?: 'all'; compa
     </Pressable>
   );
 
+  // Week 17: a long phrase wraps and the field grows to a cap (4 lines, 3 at ≥150%, ≤30% of what the
+  // keyboard leaves), then scrolls inside; the return key still sends.
+  const inputMax = lineInputMaxHeight({
+    lineHeight: theme.type.body.lineHeight ?? 26,
+    fontScale: theme.fontScale,
+    largeFont: theme.largeFont,
+    windowHeight,
+    keyboardHeight,
+    padding: 16,
+  });
+
   const field = (
     <TextInput
       ref={inputRef}
@@ -170,6 +187,10 @@ export function AssistantLine({ scope, compact = false }: { scope?: 'all'; compa
       onChangeText={setText}
       onSubmitEditing={send}
       returnKeyType="send"
+      multiline
+      submitBehavior="submit"
+      scrollEnabled
+      textAlignVertical="top"
       editable={consentGiven}
       maxFontSizeMultiplier={MAX_FONT_SCALE}
       style={[
@@ -178,6 +199,7 @@ export function AssistantLine({ scope, compact = false }: { scope?: 'all'; compa
         {
           color: theme.colors.ink,
           minHeight: theme.size.minTouch,
+          maxHeight: inputMax,
           borderColor: theme.colors.lineStrong,
           borderRadius: theme.radius.input,
           paddingHorizontal: theme.space[3],
@@ -301,14 +323,15 @@ export function AssistantLine({ scope, compact = false }: { scope?: 'all'; compa
         // ≥150%: two rows — chip, then [+] field (mic)
         <>
           <View style={styles.row}>{chip}</View>
-          <View style={[styles.row, { gap: theme.space[2] }]}>
+          {/* The field grows upwards; [+] and mic / send stay at its bottom edge, within thumb reach. */}
+          <View testID="assistant-line-row" style={[styles.row, styles.end, { gap: theme.space[2] }]}>
             {plus}
             <View style={styles.flex}>{field}</View>
             {right}
           </View>
         </>
       ) : (
-        <View style={[styles.row, { gap: theme.space[2] }]}>
+        <View testID="assistant-line-row" style={[styles.row, styles.end, { gap: theme.space[2] }]}>
           {plus}
           <View style={[styles.flex, { gap: theme.space[1] }]}>
             {chip}
@@ -329,6 +352,7 @@ export function AssistantLine({ scope, compact = false }: { scope?: 'all'; compa
 const styles = StyleSheet.create({
   wrap: { borderTopWidth: 1 },
   row: { flexDirection: 'row', alignItems: 'center' },
+  end: { alignItems: 'flex-end' },
   flex: { flex: 1 },
   shrink: { flexShrink: 1 },
   chip: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', borderWidth: 1 },

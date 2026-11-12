@@ -1,4 +1,4 @@
-# Mobile app — weeks 16а–16б («Заметки»: the free board «Доска») on week 16 (first launch, «Сегодня» tear-off sheet, «Мои данные», account deletion) on week 15 (КП: phrase edits, versions, Word, sending, drafts) on week 14 («Документы и КП»: the card file and the КП wizard) on week 13 («Расходы 2»: receipts, QR, statements) on week 12 («Расходы» — the expense calculator) on week 11's PageFrame + view registry
+# Mobile app — week 17 (KK review package, 200% on every screen, the line above the keyboard) on weeks 16а–16б («Заметки»: the free board «Доска») on week 16 (first launch, «Сегодня» tear-off sheet, «Мои данные», account deletion) on week 15 (КП: phrase edits, versions, Word, sending, drafts) on week 14 («Документы и КП»: the card file and the КП wizard) on week 13 («Расходы 2»: receipts, QR, statements) on week 12 («Расходы» — the expense calculator) on week 11's PageFrame + view registry
 
 Expo SDK 58 (React Native 0.88, New Architecture), TypeScript strict, expo-router.
 Spec: `../docs/spec/SPEC.md`, `../docs/spec/final/2-design.md`, `../docs/spec/final/3-engineering.md` §2.1, §11.2 (week 1, Mobile).
@@ -92,6 +92,73 @@ src/
   alarms/                    week 8: port (FakeAlarms), native + notification adapters, planner, S15 steps, service
 modules/alarms/              native Expo module: Android (Kotlin) AlarmManager + S14 + battery-guide, iOS (Swift) AlarmKit
 ```
+
+## Week 17: KK review, 200% on every screen, the line above the keyboard
+
+**Checked by Jest only (structure, not pixels): nothing here ran on a phone.** No new dependency.
+
+### KK strings: native-speaker review
+
+`scripts/kk-review.ts` (Node ≥22.18 runs it as is; also imported by Jest):
+
+```bash
+npm run i18n:check                 # automated checks; exit 1 on a blocking problem
+npm run i18n:export                # → ../docs/i18n/kk-review.csv (UTF-8 with BOM, «;» — opens in Excel as is)
+npm run i18n:import -- <file.csv> --dry-run   # show what would change
+npm run i18n:import -- <file.csv>             # write only the changed cells into kk.json
+```
+
+1. `i18n:export`, hand `docs/i18n/kk-review.csv` to the reviewer (columns: `key`, `where` — screen / component,
+   `ru`, `kk` — the draft, **`kk_new`** — the reviewer writes the corrected text here, only where it should change,
+   `comment` — the §7.3 questions and the reviewer's notes, `checks` — what the automated checks found, `length` —
+   RU / KK length and how much room the place has at 200%, `source` — §7.3 draft or developer draft). Leave `{{…}}`
+   as they are. A cell starting with `'` is protected from Excel's formulas; the `'` is dropped on import.
+2. The reviewer saves as **«CSV UTF-8»** (Excel) or exports CSV from Google Sheets. A file in a Windows code page
+   is refused (the Kazakh letters would be lost).
+3. `i18n:import -- --dry-run` prints «было / стало» per key; then without `--dry-run`. Keys, order and file layout stay;
+   a row whose `{{variables}}` differ from RU, or an unknown key, is refused and listed (exit 1).
+4. Re-run `npx jest` (the 200% suite renders KK too) and check the changed screens on a phone at 200%.
+
+Blocking (also `src/__tests__/i18n.test.ts`): a RU key missing in KK, a `{{variable}}` lost or invented, a kk
+plural form i18next needs (kk has **one / other** only; `_few` / `_many` in kk.json are never shown). Notes for the
+reviewer (not blocking): KK = RU, no Kazakh letter in a long string, Latin look-alike letters inside a Kazakh word
+(`fix-latin` replaces them), KK > 1.5× RU, typography, a screen name quoted in RU but named differently in KK.
+
+### The 200% rule for every screen (F-22)
+
+- Text: always `AppText` (scales to `MAX_FONT_SCALE` = 2). No `numberOfLines` on a sum, a time or the «ИИ» label;
+  a preview of a person's own long note may keep it. No fixed `height` around text (`minHeight`); no fixed `height`
+  on a `TextInput`; never `allowFontScaling={false}`.
+- Rows: ≥3 buttons with words side by side get `flexWrap: 'wrap'`, a sideways scroll, or a column at ≥150%
+  (`theme.largeFont`). Targets ≥48 (primary 56).
+- Sums: `components/AmountText` (`fitAmount`) — grows to its cap (1.6 for `amount` / `title1`) while it fits one
+  line of its box, else gets smaller; never cut, never broken inside the number.
+- **A new route under `src/app` or a new tool in the view registry fails `font200.test.tsx`** («every screen is
+  covered») until it has a case there. The suite renders every screen and every tool at fontScale 2 on 320 × 568
+  in RU and KK and runs `testing/layoutAudit.ts` (`setWindow({ fontScale: 2, ...NARROW })` also mocks
+  `PixelRatio.getFontScale()`). Exceptions are listed with a reason (`ALLOW`): the 64 pt keypads, the free board.
+
+Fixed this week: the «ИИ» label of the answer banner was cut to one line; S13 steppers «−1:00 +1:00 −0:05 +0:05»
+did not fit a 320 pt row (now wrap); the totals of «Расходы», the keypad display, the statement plan, «Проверьте
+сумму», the КП price display and the КП sums use `AmountText`.
+
+### The line above the keyboard
+
+- `KeyboardAvoidingView behavior="padding"` on **both** platforms (`components/useKeyboard.ts`): Expo apps are
+  edge-to-edge on Android, the window no longer resizes, so before this the line stayed under the Android keyboard.
+  Main area and «Переписка». The sheets with their own field (S09 check, page name, field sheets, feedback) still use
+  iOS-only padding inside a `Modal` — to check on Android.
+- While the keyboard is open the tabs step aside and the safe-area gap under the line goes; the answer banner, the
+  reminder draft and «Отменить» stay in the same column above the line, inside a scroll capped at 30% of what the
+  keyboard leaves — they can never push the line down or cover it.
+- The field is multi-line: grows to 4 lines (3 at ≥150%), never past 30% of the room left, then scrolls; the return
+  key still sends (`submitBehavior="submit"`). [+], mic and send stay 48 / 56 pt at the field's bottom edge.
+
+### 200% on a device (not provable in Jest)
+
+Real wrapping and clipping, the KK tab labels at 200% (a tab is ~80 pt wide: 4–5 letters a line), the keyboard on
+Android edge-to-edge (Xiaomi, Samsung) and iPhone SE, the line + «Отменить» + keyboard on 360×640 / 320×568, the
+free board at ≥150% (rows), the sums at 999 999 999 ₸, the tails of қ ң ғ ұ.
 
 ## Weeks 16а–16б: what works
 

@@ -8,6 +8,7 @@ import { STEPS, stepsDone, type Step } from '@/kp/view';
 import { formatMinor } from '@/expenses/calc';
 import { useTheme } from '@/theme';
 
+import { AmountText } from '../AmountText';
 import { AppText } from '../AppText';
 
 /** Keys are 64 pt with 8 pt between (template-screens 5), like the calculator of «Расходы». */
@@ -87,9 +88,9 @@ export function NumberDisplay({ text, unit, money = true, testID = 'kp-display' 
       accessibilityLabel={text ? (money ? t('kp.price_a11y', { amount: shown }) : shown) : t('kp.price_empty_a11y')}
       style={{ borderWidth: 1, borderColor: theme.colors.lineStrong, borderRadius: theme.radius.input, padding: theme.space[3], backgroundColor: theme.colors.bg, alignItems: 'flex-end' }}
     >
-      <AppText testID={`${testID}-text`} variant="title1" maxFontSizeMultiplier={1.6} style={{ textAlign: 'right', fontVariant: ['tabular-nums'] }}>
+      <AmountText testID={`${testID}-text`} variant="title1" maxScale={1.6} inset={theme.screenPadding * 2 + theme.space[3] * 2 + 2} style={{ textAlign: 'right' }}>
         {shown}
-      </AppText>
+      </AmountText>
     </View>
   );
 }

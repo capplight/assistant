@@ -222,7 +222,8 @@ export default function ReminderScreen() {
           {t('rem.time_assumed')}
         </AppText>
       ) : null}
-      <View style={[styles.row, { gap: theme.space[2], marginTop: theme.space[3] }]}>
+      {/* 200%: «−1:00 +1:00 −0:05 +0:05» do not fit one 320 pt row; they wrap to two. */}
+      <View testID="rem-steps" style={[styles.row, { flexWrap: 'wrap', gap: theme.space[2], marginTop: theme.space[3] }]}>
         {step('hour-minus', t('rem.hour_minus'), '−1:00', () => move(-60 * MIN))}
         {step('hour-plus', t('rem.hour_plus'), '+1:00', () => move(60 * MIN))}
         {step('min-minus', t('rem.min_minus'), '−0:05', () => move(-5 * MIN))}

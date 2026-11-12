@@ -114,7 +114,7 @@ export function AnswerBanner() {
         <SourceChips messageId={message.id} sources={message.sources} max={2} onMore={openAnswer} />
       ) : null}
       {message.status === 'done' && message.aiGenerated && message.text ? (
-        <AppText testID="answer-ai-label" variant="meta" numberOfLines={1}>
+        <AppText testID="answer-ai-label" variant="meta" /* the «ИИ» label is shown whole, never cut (2-design §8) */>
           {t('ai.label_short')}
         </AppText>
       ) : null}

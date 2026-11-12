@@ -6,7 +6,6 @@ import {
   findNodeHandle,
   KeyboardAvoidingView,
   Modal,
-  Platform,
   ScrollView,
   StyleSheet,
   View,
@@ -16,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppText } from '@/components/AppText';
 import { answerNotice, useLocalHitTitles } from '@/components/answerText';
 import { AssistantLine } from '@/components/AssistantLine';
+import { KEYBOARD_BEHAVIOR, useKeyboardHeight } from '@/components/useKeyboard';
 import { Button } from '@/components/Button';
 import { FeedbackSheet } from '@/components/FeedbackSheet';
 import { LocalHitChips, SourceChips } from '@/components/SourceChips';
@@ -33,6 +33,7 @@ import { useTheme } from '@/theme';
  */
 export default function ChatScreen() {
   const theme = useTheme();
+  const keyboard = useKeyboardHeight();
   const { t, i18n } = useTranslation();
   const { focus } = useLocalSearchParams<{ focus?: string }>();
   const messages = useAssistant((s) => s.messages);
@@ -88,7 +89,7 @@ export default function ChatScreen() {
           onPress={collapse}
         />
       </View>
-      <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.root} behavior={KEYBOARD_BEHAVIOR}>
         <ScrollView ref={scrollRef} contentContainerStyle={{ padding: theme.screenPadding, gap: theme.space[3] }}>
           {messages.length === 0 ? <AppText color="ink2">{t('chat.empty')}</AppText> : null}
           {messages.map((m, i) => {
@@ -120,7 +121,7 @@ export default function ChatScreen() {
             );
           })}
         </ScrollView>
-        <AssistantLine scope="all" />
+        <AssistantLine scope="all" keyboardHeight={keyboard} />
       </KeyboardAvoidingView>
 
       <Modal visible={menuFor !== null} transparent animationType="slide" onRequestClose={() => setMenuFor(null)}>

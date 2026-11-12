@@ -44,6 +44,29 @@ jobs:
         if: failure()
         run: grep -E '^(FAILED|ERROR) ' pytest-unit.txt | cut -c1-900 | sed 's/^/::error::/' || true
 
+  # Week 17 (spec 5.8): the synthetic golden set against recorded cassettes - offline, no keys.
+  # It proves the harness and the code checks; real thresholds need `golden-real` (a self-hosted
+  # runner in KZ with the anonymised set and provider keys; not set up yet, docs/ops/golden.md).
+  # Only metrics go to the artifact, never case texts.
+  golden-synthetic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - name: Golden (cassettes)
+        run: python -m assistant.ai.golden --json golden-metrics.json
+      - name: Metrics artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-synthetic-metrics
+          path: golden-metrics.json
+          if-no-files-found: ignore
+
   # Required for merge (spec 3-engineering 2.3). The image has pgvector + pg_trgm, no PostGIS:
   # migration 0001 then skips places.geom and the geo tests skip themselves.
   backend-db:

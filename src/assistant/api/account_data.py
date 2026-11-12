@@ -82,6 +82,7 @@ USER_TABLES: dict[str, Mode] = {
     "public.usage_counters": "cascade",
     "public.budgets": "explicit",  # scope 'user', key = user id
     "public.provider_usage": "anonymize",  # cost journal, partitioned; no content
+    "public.ops_alerts": "cascade",  # week 17 (0024): cost alerts naming a user id; no content
     # sync
     "public.sync_tombstones": "explicit",  # no FK on purpose (written during the cascade)
     "public.jobs": "explicit",  # queued work naming the person in its payload

@@ -159,6 +159,17 @@ class Settings(BaseSettings):
     # Big semantic reorders (>150 records, PAGE_GROUP) per person per day (spec 5.10 rule 8,
     # `limits.ai_reorder_per_day`, counter `ai_reorders`).
     chat_big_reorders_per_day: int = 3
+    # Week 17: chat cost report and alerts (python -m assistant.ai.costs; spec 5.10 rule 9, 8).
+    # Alert: >N chat steps per person per day, or one step dearer than this.
+    ops_chat_steps_per_user_day: int = 60
+    ops_chat_step_alert_usd: float = 0.05
+    # «Median chat step in target» (week 17 done-when): the spec's step estimate is
+    # $0.0007-0.003 (5.10 «Стоимость»); the upper edge is the target [estimate, recheck after
+    # the live golden run].
+    ops_chat_step_median_target_usd: float = 0.003
+    # Telegram chat of the founder/developer for ops alerts (spec 8: no personal data in them).
+    # Unset = alerts are stored in ops_alerts and logged only.
+    ops_alert_chat_id: int | None = None
     # Reminders (week 8, spec 6.6). Founder decision Ф-1 («сначала код») is open: off = every
     # phrase goes to the model (`reminder_parse`, needs ai_cross_border consent; «Без ИИ» and
     # offline get the manual form). On = code reads simple phrases first (reminders.rules),

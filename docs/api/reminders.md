@@ -150,7 +150,7 @@ Body: `{"text": "Напомни завтра в 7 выпить таблетку"
 | `status` | Meaning / what the phone does |
 |---|---|
 | `ok` | One reading. Show S13 with `draft`. `time_assumed=true`: no time was said, 9:00 was put in — highlight the time. |
-| `ambiguous` | «в 7» — `options` has 2 drafts (7:00, 19:00), likelier first; `message` = «В 7 утра или в 7 вечера?». The tap picks the draft. |
+| `ambiguous` | «в 7» — `options` has 2 drafts (7:00, 19:00), likelier first; `message` = «В 7 утра или в 7 вечера?». The tap picks the draft. Week 17 (founder 2026-11-09): also on the model path — code reads the person's phrase (`rules.ambiguous_hour`, RU + KK «сағат 7-де») and asks whatever hour the model chose; a past option moves to tomorrow. |
 | `form` | Open the manual form S12 («Ввести вручную»), prefilled from `draft` when not null. `reason` + `message` say why. |
 
 | `reason` (only with `form`) | `message` |

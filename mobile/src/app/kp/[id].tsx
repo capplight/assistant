@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { AmountText } from '@/components/AmountText';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { PhraseChangeBox, PhraseLine } from '@/components/kp/KpEdits';
@@ -394,9 +395,9 @@ function SumRow({ label, value, strong = false, testID }: { label: string; value
       <AppText variant={strong ? 'bodyStrong' : 'body'} style={{ flexGrow: 1 }}>
         {label}
       </AppText>
-      <AppText variant={strong ? 'title2' : 'number'} style={{ fontVariant: ['tabular-nums'] }}>
+      <AmountText variant={strong ? 'title2' : 'number'} inset={theme.screenPadding * 2}>
         {value}
-      </AppText>
+      </AmountText>
     </View>
   );
 }

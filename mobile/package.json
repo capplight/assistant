@@ -55,7 +55,10 @@
     "web": "expo start --web",
     "test": "jest",
     "typecheck": "tsc --noEmit",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "i18n:check": "node scripts/kk-review.ts check",
+    "i18n:export": "node scripts/kk-review.ts export",
+    "i18n:import": "node scripts/kk-review.ts import"
   },
   "private": true,
   "jest": {

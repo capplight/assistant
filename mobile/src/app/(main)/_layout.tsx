@@ -1,9 +1,10 @@
 import { Redirect, Tabs } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native';
 
 import { useAccount } from '@/account/data';
 import { MainFooter } from '@/components/MainFooter';
+import { KEYBOARD_BEHAVIOR } from '@/components/useKeyboard';
 import { finishWithDefaults, startNotChosenBefore } from '@/onboarding/service';
 import { useOnboarding } from '@/store/onboarding';
 import { useSession } from '@/store/session';
@@ -31,8 +32,8 @@ export default function MainLayout() {
   if (needsSignIn && !signInPostponed) return <Redirect href="/phone?reason=expired" />;
   if (needsConsent && !consentPostponed) return <Redirect href="/account-consent" />;
   return (
-    // iOS: keep the assistant line above the keyboard (Android resizes the window itself).
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    // Keep the assistant line above the keyboard on both platforms: Android is edge-to-edge and no longer resizes (week 17).
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={KEYBOARD_BEHAVIOR}>
       <Tabs screenOptions={{ headerShown: false, animation: 'none' }} tabBar={() => <MainFooter />}>
         <Tabs.Screen name="index" />
         <Tabs.Screen name="page/[id]" />

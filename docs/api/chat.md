@@ -35,6 +35,9 @@ one gets `deferred`.
 **When the line changes something.** Only when the person's own phrase asks for a change (code
 checks the phrase first; a short model check only when the words are unclear). Text inside
 records, files and shared text (`input_kind: "share"`) never makes a change, whatever it says.
+Week 17: shared text goes to the model inside the data block, like a record, never as the
+person's question; in later turns (history, conversation summary) it is replaced by
+«[поделился текстом; он не повторяется]».
 Changes happen on the page the line is on (`page_id`) unless the phrase names another page; the
 answer then says where («Добавил в «Покупки»»). Records placed by hand (`manual_order`) are never
 moved without the person's «Да» (`confirm_manual`).

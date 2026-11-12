@@ -31,6 +31,9 @@ AI-generated content (e.g. a КП); never in marketing copy or ordinary UI.
 | `src/assistant/stacks/`, `api/routes/collections.py` | api | stacks as groups inside pages (contract: `docs/api/stacks.md`) |
 | `src/assistant/imports/`, `api/routes/imports.py`, `tests/imports/` | api | Telegram export import; worker `python -m assistant.imports` (contract: `docs/api/import.md`) |
 | `src/assistant/analytics/`, `api/routes/events.py` | api | product events journal `analytics.events` (contract: `docs/api/events.md`) |
+| `src/assistant/ai/golden/`, `eval/golden/`, `scripts/golden_synthetic.py`, `tests/ai/test_golden.py` | ai | golden set (spec 5.8): cases + cassettes, runner `python -m assistant.ai.golden`, admission thresholds, metrics-only report; CI job `golden-synthetic` (contract: `docs/ops/golden.md`) |
+| `eval/injection/`, `tests/chat/test_injection_corpus*.py` | ai | injection corpus «документ → инструмент» (≥60, RU/KK/EN) against the code defences (contract: `docs/ops/golden.md`) |
+| `src/assistant/ai/costs.py`, `db/models_ai.py` `OpsAlert` | ai | chat cost report and ops alerts with dedup (`ops_alerts`), CLI `python -m assistant.ai.costs report\|alerts` (contract: `docs/ops/costs.md`) |
 | `mobile/` | mobile | Expo / React Native app (see `mobile/README.md`) |
 
 Modules talk only through the DB schema (`db/models.py`), the job queue (`db/queue.py`),

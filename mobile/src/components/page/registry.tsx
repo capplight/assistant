@@ -52,6 +52,11 @@ const registry = new Map<string, ComponentType<ViewProps>>([
   ['list', SimpleListView],
 ]);
 
+/** Week 17: every registered tool (the 200% test renders each one). */
+export function registeredViewKeys(): string[] {
+  return [...registry.keys()];
+}
+
 export function registerView(key: `${TemplateKey}:${Layout}` | Layout, Component: ComponentType<ViewProps>): void {
   registry.set(key, Component);
 }
