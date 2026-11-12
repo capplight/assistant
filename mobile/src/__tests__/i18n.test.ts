@@ -16,6 +16,7 @@ import {
   mixedWords,
   parseCsv,
   readLocale,
+  eolOf,
   serializeLocale,
   toCsv,
   type Dict,
@@ -66,7 +67,8 @@ describe('KK locale: automated checks', () => {
 
   it('the locale files keep their layout, so an import changes only the cells it touches', () => {
     for (const lang of ['ru', 'kk'] as const) {
-      expect(serializeLocale(readLocale(lang))).toBe(fs.readFileSync(localePath(lang), 'utf8'));
+      const text = fs.readFileSync(localePath(lang), 'utf8');
+      expect(serializeLocale(readLocale(lang), eolOf(text))).toBe(text);
     }
   });
 });

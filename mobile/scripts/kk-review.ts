@@ -43,8 +43,13 @@ export function readLocale(lang: 'ru' | 'kk', root = mobileRoot()): Dict {
   return JSON.parse(fs.readFileSync(localePath(lang, root), 'utf8')) as Dict;
 }
 
-/** Same layout as the file in the repo: 2 spaces, CRLF, final newline (checked in Jest). */
-export function serializeLocale(d: Dict, eol = '\r\n'): string {
+/** The line ending a file already uses (git checks it out as LF on Linux, CRLF on Windows). */
+export function eolOf(text: string): string {
+  return text.includes('\r\n') ? '\r\n' : '\n';
+}
+
+/** Same layout as the file in the repo: 2 spaces, the file's own line ending, final newline (checked in Jest). */
+export function serializeLocale(d: Dict, eol = '\n'): string {
   return (JSON.stringify(d, null, 2) + '\n').replace(/\n/g, eol);
 }
 
@@ -599,7 +604,7 @@ function main(argv: string[]): number {
     for (const x of result.rejected) console.log(`! ${x.key}: ${x.reason}`);
     console.log(`changed ${result.changed.length}, same ${result.unchanged}, refused ${result.rejected.length}`);
     if (!rest.includes('--dry-run') && result.changed.length) {
-      fs.writeFileSync(localePath('kk', root), serializeLocale(result.next), 'utf8');
+      fs.writeFileSync(localePath('kk', root), serializeLocale(result.next, eolOf(fs.readFileSync(localePath('kk', root), 'utf8'))), 'utf8');
       console.log(`written ${localePath('kk', root)}`);
     }
     return result.rejected.length ? 1 : 0;
@@ -615,7 +620,7 @@ function main(argv: string[]): number {
         n++;
       }
     }
-    if (n) fs.writeFileSync(localePath('kk', root), serializeLocale(kk), 'utf8');
+    if (n) fs.writeFileSync(localePath('kk', root), serializeLocale(kk, eolOf(fs.readFileSync(localePath('kk', root), 'utf8'))), 'utf8');
     console.log(`fixed ${n}`);
     return 0;
   }
