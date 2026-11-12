@@ -138,7 +138,8 @@ class Usage:
     cache_write_1h_in: int = 0  # 1-hour cache writes (a higher price)
 
 
-TokenHook = Callable[[str], Awaitable[None]]
+# Returns False while the delta is not visible to the person yet (see ai/router.py); None = shown.
+TokenHook = Callable[[str], Awaitable[bool | None]]
 
 
 @dataclass(frozen=True)
@@ -263,7 +264,7 @@ class StaleBatchResult(AIError):
 
 
 class StreamInterrupted(AIError):
-    """Provider failed after the first token was streamed: no switch (spec 5.3)."""
+    """Provider failed after streamed text reached the person: no switch (spec 5.3)."""
 
 
 @dataclass

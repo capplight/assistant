@@ -9,6 +9,7 @@ SDKs are imported lazily inside each adapter, so a missing SDK breaks only that 
 """
 
 import copy
+import re
 from typing import Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel
@@ -93,5 +94,6 @@ def error_text_of(exc: Exception) -> str:
 
 
 def looks_like_quota(message: str) -> bool:
-    m = message.lower()
+    # Links do not count: Groq ends ordinary limit errors with ".../settings/billing".
+    m = re.sub(r"https?://\S+", "", message.lower())
     return any(marker in m for marker in QUOTA_MARKERS)

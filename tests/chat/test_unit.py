@@ -14,7 +14,7 @@ from assistant.ai.adapters.openai_adapter import GroqAdapter, OpenAIAdapter
 from assistant.ai.prompting import ToolRound, build_messages
 from assistant.ai.types import AdapterRequest, Message, ProviderTurn, ToolResult
 from assistant.chat.context import est_tokens, looks_like_data_question, now_line
-from assistant.chat.service import AnswerGate, ChatReply, _preview
+from assistant.chat.service import AnswerGate, AnswerHook, ChatReply, _preview
 from assistant.chat.sources import SourceBook
 from assistant.chat.stream import FieldStream
 from assistant.chat.tools import READ_TOOLS, SEARCH
@@ -247,3 +247,17 @@ async def test_router_pins_provider_and_shares_masker():
     with pytest.raises(Exception, match="no provider"):
         await env.router.run(LLMTask.CHAT, ChatReply, inputs, user_id=1, tools=READ_TOOLS,
                              masker=masker, pin_provider="anthropic")  # fmt: skip
+
+
+async def test_answer_hook_reports_shown_text_and_resets_a_failed_attempt():
+    events: list = []
+    gate = AnswerGate(_book(), Facts(), set(), lambda n, d: events.append((n, d)))
+    hook = AnswerHook(gate)
+    assert await hook('{"answer": "Где кл') is False  # raw JSON, half a sentence: not shown
+    hook.reset()  # the provider failed; the next one starts from zero
+    assert gate.fed == "" and await hook('{"answer": "Ключи в прихожей. ') is True
+    assert [d["text"] for n, d in events if n == "token"] == ["Ключи в прихожей. "]
+
+
+def test_chat_reply_keeps_a_good_answer_without_optional_fields():
+    assert ChatReply.model_validate_json('{"answer": "ок"}').citations == []

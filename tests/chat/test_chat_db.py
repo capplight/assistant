@@ -458,3 +458,50 @@ async def test_context_budgets_and_injection(env):
         assert tight.total_tokens <= fixed + 200
         assert tight.tokens["system"] == full.tokens["system"]  # layers 1-4 are never cut
         assert len(tight.book) == len(tight.prefetched)  # cut sources cannot back a number
+
+
+def two_providers(maker, primary, fallback) -> Router:  # type: ignore[no-untyped-def]
+    settings = make_settings()
+    return Router(settings=settings, routes=load_routes(settings),
+                  adapters={primary.name: primary, fallback.name: fallback},
+                  store=PgAIStore(maker))  # fmt: skip
+
+
+async def test_failure_before_a_sentence_was_shown_falls_back(env):
+    """Device test 2026-11-12: raw JSON deltas the person never saw ended the turn with
+    stream_interrupted; now the next provider answers, and no text is doubled."""
+
+    class BreaksEarly:
+        name = "anthropic"
+
+        async def generate(self, req: AdapterRequest) -> AdapterResponse:
+            assert req.on_token is not None
+            await req.on_token('{"answer":"Где кл')
+            raise ServerError("boom", usage=Usage())
+
+    fallback = FakeAdapter("openai", [ChatReply(answer="Не нашёл в записях.", citations=[],
+                                                insufficient=True)])  # fmt: skip
+    async with client(env.make_app(two_providers(env.maker, BreaksEarly(), fallback))) as c:
+        h = await signed_in(c)
+        evs = await ask(c, h, "Где ключи?")
+        assert [n for _, n, _ in evs][-1] == "done"
+        assert "".join(d["text"] for d in by_name(evs, "token")) == "Не нашёл в записях."
+        assert fallback.calls == 1
+
+
+async def test_tool_loop_moves_to_the_next_provider_when_the_pinned_one_fails(env):
+    """Device test 2026-11-12: Gemini searched, then answered 503; nothing was shown or changed,
+    so the fallback provider goes on from the same search results."""
+    primary = FakeAdapter("anthropic", [[ToolCall("c1", "search", SEARCH_ARGS)],
+                                        ServerError("503")])
+    fallback = FakeAdapter("openai", [ChatReply(answer="Не нашёл в записях.", citations=[],
+                                                insufficient=True)])  # fmt: skip
+    async with client(env.make_app(two_providers(env.maker, primary, fallback))) as c:
+        h = await signed_in(c)
+        await record(c, h, env.maker, "Плитка 48 000 ₸")
+        evs = await ask(c, h, "Сколько стоила плитка в ванную?")
+        assert [n for _, n, _ in evs][-1] == "done", evs
+        assert by_name(evs, "tool_activity")[0]["tool"] == "search"
+        req = fallback.requests[-1]
+        assert req.messages[-1].tool_results and req.messages[-2].tool_calls[0].id == "c1"
+        assert "".join(d["text"] for d in by_name(evs, "token")) == "Не нашёл в записях."

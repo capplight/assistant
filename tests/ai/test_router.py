@@ -361,3 +361,85 @@ async def test_half_open_trial_with_client_error_does_not_block_provider_forever
     a.steps = [ok("again")]
     res = await env.router.run(LLMTask.DUP_JUDGE, Note, inputs(), user_id=1)
     assert res.provider == "anthropic" and res.data.title == "again"
+
+
+class _HiddenHook:
+    """Like the chat's hook: raw deltas are not visible until it says so; reset() forgets."""
+
+    def __init__(self, visible_after: int = 10**9) -> None:
+        self.got: list[str] = []
+        self.resets = 0
+        self.visible_after = visible_after
+
+    async def __call__(self, delta: str) -> bool:
+        self.got.append(delta)
+        return len("".join(self.got)) >= self.visible_after
+
+    def reset(self) -> None:
+        self.resets += 1
+        self.got = []
+
+
+class _StreamsThenFails(FakeAdapter):
+    async def generate(self, req):
+        self.requests.append(req)
+        await req.on_token('{"title": "par')
+        raise BadOutput("empty")
+
+
+async def test_stream_failure_before_anything_was_shown_falls_back_without_duplicates():
+    """Device test 2026-11-12: raw JSON deltas the person never saw counted as "started", so a
+    failure ended in stream_interrupted instead of the next provider."""
+    hook = _HiddenHook()
+    o = FakeAdapter("openai", [ok("o")])
+    env = make_env({"anthropic": _StreamsThenFails("anthropic"), "openai": o})
+    res = await env.router.run(LLMTask.ANSWER, Note, inputs(), user_id=1, stream=hook)
+    assert res.provider == "openai" and o.calls == 1
+    assert hook.resets == 1 and "".join(hook.got) == ok("o").model_dump_json()
+
+
+async def test_stream_failure_after_text_was_shown_is_interrupted():
+    hook = _HiddenHook(visible_after=1)
+    o = FakeAdapter("openai", [ok()])
+    env = make_env({"anthropic": _StreamsThenFails("anthropic"), "openai": o})
+    with pytest.raises(StreamInterrupted):
+        await env.router.run(LLMTask.ANSWER, Note, inputs(), user_id=1, stream=hook)
+    assert o.calls == 0
+
+
+async def test_invalid_streamed_answer_is_repaired_while_nothing_was_shown():
+    hook = _HiddenHook()
+    a = FakeAdapter("anthropic", ['{"nope": 1}', ok("fixed")])
+    env = make_env({"anthropic": a})
+    res = await env.router.run(LLMTask.ANSWER, Note, inputs(), user_id=1, stream=hook)
+    assert res.data.title == "fixed" and a.calls == 2 and hook.resets == 1
+    assert "".join(hook.got) == ok("fixed").model_dump_json()
+
+
+async def test_empty_deltas_do_not_start_the_stream_and_late_deltas_are_dropped():
+    got: list[str] = []
+
+    async def hook(delta: str) -> None:
+        got.append(delta)
+
+    class EmptyThenSlow(FakeAdapter):
+        async def generate(self, req):
+            self.requests.append(req)
+            await req.on_token("")
+            try:
+                await asyncio.sleep(5)
+            finally:
+                await req.on_token("late")  # while being cancelled after the deadline
+
+    env = make_env({"anthropic": EmptyThenSlow("anthropic"),
+                    "openai": FakeAdapter("openai", [ok("o")])})  # fmt: skip
+    res = await env.router.run(LLMTask.ANSWER, Note, inputs(), user_id=1, stream=hook)
+    assert res.provider == "openai" and outcomes(env)[0] == ("anthropic", "timeout")
+    assert "late" not in got and "".join(got) == ok("o").model_dump_json()
+
+
+async def test_avoid_skips_providers_that_failed_this_turn():
+    a, o = FakeAdapter("anthropic", [ok("a")]), FakeAdapter("openai", [ok("o")])
+    env = make_env({"anthropic": a, "openai": o})
+    res = await env.router.run(LLMTask.CHAT, Note, inputs(), user_id=1, avoid=("anthropic",))
+    assert res.provider == "openai" and a.calls == 0

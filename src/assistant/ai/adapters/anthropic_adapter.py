@@ -215,7 +215,7 @@ def _map_status(status: int, message: str) -> ProviderError:
         return ServerError(f"http {status}")
     if status in (408,):
         return ProviderTimeout(f"http {status}")
-    return ProviderRequestError(f"http {status}")
+    return ProviderRequestError(f"http {status}: {message[:300]}")
 
 
 def _to_response(msg: Any, model: str) -> AdapterResponse:

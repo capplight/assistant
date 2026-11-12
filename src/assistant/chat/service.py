@@ -195,8 +195,10 @@ class ChatReply(BaseModel):
     """The model's structured answer. `answer` first: it is what streams to the person."""
 
     answer: str
-    citations: list[str]
-    insufficient: bool
+    # Defaults only on our side (providers still get every field as required): a model that
+    # left one out after streaming a good answer must not cost the person that answer.
+    citations: list[str] = []
+    insufficient: bool = False
 
 
 @dataclass
@@ -326,12 +328,36 @@ class AnswerGate:
         for s in done:
             self._sentence(s)
 
+    def reset(self) -> None:
+        """A provider failed before any sentence was sent: forget what it streamed."""
+        if not self.sent:
+            self.fed, self.buffer, self.removed, self.basis = "", "", 0, []
+
     def finish(self, final_text: str | None) -> None:
         if final_text is not None and final_text.startswith(self.fed):
             self.feed(final_text[len(self.fed):])
         if self.buffer.strip():
             rest, self.buffer = self.buffer, ""
             self._sentence(rest)
+
+
+class AnswerHook:
+    """The router's stream hook for one model step: raw JSON -> `answer` text -> checked
+    sentences. Tells the router whether the person saw anything yet (no switch after that)."""
+
+    def __init__(self, gate: AnswerGate) -> None:
+        self.gate = gate
+        self.fs = FieldStream()
+
+    async def __call__(self, delta: str) -> bool:
+        piece = self.fs.feed(delta)
+        if piece:
+            self.gate.feed(piece)
+        return bool(self.gate.sent)
+
+    def reset(self) -> None:
+        self.fs = FieldStream()
+        self.gate.reset()
 
 
 def _preview(value: str) -> str:
@@ -929,23 +955,34 @@ class ChatService:
         if self.router is None:
             await self._deferred(run, lang)
             return
+        failed: tuple[str, ...] = ()
         try:
             for step in range(self.s.chat_max_tool_steps + 1):
                 final = (step == self.s.chat_max_tool_steps
                          or ctx.total_tokens + round_tokens >= self.s.chat_max_input_tokens)
-                fs = FieldStream()
-
-                async def hook(delta: str, fs: FieldStream = fs) -> None:
-                    piece = fs.feed(delta)
-                    if piece:
-                        gate.feed(piece)
-
-                result = await self.router.run(
-                    LLMTask.CHAT, ChatReply, ctx.inputs, user_id=turn.user_id,
-                    stream=None if change else hook, tools=tools, masker=masker,
-                    pin_provider=provider, tool_choice="none" if final else "auto",
-                    strong=strong,
-                )  # fmt: skip
+                try:
+                    result = await self.router.run(
+                        LLMTask.CHAT, ChatReply, ctx.inputs, user_id=turn.user_id,
+                        stream=None if change else AnswerHook(gate), tools=tools,
+                        masker=masker, pin_provider=provider,
+                        tool_choice="none" if final else "auto", strong=strong, avoid=failed,
+                    )  # fmt: skip
+                except AIUnavailable:
+                    # Device test 2026-11-12: the pinned provider of a tool loop failed while
+                    # the person saw nothing and nothing was changed: the next provider goes
+                    # on from the same read results (replayed in the neutral form).
+                    if (provider is None or gate.sent or m.action_out is not None
+                            or m.proposal is not None or m.note is not None):
+                        raise
+                    log.warning("chat: %s failed after a tool step, switching", provider)
+                    failed, provider = (*failed, provider), None
+                    gate.reset()
+                    result = await self.router.run(
+                        LLMTask.CHAT, ChatReply, ctx.inputs, user_id=turn.user_id,
+                        stream=None if change else AnswerHook(gate), tools=tools,
+                        masker=masker, tool_choice="none" if final else "auto",
+                        strong=strong, avoid=failed,
+                    )  # fmt: skip
                 provider = result.provider
                 cost += result.cost_usd
                 if result.tool_calls and not gate.started and not final:

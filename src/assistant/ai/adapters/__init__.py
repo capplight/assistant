@@ -19,7 +19,11 @@ def build_adapters(settings: Settings) -> dict[str, ProviderAdapter]:
     out: dict[str, ProviderAdapter] = {}
     for name, (cls, secret) in keys.items():
         key = secret.get_secret_value()
-        if key:
+        if not key:
+            continue
+        if cls is GeminiAdapter:
+            out[name] = GeminiAdapter(key, thinking=settings.ai_gemini_thinking)
+        else:
             out[name] = cls(key)
     return out
 

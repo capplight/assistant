@@ -125,6 +125,10 @@ class Settings(BaseSettings):
     ai_breaker_failures: int = 5
     ai_breaker_window_s: float = 60.0
     ai_breaker_open_s: float = 120.0
+    # Gemini thinking level per request effort (the router sends low for the light tier,
+    # medium for strong): minimal | low | medium | high; a missing key = the model's
+    # default. minimal was the fastest live on gemini-3.5-flash-lite (device test).
+    ai_gemini_thinking: dict[str, str] = {"low": "minimal"}
 
     # Per-user AI budgets by users.profile (02-resolutions 2.2), USD. Day/month boundaries
     # are computed in budget_tz.

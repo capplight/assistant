@@ -8,7 +8,11 @@ Order of checks per call:
 4. PII masking + untrusted wrapping, then providers in order with fallback on 429 (short
    retry-after: wait and retry once), quota/402 (provider off until manual reset), 5xx /
    timeout, invalid output (one repair attempt on the same provider), refusal.
-While streaming, a switch happens only before the first token; afterwards -> StreamInterrupted.
+While streaming, a switch (or a repair) happens while nothing has reached the person; afterwards
+-> StreamInterrupted. "Reached" is the hook's call: a hook that returns False got raw deltas it
+has not shown yet (the chat shows only checked sentences of the `answer` field), and its
+`reset()`, if it has one, is called before the next attempt so text of a failed attempt is
+dropped. A hook that returns None counts every non-empty delta as shown.
 Every attempt and every block is a provider_usage row; costs go to provider and user budgets.
 """
 
@@ -60,6 +64,7 @@ from assistant.ai.types import (
     Usage,
 )
 from assistant.config import Settings
+from assistant.logs import error_text
 
 log = logging.getLogger(__name__)
 
@@ -73,15 +78,53 @@ _BREAKER_FAILURES = (ServerError, ProviderTimeout, RateLimited)
 
 
 class _StreamUnmasker:
-    """Forwards streamed deltas with placeholders restored; holds back a split `⟨..`."""
+    """Forwards streamed deltas with placeholders restored; holds back a split `⟨..`.
+
+    `started`: a non-empty delta arrived in the current attempt (the first-token deadline).
+    `shown`: something reached the person (no switch after that). `fed`: the hook got text in
+    the current attempt (reset it before another one). Deltas of an attempt that ended (a call
+    being cancelled after a timeout) are dropped."""
 
     def __init__(self, masker: Masker, hook: TokenHook) -> None:
         self.masker = masker
         self.hook = hook
         self.pending = ""
         self.started = asyncio.Event()
+        self.shown = False
+        self.fed = False
+        self._attempt = 0
 
-    async def __call__(self, delta: str) -> None:
+    def attempt(self) -> TokenHook:
+        """A fresh hook for one provider call."""
+        self._attempt += 1
+        self.started = asyncio.Event()
+        self.pending = ""
+        n = self._attempt
+
+        async def on_token(delta: str) -> None:
+            if n == self._attempt and delta:
+                await self._feed(delta)
+
+        return on_token
+
+    def close(self) -> None:
+        """The attempt failed: later deltas of its call are ignored."""
+        self._attempt += 1
+
+    async def restart(self) -> None:
+        """Before another attempt: the hook forgets the text of the failed one."""
+        if self.fed:
+            reset = getattr(self.hook, "reset", None)
+            if reset is not None:
+                reset()
+            self.fed = False
+
+    async def _send(self, text: str) -> None:
+        self.fed = True
+        if await self.hook(text) is not False:
+            self.shown = True
+
+    async def _feed(self, delta: str) -> None:
         self.started.set()
         text = self.pending + delta
         cut = text.rfind("⟨")
@@ -90,11 +133,11 @@ class _StreamUnmasker:
         else:
             self.pending = ""
         if text:
-            await self.hook(self.masker.unmask(text))
+            await self._send(self.masker.unmask(text))
 
     async def flush(self) -> None:
         if self.pending:
-            await self.hook(self.masker.unmask(self.pending))
+            await self._send(self.masker.unmask(self.pending))
             self.pending = ""
 
 
@@ -162,6 +205,7 @@ class Router:
         tools: list[ToolSpec] | tuple[ToolSpec, ...] = (), continuing: bool = False,
         job_id: int | None = None, masker: Masker | None = None,
         pin_provider: str | None = None, tool_choice: str = "auto",
+        avoid: tuple[str, ...] = (),
     ) -> Result[T]:  # fmt: skip
         """Run one task. `user_id=None` is allowed only with `no_personal_data=True`
         (synthetic eval data). `strong` asks for the route's escalation tier with the evidence
@@ -171,7 +215,8 @@ class Router:
         Tool loops (CHAT): pass one `masker` for every step of the turn (stable placeholders),
         and `pin_provider` = the provider of the first step: after a tool call there is no
         switch (spec 5.5). Consent, budgets and the provider plan are still checked each step;
-        a pinned provider that is no longer allowed -> AIUnavailable."""
+        a pinned provider that is no longer allowed -> AIUnavailable. `avoid`: providers that
+        already failed this turn (the caller moves a tool loop on while nothing was shown)."""
         route = self.routes.route(task)
         now = self.clock()
         ctx = _Ctx(task, route.budget_class, user_id, None, job_id,
@@ -195,6 +240,7 @@ class Router:
         order = [p for p in plan.order if p in self.adapters]
         if pin_provider is not None:
             order = [p for p in order if p == pin_provider]
+        order = [p for p in order if p not in avoid]
         if not order:
             raise AIUnavailable(f"no provider available: {plan.excluded or 'no adapters'}")
 
@@ -217,11 +263,14 @@ class Router:
             repaired = retried_429 = False
             while True:
                 attempt += 1
+                if unmasker is not None:
+                    await unmasker.restart()
                 req = AdapterRequest(
                     model=model, system=system, messages=msgs, schema_name=schema.__name__,
                     json_schema=json_schema, tools=tuple(tools), max_tokens=route.max_tokens,
                     timeout_s=route.timeout_s, cache_ttl=route.cache_ttl,
-                    effort="low" if tier is Tier.LIGHT else "medium", on_token=unmasker,
+                    effort="low" if tier is Tier.LIGHT else "medium",
+                    on_token=unmasker.attempt() if unmasker is not None else None,
                     tool_choice=tool_choice if tools else "auto",
                 )  # fmt: skip
                 t0 = self.monotonic()
@@ -229,12 +278,17 @@ class Router:
                     resp = await self._call(self.adapters[provider], req, route.timeout_s,
                                             unmasker)  # fmt: skip
                 except ProviderError as exc:
+                    if unmasker is not None:
+                        unmasker.close()
                     latency = int((self.monotonic() - t0) * 1000)
                     last = exc.outcome
+                    # The reason, short: a 400 from a provider names the schema field it rejected.
+                    log.warning("%s: %s/%s failed (%s): %s", task, provider, model,
+                                type(exc).__name__, error_text(exc)[:300])  # fmt: skip
                     await self._account(ctx, provider, model, exc.usage or Usage(), exc.outcome,
                                         latency, attempt, fallback_from, now,
                                         error_kind=type(exc).__name__)  # fmt: skip
-                    if unmasker is not None and unmasker.started.is_set():
+                    if unmasker is not None and unmasker.shown:
                         raise StreamInterrupted(type(exc).__name__) from exc
                     if (isinstance(exc, RateLimited) and not retried_429
                             and exc.retry_after is not None
@@ -252,12 +306,14 @@ class Router:
                         data = schema.model_validate_json(resp.text)
                     except ValidationError as ve:
                         last = Outcome.INVALID_OUTPUT
+                        log.warning("%s: %s/%s answer failed validation (%d errors)", task,
+                                    provider, model, ve.error_count())  # fmt: skip
                         await self._account(ctx, provider, model, resp.usage,
                                             Outcome.INVALID_OUTPUT, latency, attempt,
                                             fallback_from, now, request_id=resp.request_id,
                                             error_kind="ValidationError")  # fmt: skip
                         self.breaker.release(provider, model)
-                        if unmasker is not None and unmasker.started.is_set():
+                        if unmasker is not None and unmasker.shown:
                             raise StreamInterrupted("invalid output") from ve
                         if not repaired:
                             repaired = True
@@ -438,6 +494,8 @@ class Router:
         except TimeoutError as exc:
             raise ProviderTimeout("stream") from exc
         finally:
+            if not call.done():
+                unmasker.close()  # whatever the cancelled call still streams is dropped
             for fut in (call, started):
                 if not fut.done():
                     fut.cancel()
