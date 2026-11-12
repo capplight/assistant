@@ -50,5 +50,12 @@ jobs:
           key: jest-${{ runner.os }}-${{ hashFiles('mobile/package-lock.json') }}-${{ github.sha }}
           restore-keys: |
             jest-${{ runner.os }}-${{ hashFiles('mobile/package-lock.json') }}-
+      # Failed test names and the first lines of each reason also go out as annotations,
+      # readable without log access.
       - name: Tests
-        run: npx jest --ci --cacheDirectory=/tmp/jest-cache
+        run: |
+          set -o pipefail
+          npx jest --ci --cacheDirectory=/tmp/jest-cache 2>&1 | tee jest-out.txt
+      - name: Report failures as annotations
+        if: failure()
+        run: grep -E -A6 '^  ● ' jest-out.txt | grep -v -E '^\s*$|^--$' | head -60 | cut -c1-400 | sed 's/^/::error::/' || true
