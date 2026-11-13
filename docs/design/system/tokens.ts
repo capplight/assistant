@@ -1,244 +1,283 @@
 /**
- * DRAFT design tokens — «Мята» (light) + «Глубина» (dark), decision Ф-46.
+ * DRAFT design tokens v2 — «Мята» (light) + «Глубина» (dark). Ф-46, Ф-48…Ф-54 (Pinterest ideas, p14 briefing).
  * Not wired into the app. Target: mobile/src/theme/{colors,layout,typography}.ts.
- * See docs/design/system/design-system.md §2 for the rename map from the current tokens.
+ * Mocks: docs/design/system/screens-v2.html. Changes vs v1: design-system.md §8 «Что меняется».
  *
  * Brand rule (both themes):
- *   brand      = sea-emerald: everything you press (primary button, mic, active tab, checkbox, links, focus).
- *   highlight  = sun/amber:   what matters now (the «Дальше» card, the week-1 tip, pinned note, «new» dot).
- *   Text on brand uses `onBrand`, text on highlight uses `onHighlight` (always dark).
- * Contrast (WCAG 2.1): ink/ink2 ≥ 4.5:1 on bg and surface; ink3 ≥ 4.5:1 on surface only
- * (on bg use ink2); brand as text ≥ 4.5:1 on bg/surface; onBrand on brand ≥ 5.5:1.
+ *   brand     = emerald/mint: everything you press (primary button, mic, centre tab «Расходы», checkbox, links, focus).
+ *   highlight = sun/amber:    what matters NOW (current item of the day, «Ждёт» badge). One sun fill per screen.
+ *   Text on brand → onBrand, text on highlight → onHighlight (always dark).
+ * Contrast (WCAG 2.1): ink/ink2 ≥ 4.5:1 on bg and surface; ink3 ≥ 4.5:1 on surface only; metric numbers ≥ 4.5:1 on surface.
  */
 
+/** «Глубина» is built on ONE tonal scale (moodboard p55): every dark colour below is one of these steps or brand/highlight. */
+export const deepScale = {
+  0: '#051F20', // bg bottom, sunken
+  1: '#0B2B26', // bg top, keypad-free areas
+  2: '#163832', // surface (glass base)
+  3: '#235347', // brandTint, separators (opaque)
+  4: '#3E6B5A', // pressed surface
+  5: '#8EB69B', // ink3
+  6: '#DAF1DE', // ink, «light» accent card
+} as const;
+
 export type ColorTokens = {
-  /** Screen background (solid fallback) + its vertical gradient (top → bottom). */
   bg: string;
-  bgGradient: readonly [string, string, string];
-  /** Cards, list groups, tab bar, assistant capsule. */
-  surface: string;
-  /** Sheets, menus, toasts — one step above surface. */
-  surfaceRaised: string;
-  /** Inputs, segmented-control track, «+» circle, key caps. */
-  surfaceSunken: string;
-  ink: string; // text 1 — titles, body
-  ink2: string; // text 2 — secondary, meta on bg
-  ink3: string; // text 3 — dates/disabled, ONLY on surface (not on bg, not on surfaceRaised in dark)
-  separator: string; // 0.5–1 px inset dividers
-  iconSecondary: string; // ⋯, chevrons, inactive tab icons
+  /** Screen background: radial glow at the top + vertical gradient. Render with expo-linear-gradient + a radial PNG/SVG, or a Skia shader. */
+  bgGradient: readonly [string, string];
+  bgGlow: string; // colour of the radial glow at the top (alpha included)
+  surface: string; // cards, tiles, list groups (dark: glass = semi-transparent + hairline)
+  surfaceSolid: string; // when no blur/translucency is possible (Android low-end, sheets)
+  surfaceRaised: string; // sheets, toasts, confirmation cards
+  surfaceSunken: string; // inputs, segmented track, keypad bg, «+» circle
+  glassBorder: string | null; // 1 px hairline on dark glass cards; null in light (no borders)
+  ink: string;
+  ink2: string;
+  ink3: string; // ONLY on surface
+  separator: string;
+  iconSecondary: string;
   brand: string;
   brandPressed: string;
-  brandTint: string; // selected pill, chips, icon squares in «Ещё»
+  brandTint: string;
   onBrand: string;
+  brandGlow: string; // centre tab, mic, voice mode edge
   highlight: string;
   highlightTint: string;
   onHighlight: string;
-  onHighlight2: string; // secondary text on highlight
+  onHighlight2: string;
   success: string;
   successTint: string;
-  warning: string; // as text
+  warning: string;
   warningTint: string;
-  danger: string; // overdue, delete — text and fills
+  danger: string;
   dangerTint: string;
   onDanger: string;
   focus: string;
   scrim: string;
-  /** Bottom fade behind the floating tab bar / assistant capsule (= bgGradient[2]). */
-  fade: string;
+  fade: string; // bottom dissolve behind the floating bar
+  tabBar: string; // floating tab capsule
+  tabPill: string; // active tab pill (p14: lighter pill)
+  track: string; // progress-bar track
+  paper: string; // A4 document preview (always light)
 };
 
 export const lightColors: ColorTokens = {
   bg: '#E2F2E9',
-  bgGradient: ['#CFEBDD', '#E2F2E9', '#EAF5EF'],
+  bgGradient: ['#DDF1E6', '#EAF5EF'],
+  bgGlow: 'rgba(195,232,211,1)',
   surface: '#F9FDFA',
+  surfaceSolid: '#F9FDFA',
   surfaceRaised: '#FFFFFF',
   surfaceSunken: '#D3E8DC',
-  ink: '#0E2A1F', // 13.2 bg · 14.9 surface
-  ink2: '#47665A', // 5.0 bgTop · 6.2 surface
-  ink3: '#587669', // 4.9 surface (4.3 bg → not on bg)
+  glassBorder: null,
+  ink: '#0E2A1F',
+  ink2: '#47665A',
+  ink3: '#587669',
   separator: '#DAEAE1',
-  iconSecondary: '#728E81', // ≥3.3 on surface (non-text)
-  brand: '#0A7553', // 4.9 bg · 5.6 surface
+  iconSecondary: '#728E81',
+  brand: '#0A7553',
   brandPressed: '#06573D',
   brandTint: '#D2EEDF',
-  onBrand: '#FFFFFF', // 5.7
+  onBrand: '#FFFFFF',
+  brandGlow: 'rgba(10,117,83,0.38)',
   highlight: '#FFC845',
   highlightTint: '#FFF2CC',
-  onHighlight: '#0E2A1F', // 9.9
+  onHighlight: '#0E2A1F',
   onHighlight2: '#3D4A2A',
   success: '#0A7553',
   successTint: '#D2EEDF',
-  warning: '#9A6400', // 4.9 surface
+  warning: '#9A6400',
   warningTint: '#FFF2CC',
-  danger: '#C4343D', // 4.6 bg · 5.2 surface
+  danger: '#C4343D',
   dangerTint: '#FBE3E4',
   onDanger: '#FFFFFF',
   focus: '#0A7553',
-  scrim: 'rgba(10,50,35,0.30)',
+  scrim: 'rgba(10,50,35,0.32)',
   fade: '#EAF5EF',
+  tabBar: 'rgba(249,253,250,0.96)',
+  tabPill: '#D2EEDF',
+  track: '#E3EFE8',
+  paper: '#FFFFFF',
 };
 
 export const darkColors: ColorTokens = {
-  bg: '#0F2C33',
-  bgGradient: ['#14363E', '#0F2C33', '#0D272D'],
-  surface: '#18414A',
-  surfaceRaised: '#1F4C56',
-  surfaceSunken: '#0A2328',
-  ink: '#EEF6F4', // 13.4 bg · 10.1 surface
-  ink2: '#A7C2BF', // 7.8 bg · 5.9 surface · 5.0 raised
-  ink3: '#93B4B2', // 5.0 surface
-  separator: '#24515A',
-  iconSecondary: '#7FA3A3',
-  brand: '#4CCB9D', // 7.2 bg · 5.5 surface
-  brandPressed: '#7ADDB8',
-  brandTint: '#1C4D44',
-  onBrand: '#06261C', // 7.9
+  bg: deepScale[0],
+  bgGradient: [deepScale[1], deepScale[0]],
+  bgGlow: 'rgba(52,180,120,0.34)',
+  surface: 'rgba(22,56,50,0.80)', // deepScale[2] @ 80 %
+  surfaceSolid: deepScale[2],
+  surfaceRaised: '#1D4239',
+  surfaceSunken: deepScale[1],
+  glassBorder: 'rgba(218,241,222,0.09)',
+  ink: deepScale[6], // 14.4 on bg · 10.7 on surface
+  ink2: '#A9CDB4', // 7.3 on surface
+  ink3: deepScale[5], // 5.7 on surface
+  separator: 'rgba(218,241,222,0.10)',
+  iconSecondary: '#6F9A80',
+  brand: '#5FD6A8', // 7.1 on surface
+  brandPressed: '#8BE3C1',
+  brandTint: deepScale[3],
+  onBrand: '#04241C',
+  brandGlow: 'rgba(95,214,168,0.50)',
   highlight: '#FFB547',
   highlightTint: '#4A3C22',
-  onHighlight: '#12262B', // 8.9
+  onHighlight: '#12262B',
   onHighlight2: '#3A3420',
-  success: '#4CCB9D',
-  successTint: '#1C4D44',
+  success: '#5FD6A8',
+  successTint: deepScale[3],
   warning: '#FFB547',
   warningTint: '#4A3C22',
-  danger: '#FF8C86', // ≥5 surface
+  danger: '#FF8C86',
   dangerTint: '#4A2A2E',
   onDanger: '#2A0D0F',
-  focus: '#7ADDB8',
-  scrim: 'rgba(0,0,0,0.45)',
-  fade: '#0D272D',
+  focus: '#8BE3C1',
+  scrim: 'rgba(0,0,0,0.55)',
+  fade: deepScale[0],
+  tabBar: 'rgba(17,48,42,0.94)',
+  tabPill: 'rgba(218,241,222,0.13)',
+  track: 'rgba(218,241,222,0.10)',
+  paper: '#F7FAF8',
 };
 
-/** Sticky-note fills. Keys unchanged (stored with notes). No mint «green» on mint bg → lime. */
-export type NoteColorKey = 'yellow' | 'pink' | 'green' | 'blue' | 'peach' | 'white';
-export const NOTE_COLOR_KEYS: readonly NoteColorKey[] = ['yellow', 'pink', 'green', 'blue', 'peach', 'white'];
+/** Metric tiles (p14): big coloured number per tile. Fixed meaning in both themes. */
+export type MetricKey = 'tasks' | 'spent' | 'reminders' | 'new';
+export const metricColors: Record<'light' | 'dark', Record<MetricKey, string>> = {
+  light: { tasks: '#0A7553', spent: '#A65A08', reminders: '#2F6FD6', new: '#8A6200' }, // all ≥ 4.5 on surface
+  dark: { tasks: '#5FD6A8', spent: '#FFB547', reminders: '#8DB4FF', new: '#FFD36B' },
+};
+
+/**
+ * Sticky notes: FIXED palette of 7 (moodboard idea 3). Existing keys unchanged (stored with notes); `lilac` is NEW.
+ * Picker order = this array. Text on every fill: noteInk / noteInk2 (≥ 4.5:1).
+ */
+export type NoteColorKey = 'white' | 'yellow' | 'peach' | 'pink' | 'lilac' | 'blue' | 'green';
+export const NOTE_COLOR_KEYS: readonly NoteColorKey[] = ['white', 'yellow', 'peach', 'pink', 'lilac', 'blue', 'green'];
 export const lightNoteColors: Record<NoteColorKey, string> = {
-  yellow: '#FFF1C7', pink: '#FCE4E6', green: '#E4F0C8', blue: '#DDEBFA', peach: '#FFE6D8', white: '#F9FDFA',
+  white: '#FFFFFF', yellow: '#FFEDB0', peach: '#FFDCC7', pink: '#FBD5DC', lilac: '#E6DDFB', blue: '#D4E6FB', green: '#DDEFC4',
 };
 export const darkNoteColors: Record<NoteColorKey, string> = {
-  yellow: '#4A3C22', pink: '#4A2E33', green: '#3A4424', blue: '#263F5A', peach: '#4A3523', white: '#18414A',
+  white: '#1D4239', yellow: '#4D4020', peach: '#4D3424', pink: '#4D2C36', lilac: '#3A3352', blue: '#22405A', green: '#354A26',
 };
+export const noteInk = { light: { ink: '#1F2B24', ink2: '#4A5A50' }, dark: { ink: '#DAF1DE', ink2: '#B9D5C1' } } as const;
 
-/** «Расходы» categories: solid = dot/bar/icon, tint = solid at 12% (light) / 22% (dark) behind the icon. */
+/** «Расходы» categories: solid = icon/bar; tint = solid @ 15 % (light) / 22 % (dark). Text amounts use `categoryText`. */
 export type CategoryKey = 'food' | 'transport' | 'home' | 'cafe' | 'health' | 'kids' | 'bills' | 'other';
 export const categoryColors: Record<'light' | 'dark', Record<CategoryKey, string>> = {
   light: { food: '#2E9F6A', transport: '#3E7BEA', home: '#D98A0B', cafe: '#E36A5A', health: '#D9467A', kids: '#00A3B4', bills: '#56708F', other: '#8A9A93' },
   dark: { food: '#5CC98F', transport: '#78A6FF', home: '#FFC061', cafe: '#FF9585', health: '#FF85AE', kids: '#4FD3E0', bills: '#93A9C6', other: '#A9BAB3' },
 };
-export const categoryTintAlpha = { light: 0.12, dark: 0.22 } as const;
-
-/** Page label colours — only the small page icon / chip, never titles or backgrounds. */
-export type PageKey = 'today' | 'notes' | 'tasks' | 'shopping' | 'expenses' | 'documents';
-export const pageColors: Record<'light' | 'dark', Record<PageKey, string>> = {
-  light: { today: '#FFC845', notes: '#E9A800', tasks: '#0A7553', shopping: '#3E7BEA', expenses: '#D9822B', documents: '#56708F' },
-  dark: { today: '#FFB547', notes: '#FFC845', tasks: '#4CCB9D', shopping: '#78A6FF', expenses: '#FFA65C', documents: '#93A9C6' },
+/** Darker text variants for amounts on light surface (≥ 4.5:1); dark theme uses categoryColors.dark as is. */
+export const categoryText: Record<CategoryKey, string> = {
+  food: '#1E7F52', transport: '#2F6FD6', home: '#A65A08', cafe: '#B9483A', health: '#B23462', kids: '#00788A', bills: '#4A6280', other: '#5E6E67',
 };
 
-/* ---------------- typography ---------------- */
+/* ---------------- typography (Onest; Kazakh ӘҒҚҢӨҰҮҺІ checked in the font cmap) ---------------- */
+export const fontFamily = { regular: 'Onest_400Regular', medium: 'Onest_500Medium', semibold: 'Onest_600SemiBold', bold: 'Onest_700Bold' } as const;
 
-/** Onest (already in the app via @expo-google-fonts/onest). Kazakh ӘҒҚҢӨҰҮҺІ ә…і present (cmap checked). */
-export const fontFamily = {
-  regular: 'Onest_400Regular',
-  medium: 'Onest_500Medium',
-  semibold: 'Onest_600SemiBold',
-  bold: 'Onest_700Bold',
-} as const;
-
-export type TypeToken =
-  | 'largeTitle' | 'title1' | 'title2' | 'headline' | 'body' | 'bodyStrong' | 'callout'
-  | 'sectionLabel' | 'footnote' | 'caption' | 'tabLabel' | 'button' | 'number' | 'amount' | 'time';
-
-/** Sizes are iOS pt. On Android use body/bodyStrong/button = 16/24 (Material bodyLarge); others unchanged. */
-type T = { fontFamily: string; fontSize: number; lineHeight: number; letterSpacing?: number; fontVariant?: ['tabular-nums'] };
-export const type: Record<TypeToken, T> = {
-  largeTitle: { fontFamily: fontFamily.bold, fontSize: 30, lineHeight: 36, letterSpacing: -0.6 }, // screen title
-  title1: { fontFamily: fontFamily.bold, fontSize: 24, lineHeight: 30, letterSpacing: -0.4 }, // welcome, sheet hero
-  title2: { fontFamily: fontFamily.semibold, fontSize: 20, lineHeight: 26, letterSpacing: -0.2 }, // card hero text
-  headline: { fontFamily: fontFamily.semibold, fontSize: 17, lineHeight: 22 }, // sheet title, note title
+type T = { fontFamily: string; fontSize: number; lineHeight: number; letterSpacing?: number; textTransform?: 'uppercase'; fontVariant?: ['tabular-nums'] };
+export const type: Record<string, T> = {
+  largeTitle: { fontFamily: fontFamily.bold, fontSize: 30, lineHeight: 36, letterSpacing: -0.6 },
+  briefHeadline: { fontFamily: fontFamily.bold, fontSize: 28, lineHeight: 33, letterSpacing: -0.7 }, // NEW «Спокойный день.»
+  briefBody: { fontFamily: fontFamily.regular, fontSize: 16, lineHeight: 23 }, // NEW summary paragraph, max 3 lines + «Подробнее»
+  title1: { fontFamily: fontFamily.bold, fontSize: 24, lineHeight: 30, letterSpacing: -0.4 },
+  title2: { fontFamily: fontFamily.semibold, fontSize: 20, lineHeight: 26, letterSpacing: -0.2 },
+  headline: { fontFamily: fontFamily.semibold, fontSize: 17, lineHeight: 22 },
   body: { fontFamily: fontFamily.regular, fontSize: 17, lineHeight: 24 },
   bodyStrong: { fontFamily: fontFamily.semibold, fontSize: 17, lineHeight: 24 },
-  callout: { fontFamily: fontFamily.regular, fontSize: 15, lineHeight: 20 }, // row meta, note body
-  sectionLabel: { fontFamily: fontFamily.semibold, fontSize: 15, lineHeight: 20 }, // NO uppercase
-  footnote: { fontFamily: fontFamily.regular, fontSize: 13, lineHeight: 18 }, // dates, privacy line
+  callout: { fontFamily: fontFamily.regular, fontSize: 15, lineHeight: 20 },
+  sectionLabel: { fontFamily: fontFamily.bold, fontSize: 15, lineHeight: 20 }, // block titles «План дня», no caps
+  eyebrow: { fontFamily: fontFamily.bold, fontSize: 12, lineHeight: 16, letterSpacing: 0.8, textTransform: 'uppercase' }, // NEW tile labels / status line ONLY (≤ 3 words)
+  footnote: { fontFamily: fontFamily.regular, fontSize: 13, lineHeight: 18 },
   caption: { fontFamily: fontFamily.medium, fontSize: 12, lineHeight: 16 },
   tabLabel: { fontFamily: fontFamily.medium, fontSize: 11, lineHeight: 13 },
-  button: { fontFamily: fontFamily.semibold, fontSize: 17, lineHeight: 22 }, // = body, never larger
+  button: { fontFamily: fontFamily.semibold, fontSize: 17, lineHeight: 22 },
   number: { fontFamily: fontFamily.semibold, fontSize: 17, lineHeight: 24, fontVariant: ['tabular-nums'] },
+  metric: { fontFamily: fontFamily.bold, fontSize: 32, lineHeight: 34, letterSpacing: -1, fontVariant: ['tabular-nums'] }, // NEW tile number
+  metricUnit: { fontFamily: fontFamily.semibold, fontSize: 14, lineHeight: 18 }, // NEW «₸», «из 5»
   amount: { fontFamily: fontFamily.bold, fontSize: 40, lineHeight: 46, letterSpacing: -1.2, fontVariant: ['tabular-nums'] },
-  time: { fontFamily: fontFamily.bold, fontSize: 36, lineHeight: 40, letterSpacing: -1, fontVariant: ['tabular-nums'] }, // «Дальше 14:30»
+  keypadAmount: { fontFamily: fontFamily.bold, fontSize: 52, lineHeight: 58, letterSpacing: -1.6, fontVariant: ['tabular-nums'] }, // NEW
+  keypadKey: { fontFamily: fontFamily.semibold, fontSize: 24, lineHeight: 28 }, // NEW
+  answerValue: { fontFamily: fontFamily.bold, fontSize: 48, lineHeight: 52, letterSpacing: -1.4 }, // NEW search value «4512»
+  time: { fontFamily: fontFamily.bold, fontSize: 36, lineHeight: 40, letterSpacing: -1, fontVariant: ['tabular-nums'] },
 };
-/** System font scale is honoured up to 2.0; layouts switch to large-font mode at 1.5 (keep current constants). */
 export const MAX_FONT_SCALE = 2.0;
 export const LARGE_FONT_SCALE = 1.5;
-/** Hero numbers (amount, time) scale at most ×1.4 so they never push content off screen. */
-export const HERO_MAX_SCALE = 1.4;
+export const HERO_MAX_SCALE = 1.4; // metric, amount, keypadAmount, answerValue, briefHeadline
 
 /* ---------------- layout ---------------- */
-
 export const space = { 0: 0, 1: 4, 2: 8, 3: 12, 4: 16, 5: 20, 6: 24, 8: 32, 10: 40 } as const;
 
 export const size = {
-  screenPadding: 16, // width < 600
-  screenPaddingWide: 20, // width ≥ 600
+  screenPadding: 16,
+  screenPaddingWide: 20,
   maxContentWidth: 600,
-  minTouch: 48, // hit area (hitSlop), Android 48 / iOS 44
-  buttonHeight: 50, // primary / secondary
-  buttonHeightSmall: 36, // chips-as-buttons, «Готово» on cards
-  rowHeight: 52, // one-line list row
-  rowHeightMeta: 64, // row with meta line
-  assistantCapsule: 52,
-  assistantMic: 40, // visible circle; hit 48
-  assistantPlus: 36,
-  tabBar: 60, // floating capsule
-  tabBarInset: 12, // left/right/bottom gap of the floating tab bar (+ safe area)
-  tabPill: { width: 56, height: 30 },
-  checkbox: 24, // circle; hit 48
-  iconSm: 20,
+  minTouch: 48,
+  buttonHeight: 50,
+  buttonHeightSmall: 36,
+  rowHeight: 52,
+  rowHeightMeta: 64,
+  checkbox: 26, // was 24 — bigger circles (moodboard p350/p360)
+  // floating bottom
+  tabBar: 72, // capsule height (was 60)
+  tabBarInset: 12,
+  tabPill: { width: 68, height: 56 }, // icon + label inside the pill (p14)
+  centreTab: 60, // emerald circle, raised by 20 above the bar top
+  centreTabLift: 20,
+  assistantCapsule: 56, // was 52
+  assistantMic: 44,
+  assistantPlus: 40,
+  chipRow: 36, // suggestion chips above the capsule
+  chipHeight: 36,
+  toastMinHeight: 72, // two lines: text + actions
+  // content
+  metricTile: { minHeight: 132, radius: 22 },
+  briefCardRadius: 26,
+  keypadKey: 56,
   icon: 24,
+  iconSm: 20,
   iconLg: 28,
-  headerButton: 36,
-  segmentedHeight: 36,
-  sheetHandle: { width: 36, height: 4 },
+  headerButton: 40,
+  segmentedHeight: 40,
+  viewToggle: { width: 76, height: 36 },
 } as const;
 
-export const radius = {
-  xs: 6, // tiny badges
-  sm: 10, // inputs, segmented thumb
-  md: 14, // sticky note, small cards, rectangular buttons
-  lg: 16, // cards, list groups
-  xl: 20, // «Дальше» card, toast
-  sheet: 24,
-  round: 9999, // capsules, pills, mic
-} as const;
+export const radius = { xs: 6, sm: 10, md: 14, lg: 18, xl: 22, xxl: 26, sheet: 28, round: 9999 } as const;
 
-/** Light: soft green-tinted shadows. Dark: no card shadows — depth = surface → surfaceRaised. */
+/** Light: soft green shadows. Dark: glass = surface (80 %) + glassBorder hairline, no card shadows; floating = deep shadow. */
 export const elevation = {
   light: {
-    card: { shadowColor: '#0A462D', shadowOffset: { width: 0, height: 2 }, shadowRadius: 8, shadowOpacity: 0.06, elevation: 1 },
-    floating: { shadowColor: '#0A462D', shadowOffset: { width: 0, height: 8 }, shadowRadius: 24, shadowOpacity: 0.16, elevation: 8 },
+    card: { shadowColor: '#0A462D', shadowOffset: { width: 0, height: 4 }, shadowRadius: 14, shadowOpacity: 0.07, elevation: 2 },
+    floating: { shadowColor: '#0A462D', shadowOffset: { width: 0, height: 8 }, shadowRadius: 26, shadowOpacity: 0.16, elevation: 8 },
   },
   dark: {
     card: null,
-    floating: { shadowColor: '#000000', shadowOffset: { width: 0, height: 8 }, shadowRadius: 24, shadowOpacity: 0.35, elevation: 8 },
+    floating: { shadowColor: '#000000', shadowOffset: { width: 0, height: 10 }, shadowRadius: 30, shadowOpacity: 0.45, elevation: 10 },
   },
 } as const;
 
-/** Lucide (lucide-react-native, already installed): stroke 1.75, round caps; sizes 20/24/28 only. */
+/** Glow = coloured shadow (iOS) / shadow PNG or Skia blur (Android). Used ONLY on: centre tab, mic, voice capsule edge, status dot. */
+export const glow = {
+  centreTab: { radius: 18, offsetY: 6, opacity: 1 }, // colour = brandGlow
+  mic: { radius: 10, offsetY: 3, opacity: 1 },
+  voiceEdge: { ring: 2, radius: 26, spread: 6 }, // ring in brand + blur in brandGlow, pulses with the voice level
+  statusDot: { radius: 8 },
+} as const;
+
 export const icon = { set: 'lucide', strokeWidth: 1.75, sizes: [20, 24, 28] } as const;
 
-export type Easing = readonly [number, number, number, number] | 'linear' | 'spring';
 export const motion = {
-  press: { duration: 100, easing: [0.2, 0, 0, 1] }, // scale 0.97 + tint
+  press: { duration: 100, easing: [0.2, 0, 0, 1] },
   fast: { duration: 150, easing: [0.2, 0, 0, 1] },
   base: { duration: 250, easing: [0.2, 0, 0, 1] },
   exit: { duration: 200, easing: [0.3, 0, 1, 1] },
-  sheet: { duration: 350, easing: 'spring' }, // damping 22, stiffness 220
-  check: { duration: 600, easing: [0.2, 0, 0, 1] }, // fill + haptic, then row leaves to «Сделано»
-  toast: { duration: 250, easing: 'spring' }, // stays 5 s, «Отменить» always
-  listen: { duration: 1200, easing: 'linear' }, // mic pulse
+  sheet: { duration: 350, easing: 'spring' },
+  check: { duration: 600, easing: [0.2, 0, 0, 1] },
+  toast: { duration: 250, easing: 'spring' }, // stays 6 s (two actions)
+  confirmCard: { duration: 5000, easing: 'linear' }, // reminder card auto-closes; thin progress bar shows the time
+  listen: { duration: 1200, easing: 'linear' }, // voice glow pulse
+  metricCount: { duration: 600, easing: 'ease-out' }, // numbers count up on first show of the day
 } as const;
 export const springSheet = { damping: 22, stiffness: 220 } as const;
 export const reducedMotionFade = 150;
 
-/** Full-screen alarm keeps its current fixed colours (same in both themes) — unchanged, not part of this redesign. */
-export const alarmScreen = { bg: '#B4361E', text: '#FFFFFF' } as const;
+export const alarmScreen = { bg: '#B4361E', text: '#FFFFFF' } as const; // unchanged
