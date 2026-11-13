@@ -59,19 +59,21 @@ export type ColorTokens = {
   tabPill: string; // active tab pill (p14: lighter pill)
   track: string; // progress-bar track
   paper: string; // A4 document preview (always light)
+  linkOnBg: string; // «‹ Назад» and text links placed directly on the page background
 };
 
 export const lightColors: ColorTokens = {
-  bg: '#E2F2E9',
-  bgGradient: ['#DDF1E6', '#EAF5EF'],
-  bgGlow: 'rgba(195,232,211,1)',
-  surface: '#F9FDFA',
-  surfaceSolid: '#F9FDFA',
+  // v2.1 (A23 separation fix): deeper mint page + pure white cards + layered shadow with a 1 px tinted ring.
+  bg: '#D3ECDE', // was #E2F2E9 · white card vs bg 1.25:1 (was 1.13:1)
+  bgGradient: ['#D3ECDE', '#DEEFE5'], // was #DDF1E6 → #EAF5EF
+  bgGlow: 'rgba(196,232,211,1)', // #C4E8D3, was #C3E8D3 on a lighter page
+  surface: '#FFFFFF', // was #F9FDFA
+  surfaceSolid: '#FFFFFF',
   surfaceRaised: '#FFFFFF',
-  surfaceSunken: '#D3E8DC',
-  glassBorder: null,
+  surfaceSunken: '#C5E1D1', // was #D3E8DC · brand text is NOT placed on sunken (4.1:1)
+  glassBorder: null, // light edge = 1 px ring inside elevation.light.card (rgba(10,90,60,.07))
   ink: '#0E2A1F',
-  ink2: '#47665A',
+  ink2: '#47665A', // 5.1 on bg · 6.4 on surface
   ink3: '#587669',
   separator: '#DAEAE1',
   iconSecondary: '#728E81',
@@ -93,11 +95,12 @@ export const lightColors: ColorTokens = {
   onDanger: '#FFFFFF',
   focus: '#0A7553',
   scrim: 'rgba(10,50,35,0.32)',
-  fade: '#EAF5EF',
-  tabBar: 'rgba(249,253,250,0.96)',
+  fade: '#DEEFE5', // = bgGradient[1]
+  tabBar: 'rgba(255,255,255,0.97)',
   tabPill: '#D2EEDF',
-  track: '#E3EFE8',
+  track: '#E1EEE6',
   paper: '#FFFFFF',
+  linkOnBg: '#06573D', // brand #0A7553 is 4.3:1 under the top glow → deeper emerald 6.4:1
 };
 
 export const darkColors: ColorTokens = {
@@ -137,6 +140,7 @@ export const darkColors: ColorTokens = {
   tabPill: 'rgba(218,241,222,0.13)',
   track: 'rgba(218,241,222,0.10)',
   paper: '#F7FAF8',
+  linkOnBg: '#5FD6A8',
 };
 
 /** Metric tiles (p14): big coloured number per tile. Fixed meaning in both themes. */
@@ -246,8 +250,13 @@ export const radius = { xs: 6, sm: 10, md: 14, lg: 18, xl: 22, xxl: 26, sheet: 2
 /** Light: soft green shadows. Dark: glass = surface (80 %) + glassBorder hairline, no card shadows; floating = deep shadow. */
 export const elevation = {
   light: {
-    card: { shadowColor: '#0A462D', shadowOffset: { width: 0, height: 4 }, shadowRadius: 14, shadowOpacity: 0.07, elevation: 2 },
-    floating: { shadowColor: '#0A462D', shadowOffset: { width: 0, height: 8 }, shadowRadius: 26, shadowOpacity: 0.16, elevation: 8 },
+    // Layered (CSS ref): 0 0 0 1px rgba(10,90,60,.07) · 0 1px 2px rgba(10,70,45,.08) · 0 6px 16px -4px rgba(10,70,45,.14)
+    // RN: ring = borderWidth 1 (StyleSheet.hairlineWidth on 3x) borderColor rgba(10,90,60,0.07); two shadows = nested Views or react-native-shadow-2.
+    ring: { borderWidth: 1, borderColor: 'rgba(10,90,60,0.07)' },
+    card: { shadowColor: '#0A462D', shadowOffset: { width: 0, height: 6 }, shadowRadius: 16, shadowOpacity: 0.14, elevation: 3 },
+    cardContact: { shadowColor: '#0A462D', shadowOffset: { width: 0, height: 1 }, shadowRadius: 2, shadowOpacity: 0.08 },
+    // 0 0 0 1px rgba(10,90,60,.06) · 0 10px 28px -6px rgba(10,70,45,.22) · 0 2px 4px rgba(10,70,45,.08)
+    floating: { shadowColor: '#0A462D', shadowOffset: { width: 0, height: 10 }, shadowRadius: 28, shadowOpacity: 0.22, elevation: 10 },
   },
   dark: {
     card: null,
