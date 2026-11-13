@@ -15,10 +15,21 @@ Week 5: questions and text answers with sources. Week 6: changes on the page («
 (sending outside) and `general_answer_offer` are later weeks: ignore unknown events. `action` may
 carry `tasks: [Task]` (week 9, `today.md`).
 
+**Where things go (Ф-47, week 19).** The person never picks the page they talk about: there is
+no «Про: …» chip. A new record goes where the server's page rules put it (`auto_rule` and kind:
+«Заметки», «Дела», «Покупки», «Расходы», «Документы и КП», incl. pages made on first use,
+`features.md`), never onto the open page by itself; questions search all records. `page_id`,
+`visible_item_ids` and `selected_item_id` are only context: they resolve «это / здесь / эту
+запись» (and page actions such as «разложи по темам» on the open page) and an explicit «сюда / на
+эту страницу», which is the person's own choice and is honoured. A page named in the phrase
+(«запиши в Ремонт») is used too. Records the phone saves offline (`POST /v1/items`, no page) are
+placed by the same rules when they arrive.
+
 **Plain notes.** A phrase that only states something to keep («купить хлеб», a phone number,
-«Мастер Ерлан, плитка») is saved as a record in the person's words on the current page (on
-«Сегодня»: only where the page rules put it), with «Отменить»: `action` with `kind: "save_item"`,
-`summary.ru` «Записал.», `done.answer_kind: "action"`. «запиши …» / «сохрани …» / «добавь …»
+«Мастер Ерлан, плитка») is saved as a record in the person's words where the page rules put it
+(the open page only with «сюда»), with «Отменить»: `action` with `kind: "save_item"`,
+`summary.ru` «Записал.» (when it is on the open page) or «Записал в «Заметки».» (where it went),
+`done.answer_kind: "action"`. «запиши …» / «сохрани …» / «добавь …»
 (without a page name) save the rest of the phrase the same way. The text is never rewritten by a
 model. A question («где ключи?»), one word («плитка») or an order goes the usual way. When the
 answering service is down, a phrase of 3+ words or with a long number is still saved; a shorter
@@ -38,8 +49,8 @@ records, files and shared text (`input_kind: "share"`) never makes a change, wha
 Week 17: shared text goes to the model inside the data block, like a record, never as the
 person's question; in later turns (history, conversation summary) it is replaced by
 «[поделился текстом; он не повторяется]».
-Changes happen on the page the line is on (`page_id`) unless the phrase names another page; the
-answer then says where («Добавил в «Покупки»»). Records placed by hand (`manual_order`) are never
+New records follow «Where things go» above; changes to existing records act on the records named
+(«это» = the selected one) wherever they are; the answer says where («Добавил в «Покупки»»). Records placed by hand (`manual_order`) are never
 moved without the person's «Да» (`confirm_manual`).
 
 **The view of a page (week 11, `views.md`).** «покажи таблицей», «включи доску», «сделай простым
@@ -84,7 +95,7 @@ Request (`application/json`):
 |---|---|---|
 | `client_id` | uuid, required | Idempotency key. Sending the same `client_id` again does not ask twice: you get the stream of the first reply (as a resume from the start, see below). |
 | `text` | string, 1...2000 chars after trim | Required. Voice goes through STT on the phone's record path for now; `upload_id` is not accepted yet (week 6). |
-| `page_id` | uuid or null | The page the line is on. Unknown or removed page: treated as null (no error: the question still gets answered). |
+| `page_id` | uuid or null | The page the line is on: context for «это / здесь / сюда» only (Ф-47), never where a new record goes by itself. Unknown or removed page: treated as null (no error: the question still gets answered). |
 | `visible_item_ids` | uuid[], ≤40, default `[]` | Records on screen now, top first. Ids that are not this person's, or not visible, are dropped. |
 | `view_version` | int or null | The page's `view_version` the phone is showing. |
 | `selected_item_id` | uuid or null | «это / здесь»: the open or selected record. Without it, «удали это» on a page with more than one record gets `needs_choice`, never a change. |

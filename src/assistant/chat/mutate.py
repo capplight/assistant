@@ -37,7 +37,7 @@ from assistant.actions.patch import page_patches
 from assistant.ai import LLMTask, Masker, TaskInputs, ToolSpec, UntrustedPart
 from assistant.ai.adapters import strict_json_schema
 from assistant.ai.store import period_starts
-from assistant.chat.intent import asks_view, names_page
+from assistant.chat.intent import asks_view, names_here, names_page
 from assistant.chat.sources import PageInfo, Source, SourceBook, title_of
 from assistant.chat.verify import Facts, check_sentence, facts_of
 from assistant.db.models import Item
@@ -138,7 +138,9 @@ class CreatePageArgs(BaseModel):
 CREATE = ToolSpec(
     name="create",
     description=(
-        "Save a new record. page: a page ref (p2) or null for the current page. text: the record "
+        "Save a new record. page: null (code files it on the fitting pages by their rules), or a "
+        "page ref (p2) only when the person named that page or said «сюда / на эту страницу» "
+        "(then the current page). text: the record "
         "as the person said it, in their words; never add numbers, dates or details they did "
         "not say. title: a short title or null. Only when the person asked to note, save or add."
     ),
@@ -477,6 +479,12 @@ def _sources(env: Any, refs: list[str]) -> tuple[list[Source], list[str]]:
     return found, unknown
 
 
+def _names_title(phrase: str, page: PageInfo) -> bool:
+    """The phrase names the page by its title («запиши в Ремонт»)."""
+    title = " ".join(page.title.lower().replace("ё", "е").split())
+    return bool(title) and title in " ".join(phrase.lower().replace("ё", "е").split())
+
+
 def _target_page(env: Any, ref: str | None) -> PageInfo | None:
     return env.book.page(ref) if ref else env.mut.page
 
@@ -497,18 +505,26 @@ def _check_deictic(m: MutationState, records: list[Source]) -> str | None:
 
 
 async def tool_create(env: Any, args: CreateArgs, *, by_code: bool = False) -> Result:
-    """`by_code`: the person's own words saved as they are (a plain note from the line); with
-    no page (or on «Сегодня») the record goes only where the page rules put it."""
+    """`by_code`: the person's own words saved as they are (a plain note from the line).
+
+    Ф-47: a new record goes where the page rules put it («Заметки», «Покупки», «Расходы»...),
+    never onto the open page by itself. A page is used only when the person named it, or said
+    «сюда / на эту страницу» (then the open one)."""
     m: MutationState = env.mut
-    page = _target_page(env, args.page)
+    page = env.book.page(args.page) if args.page else None
     if args.page and page is None:
         return _err(f"unknown page {args.page}")
-    if by_code and page is not None and page.template_key == "today":
-        page = None
-    if page is None and not by_code:
-        return _err("no current page: ask the person which page")
+    here_said = m.page is not None and names_here(m.phrase)
+    if page is None and here_said:
+        page = m.page  # «добавь сюда»: the person's own choice
+    if page is not None and m.page is not None and page.pk == m.page.pk and not here_said \
+            and not _names_title(m.phrase, page):  # fmt: skip
+        page = None  # the open page the person did not choose: the rules decide
     if page is not None and page.template_key == "today":
-        return _err("«Сегодня» holds no records: use another page")
+        if by_code or not args.page or here_said:
+            page = None  # «Сегодня» holds no records: the rules decide
+        else:
+            return _err("«Сегодня» holds no records: use another page")
     body = normalize_text(args.text or "")
     if not body or len(body) > 2000:
         return _err("text must be 1-2000 characters")
@@ -555,6 +571,13 @@ async def tool_create(env: Any, args: CreateArgs, *, by_code: bool = False) -> R
         else:  # placed by the page rules only: report those pages
             prep.pages = set(await s.scalars(select(ScreenItem.screen_id).where(
                 ScreenItem.item_id == item.id)))  # fmt: skip
+            titles = list(await s.scalars(select(Screen.title).where(
+                Screen.id.in_(prep.pages), Screen.deleted_at.is_(None))
+                .order_by(Screen.position))) if prep.pages else []  # fmt: skip
+            on_open = m.page is not None and m.page.pk in prep.pages
+            # Ф-47: not on the open page: say where it went («Записал в «Заметки».»)
+            if titles and not prep.sentence and not on_open:
+                prep.sentence = "Записал в " + ", ".join(_q(t) for t in titles[:2]) + "."
         prep.items = {str(item.public_id)}
         prep.changes = [{"item_id": str(item.public_id), "title": name, "kind": "create",
                          "page_id": str(page.id) if page else None,

@@ -59,8 +59,8 @@ describe('the assistant line above the keyboard at 200%, 320 × 568', () => {
     await kb.open(KB);
     expect(screen.queryByTestId('bottom-tabs')).toBeNull();
     expect(flat('main-footer').paddingBottom).toBe(0);
-    // ≥150%: two rows — the chip stays (2-design §4.3 «Пишу: чип остаётся»).
-    expect(screen.getByTestId('context-chip')).toBeTruthy();
+    // Ф-47: no scope label in the line at any size.
+    expect(screen.queryByTestId('context-chip')).toBeNull();
 
     const input = screen.getByTestId('assistant-input');
     expect(input.props.multiline).toBe(true);

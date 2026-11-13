@@ -86,7 +86,7 @@ describe('the review file: export → Excel → import', () => {
     const tab = rows.find((r) => r.key === 'tabs.more')!;
     expect(tab.length).toMatch(/вкладк/);
     expect(tab.comment).toMatch(/Тағы/);
-    expect(rows.find((r) => r.key === 'line.about')!.where).toMatch(/AssistantLine/);
+    expect(rows.find((r) => r.key === 'line.a11y')!.where).toMatch(/AssistantLine/);
   });
 
   it('UTF-8 with BOM, «;», formula-looking cells protected; a file with no edits changes nothing', () => {
@@ -108,7 +108,6 @@ describe('the review file: export → Excel → import', () => {
       ['key', 'kk_new', 'comment'],
       ['common.undo', 'Қайтару', ''],
       ['tabs.more', '', 'ok'],
-      ['line.about', '{{page}} бойынша', ''],
       ['exp.count_other', '{{n}} шығын', ''],
       ['no.such', 'x', ''],
     ];

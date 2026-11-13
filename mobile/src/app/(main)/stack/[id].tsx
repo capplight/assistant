@@ -24,8 +24,8 @@ import { useTheme } from '@/theme';
  * sources and «Убрать из стопки» (the assistant does not put it back, R-54). Every change has
  * «Отменить» (the undo of the server's action). Changes need the internet; reading works offline.
  * Week 11: «Сделать страницей» (founder addition) — a «Своя страница» with these records, with
- * «Отменить»; the records stay here too (a page is a view). Not here yet: the line chip
- * «Про: <стопка>», the summary (P1).
+ * «Отменить»; the records stay here too (a page is a view). Not here yet:
+ * the summary (P1).
  */
 export default function StackScreen() {
   const theme = useTheme();

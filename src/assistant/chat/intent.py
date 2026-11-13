@@ -208,6 +208,17 @@ def asks_view(text: str) -> bool:
     return bool(_VIEW.search(_norm(text)))
 
 
+# Ф-47: the open page is where a new record goes only when the person says so.
+_HERE = re.compile(_W + r"(?:сюда|здесь|тут|на\s+(?:эту|этой|текущ\w*|открыт\w*)\s+страниц\w*|"
+                   r"в\s+(?:эту|этой)\s+страниц\w*|на\s+эту\s+же|осында|осы\s+бетке)" + _E,
+                   re.IGNORECASE)  # fmt: skip
+
+
+def names_here(text: str) -> bool:
+    """«добавь сюда», «запиши на эту страницу»: the person chose the open page (Ф-47)."""
+    return bool(_HERE.search(_norm(text)))
+
+
 def names_page(text: str) -> bool:
     """«сделай страницу …»: a page is made only on a direct request (R-55)."""
     return bool(_PAGE_WORD.search(_norm(text)))

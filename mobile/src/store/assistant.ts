@@ -134,14 +134,11 @@ export type Banner = { messageId: string };
 export const MAX_LOCAL_MESSAGES = 300;
 
 type AssistantState = {
-  /** «Про: все страницы» toggle on the context chip. */
-  aboutAll: boolean;
   listening: boolean;
   banner: Banner | null;
   /** «Ответ готов» on «Сегодня»: an answer finished while the phone was away (GET /chat/pending-banner). */
   pending: Banner | null;
   messages: ChatMessage[];
-  setAboutAll: (v: boolean) => void;
   setListening: (v: boolean) => void;
   showBanner: (b: Banner) => void;
   closeBanner: () => void;
@@ -158,12 +155,10 @@ const cap = (ms: ChatMessage[]) => (ms.length > MAX_LOCAL_MESSAGES ? ms.slice(ms
 export const useAssistant = create<AssistantState>()(
   persist(
     (set) => ({
-      aboutAll: false,
       listening: false,
       banner: null,
       pending: null,
       messages: [],
-      setAboutAll: (aboutAll) => set({ aboutAll }),
       setListening: (listening) => set({ listening }),
       showBanner: (banner) => set({ banner }),
       closeBanner: () => set({ banner: null }),
@@ -193,7 +188,7 @@ export const useAssistant = create<AssistantState>()(
           next.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
           return { messages: cap(next) };
         }),
-      reset: () => set({ aboutAll: false, listening: false, banner: null, pending: null, messages: [] }),
+      reset: () => set({ listening: false, banner: null, pending: null, messages: [] }),
     }),
     {
       name: 'assistant.v1',

@@ -182,7 +182,6 @@ describe('S09 card', () => {
     await fireEvent.press(screen.getByTestId('record-c1'));
     await settle(() => screen.queryByTestId('record-card') !== null);
     expect(screen.getByTestId(`tab-${notes().id}`)).toBeSelected();
-    expect(within(screen.getByTestId('context-chip')).getByText('Про: Заметки')).toBeTruthy();
     expect(screen.getByTestId('assistant-input')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('record-back'));
     expect(r.getPathname()).toBe(`/page/${notes().id}`);

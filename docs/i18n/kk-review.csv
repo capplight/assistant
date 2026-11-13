@@ -1,7 +1,7 @@
 ﻿key;where;ru;kk;kk_new;comment;checks;length;source
 account.share_text;account/data;Мои данные — архив. Ссылка работает до {{until}}.;Менің деректерім — мұрағат. Сілтеме {{until}} дейін жұмыс істейді.;;;оставить как есть: {{until}};RU 40 / KK 57;черновик разработчика
 account.deleting_ask;account/data;Аккаунт удаляется. Восстановить?;Аккаунт жойылуда. Қалпына келтіру керек пе?;;;;RU 32 / KK 43;черновик разработчика
-errors.generic;account/data, api/errors, screen /, screen /did +5;Что-то пошло не так. Попробуйте ещё раз.;Бірдеңе дұрыс болмады. Қайталаңыз.;;;;RU 40 / KK 34;черновик разработчика
+errors.generic;account/data, api/errors, screen /did, screen /habits +4;Что-то пошло не так. Попробуйте ещё раз.;Бірдеңе дұрыс болмады. Қайталаңыз.;;;;RU 40 / KK 34;черновик разработчика
 account.deleting;account/data, screen /account-deleting;Аккаунт удаляется. Вход закрыт.;Аккаунт жойылуда. Кіру жабық.;;;;RU 31 / KK 29;черновик разработчика
 account.offline;account/data, screen /delete-account;Нет интернета. Удалить аккаунт можно, когда он появится.;Интернет жоқ. Аккаунтты интернет пайда болғанда жоюға болады.;;;;RU 56 / KK 61;черновик разработчика
 pages.remove;account/switch, screen /my-pages, db/outbox, pages/manual +1;Убрать страницу;Бетті алып тастау;;;;RU 15 / KK 17;черновик разработчика
@@ -9,11 +9,11 @@ rem.when_today;alarms/format;сегодня;бүгін;;;;RU 7 / KK 5;черно
 rem.when_tomorrow;alarms/format;завтра;ертең;;;;RU 6 / KK 5;черновик разработчика
 rem.today;alarms/format, screen /reminder-new, components/page/rows;Сегодня;Бүгін;;;;RU 7 / KK 5;ТЗ §7.3 (черновик)
 rem.tomorrow;alarms/format, screen /reminder-new, components/page/rows;Завтра;Ертең;;;;RU 6 / KK 5;черновик разработчика
-alarm.snooze_short;alarms/service;Отложить;Кейінге қалдыру;;;длиннее RU: RU 8 → KK 15 (×1.9);RU 8 / KK 15 · длиннее RU в 1.9 раза — проверить при 200%;черновик разработчика
 alarm.channel_alarms;alarms/service;Будильники;Оятқыштар;;;;RU 10 / KK 9;черновик разработчика
 alarm.channel_reminders;alarms/service;Напоминания;Ескертулер;;;;RU 11 / KK 10;черновик разработчика
 alarm.reminder;alarms/service;Напоминание;Ескерту;;;;RU 11 / KK 7;черновик разработчика
 setup.test_title;alarms/service;Проверка будильника;Оятқышты тексеру;;;;RU 19 / KK 16;черновик разработчика
+alarm.snooze_short;alarms/service, components/TodaySheet;Отложить;Кейінге қалдыру;;;длиннее RU: RU 8 → KK 15 (×1.9);RU 8 / KK 15 · длиннее RU в 1.9 раза — проверить при 200%;черновик разработчика
 alarm.heading;alarms/service, screen /alarm;Будильник-напоминание;Ескертетін оятқыш;;;;RU 21 / KK 17;черновик разработчика
 alarm.other_time;alarms/service, screen /alarm;Другое время;Басқа уақыт;;;;RU 12 / KK 11;черновик разработчика
 alarm.in_5;alarms/service, screen /alarm;Через 5 минут;5 минуттан кейін;;;;RU 13 / KK 16;черновик разработчика
@@ -31,11 +31,18 @@ tpl.shopping;chat/service, components/TemplateCard, components/TodaySheet, pages
 tpl.documents;chat/service, components/TemplateCard, components/TodaySheet, pages/service +2;Документы и КП;Құжаттар мен КҰ;;«КҰ» (коммерциялық ұсыныс) — понятное ли сокращение?;;RU 14 / KK 15;ТЗ §7.3 (черновик)
 tpl.expenses;chat/service, components/TemplateCard, components/TodaySheet, pages/service +2;Расходы;Шығындар;;;;RU 7 / KK 8;ТЗ §7.3 (черновик)
 tpl.custom;chat/service, components/TemplateCard, components/TodaySheet, pages/service +2;Своя страница;Жеке бет;;;;RU 13 / KK 8;ТЗ §7.3 (черновик)
+tpl.short.notes;chat/service, components/TemplateCard, components/TodaySheet, pages/service +2;Заметки;Жазбалар;;;;"RU 7 / KK 8 · подпись вкладки: при 200% ~4–5 букв в строке, переносится; короче — лучше";ТЗ §7.3 (черновик)
+tpl.short.tasks;chat/service, components/TemplateCard, components/TodaySheet, pages/service +2;Дела;Істер;;«Істер» или «Тапсырмалар» для «Дела»?;;"RU 4 / KK 5 · подпись вкладки: при 200% ~4–5 букв в строке, переносится; короче — лучше";черновик разработчика
+tpl.short.shopping;chat/service, components/TemplateCard, components/TodaySheet, pages/service +2;Покупки;Сатып алу;;;;"RU 7 / KK 9 · подпись вкладки: при 200% ~4–5 букв в строке, переносится; короче — лучше";черновик разработчика
+tpl.short.documents;chat/service, components/TemplateCard, components/TodaySheet, pages/service +2;Документы;Құжаттар;;;;"RU 9 / KK 8 · подпись вкладки: при 200% ~4–5 букв в строке, переносится; короче — лучше";черновик разработчика
+tpl.short.expenses;chat/service, components/TemplateCard, components/TodaySheet, pages/service +2;Расходы;Шығындар;;;;"RU 7 / KK 8 · подпись вкладки: при 200% ~4–5 букв в строке, переносится; короче — лучше";ТЗ §7.3 (черновик)
+tpl.short.custom;chat/service, components/TemplateCard, components/TodaySheet, pages/service +2;Моя;Менің;;;;"RU 3 / KK 5 · подпись вкладки: при 200% ~4–5 букв в строке, переносится; короче — лучше";черновик разработчика
 tpl.hint.notes;chat/service, components/TemplateCard, components/TodaySheet, pages/service +2;разложу и уберу повторы;бөліп, қайталауды алып тастаймын;;;;RU 23 / KK 32;черновик разработчика
 tpl.hint.tasks;chat/service, components/TemplateCard, components/TodaySheet, pages/service +2;будильники, списки;оятқыштар, тізімдер;;;;RU 18 / KK 19;черновик разработчика
 tpl.hint.shopping;chat/service, components/TemplateCard, components/TodaySheet, pages/service +2;что купить;не сатып алу керек;;;длиннее RU: RU 10 → KK 18 (×1.8);RU 10 / KK 18 · длиннее RU в 1.8 раза — проверить при 200%;черновик разработчика
 tpl.hint.documents;chat/service, components/TemplateCard, components/TodaySheet, pages/service +2;КП из ТЗ, договоры, чеки;ТТ бойынша КҰ, шарттар, чектер;;;;RU 24 / KK 30;черновик разработчика
 tpl.hint.expenses;chat/service, components/TemplateCard, components/TodaySheet, pages/service +2;итог месяца, по категориям;ай қорытындысы, санаттар бойынша;;;;RU 26 / KK 32;черновик разработчика
+tpl.hint.custom;chat/service, components/TemplateCard, components/TodaySheet, pages/service +2;пустая — назовёте сами;бос — атын өзіңіз қоясыз;;;;RU 22 / KK 24;черновик разработчика
 tpl.line_hint.today;chat/service, components/TemplateCard, components/TodaySheet, pages/service +2;Например: напомни в пятницу оплатить свет;Мысалы: жұмада жарыққа төлеуді еске сал;;;;RU 41 / KK 39;черновик разработчика
 tpl.line_hint.notes;chat/service, components/TemplateCard, components/TodaySheet, pages/service +2;Например: разложи заметки;Мысалы: жазбаларды бөл;;;;RU 25 / KK 22;черновик разработчика
 tpl.line_hint.tasks;chat/service, components/TemplateCard, components/TodaySheet, pages/service +2;Например: напомни завтра в 7 выпить таблетку;Мысалы: ертең сағат 7-де дәрі ішуді еске сал;;;;RU 44 / KK 44;черновик разработчика
@@ -56,18 +63,15 @@ add.camera;components/AddSheet;Камера;Камера;;;KK = RU: не пер�
 add.file;components/AddSheet;Файл;Файл;;;KK = RU: не переведено или заимствованное слово — подтвердить;RU 4 / KK 4;черновик разработчика
 add.manual;components/AddSheet;Вручную;Қолмен;;;;RU 7 / KK 6;черновик разработчика
 add.reminder;components/AddSheet;Напоминание;Ескерту;;;;RU 11 / KK 7;черновик разработчика
+more.later;components/AddSheet;Появится позже;Кейінірек пайда болады;;;длиннее RU: RU 14 → KK 22 (×1.6);RU 14 / KK 22 · длиннее RU в 1.6 раза — проверить при 200%;черновик разработчика
 exp.bring_statement;components/AddSheet, components/page/ExpenseInbox;Выписка из банка (PDF);Банктен үзінді көшірме (PDF);;;;RU 22 / KK 28;черновик разработчика
+answer.assistant;components/AnswerBanner;Помощник;Көмекші;;;;RU 8 / KK 7;черновик разработчика
 choice.pick_hint;components/AnswerBanner;Нажмите на запись, о которой речь.;Қай жазба туралы екенін басыңыз.;;;;RU 34 / KK 32;черновик разработчика
 choice.cancel;components/AnswerBanner;Отмена;Болдырмау;;;;RU 6 / KK 9 · кнопка: при 200% ~12 букв в строке, переносится;ТЗ §7.3 (черновик)
 rem.set_by_hand;components/AnswerBanner;Поставить вручную;Қолмен қою;;;;RU 17 / KK 10;черновик разработчика
 answer.open;components/AnswerBanner, components/PendingAnswerCard;Открыть ответ;Жауапты ашу;;;;RU 13 / KK 11 · кнопка: при 200% ~12 букв в строке, переносится;ТЗ §7.3 (черновик)
 answer.close;components/AnswerBanner, components/PendingAnswerCard;Закрыть;Жабу;;;;RU 7 / KK 4 · кнопка: при 200% ~12 букв в строке, переносится;ТЗ §7.3 (черновик)
-ai.label_short;components/AnswerBanner, components/page/StickersView, components/PendingAnswerCard, components/RecordRow;Подготовил помощник (ИИ) — проверьте;Көмекші (ЖИ) дайындады — тексеріңіз;;;;RU 36 / KK 35;черновик разработчика
-line.about;components/AssistantLine;Про: {{page}};{{page}} бойынша;;Чип «Про: Покупки» — «Сатып алулар бойынша» или «Бет: Сатып алулар»?;оставить как есть: {{page}};RU 5 / KK 8;черновик разработчика
-line.about_all;components/AssistantLine;Про: все страницы;Барлық беттер бойынша;;;;RU 17 / KK 21;черновик разработчика
-line.about_a11y;components/AssistantLine;Про страницу {{page}}. Нажмите, чтобы спросить по всем страницам;{{page}} беті бойынша. Барлық беттер бойынша сұрау үшін басыңыз;;;оставить как есть: {{page}};RU 56 / KK 55 · только для чтения с экрана, длина свободна;черновик разработчика
-line.about_all_a11y;components/AssistantLine;Про все страницы. Нажмите, чтобы вернуться к этой странице;Барлық беттер бойынша. Осы бетке қайту үшін басыңыз;;;;RU 58 / KK 51 · только для чтения с экрана, длина свободна;черновик разработчика
-line.a11y;components/AssistantLine;Помощник. Про страницу {{page}}. Скажите или напишите;Көмекші. {{page}} беті бойынша. Айтыңыз немесе жазыңыз;;;оставить как есть: {{page}};RU 45 / KK 46 · только для чтения с экрана, длина свободна;черновик разработчика
+line.a11y;components/AssistantLine;Помощник. Скажите или напишите;Көмекші. Айтыңыз немесе жазыңыз;;;;RU 30 / KK 31 · только для чтения с экрана, длина свободна;черновик разработчика
 line.plus_a11y;components/AssistantLine;Добавить фото, файл или вручную;Сурет, файл қосу немесе қолмен енгізу;;;;RU 31 / KK 37 · только для чтения с экрана, длина свободна;черновик разработчика
 line.mic;components/AssistantLine;Сказать;Айту;;;;RU 7 / KK 4;черновик разработчика
 line.write;components/AssistantLine;Написать;Жазу;;;;RU 8 / KK 4 · кнопка: при 200% ~12 букв в строке, переносится;черновик разработчика
@@ -91,6 +95,7 @@ feedback.comment;components/FeedbackSheet;Что случилось? Можно 
 feedback.allow;components/FeedbackSheet;Разрешаю взять этот пример без имён и номеров, чтобы помощник отвечал лучше;Көмекші жақсырақ жауап беруі үшін осы мысалды аты-жөні мен нөмірлерсіз алуға рұқсат етемін;;;;RU 75 / KK 90;черновик разработчика
 feedback.where;components/FeedbackSheet;Отправлю команде. Хранится в Казахстане.;Командаға жіберемін. Қазақстанда сақталады.;;;;RU 40 / KK 43;черновик разработчика
 feedback.thanks;components/FeedbackSheet;Спасибо! Передал команде.;Рақмет! Командаға жібердім.;;;;RU 25 / KK 27;черновик разработчика
+tour.skip;components/Gallery;Пропустить;Өткізіп жіберу;;;;RU 10 / KK 14;черновик разработчика
 gallery.title;components/Gallery;Какие страницы вам нужны?;Сізге қандай беттер керек?;;;;RU 25 / KK 26;ТЗ §7.3 (черновик)
 gallery.hint;components/Gallery;Нажмите на нужные.;Керектерін басыңыз.;;;;RU 18 / KK 19;черновик разработчика
 gallery.premarked;components/Gallery;Я отметил подходящие.;Лайықтыларын белгіледім.;;;;RU 21 / KK 24;черновик разработчика
@@ -117,7 +122,6 @@ move.remove;components/RecordMenuSheet;Убрать с этой страницы
 move.remove_hint;components/RecordMenuSheet;Запись останется на других страницах и в поиске;Жазба басқа беттерде және іздеуде қалады;;;;RU 47 / KK 40;черновик разработчика
 move.delete;components/RecordMenuSheet;Удалить;Жою;;;;RU 7 / KK 3;черновик разработчика
 move.mine;components/RecordMenuSheet;Вы поставили эту запись сюда сами;Бұл жазбаны осында өзіңіз қойдыңыз;;;;RU 33 / KK 34;черновик разработчика
-today.upcoming;components/ReminderCards;Ближайшие напоминания;Жақын ескертулер;;;;RU 21 / KK 16;черновик разработчика
 alarm.risk;components/ReminderCards;Будильники могут не сработать на этом телефоне;Бұл телефонда оятқыштар шырылдамауы мүмкін;;;;RU 46 / KK 42;черновик разработчика
 alarm.fix;components/ReminderCards;Исправить;Түзету;;;;RU 9 / KK 6;черновик разработчика
 rem.draft_ready;components/ReminderCards;Проверьте напоминание: «{{text}}»;Ескертуді тексеріңіз: «{{text}}»;;;оставить как есть: {{text}};RU 25 / KK 24;черновик разработчика
@@ -126,14 +130,12 @@ rem.deleted;components/ReminderLists;Удалил напоминание: {{titl
 tasks.seg_today;components/ReminderLists;Сегодня;Бүгін;;;;RU 7 / KK 5;ТЗ §7.3 (черновик)
 tasks.seg_soon;components/ReminderLists;Скоро;Жақында;;;;RU 5 / KK 7;черновик разработчика
 tasks.seg_missed;components/ReminderLists;Пропущено;Өткізілген;;;;RU 9 / KK 10;черновик разработчика
-tasks.seg_missed_n;components/ReminderLists;Пропущено ({{n}});Өткізілген ({{n}});;;оставить как есть: {{n}};RU 12 / KK 13;черновик разработчика
-missed.row;components/ReminderLists;Пропущено {{time}} · {{title}};Өткізілді {{time}} · {{title}};;;оставить как есть: {{time}} {{title}};RU 13 / KK 13;черновик разработчика
 missed.done;components/ReminderLists;Сделано;Орындалды;;;;RU 7 / KK 9 · кнопка: при 200% ~12 букв в строке, переносится;ТЗ §7.3 (черновик)
 missed.done_a11y;components/ReminderLists;Сделано: {{title}};Орындалды: {{title}};;;оставить как есть: {{title}};RU 9 / KK 11 · только для чтения с экрана, длина свободна;черновик разработчика
 missed.move;components/ReminderLists;Перенести;Ауыстыру;;;;RU 9 / KK 8;черновик разработчика
 missed.move_a11y;components/ReminderLists;Перенести на другое время: {{title}};Басқа уақытқа ауыстыру: {{title}};;;оставить как есть: {{title}};RU 27 / KK 24 · только для чтения с экрана, длина свободна;черновик разработчика
-missed.done_strip;components/ReminderLists;Отметил: {{title}};Белгіледім: {{title}};;;оставить как есть: {{title}};RU 9 / KK 12;черновик разработчика
-missed.undo_gone;components/ReminderLists;Уже отправлено. Отменить можно в «Что я сделал».;Жіберіліп қойды. «Не жасадым» ішінде болдырмауға болады.;;;;RU 48 / KK 56;черновик разработчика
+missed.done_strip;components/ReminderLists, today/missed;Отметил: {{title}};Белгіледім: {{title}};;;оставить как есть: {{title}};RU 9 / KK 12;черновик разработчика
+missed.undo_gone;components/ReminderLists, today/missed;Уже отправлено. Отменить можно в «Что я сделал».;Жіберіліп қойды. «Не жасадым» ішінде болдырмауға болады.;;;;RU 48 / KK 56;черновик разработчика
 search.found_more;components/SearchResults;Нашёл ещё по смыслу ({{n}});Мағынасы бойынша тағы таптым ({{n}});;;оставить как есть: {{n}};RU 22 / KK 31;черновик разработчика
 search.looking;components/SearchResults;Ищу ещё…;Тағы іздеп жатырмын…;;;длиннее RU: RU 8 → KK 20 (×2.5);RU 8 / KK 20 · длиннее RU в 2.5 раза — проверить при 200%;черновик разработчика
 search.offline;components/SearchResults;Искать по смыслу смогу, когда появится интернет.;Мағынасы бойынша интернет болғанда іздей аламын.;;;;RU 48 / KK 48;черновик разработчика
@@ -146,18 +148,17 @@ dup.notes_card;components/StackCards;Похожие записи: {{count}};Ұқ
 stack.section;components/StackCards;Стопки;Топтамалар;;;длиннее RU: RU 6 → KK 10 (×1.7);RU 6 / KK 10 · длиннее RU в 1.7 раза — проверить при 200%;черновик разработчика
 stack.count_a11y;components/StackCards;Стопка «{{title}}», записей: {{count}};«{{title}}» топтамасы, жазбалар: {{count}};;;оставить как есть: {{count}} {{title}};RU 20 / KK 24 · только для чтения с экрана, длина свободна;черновик разработчика
 stack.before_after;components/StackCards;было {{before}}, убрал повторов: {{removed}};{{before}} болған, алынған қайталанғандар: {{removed}};;;оставить как есть: {{before}} {{removed}};RU 23 / KK 33;черновик разработчика
-stack.menu;components/StackCards;Ещё;Тағы;;;;RU 3 / KK 4;ТЗ §7.3 (черновик)
 stack.menu_a11y;components/StackCards;Действия со стопкой «{{title}}»;«{{title}}» топтамасымен әрекеттер;;;оставить как есть: {{title}};RU 22 / KK 25 · только для чтения с экрана, длина свободна;черновик разработчика
 stack.open;components/StackCards;Открыть;Ашу;;;;RU 7 / KK 3;черновик разработчика
 tasks.bought;components/TaskRow;Куплено;Сатып алынды;;;длиннее RU: RU 7 → KK 12 (×1.7);RU 7 / KK 12 · длиннее RU в 1.7 раза — проверить при 200%;черновик разработчика
 tasks.return;components/TaskRow;Вернуть;Қайтару;;;;RU 7 / KK 7;черновик разработчика
 tasks.return_a11y;components/TaskRow;Вернуть в список: {{title}};Тізімге қайтару: {{title}};;;оставить как есть: {{title}};RU 18 / KK 17 · только для чтения с экрана, длина свободна;черновик разработчика
-tasks.menu_a11y;components/TaskRow;Ещё: {{title}};Тағы: {{title}};;;оставить как есть: {{title}};RU 5 / KK 6 · только для чтения с экрана, длина свободна;черновик разработчика
+shop.qty_change_a11y;components/TaskRow;{{title}}: {{qty}}. Изменить количество;{{title}}: {{qty}}. Санын өзгерту;;;оставить как есть: {{qty}} {{title}};RU 23 / KK 17 · только для чтения с экрана, длина свободна;черновик разработчика
 tour.selected;components/TemplateCard;Отмечено;Белгіленді;;;;RU 8 / KK 10;черновик разработчика
 tour.not_selected;components/TemplateCard;Не отмечено;Белгіленбеген;;;;RU 11 / KK 13;черновик разработчика
 gallery.exists;components/TemplateCard;Уже есть;Бар;;;;RU 8 / KK 3;черновик разработчика
 gallery.card_a11y;components/TemplateCard;{{title}}. {{state}}. {{hint}};{{title}}. {{state}}. {{hint}};;;оставить как есть: {{hint}} {{state}} {{title}};RU 4 / KK 4 · только для чтения с экрана, длина свободна;черновик разработчика
-today.profile;components/TodaySheet;Профиль и настройки;Профиль және баптаулар;;;;RU 19 / KK 22;черновик разработчика
+today.today;components/TodaySheet;Сегодня;Бүгін;;;;RU 7 / KK 5;ТЗ §7.3 (черновик)
 today.next;components/TodaySheet;Дальше;Келесі;;;;RU 6 / KK 6;черновик разработчика
 today.next_now;components/TodaySheet;сейчас;қазір;;;;RU 6 / KK 5;черновик разработчика
 today.next_in_min;components/TodaySheet;через {{n}} мин;{{n}} минуттан кейін;;;оставить как есть: {{n}};RU 10 / KK 15;черновик разработчика
@@ -167,9 +168,12 @@ today.tile_menu_a11y;components/TodaySheet;Плитка «{{page}}»: показ
 today.tile_pin;components/TodaySheet;Всегда показывать на Сегодня;Бүгін бетінде әрқашан көрсету;;;;RU 28 / KK 29;черновик разработчика
 today.tile_unpin;components/TodaySheet;Показывать, когда что-то есть;Бірдеңе болғанда көрсету;;;;RU 29 / KK 24;черновик разработчика
 today.tile_hide;components/TodaySheet;Не показывать на Сегодня;Бүгін бетінде көрсетпеу;;;;RU 24 / KK 23;черновик разработчика
-common.cancel;components/TodaySheet;Отмена;Бас тарту;;;;RU 6 / KK 9 · кнопка: при 200% ~12 букв в строке, переносится;черновик разработчика
+today.search;components/TodaySheet;Поиск;Іздеу;;;;RU 5 / KK 5;черновик разработчика
+today.buy_one;components/TodaySheet;Купить: {{first}};Сатып алу: {{first}};;;оставить как есть: {{first}};RU 8 / KK 11;черновик разработчика
+today.buy_more;components/TodaySheet;Купить: {{first}} и ещё {{n}};Сатып алу: {{first}} және тағы {{n}};;;оставить как есть: {{first}} {{n}};RU 15 / KK 22;черновик разработчика
 tpl.custom_default;components/TodaySheet, pages/service, pages/usePageLabels, today/tileService;Моя страница;Менің бетім;;;;RU 12 / KK 11;черновик разработчика
 line.open;components/UndoStrip;Открыть;Ашу;;;;RU 7 / KK 3 · кнопка: при 200% ~12 букв в строке, переносится;черновик разработчика
+common.undone;components/UndoStrip;Отменено;Болдырылмады;;;;RU 8 / KK 12 · кнопка: при 200% ~12 букв в строке, переносится;черновик разработчика
 record.deleted;components/UndoStrip;Удалил запись;Жазбаны өшірдім;;;;RU 13 / KK 15;черновик разработчика
 dedup.exact;components/UndoStrip;Уже было — добавил к записи от {{date}};Бұрын болған — {{date}} жазбасына қостым;;;оставить как есть: {{date}};RU 31 / KK 32;черновик разработчика
 move.also_done_many;components/UndoStrip;Теперь ещё на страницах: {{pages}};Енді мына беттерде де бар: {{pages}};;;оставить как есть: {{pages}};RU 25 / KK 27;черновик разработчика
@@ -252,6 +256,37 @@ kp.step_seen;components/kp/KpParts, kp/view;Видел;Көрді;;;;RU 5 / KK 5
 kp.step_accepted;components/kp/KpParts, kp/view;Принято;Қабылданды;;;;RU 7 / KK 10;черновик разработчика
 kp.step_done_a11y;components/kp/KpParts, kp/view;{{step}} — да;{{step}} — иә;;;оставить как есть: {{step}};RU 5 / KK 5 · только для чтения с экрана, длина свободна;черновик разработчика
 kp.step_todo_a11y;components/kp/KpParts, kp/view;{{step}} — ещё нет;{{step}} — әлі жоқ;;;оставить как есть: {{step}};RU 10 / KK 10 · только для чтения с экрана, длина свободна;черновик разработчика
+kp.preview_seller;components/kp/KpPreview;Ваша компания;Сіздің компанияңыз;;;;RU 13 / KK 18;черновик разработчика
+kp.preview_bin;components/kp/KpPreview;БИН {{bin}};БСН {{bin}};;;оставить как есть: {{bin}};RU 4 / KK 4;черновик разработчика
+kp.preview_to;components/kp/KpPreview;Кому: {{name}};Кімге: {{name}};;;оставить как есть: {{name}};RU 6 / KK 7;черновик разработчика
+kp.preview_col_name;components/kp/KpPreview;Наименование;Атауы;;;;RU 12 / KK 5;черновик разработчика
+kp.preview_col_qty;components/kp/KpPreview;Кол-во;Саны;;;;RU 6 / KK 4;черновик разработчика
+kp.preview_col_price;components/kp/KpPreview;Цена;Бағасы;;;;RU 4 / KK 6;черновик разработчика
+kp.preview_col_sum;components/kp/KpPreview;Сумма;Сомасы;;;;RU 5 / KK 6;черновик разработчика
+kp.preview_a11y;components/kp/KpPreview;Лист: {{title}}, {{client}}, позиций {{count}}, {{total}};Парақ: {{title}}, {{client}}, позициялар {{count}}, {{total}};;;оставить как есть: {{client}} {{count}} {{title}} {{total}};RU 20 / KK 24 · только для чтения с экрана, длина свободна;черновик разработчика
+kp.pdf_missing;components/kp/KpSendPanel;Сначала укажите все цены;Алдымен барлық бағаны көрсетіңіз;;;;RU 24 / KK 32;черновик разработчика
+send.file_pdf;components/kp/KpSendPanel;{{title}}, версия {{n}} · PDF;{{title}}, {{n}}-нұсқа · PDF;;;оставить как есть: {{n}} {{title}};RU 15 / KK 14;черновик разработчика
+send.file_docx;components/kp/KpSendPanel;{{title}}, версия {{n}} · Word;{{title}}, {{n}}-нұсқа · Word;;;оставить как есть: {{n}} {{title}};RU 16 / KK 15;черновик разработчика
+send.subject;components/kp/KpSendPanel;{{title}};{{title}};;;оставить как есть: {{title}};RU 0 / KK 0;черновик разработчика
+send.sum;components/kp/KpSendPanel;Сумма: {{amount}};Сомасы: {{amount}};;;оставить как есть: {{amount}};RU 7 / KK 8;черновик разработчика
+send.sum_missing;components/kp/KpSendPanel;Нет цены: {{count}};Бағасы жоқ: {{count}};;;оставить как есть: {{count}};RU 10 / KK 12;черновик разработчика
+send.client_saw;components/kp/KpSendPanel;Клиент видел v{{n}}. Отправить новую?;Клиент v{{n}} көрді. Жаңасын жіберу керек пе?;;;оставить как есть: {{n}};RU 32 / KK 40;черновик разработчика
+send.already_sent;components/kp/KpSendPanel;Версию {{n}} уже отправляли. Можно отправить ещё раз.;{{n}}-нұсқа жіберілген. Тағы жіберуге болады.;;;оставить как есть: {{n}};RU 48 / KK 40;черновик разработчика
+send.format;components/kp/KpSendPanel;Файл;Файл;;;KK = RU: не переведено или заимствованное слово — подтвердить;RU 4 / KK 4;черновик разработчика
+send.format_pdf;components/kp/KpSendPanel;PDF;PDF;;;;RU 3 / KK 3;черновик разработчика
+send.format_docx;components/kp/KpSendPanel;Word;Word;;;;RU 4 / KK 4;черновик разработчика
+send.ch_share;components/kp/KpSendPanel;Другое;Басқа;;;;RU 6 / KK 5;черновик разработчика
+send.text_reset;components/kp/KpSendPanel;Вернуть текст как был;Мәтінді бұрынғыдай қайтару;;;;RU 21 / KK 26;черновик разработчика
+send.share_hint;components/kp/KpSendPanel;Откроется «Поделиться». Выберите, куда отправить файл.;«Бөлісу» ашылады. Файлды қайда жіберетініңізді таңдаңыз.;;;;RU 54 / KK 56;черновик разработчика
+send.open_share;components/kp/KpSendPanel;Поделиться;Бөлісу;;;;RU 10 / KK 6;черновик разработчика
+send.err_offline;components/kp/KpSendPanel;Файл делает сервер — нужен интернет. Текст в WhatsApp можно отправить и без него.;Файлды сервер жасайды — интернет керек. WhatsApp-қа мәтінді интернетсіз де жіберуге болады.;;;;RU 81 / KK 91;черновик разработчика
+send.err_missing;components/kp/KpSendPanel;Сначала укажите все цены;Алдымен барлық бағаны көрсетіңіз;;;;RU 24 / KK 32;черновик разработчика
+send.err_waiting;components/kp/KpSendPanel;Ещё отправляю правки. Попробуйте через минуту.;Түзетулерді әлі жіберіп жатырмын. Бір минуттан кейін көріңіз.;;;;RU 46 / KK 61;черновик разработчика
+send.err_failed;components/kp/KpSendPanel;Не получилось открыть. Попробуйте ещё раз.;Ашу мүмкін болмады. Қайталап көріңіз.;;;;RU 42 / KK 37;черновик разработчика
+send.text_only;components/kp/KpSendPanel;Отправить только текст в чат;Чатқа тек мәтін жіберу;;;;RU 28 / KK 22;черновик разработчика
+send.did_you_body;components/kp/KpSendPanel;Если отправили, отмечу версию {{n}} как отправленную.;Жіберсеңіз, {{n}}-нұсқаны жіберілді деп белгілеймін.;;;оставить как есть: {{n}};RU 48 / KK 47;черновик разработчика
+send.marked;components/kp/KpSendPanel;Отправлено {{date}};Жіберілді {{date}};;;оставить как есть: {{date}};RU 11 / KK 10;черновик разработчика
+send.wa_failed;components/kp/KpSendPanel, kp/service;Не получилось открыть WhatsApp.;WhatsApp ашылмады.;;;;RU 31 / KK 18;черновик разработчика
 kp.edit_save;components/kp/NumberSheet;Сохранить;Сақтау;;;;RU 9 / KK 6;черновик разработчика
 notes.board_a11y;components/page/BoardView;Доска, стикеров: {{count}};Тақта, стикерлер: {{count}};;;оставить как есть: {{count}};RU 17 / KK 18 · только для чтения с экрана, длина свободна;черновик разработчика
 notes.board_move;components/page/BoardView;Подвинуть;Жылжыту;;;;RU 9 / KK 7;черновик разработчика
@@ -266,14 +301,15 @@ notes.board_down_a11y;components/page/BoardView;Подвинуть ниже: {{w
 notes.board_left_a11y;components/page/BoardView;Подвинуть левее: {{what}};Солға жылжыту: {{what}};;;оставить как есть: {{what}};RU 17 / KK 15 · только для чтения с экрана, длина свободна;черновик разработчика
 notes.board_right_a11y;components/page/BoardView;Подвинуть правее: {{what}};Оңға жылжыту: {{what}};;;оставить как есть: {{what}};RU 18 / KK 14 · только для чтения с экрана, длина свободна;черновик разработчика
 notes.board_drag_hint;components/page/BoardView;Чтобы подвинуть, нажмите и держите;Жылжыту үшін басып ұстап тұрыңыз;;;;RU 34 / KK 32;черновик разработчика
-move.menu_a11y;components/page/BoardView, components/page/DocumentsView, components/page/NotebookView, components/page/StickersView +1;Ещё: {{what}};Тағы: {{what}};;;оставить как есть: {{what}};RU 5 / KK 6 · только для чтения с экрана, длина свободна;черновик разработчика
-move.menu;components/page/BoardView, components/page/DocumentsView, components/page/StickersView, components/RecordRow;Ещё;Тағы;;;;RU 3 / KK 4;ТЗ §7.3 (черновик)
+move.menu_a11y;components/page/BoardView, components/page/DocumentsView, components/page/NotebookView, components/page/PageFrame +2;Ещё: {{what}};Тағы: {{what}};;;оставить как есть: {{what}};RU 5 / KK 6 · только для чтения с экрана, длина свободна;черновик разработчика
+move.menu;components/page/BoardView, components/page/DocumentsView, components/page/StickersView, components/RecordRow +1;Ещё;Тағы;;;;RU 3 / KK 4;ТЗ §7.3 (черновик)
 notes.board_moved;components/page/BoardView, components/page/StickersView;Подвинул: {{what}};Жылжыттым: {{what}};;;оставить как есть: {{what}};RU 10 / KK 11;черновик разработчика
 page.recent;components/page/ClassicView;Последние;Соңғылары;;;;RU 9 / KK 9;черновик разработчика
 page.empty_example.notes;components/page/ClassicView;Например: код от домофона 4512;Мысалы: домофон коды 4512;;;нет казахских букв — возможно, по-русски;RU 30 / KK 25;черновик разработчика
 page.empty_example.custom;components/page/ClassicView;Например: плитка 24 м²;Мысалы: плитка 24 м²;;;;RU 22 / KK 20;черновик разработчика
 tasks.bought_section;components/page/ClassicView;Куплено;Сатып алынды;;;длиннее RU: RU 7 → KK 12 (×1.7);RU 7 / KK 12 · длиннее RU в 1.7 раза — проверить при 200%;черновик разработчика
 tasks.done_section;components/page/ClassicView;Выполненное;Орындалғандар;;;;RU 11 / KK 13;черновик разработчика
+today.new_reminder;components/page/ClassicView, components/page/PlannerView;Новое напоминание;Жаңа ескерту;;;;RU 17 / KK 12;черновик разработчика
 tasks.missed_none;components/page/ClassicView, components/page/PlannerView;Ничего не пропущено.;Ештеңе өткізілмеді.;;;;RU 20 / KK 19;черновик разработчика
 kp.new;components/page/DocumentsView;Новое КП;Жаңа КҰ;;;;RU 8 / KK 7;черновик разработчика
 kp.new_no_ai;components/page/DocumentsView;Новое КП — нужен помощник;Жаңа КҰ — көмекші керек;;;;RU 25 / KK 23;черновик разработчика
@@ -337,13 +373,25 @@ exp.check_day;components/page/ExpenseInbox;Проверьте и день: {{day
 exp.check_ok_a11y;components/page/ExpenseInbox;Верно, {{amount}};Дұрыс, {{amount}};;;оставить как есть: {{amount}};RU 7 / KK 7 · только для чтения с экрана, длина свободна;черновик разработчика
 exp.check_edit;components/page/ExpenseInbox;Изменить;Өзгерту;;;;RU 8 / KK 7;черновик разработчика
 exp.check_edit_a11y;components/page/ExpenseInbox;Изменить сумму {{amount}};{{amount}} сомасын өзгерту;;;оставить как есть: {{amount}};RU 15 / KK 16 · только для чтения с экрана, длина свободна;черновик разработчика
-exp.check_all;components/page/ExpenseInbox;Показать все ({{count}});Барлығын көрсету ({{count}});;;оставить как есть: {{count}};RU 15 / KK 19;черновик разработчика
 exp.dup_offline;components/page/ExpenseInbox;Нужен интернет — сейчас ничего не изменилось.;Интернет керек — қазір ештеңе өзгерген жоқ.;;;;RU 45 / KK 43;черновик разработчика
 exp.dup_gone;components/page/ExpenseInbox;Эти траты уже изменились — предлагать не буду.;Бұл шығындар өзгеріп қойған — ұсынбаймын.;;;;RU 46 / KK 41;черновик разработчика
 exp.dup_title;components/page/ExpenseInbox;Похоже, эта трата уже есть;Бұл шығын бұрыннан бар сияқты;;;;RU 26 / KK 29;черновик разработчика
 exp.dup_what;components/page/ExpenseInbox;Объединю в одну: вторая уйдёт в «Удалённые записи». Можно отменить.;Біреуге біріктіремін: екіншісі «Жойылған жазбаларға» кетеді. Болдырмауға болады.;;;название экрана: «Удалённые записи» is «Өшірілген жазбалар» in KK (trash.title);RU 67 / KK 80;черновик разработчика
 exp.dup_merge;components/page/ExpenseInbox;Объединить;Біріктіру;;;;RU 10 / KK 9;черновик разработчика
 exp.dup_different;components/page/ExpenseInbox;Это разные;Бұлар әртүрлі;;;;RU 10 / KK 13;черновик разработчика
+exp.attention;components/page/ExpenseInbox;Требует внимания;Назар аударыңыз;;;;RU 16 / KK 15;черновик разработчика
+exp.att_check_one;components/page/ExpenseInbox;{{count}} проверить;{{count}} тексеру;;;"форма «one» (при 1, 21, 31…); {{count}} — число · оставить как есть: {{count}}";RU 10 / KK 8;черновик разработчика
+exp.att_check_other;components/page/ExpenseInbox;{{count}} проверить;{{count}} тексеру;;;"форма «other» (остальные числа); {{count}} — число · оставить как есть: {{count}}";RU 10 / KK 8;черновик разработчика
+exp.att_dup_one;components/page/ExpenseInbox;{{count}} повтор;{{count}} қайталану;;;"форма «one» (при 1, 21, 31…); {{count}} — число · оставить как есть: {{count}}";RU 7 / KK 10;черновик разработчика
+exp.att_dup_other;components/page/ExpenseInbox;{{count}} повтора;{{count}} қайталану;;;"форма «other» (остальные числа); {{count}} — число · оставить как есть: {{count}}";RU 8 / KK 10;черновик разработчика
+exp.att_plan_one;components/page/ExpenseInbox;{{count}} выписка;{{count}} үзінді көшірме;;;"длиннее RU: RU 8 → KK 15 (×1.9) · форма «one» (при 1, 21, 31…); {{count}} — число · оставить как есть: {{count}}";RU 8 / KK 15 · длиннее RU в 1.9 раза — проверить при 200%;черновик разработчика
+exp.att_plan_other;components/page/ExpenseInbox;{{count}} выписки;{{count}} үзінді көшірме;;;"длиннее RU: RU 8 → KK 15 (×1.9) · форма «other» (остальные числа); {{count}} — число · оставить как есть: {{count}}";RU 8 / KK 15 · длиннее RU в 1.9 раза — проверить при 200%;черновик разработчика
+exp.att_job_one;components/page/ExpenseInbox;{{count}} чек;{{count}} чек;;;"KK = RU: не переведено или заимствованное слово — подтвердить · форма «one» (при 1, 21, 31…); {{count}} — число · оставить как есть: {{count}}";RU 4 / KK 4;черновик разработчика
+exp.att_job_other;components/page/ExpenseInbox;{{count}} чека;{{count}} чек;;;"форма «other» (остальные числа); {{count}} — число · оставить как есть: {{count}}";RU 5 / KK 4;черновик разработчика
+exp.att_reading;components/page/ExpenseInbox;читаю чек…;чекті оқып жатырмын…;;;длиннее RU: RU 10 → KK 20 (×2.0);RU 10 / KK 20 · длиннее RU в 2.0 раза — проверить при 200%;черновик разработчика
+exp.att_done;components/page/ExpenseInbox;Всё проверено;Бәрі тексерілді;;;;RU 13 / KK 15;черновик разработчика
+exp.att_skip;components/page/ExpenseInbox;{{n}} из {{count}} · Дальше ›;{{n}} / {{count}} · Келесі ›;;;оставить как есть: {{count}} {{n}};RU 15 / KK 14;черновик разработчика
+exp.bring_receipt;components/page/ExpenseInbox;Чек;Чек;;;KK = RU: не переведено или заимствованное слово — подтвердить;RU 3 / KK 3;черновик разработчика
 exp.no_category;components/page/ExpenseInbox, components/page/ExpensesView;Без категории;Санатсыз;;;;RU 13 / KK 8;черновик разработчика
 exp.sheet_verify;components/page/ExpenseInbox, components/page/ExpensesView;Верно;Дұрыс;;;;RU 5 / KK 5;черновик разработчика
 exp.kaspi_title;components/page/ExpenseInbox, components/page/ExpensesView;Выписка Kaspi;Kaspi үзінді көшірмесі;;;длиннее RU: RU 13 → KK 22 (×1.7);RU 13 / KK 22 · длиннее RU в 1.7 раза — проверить при 200%;черновик разработчика
@@ -357,7 +405,6 @@ exp.key_000;components/page/ExpenseKeypad;три нуля;үш нөл;;;;RU 8 / 
 exp.save_a11y;components/page/ExpenseKeypad;Записать трату;Шығынды жазу;;;;RU 14 / KK 12 · только для чтения с экрана, длина свободна;черновик разработчика
 exp.key_plus;components/page/ExpenseKeypad, components/page/ExpenseParts;плюс;қосу;;;;RU 4 / KK 4;черновик разработчика
 exp.key_minus;components/page/ExpenseKeypad, components/page/ExpenseParts;минус;алу;;;;RU 5 / KK 3;черновик разработчика
-exp.enter_hint;components/page/ExpenseParts;Набрать сумму;Соманы теру;;;;RU 13 / KK 11;черновик разработчика
 exp.sum_a11y;components/page/ExpenseParts;Сумма: {{text}};Сома: {{text}};;;оставить как есть: {{text}};RU 7 / KK 6 · только для чтения с экрана, длина свободна;черновик разработчика
 exp.sum_total_a11y;components/page/ExpenseParts;Сумма: {{text}}, всего {{amount}};Сома: {{text}}, барлығы {{amount}};;;оставить как есть: {{amount}} {{text}};RU 15 / KK 16 · только для чтения с экрана, длина свободна;черновик разработчика
 exp.sum_empty_a11y;components/page/ExpenseParts;Сумма не набрана;Сома терілмеген;;;;RU 16 / KK 15 · только для чтения с экрана, длина свободна;черновик разработчика
@@ -377,7 +424,6 @@ exp.period_year;components/page/ExpensesView;Год;Жыл;;;;RU 3 / KK 3;чер
 exp.periods_a11y;components/page/ExpensesView;Период;Кезең;;;;RU 6 / KK 5 · только для чтения с экрана, длина свободна;черновик разработчика
 exp.prev_a11y;components/page/ExpensesView;Предыдущий период;Алдыңғы кезең;;;;RU 17 / KK 13 · только для чтения с экрана, длина свободна;черновик разработчика
 exp.next_a11y;components/page/ExpensesView;Следующий период;Келесі кезең;;;;RU 16 / KK 12 · только для чтения с экрана, длина свободна;черновик разработчика
-exp.total;components/page/ExpensesView;Итого;Барлығы;;;;RU 5 / KK 7;ТЗ §7.3 (черновик)
 exp.total_a11y;components/page/ExpensesView;Итого за {{period}}: {{amount}};{{period}} бойынша барлығы: {{amount}};;;длиннее RU: RU 11 → KK 18 (×1.6) · оставить как есть: {{amount}} {{period}};RU 11 / KK 18 · только для чтения с экрана, длина свободна;черновик разработчика
 exp.empty_total;components/page/ExpensesView;Пока трат нет;Әзірге шығын жоқ;;;;RU 13 / KK 16;черновик разработчика
 exp.count_one;components/page/ExpensesView;{{count}} трата;{{count}} шығын;;;"форма «one» (при 1, 21, 31…); {{count}} — число · оставить как есть: {{count}}";RU 6 / KK 6;черновик разработчика
@@ -387,11 +433,9 @@ exp.to_check_a11y;components/page/ExpensesView;Не проверено: {{n}}. �
 exp.to_check_all;components/page/ExpensesView;Показать все траты;Барлық шығынды көрсету;;;;RU 18 / KK 22;черновик разработчика
 exp.apart;components/page/ExpensesView;Отдельно: {{list}} — не пересчитываю;Бөлек: {{list}} — қайта есептемеймін;;;оставить как есть: {{list}};RU 28 / KK 28;черновик разработчика
 exp.income;components/page/ExpensesView;Пришло: {{amount}};Түсті: {{amount}};;;оставить как есть: {{amount}};RU 8 / KK 7;черновик разработчика
-exp.enter;components/page/ExpensesView;Ввести трату;Шығын енгізу;;;;RU 12 / KK 12;черновик разработчика
-exp.or_say;components/page/ExpensesView;Или скажите в строке внизу;Немесе төмендегі жолға айтыңыз;;;;RU 26 / KK 30;черновик разработчика
+exp.enter;components/page/ExpensesView;Записать трату;Шығын жазу;;;;RU 14 / KK 10;черновик разработчика
 exp.empty_hint;components/page/ExpensesView;Наберите сумму или скажите: «потратил 5000 на бензин»;Соманы теріңіз немесе айтыңыз: «бензинге 5000 жұмсадым»;;;;RU 53 / KK 55;черновик разработчика
 exp.save;components/page/ExpensesView;Записать;Жазу;;;;RU 8 / KK 4 · кнопка: при 200% ~12 букв в строке, переносится;черновик разработчика
-exp.close_entry;components/page/ExpensesView;Свернуть;Жабу;;;;RU 8 / KK 4;ТЗ §7.3 (черновик)
 exp.by_category;components/page/ExpensesView;По категориям;Санаттар бойынша;;;;RU 13 / KK 16;черновик разработчика
 exp.by_category_a11y;components/page/ExpensesView;{{title}}: {{amount}}, {{share}}%;{{title}}: {{amount}}, {{share}}%;;;оставить как есть: {{amount}} {{share}} {{title}};RU 5 / KK 5 · только для чтения с экрана, длина свободна;черновик разработчика
 exp.feed;components/page/ExpensesView;Траты;Шығындар;;;;RU 5 / KK 8;ТЗ §7.3 (черновик)
@@ -400,7 +444,6 @@ exp.day_total;components/page/ExpensesView;Итого за день {{amount}};�
 exp.row_a11y;components/page/ExpensesView;Трата. {{amount}}. {{title}}. {{category}}. {{day}};Шығын. {{amount}}. {{title}}. {{category}}. {{day}};;;оставить как есть: {{amount}} {{category}} {{day}} {{title}};RU 13 / KK 13 · только для чтения с экрана, длина свободна;черновик разработчика
 exp.row_check_a11y;components/page/ExpensesView;Трата. {{amount}}, проверьте сумму. {{title}}. {{category}}. {{day}};Шығын. {{amount}}, соманы тексеріңіз. {{title}}. {{category}}. {{day}};;;оставить как есть: {{amount}} {{category}} {{day}} {{title}};RU 30 / KK 32 · только для чтения с экрана, длина свободна;черновик разработчика
 exp.check;components/page/ExpensesView;проверьте;тексеріңіз;;;;RU 9 / KK 10;ТЗ §7.3 (черновик)
-exp.more_a11y;components/page/ExpensesView;Ещё: {{title}};Тағы: {{title}};;;оставить как есть: {{title}};RU 5 / KK 6 · только для чтения с экрана, длина свободна;черновик разработчика
 exp.saved;components/page/ExpensesView;Записал {{amount}} · {{category}};Жаздым: {{amount}} · {{category}};;;оставить как есть: {{amount}} {{category}};RU 11 / KK 11;черновик разработчика
 exp.saved_plain;components/page/ExpensesView;Записал {{amount}};Жаздым: {{amount}};;;оставить как есть: {{amount}};RU 8 / KK 8;черновик разработчика
 exp.cat_set;components/page/ExpensesView;{{title}} → {{category}};{{title}} → {{category}};;;оставить как есть: {{category}} {{title}};RU 3 / KK 3;черновик разработчика
@@ -425,6 +468,11 @@ exp.waits;components/page/ExpensesView;Ждёт связи;Байланысты 
 exp.other_records;components/page/ExpensesView;Записи без суммы;Сомасыз жазбалар;;;;RU 16 / KK 16;черновик разработчика
 exp.sheet_lines;components/page/ExpensesView;Что в чеке;Чекте не бар;;;;RU 10 / KK 12;черновик разработчика
 exp.sheet_lines_check;components/page/ExpensesView;Позиции не сходятся с суммой — проверьте;Позициялар сомаға сәйкес келмейді — тексеріңіз;;;;RU 40 / KK 46;черновик разработчика
+exp.entry_title;components/page/ExpensesView;Новая трата;Жаңа шығын;;;;RU 11 / KK 10;черновик разработчика
+exp.bar_hint;components/page/ExpensesView;Записать трату в эту категорию;Осы санатқа шығын жазу;;;;RU 30 / KK 22;черновик разработчика
+exp.bars_all;components/page/ExpensesView;Все категории ({{count}});Барлық санаттар ({{count}});;;оставить как есть: {{count}};RU 16 / KK 18;черновик разработчика
+exp.bars_less;components/page/ExpensesView;Свернуть;Жию;;;;RU 8 / KK 3;ТЗ §7.3 (черновик)
+exp.row_hint;components/page/ExpensesView;Открыть трату;Шығынды ашу;;;;RU 13 / KK 11;черновик разработчика
 view.new_field;components/page/FieldSheets;Новое поле;Жаңа өріс;;;;RU 10 / KK 9;черновик разработчика
 view.field_name;components/page/FieldSheets;Название;Атауы;;;;RU 8 / KK 5;черновик разработчика
 view.field_name_example;components/page/FieldSheets;Например: Телефон мастера;Мысалы: Шебердің телефоны;;;;RU 25 / KK 25;черновик разработчика
@@ -450,6 +498,7 @@ page.rename;components/page/PageFrame;Переименовать страниц�
 page.find_none;components/page/PageFrame;На этой странице такого нет;Бұл бетте мұндай жоқ;;;;RU 27 / KK 20;черновик разработчика
 page.find_all;components/page/PageFrame;Искать по всем страницам;Барлық беттерден іздеу;;;;RU 24 / KK 22;черновик разработчика
 page.order;components/page/PageFrame;Порядок;Реті;;;;RU 7 / KK 4;черновик разработчика
+page.order_done;components/page/PageFrame;Готово;Дайын;;;;RU 6 / KK 5;черновик разработчика
 page.order_hint;components/page/PageFrame;Нажимайте «Выше» и «Ниже» у записей;Жазбалардағы «Жоғары» және «Төмен» батырмаларын басыңыз;;;длиннее RU: RU 35 → KK 55 (×1.6);RU 35 / KK 55 · длиннее RU в 1.6 раза — проверить при 200%;черновик разработчика
 view.settings_a11y;components/page/PageFrame;Настроить страницу «{{page}}»;«{{page}}» бетін баптау;;;оставить как есть: {{page}};RU 21 / KK 15 · только для чтения с экрана, длина свободна;черновик разработчика
 planner.untimed;components/page/PlannerView;Без времени;Уақытсыз;;;;RU 11 / KK 8;черновик разработчика
@@ -488,6 +537,7 @@ shop.qty_set;components/page/ShoppingView;{{title}}: {{n}};{{title}}: {{n}};;;о
 shop.qty_a11y;components/page/ShoppingView;Сколько: {{n}};Қанша: {{n}};;;оставить как есть: {{n}};RU 9 / KK 7 · только для чтения с экрана, длина свободна;черновик разработчика
 shop.qty_more_a11y;components/page/ShoppingView;Больше: {{title}};Көбірек: {{title}};;;оставить как есть: {{title}};RU 8 / KK 9 · только для чтения с экрана, длина свободна;черновик разработчика
 shop.qty_less_a11y;components/page/ShoppingView;Меньше: {{title}};Азырақ: {{title}};;;оставить как есть: {{title}};RU 8 / KK 8 · только для чтения с экрана, длина свободна;черновик разработчика
+shop.qty_title;components/page/ShoppingView;Сколько: {{title}};Қанша: {{title}};;;оставить как есть: {{title}};RU 9 / KK 7;черновик разработчика
 shop.group_up_a11y;components/page/ShoppingView;Магазин «{{name}}» выше;«{{name}}» дүкені жоғары;;;оставить как есть: {{name}};RU 15 / KK 16 · только для чтения с экрана, длина свободна;черновик разработчика
 shop.group_down_a11y;components/page/ShoppingView;Магазин «{{name}}» ниже;«{{name}}» дүкені төмен;;;оставить как есть: {{name}};RU 15 / KK 15 · только для чтения с экрана, длина свободна;черновик разработчика
 shop.still_q;components/page/ShoppingView;Ещё в магазине?;Әлі дүкендесіз бе?;;;;RU 15 / KK 18;черновик разработчика
@@ -524,12 +574,7 @@ notes.pinned_a11y;components/page/stickerLabel;приколот;бекітілг
 notes.sticker_a11y;components/page/stickerLabel;Стикер {{n}} из {{total}};Стикер {{n}}, барлығы {{total}};;;длиннее RU: RU 11 → KK 17 (×1.5) · оставить как есть: {{n}} {{total}};RU 11 / KK 17 · только для чтения с экрана, длина свободна;черновик разработчика
 tpl.line_hint_now.today;components/useCurrentPage;Например: где мой чек за холодильник?;Мысалы: тоңазытқыштың чегі қайда?;;;;RU 37 / KK 33;черновик разработчика
 consent.title;consent/ConsentForm;Перед началом — честно;Бастамас бұрын — шынын айтайын;;;;RU 22 / KK 30;черновик разработчика
-consent.storage_title;consent/ConsentForm;1. Хранение в Казахстане;1. Қазақстанда сақтау;;;;RU 24 / KK 21;черновик разработчика
-consent.storage_body;consent/ConsentForm;Ваши записи, голос и фото я храню на серверах в Казахстане.;Жазбаларыңызды, дауысыңызды және суреттеріңізді Қазақстандағы серверлерде сақтаймын.;;;;RU 59 / KK 84;черновик разработчика
-consent.cross_title;consent/ConsentForm;2. Передача сервисам ИИ за рубеж;2. Шетелдегі ЖИ сервистеріне беру;;;;RU 32 / KK 33;черновик разработчика
-consent.cross_body;consent/ConsentForm;Чтобы понимать голос и документы, я отправляю текст, записи голоса и фото одному из сервисов ИИ (США). Они не обучаются на ваших данных и хранят их не дольше {{days}} дней для защиты от злоупотреблений.;Дауыс пен құжаттарды түсіну үшін мәтінді, дауыс жазбаларын және суреттерді ЖИ сервистерінің біріне (АҚШ) жіберемін. Олар сіздің деректеріңізбен оқымайды және теріс пайдаланудан қорғау үшін {{days}} күннен артық сақтамайды.;;;оставить как есть: {{days}};RU 194 / KK 214;черновик разработчика
 consent.recipients_toggle;consent/ConsentForm;Кто получает данные;Деректерді кім алады;;;;RU 19 / KK 20;черновик разработчика
-consent.recipients;consent/ConsentForm;Anthropic, OpenAI, Google, Groq;Anthropic, OpenAI, Google, Groq;;;;RU 31 / KK 31;черновик разработчика
 consent.recipients_note;consent/ConsentForm;Один из этих сервисов, в зависимости от задачи.;Тапсырмаға байланысты осы сервистердің бірі.;;;;RU 47 / KK 44;черновик разработчика
 consent.terms;consent/ConsentForm;Условия;Шарттар;;;;RU 7 / KK 7;черновик разработчика
 consent.policy;consent/ConsentForm;Политика;Саясат;;;;RU 8 / KK 6;черновик разработчика
@@ -619,6 +664,7 @@ send.text_body_sum;kp/service;Направляю {{what}} на сумму {{tota
 draft.text_saved;kp/service;Сохранил текст;Мәтінді сақтадым;;;;RU 14 / KK 16;черновик разработчика
 draft.discarded;kp/service;Убрал черновик;Нобайды алып тастадым;;;;RU 14 / KK 21;черновик разработчика
 kp.kp_number;kp/view;КП № {{number}};КҰ № {{number}};;;оставить как есть: {{number}};RU 5 / KK 5;черновик разработчика
+kp.kp_plain;kp/view;КП;КҰ;;;;RU 2 / KK 2;черновик разработчика
 kp.vat_included;kp/view;{{rate}}%, в сумме;{{rate}}%, сомаға кірген;;;длиннее RU: RU 10 → KK 16 (×1.6) · оставить как есть: {{rate}};RU 10 / KK 16 · длиннее RU в 1.6 раза — проверить при 200%;черновик разработчика
 kp.vat_on_top;kp/view;{{rate}}%, сверху;{{rate}}%, үстіне;;;оставить как есть: {{rate}};RU 9 / KK 9;черновик разработчика
 kp.vat_none;kp/view;без НДС;ҚҚС-сыз;;;;RU 7 / KK 7;черновик разработчика
@@ -667,24 +713,18 @@ record.link;records/format;Ссылка;Сілтеме;;;;RU 6 / KK 7;черно
 record.processing;records/format;Разбираю…;Талдап жатырмын…;;;длиннее RU: RU 9 → KK 16 (×1.8);RU 9 / KK 16 · длиннее RU в 1.8 раза — проверить при 200%;черновик разработчика
 record.needs_consent;records/format;Разберу, когда дадите согласие;Келісім бергенде талдаймын;;;;RU 30 / KK 26;черновик разработчика
 record.failed;records/format;Не получилось разобрать. Запись сохранена.;Талдау мүмкін болмады. Жазба сақталды.;;;;RU 42 / KK 38;черновик разработчика
-today.hello;screen /;Добрый день;Қайырлы күн;;;;RU 11 / KK 11;черновик разработчика
-today.today;screen /;Сегодня;Бүгін;;;;RU 7 / KK 5;ТЗ §7.3 (черновик)
-today.did;screen /;Я сделал за вас;Сіз үшін жасадым;;;;RU 15 / KK 16;черновик разработчика
 today.suggest;screen /;Предложения;Ұсыныстар;;;;RU 11 / KK 9;черновик разработчика
-today.hello_name;screen /;Добрый день, {{name}};Қайырлы күн, {{name}};;;оставить как есть: {{name}};RU 13 / KK 13;черновик разработчика
-today.shopping;screen /;Покупки: {{titles}} ({{n}});Сатып алулар: {{titles}} ({{n}});;;оставить как есть: {{n}} {{titles}};RU 12 / KK 17;черновик разработчика
 today.shopping_hint;screen /;Открыть страницу «Покупки»;«Сатып алулар» бетін ашу;;;;RU 26 / KK 24;черновик разработчика
 today.free;screen /;Сегодня свободно. Скажите: «Напомни в пятницу оплатить свет»;Бүгін бос. Айтыңыз: «Жұмада жарыққа төлеуді еске сал»;;;;RU 60 / KK 53;черновик разработчика
 today.free_example;screen /;Сегодня свободно. Скажите: «{{example}}»;Бүгін бос. Айтыңыз: «{{example}}»;;;оставить как есть: {{example}};RU 29 / KK 22;черновик разработчика
 today.nothing_else;screen /;Больше на сегодня ничего.;Бүгінге басқа ештеңе жоқ.;;;;RU 25 / KK 25;черновик разработчика
-missed.section;screen /;Пропущено;Өткізілген;;;;RU 9 / KK 10;черновик разработчика
-common.undone;screen /, components/UndoStrip;Отменено;Болдырылмады;;;;RU 8 / KK 12 · кнопка: при 200% ~12 букв в строке, переносится;черновик разработчика
-today.new_reminder;screen /, components/page/ClassicView, components/page/PlannerView, components/ReminderCards;Новое напоминание;Жаңа ескерту;;;;RU 17 / KK 12;черновик разработчика
-common.undo;screen /, screen /chat, screen /did, screen /statement/[id] +2;Отменить;Болдырмау;;«Болдырмау» или «Қайтару» для «Отменить»?;;RU 8 / KK 9 · кнопка: при 200% ~12 букв в строке, переносится;ТЗ §7.3 (черновик)
-did.undo_a11y;screen /, screen /did;Отменить: {{what}};Болдырмау: {{what}};;;оставить как есть: {{what}};RU 10 / KK 11 · только для чтения с экрана, длина свободна;черновик разработчика
-changes.expired;screen /, screen /did, chat/service, components/ReminderLists +1;Отменить уже нельзя — прошло больше 30 дней.;Енді болдырмау мүмкін емес — 30 күннен асты.;;;;RU 44 / KK 44;черновик разработчика
-more.did;screen /, screen /more, screen /chat, screen /did +1;Что я сделал;Не жасадым;;;;RU 12 / KK 10;черновик разработчика
+today.for_today;screen /;На сегодня;Бүгінге;;;;RU 10 / KK 7;черновик разработчика
+today.done_of;screen /;{{done}} из {{total}};{{total}} ішінен {{done}};;;длиннее RU: RU 4 → KK 8 (×2.0) · оставить как есть: {{done}} {{total}};RU 4 / KK 8 · длиннее RU в 2.0 раза — проверить при 200%;черновик разработчика
+today.overdue;screen /;просрочено;мерзімі өтті;;;;RU 10 / KK 12;черновик разработчика
+missed.row;screen /, components/ReminderLists;Пропущено {{time}} · {{title}};Өткізілді {{time}} · {{title}};;;оставить как есть: {{time}} {{title}};RU 13 / KK 13;черновик разработчика
 common.yes;screen /, screen /page-settings/[id], components/page/FieldSheets, components/page/NotebookView;Да;Иә;;;;RU 2 / KK 2 · кнопка: при 200% ~12 букв в строке, переносится;ТЗ §7.3 (черновик)
+alarm.level_alarm;screen /, screen /reminder-new, components/page/PlannerView, components/ReminderLists;Будильник;Оятқыш;;;;RU 9 / KK 6;черновик разработчика
+alarm.level_notification;screen /, screen /reminder-new, components/page/PlannerView, components/ReminderLists;Уведомление;Хабарландыру;;;;RU 11 / KK 12;черновик разработчика
 account_consent.title;screen /account-consent;Этот номер уже есть в другом аккаунте;Бұл нөмір басқа аккаунтта бар;;;;RU 37 / KK 29;черновик разработчика
 account_consent.body;screen /account-consent;Чтобы работать в нём, нужно ваше согласие. Записи с этого телефона целы. Пока вы не согласитесь, они останутся здесь и никуда не отправятся.;Онда жұмыс істеу үшін келісіміңіз керек. Осы телефондағы жазбалар аман. Келіскенше олар осында қалады және ешқайда жіберілмейді.;;;;RU 140 / KK 128;черновик разработчика
 account_consent.later;screen /account-consent;Позже;Кейінірек;;;длиннее RU: RU 5 → KK 9 (×1.8);RU 5 / KK 9 · длиннее RU в 1.8 раза — проверить при 200%;черновик разработчика
@@ -709,7 +749,7 @@ setup.step_alarmkit;screen /alarm-setup;Разрешить будильники;
 setup.hint_notifications;screen /alarm-setup;Без этого разрешения я не смогу громко напомнить.;Бұл рұқсатсыз қатты ескерте алмаймын.;;;;RU 49 / KK 37;черновик разработчика
 setup.hint_exact;screen /alarm-setup;Тогда напоминание придёт минута в минуту.;Сонда ескерту минутына дейін дәл келеді.;;;;RU 41 / KK 40;черновик разработчика
 setup.hint_full_screen;screen /alarm-setup;Будильник появится поверх экрана блокировки.;Оятқыш құлыптау экранының үстінен шығады.;;;;RU 44 / KK 41;черновик разработчика
-setup.hint_autostart;screen /alarm-setup;Найдите «Помощник» и включите переключатель.;«Помощник» қолданбасын тауып, қосқышты қосыңыз.;;;;RU 44 / KK 47;черновик разработчика
+setup.hint_autostart;screen /alarm-setup;Найдите «Помощник» и включите переключатель.;«Помощник» қолданбасын тауып, қосқышты қосыңыз.;;;название экрана: «Помощник» is «Көмекші» in KK (answer.assistant, settings.assistant);RU 44 / KK 47;черновик разработчика
 setup.hint_battery;screen /alarm-setup;Выберите «Без ограничений».;«Шектеусіз» дегенді таңдаңыз.;;;;RU 27 / KK 29;черновик разработчика
 setup.hint_battery_xiaomi;screen /alarm-setup;Выберите «Нет ограничений».;«Шектеу жоқ» дегенді таңдаңыз.;;;;RU 27 / KK 30;черновик разработчика
 setup.hint_alarmkit;screen /alarm-setup;Будильник прозвенит, даже если телефон на беззвучном.;Телефон дыбыссыз режимде болса да, оятқыш шырылдайды.;;;;RU 53 / KK 53;черновик разработчика
@@ -740,6 +780,7 @@ feedback.open;screen /chat;Сообщить о проблеме;Мәселе т�
 answer.local_found;screen /chat, components/AnswerBanner;На телефоне нашёл: {{n}};Телефоннан таптым: {{n}};;;оставить как есть: {{n}};RU 19 / KK 19;черновик разработчика
 answer.retry;screen /chat, components/AnswerBanner;Спросить ещё раз;Қайта сұрау;;;;RU 16 / KK 11;черновик разработчика
 chat.title;screen /chat, components/useCurrentPage;Переписка;Хат алмасу;;«Хат алмасу» или «Сөйлесу» для «Переписка»?;;RU 9 / KK 10;ТЗ §7.3 (черновик)
+common.undo;screen /chat, screen /did, screen /statement/[id], components/kp/KpEdits +1;Отменить;Болдырмау;;«Болдырмау» или «Қайтару» для «Отменить»?;;RU 8 / KK 9 · кнопка: при 200% ~12 букв в строке, переносится;ТЗ §7.3 (черновик)
 kp.company_title;screen /company;Моя компания;Менің компаниям;;;;RU 12 / KK 15;черновик разработчика
 kp.company_hint;screen /company;Эти данные будут в каждом КП.;Бұл деректер әр КҰ-да болады.;;;;RU 29 / KK 29;черновик разработчика
 kp.f_name;screen /company;Название;Атауы;;;;RU 8 / KK 5;черновик разработчика
@@ -806,7 +847,9 @@ account.sms_phone;screen /delete-account;Номер вашего аккаунт�
 account.sms_get;screen /delete-account;Получить SMS-код;SMS-код алу;;;;RU 16 / KK 11;черновик разработчика
 account.sms_code;screen /delete-account;Код из SMS;SMS-тағы код;;;;RU 10 / KK 12;черновик разработчика
 account.yes_delete;screen /delete-account;Да, удалить всё;Иә, бәрін жою;;;;RU 15 / KK 13;черновик разработчика
-account.export;screen /delete-account, screen /my-data;Скачать мои данные;Деректерімді жүктеу;;;;RU 18 / KK 19;черновик разработчика
+account.export;screen /delete-account, screen /my-data, screen /settings;Скачать мои данные;Деректерімді жүктеу;;;;RU 18 / KK 19;черновик разработчика
+account.delete;screen /delete-account, screen /my-data, screen /settings;Удалить аккаунт и все данные;Аккаунтты және барлық деректерді жою;;;;RU 28 / KK 36;черновик разработчика
+did.undo_a11y;screen /did;Отменить: {{what}};Болдырмау: {{what}};;;оставить как есть: {{what}};RU 10 / KK 11 · только для чтения с экрана, длина свободна;черновик разработчика
 did.redo_a11y;screen /did;Вернуть: {{what}};Қайтару: {{what}};;;оставить как есть: {{what}};RU 9 / KK 9 · только для чтения с экрана, длина свободна;черновик разработчика
 did.by_you;screen /did;вы;сіз;;;;RU 2 / KK 3;черновик разработчика
 did.by_me;screen /did;помощник;көмекші;;;;RU 8 / KK 7;черновик разработчика
@@ -816,28 +859,30 @@ did.older;screen /did;Старше 30 дней;30 күннен ескі;;;;RU 14
 did.queued;screen /did;Отменю, когда появится интернет.;Интернет болғанда болдырмаймын.;;;;RU 32 / KK 31;черновик разработчика
 did.all;screen /did;Все;Барлығы;;;длиннее RU: RU 3 → KK 7 (×2.3);RU 3 / KK 7 · длиннее RU в 2.3 раза — проверить при 200%;ТЗ §7.3 (черновик)
 did.only_important;screen /did;Только важное;Тек маңыздысы;;;;RU 13 / KK 13;черновик разработчика
+changes.expired;screen /did, chat/service, components/ReminderLists, dedup/service +1;Отменить уже нельзя — прошло больше 30 дней.;Енді болдырмау мүмкін емес — 30 күннен асты.;;;;RU 44 / KK 44;черновик разработчика
 changes.revert;screen /did, components/ChangesSheet;Вернуть;Қайтару;;;;RU 7 / KK 7;черновик разработчика
+habits.title;screen /did, screen /habits, screen /settings;Что я для вас настроил;Сіз үшін не баптадым;;;;RU 22 / KK 20;черновик разработчика
 draft.gone;screen /draft/[id];Этого черновика больше нет.;Бұл нобай енді жоқ.;;;;RU 27 / KK 19;черновик разработчика
 draft.title_wa;screen /draft/[id];Отправить сообщение?;Хабарлама жіберу керек пе?;;;;RU 20 / KK 26;черновик разработчика
 draft.title_mail;screen /draft/[id];Отправить письмо?;Хат жіберу керек пе?;;;;RU 17 / KK 20;черновик разработчика
 draft.check_number;screen /draft/[id];Проверьте числа в тексте — я мог ошибиться.;Мәтіндегі сандарды тексеріңіз — қателесуім мүмкін.;;;;RU 43 / KK 50;черновик разработчика
 draft.discard;screen /draft/[id];Не надо;Керек емес;;;;RU 7 / KK 10;черновик разработчика
-send.to;screen /draft/[id], screen /kp/send;Кому;Кімге;;;;RU 4 / KK 5;черновик разработчика
-send.by;screen /draft/[id], screen /kp/send;Чем;Немен;;;;RU 3 / KK 5;черновик разработчика
-send.email;screen /draft/[id], screen /kp/send;Адрес почты (не обязательно);Пошта мекенжайы (міндетті емес);;;;RU 28 / KK 31;черновик разработчика
-send.text;screen /draft/[id], screen /kp/send;Текст;Мәтін;;;;RU 5 / KK 5;черновик разработчика
-send.wa_hint;screen /draft/[id], screen /kp/send;Откроется WhatsApp — выберите чат «{{name}}» и нажмите ➤;WhatsApp ашылады — «{{name}}» чатын таңдап, ➤ басыңыз;;;оставить как есть: {{name}};RU 48 / KK 45;черновик разработчика
-send.mail_hint;screen /draft/[id], screen /kp/send;Откроется почта с файлом. Проверьте и нажмите «Отправить».;Файлы бар пошта ашылады. Тексеріп, «Жіберу» басыңыз.;;;;RU 58 / KK 52;черновик разработчика
-send.open_wa;screen /draft/[id], screen /kp/send;Открыть WhatsApp;WhatsApp ашу;;;;RU 16 / KK 12;черновик разработчика
-send.open_mail;screen /draft/[id], screen /kp/send;Открыть почту;Поштаны ашу;;;;RU 13 / KK 11;черновик разработчика
-send.busy;screen /draft/[id], screen /kp/send;Готовлю файл…;Файлды дайындап жатырмын…;;;нет казахских букв — возможно, по-русски · длиннее RU: RU 13 → KK 25 (×1.9);RU 13 / KK 25 · длиннее RU в 1.9 раза — проверить при 200%;черновик разработчика
-send.did_you;screen /draft/[id], screen /kp/send;Отправили?;Жібердіңіз бе?;;;;RU 10 / KK 14;черновик разработчика
-send.did_yes;screen /draft/[id], screen /kp/send;Да;Иә;;;;RU 2 / KK 2;ТЗ §7.3 (черновик)
-send.did_no;screen /draft/[id], screen /kp/send;Нет;Жоқ;;;;RU 3 / KK 3;черновик разработчика
-send.marked_note;screen /draft/[id], screen /kp/send;Отправлено, отменить нельзя;Жіберілді, болдырмау мүмкін емес;;;;RU 27 / KK 32;черновик разработчика
-send.finish;screen /draft/[id], screen /kp/send;Готово;Дайын;;;;RU 6 / KK 5;черновик разработчика
-send.not_marked;screen /draft/[id], screen /kp/send;Хорошо, не отмечаю. Можно открыть ещё раз.;Жарайды, белгілемеймін. Қайта ашуға болады.;;;;RU 42 / KK 43;черновик разработчика
-send.no_client;screen /draft/[id], screen /kp/send, components/page/DocumentsView;клиент;клиент;;;KK = RU: не переведено или заимствованное слово — подтвердить;RU 6 / KK 6;черновик разработчика
+send.to;screen /draft/[id], components/kp/KpSendPanel;Кому;Кімге;;;;RU 4 / KK 5;черновик разработчика
+send.by;screen /draft/[id], components/kp/KpSendPanel;Чем;Немен;;;;RU 3 / KK 5;черновик разработчика
+send.email;screen /draft/[id], components/kp/KpSendPanel;Адрес почты (не обязательно);Пошта мекенжайы (міндетті емес);;;;RU 28 / KK 31;черновик разработчика
+send.text;screen /draft/[id], components/kp/KpSendPanel;Текст;Мәтін;;;;RU 5 / KK 5;черновик разработчика
+send.wa_hint;screen /draft/[id], components/kp/KpSendPanel;Откроется WhatsApp — выберите чат «{{name}}» и нажмите ➤;WhatsApp ашылады — «{{name}}» чатын таңдап, ➤ басыңыз;;;оставить как есть: {{name}};RU 48 / KK 45;черновик разработчика
+send.mail_hint;screen /draft/[id], components/kp/KpSendPanel;Откроется почта с файлом. Проверьте и нажмите «Отправить».;Файлы бар пошта ашылады. Тексеріп, «Жіберу» басыңыз.;;;;RU 58 / KK 52;черновик разработчика
+send.open_wa;screen /draft/[id], components/kp/KpSendPanel;Открыть WhatsApp;WhatsApp ашу;;;;RU 16 / KK 12;черновик разработчика
+send.open_mail;screen /draft/[id], components/kp/KpSendPanel;Открыть почту;Поштаны ашу;;;;RU 13 / KK 11;черновик разработчика
+send.busy;screen /draft/[id], components/kp/KpSendPanel;Готовлю файл…;Файлды дайындап жатырмын…;;;нет казахских букв — возможно, по-русски · длиннее RU: RU 13 → KK 25 (×1.9);RU 13 / KK 25 · длиннее RU в 1.9 раза — проверить при 200%;черновик разработчика
+send.did_you;screen /draft/[id], components/kp/KpSendPanel;Отправили?;Жібердіңіз бе?;;;;RU 10 / KK 14;черновик разработчика
+send.did_yes;screen /draft/[id], components/kp/KpSendPanel;Да;Иә;;;;RU 2 / KK 2;ТЗ §7.3 (черновик)
+send.did_no;screen /draft/[id], components/kp/KpSendPanel;Нет;Жоқ;;;;RU 3 / KK 3;черновик разработчика
+send.marked_note;screen /draft/[id], components/kp/KpSendPanel;Отправлено, отменить нельзя;Жіберілді, болдырмау мүмкін емес;;;;RU 27 / KK 32;черновик разработчика
+send.finish;screen /draft/[id], components/kp/KpSendPanel;Готово;Дайын;;;;RU 6 / KK 5;черновик разработчика
+send.not_marked;screen /draft/[id], components/kp/KpSendPanel;Хорошо, не отмечаю. Можно открыть ещё раз.;Жарайды, белгілемеймін. Қайта ашуға болады.;;;;RU 42 / KK 43;черновик разработчика
+send.no_client;screen /draft/[id], screen /kp/[id], components/kp/KpPreview, components/kp/KpSendPanel +1;клиент;клиент;;;KK = RU: не переведено или заимствованное слово — подтвердить;RU 6 / KK 6;черновик разработчика
 draft.err_no_ai;screen /draft/new;Текст пишет помощник, сейчас он выключен.;Мәтінді көмекші жазады, қазір ол өшірулі.;;;;RU 41 / KK 41;черновик разработчика
 draft.new_title;screen /draft/new;Написать клиенту;Клиентке жазу;;;;RU 16 / KK 13;черновик разработчика
 draft.new_title_to;screen /draft/new;Написать: {{name}};Жазу: {{name}};;;оставить как есть: {{name}};RU 10 / KK 6;черновик разработчика
@@ -874,7 +919,6 @@ dup.mark_a11y;screen /duplicates;Отметить: {{title}};Белгілеу: {
 dup.merge_marked;screen /duplicates;Объединить все отмеченные ({{count}});Белгіленгендердің бәрін біріктіру ({{count}});;;оставить как есть: {{count}};RU 28 / KK 36;черновик разработчика
 dup.batch_detail;screen /duplicates, screen /import;Точные копии: {{removed}}. Останется записей: {{after}}. Вернуть можно 30 дней.;Дәл көшірмелер: {{removed}}. Қалатын жазбалар: {{after}}. 30 күн ішінде қайтаруға болады.;;;оставить как есть: {{after}} {{removed}};RU 59 / KK 69;черновик разработчика
 dup.batch_yes;screen /duplicates, screen /import;Да, убрать;Иә, алып таста;;;;RU 10 / KK 14;черновик разработчика
-common.back;screen /duplicates, screen /import, screen /my-pages, screen /record/[id] +6;Назад;Артқа;;;;RU 5 / KK 5 · кнопка: при 200% ~12 букв в строке, переносится;черновик разработчика
 habits.hint;screen /habits;Это я запомнил по вашим действиям. Уберите то, что не нужно.;Мұны сіздің әрекеттеріңізден есте сақтадым. Керегі жоғын алып тастаңыз.;;;;RU 60 / KK 71;черновик разработчика
 habits.offline;screen /habits;Список придёт, когда появится интернет.;Тізім интернет болғанда келеді.;;;;RU 39 / KK 31;черновик разработчика
 habits.empty;screen /habits;Пока ничего не запомнил.;Әзірге ештеңе есте сақтамадым.;;;;RU 24 / KK 30;черновик разработчика
@@ -937,13 +981,10 @@ dup.look;screen /import, components/SimilarNote, components/StackCards;Посм�
 dup.look_a11y;screen /import, components/SimilarNote, components/StackCards;Посмотреть похожие записи;Ұқсас жазбаларды қарау;;;;RU 25 / KK 22 · только для чтения с экрана, длина свободна;черновик разработчика
 import.offline;screen /import, dedup/service;Нужен интернет;Интернет керек;;;;RU 14 / KK 14;черновик разработчика
 common.not_now;screen /import, screen /, screen /statement/[id];Не сейчас;Қазір емес;;;;RU 9 / KK 10 · кнопка: при 200% ~12 букв в строке, переносится;ТЗ §7.3 (черновик)
+common.back;screen /import, screen /record/[id], screen /did, screen /habits +3;Назад;Артқа;;;;RU 5 / KK 5 · кнопка: при 200% ~12 букв в строке, переносится;черновик разработчика
 kp.more;screen /kp/[id];Ещё;Тағы;;;;RU 3 / KK 4;ТЗ §7.3 (черновик)
 kp.total_missing;screen /kp/[id];Нет цены: {{count}}. Итог ещё не полный;Бағасы жоқ: {{count}}. Қорытынды әлі толық емес;;;оставить как есть: {{count}};RU 30 / KK 38;черновик разработчика
 kp.sum_net;screen /kp/[id];Без НДС;ҚҚС-сыз;;;;RU 7 / KK 7;черновик разработчика
-kp.sum_vat;screen /kp/[id];НДС {{rate}}%;ҚҚС {{rate}}%;;;оставить как есть: {{rate}};RU 5 / KK 5;черновик разработчика
-kp.sum_vat_in;screen /kp/[id];В том числе НДС {{rate}}%;Оның ішінде ҚҚС {{rate}}%;;;оставить как есть: {{rate}};RU 17 / KK 17;черновик разработчика
-kp.sum_total;screen /kp/[id];Итого;Барлығы;;;;RU 5 / KK 7;ТЗ §7.3 (черновик)
-kp.sum_discount;screen /kp/[id];Скидка {{pct}}%;Жеңілдік {{pct}}%;;;оставить как есть: {{pct}};RU 8 / KK 10;черновик разработчика
 kp.set_price;screen /kp/[id];Указать цену;Бағасын көрсету;;;;RU 12 / KK 15;черновик разработчика
 kp.change_price_a11y;screen /kp/[id];Изменить цену: {{name}};Бағасын өзгерту: {{name}};;;оставить как есть: {{name}};RU 15 / KK 17 · только для чтения с экрана, длина свободна;черновик разработчика
 kp.change_qty;screen /kp/[id];Кол-во: {{qty}};Саны: {{qty}};;;оставить как есть: {{qty}};RU 8 / KK 6;черновик разработчика
@@ -966,18 +1007,48 @@ kp.edit_title_amount;screen /kp/[id];Стоимость: {{name}};Құны: {{na
 kp.set_volume;screen /kp/[id];Указать объём;Көлемін көрсету;;;;RU 13 / KK 15;черновик разработчика
 kp.change_volume;screen /kp/[id];Объём: {{volume}};Көлемі: {{volume}};;;оставить как есть: {{volume}};RU 7 / KK 8;черновик разработчика
 kp.change_volume_a11y;screen /kp/[id];Изменить объём: {{name}};Көлемін өзгерту: {{name}};;;оставить как есть: {{name}};RU 16 / KK 17 · только для чтения с экрана, длина свободна;черновик разработчика
-kp.sum_total_no_vat;screen /kp/[id];Итого без НДС;ҚҚС-сыз жиыны;;;;RU 13 / KK 13;черновик разработчика
+kp.lines;screen /kp/[id];Позиции;Позициялар;;;;RU 7 / KK 10;черновик разработчика
+kp.add_line_row;screen /kp/[id];Позиция;Позиция;;;KK = RU: не переведено или заимствованное слово — подтвердить;RU 7 / KK 7;черновик разработчика
+kp.line_short;screen /kp/[id];{{qty}} {{unit}} × {{price}};{{qty}} {{unit}} × {{price}};;;оставить как есть: {{price}} {{qty}} {{unit}};RU 4 / KK 4;черновик разработчика
+kp.lump_word;screen /kp/[id];Стоимость за весь объём;Барлық көлемнің құны;;;;RU 23 / KK 20;черновик разработчика
+kp.sum_none;screen /kp/[id];укажите;көрсетіңіз;;;;RU 7 / KK 10;черновик разработчика
+kp.line_hint;screen /kp/[id];Изменить цену или количество;Бағаны немесе санын өзгерту;;;;RU 28 / KK 27;черновик разработчика
+kp.bar_total;screen /kp/[id];Итого;Барлығы;;;;RU 5 / KK 7;ТЗ §7.3 (черновик)
+kp.bar_total_vat;screen /kp/[id];Итого с НДС;ҚҚС-пен барлығы;;;;RU 11 / KK 15;черновик разработчика
+kp.mode_a11y;screen /kp/[id];Правка или просмотр листа;Түзету немесе парақты қарау;;;;RU 25 / KK 27 · только для чтения с экрана, длина свободна;черновик разработчика
+kp.mode_edit;screen /kp/[id];Правка;Түзету;;;;RU 6 / KK 6;черновик разработчика
+kp.mode_preview;screen /kp/[id];Просмотр;Қарау;;;;RU 8 / KK 5;черновик разработчика
+kp.preview_note;screen /kp/[id];Так выглядит лист. Файл PDF — в «⋯»;Парақ осылай көрінеді. PDF файлы — «⋯» ішінде;;;;RU 35 / KK 45;черновик разработчика
 send.open;screen /kp/[id];Отправить;Жіберу;;;;RU 9 / KK 6;черновик разработчика
 draft.write_client;screen /kp/[id];Написать клиенту;Клиентке жазу;;;;RU 16 / KK 13;черновик разработчика
 kp.add_line;screen /kp/[id], components/kp/KpLineSheets;'+ Добавить строку;'+ Жол қосу;;;;RU 17 / KK 10;черновик разработчика
+kp.sum_vat;screen /kp/[id], components/kp/KpPreview;НДС {{rate}}%;ҚҚС {{rate}}%;;;оставить как есть: {{rate}};RU 5 / KK 5;черновик разработчика
+kp.sum_vat_in;screen /kp/[id], components/kp/KpPreview;В том числе НДС {{rate}}%;Оның ішінде ҚҚС {{rate}}%;;;оставить как есть: {{rate}};RU 17 / KK 17;черновик разработчика
+kp.sum_total;screen /kp/[id], components/kp/KpPreview;Итого;Барлығы;;;;RU 5 / KK 7;ТЗ §7.3 (черновик)
+kp.sum_discount;screen /kp/[id], components/kp/KpPreview;Скидка {{pct}}%;Жеңілдік {{pct}}%;;;оставить как есть: {{pct}};RU 8 / KK 10;черновик разработчика
+kp.sum_total_no_vat;screen /kp/[id], components/kp/KpPreview;Итого без НДС;ҚҚС-сыз жиыны;;;;RU 13 / KK 13;черновик разработчика
+kp.waiting_sync;screen /kp/[id], components/kp/KpSendPanel;Ждёт связи;Байланысты күтуде;;;длиннее RU: RU 10 → KK 17 (×1.7);RU 10 / KK 17 · длиннее RU в 1.7 раза — проверить при 200%;черновик разработчика
+kp.no_version;screen /kp/[id], components/kp/KpSendPanel;Строки КП откроются, когда появится интернет.;КҰ жолдары интернет пайда болғанда ашылады.;;;;RU 45 / KK 43;черновик разработчика
+kp.fields_missing;screen /kp/[id], components/kp/KpSendPanel;Для PDF не хватает: {{list}};PDF үшін жетіспейді: {{list}};;;оставить как есть: {{list}};RU 20 / KK 21;черновик разработчика
+kp.req_number;screen /kp/[id], components/kp/KpSendPanel;номер;нөмірі;;;;RU 5 / KK 6;черновик разработчика
+kp.req_date;screen /kp/[id], components/kp/KpSendPanel;дата;күні;;;;RU 4 / KK 4;черновик разработчика
+kp.req_validity;screen /kp/[id], components/kp/KpSendPanel;срок действия;қолданылу мерзімі;;;;RU 13 / KK 17;черновик разработчика
+kp.req_seller_bin_iin;screen /kp/[id], components/kp/KpSendPanel;ваш БИН или ИИН;сіздің БСН немесе ЖСН;;;;RU 15 / KK 21;черновик разработчика
+kp.req_seller_address;screen /kp/[id], components/kp/KpSendPanel;ваш адрес;сіздің мекенжайыңыз;;;длиннее RU: RU 9 → KK 19 (×2.1);RU 9 / KK 19 · длиннее RU в 2.1 раза — проверить при 200%;черновик разработчика
+kp.req_seller_bank;screen /kp/[id], components/kp/KpSendPanel;ваш банк;сіздің банкіңіз;;;длиннее RU: RU 8 → KK 15 (×1.9);RU 8 / KK 15 · длиннее RU в 1.9 раза — проверить при 200%;черновик разработчика
+kp.req_buyer_name;screen /kp/[id], components/kp/KpSendPanel;клиент;клиент;;;KK = RU: не переведено или заимствованное слово — подтвердить;RU 6 / KK 6;черновик разработчика
+kp.req_buyer_bin;screen /kp/[id], components/kp/KpSendPanel;БИН клиента;клиенттің БСН-і;;;;RU 11 / KK 15;черновик разработчика
+kp.req_items_unit;screen /kp/[id], components/kp/KpSendPanel;единицы у позиций;позициялардың өлшемі;;;;RU 17 / KK 20;черновик разработчика
+kp.req_vat;screen /kp/[id], components/kp/KpSendPanel;НДС;ҚҚС;;;;RU 3 / KK 3;черновик разработчика
+kp.req_signature_stamp;screen /kp/[id], components/kp/KpSendPanel;подпись и печать;қолтаңба мен мөр;;;;RU 16 / KK 16;черновик разработчика
 kp.vat_mode_included;screen /kp/[id], kp/service, kp/view;в сумме;сомаға кірген;;;длиннее RU: RU 7 → KK 13 (×1.9);RU 7 / KK 13 · длиннее RU в 1.9 раза — проверить при 200%;черновик разработчика
 kp.vat_mode_on_top;screen /kp/[id], kp/service, kp/view;сверху;үстіне;;;;RU 6 / KK 6;черновик разработчика
 kp.vat_mode_none;screen /kp/[id], kp/service, kp/view;без НДС;ҚҚС-сыз;;;;RU 7 / KK 7;черновик разработчика
-kp.kp_plain;screen /kp/[id], kp/view;КП;КҰ;;;;RU 2 / KK 2;черновик разработчика
 kp.change_price;screen /kp/[id], screen /price-list;Цена: {{price}};Бағасы: {{price}};;;оставить как есть: {{price}};RU 6 / KK 8;черновик разработчика
 kp.edit_title_price;screen /kp/[id], screen /price-list;Цена: {{name}};Бағасы: {{name}};;;оставить как есть: {{name}};RU 6 / KK 8;черновик разработчика
 kp.job_retry;screen /kp/new;Попробовать снова;Қайта көру;;;;RU 17 / KK 10;черновик разработчика
 kp.job_remove;screen /kp/new;Убрать;Алып тастау;;;длиннее RU: RU 6 → KK 11 (×1.8);RU 6 / KK 11 · длиннее RU в 1.8 раза — проверить при 200%;черновик разработчика
+kp.step;screen /kp/new;{{n}} из 3;{{n}} / 3;;;оставить как есть: {{n}};RU 5 / KK 4;черновик разработчика
 kp.company_first_title;screen /kp/new;Сначала — ваша компания;Алдымен — сіздің компанияңыз;;;;RU 23 / KK 28;черновик разработчика
 kp.company_first_body;screen /kp/new;Название и БИН будут в каждом КП. Это нужно один раз.;Атауы мен БСН әр КҰ-да болады. Бұл бір рет керек.;;;;RU 53 / KK 49;черновик разработчика
 kp.later;screen /kp/new;Позже;Кейін;;;;RU 5 / KK 5;черновик разработчика
@@ -1013,7 +1084,6 @@ kp.job_waiting;screen /kp/new, components/page/DocumentsView;ТЗ сохране
 kp.job_reading;screen /kp/new, components/page/DocumentsView;Читаю ТЗ… обычно до 2 минут;ТТ-ны оқып жатырмын… әдетте 2 минутқа дейін;;;длиннее RU: RU 27 → KK 43 (×1.6);RU 27 / KK 43 · длиннее RU в 1.6 раза — проверить при 200%;черновик разработчика
 kp.job_progress;screen /kp/new, components/page/DocumentsView;Читаю ТЗ… {{done}} из {{total}};ТТ-ны оқып жатырмын… {{total}} ішінен {{done}};;;длиннее RU: RU 14 → KK 29 (×2.1) · оставить как есть: {{done}} {{total}};RU 14 / KK 29 · длиннее RU в 2.1 раза — проверить при 200%;черновик разработчика
 kp.job_failed;screen /kp/new, components/page/DocumentsView;Не получилось прочитать ТЗ;ТТ-ны оқу мүмкін болмады;;;;RU 26 / KK 24;черновик разработчика
-kp.step;screen /kp/new, screen /kp/[id];{{n}} из 3;{{n}} / 3;;;оставить как есть: {{n}};RU 5 / KK 4;черновик разработчика
 kp.company_fill;screen /kp/new, screen /kp/[id];Заполнить реквизиты;Деректемелерді толтыру;;;;RU 19 / KK 22;черновик разработчика
 kp.fast_input;screen /kp/new, screen /kp/[id];Ввести цены подряд;Бағаларды қатарынан енгізу;;;;RU 18 / KK 26;черновик разработчика
 kp.vat_line;screen /kp/new, screen /kp/[id];НДС: {{mode}};ҚҚС: {{mode}};;;оставить как есть: {{mode}};RU 5 / KK 5;черновик разработчика
@@ -1029,44 +1099,7 @@ kp.fast_item;screen /kp/prices;{{name}}, {{qty}} {{unit}};{{name}}, {{qty}} {{un
 kp.edit_bad;screen /kp/prices, components/kp/NumberSheet;Нужно число больше нуля;Нөлден үлкен сан керек;;;;RU 23 / KK 22;черновик разработчика
 kp.save_to_list;screen /kp/prices, components/kp/NumberSheet;Сохранить в прайс;Прайсқа сақтау;;;;RU 17 / KK 14;черновик разработчика
 kp.price_set;screen /kp/prices, screen /kp/[id];Цена: {{name}};Бағасы: {{name}};;;оставить как есть: {{name}};RU 6 / KK 8;черновик разработчика
-kp.pdf_missing;screen /kp/send;Сначала укажите все цены;Алдымен барлық бағаны көрсетіңіз;;;;RU 24 / KK 32;черновик разработчика
-send.title;screen /kp/send;Отправляю;Жіберіп жатырмын;;;длиннее RU: RU 9 → KK 16 (×1.8);RU 9 / KK 16 · длиннее RU в 1.8 раза — проверить при 200%;черновик разработчика
-send.file_pdf;screen /kp/send;{{title}}, версия {{n}} · PDF;{{title}}, {{n}}-нұсқа · PDF;;;оставить как есть: {{n}} {{title}};RU 15 / KK 14;черновик разработчика
-send.file_docx;screen /kp/send;{{title}}, версия {{n}} · Word;{{title}}, {{n}}-нұсқа · Word;;;оставить как есть: {{n}} {{title}};RU 16 / KK 15;черновик разработчика
-send.subject;screen /kp/send;{{title}};{{title}};;;оставить как есть: {{title}};RU 0 / KK 0;черновик разработчика
-send.sum;screen /kp/send;Сумма: {{amount}};Сомасы: {{amount}};;;оставить как есть: {{amount}};RU 7 / KK 8;черновик разработчика
-send.sum_missing;screen /kp/send;Нет цены: {{count}};Бағасы жоқ: {{count}};;;оставить как есть: {{count}};RU 10 / KK 12;черновик разработчика
-send.client_saw;screen /kp/send;Клиент видел v{{n}}. Отправить новую?;Клиент v{{n}} көрді. Жаңасын жіберу керек пе?;;;оставить как есть: {{n}};RU 32 / KK 40;черновик разработчика
-send.already_sent;screen /kp/send;Версию {{n}} уже отправляли. Можно отправить ещё раз.;{{n}}-нұсқа жіберілген. Тағы жіберуге болады.;;;оставить как есть: {{n}};RU 48 / KK 40;черновик разработчика
-send.format;screen /kp/send;Файл;Файл;;;KK = RU: не переведено или заимствованное слово — подтвердить;RU 4 / KK 4;черновик разработчика
-send.format_pdf;screen /kp/send;PDF;PDF;;;;RU 3 / KK 3;черновик разработчика
-send.format_docx;screen /kp/send;Word;Word;;;;RU 4 / KK 4;черновик разработчика
-send.ch_share;screen /kp/send;Другое;Басқа;;;;RU 6 / KK 5;черновик разработчика
-send.text_reset;screen /kp/send;Вернуть текст как был;Мәтінді бұрынғыдай қайтару;;;;RU 21 / KK 26;черновик разработчика
-send.share_hint;screen /kp/send;Откроется «Поделиться». Выберите, куда отправить файл.;«Бөлісу» ашылады. Файлды қайда жіберетініңізді таңдаңыз.;;;;RU 54 / KK 56;черновик разработчика
-send.open_share;screen /kp/send;Поделиться;Бөлісу;;;;RU 10 / KK 6;черновик разработчика
-send.err_offline;screen /kp/send;Файл делает сервер — нужен интернет. Текст в WhatsApp можно отправить и без него.;Файлды сервер жасайды — интернет керек. WhatsApp-қа мәтінді интернетсіз де жіберуге болады.;;;;RU 81 / KK 91;черновик разработчика
-send.err_missing;screen /kp/send;Сначала укажите все цены;Алдымен барлық бағаны көрсетіңіз;;;;RU 24 / KK 32;черновик разработчика
-send.err_waiting;screen /kp/send;Ещё отправляю правки. Попробуйте через минуту.;Түзетулерді әлі жіберіп жатырмын. Бір минуттан кейін көріңіз.;;;;RU 46 / KK 61;черновик разработчика
-send.err_failed;screen /kp/send;Не получилось открыть. Попробуйте ещё раз.;Ашу мүмкін болмады. Қайталап көріңіз.;;;;RU 42 / KK 37;черновик разработчика
-send.text_only;screen /kp/send;Отправить только текст в чат;Чатқа тек мәтін жіберу;;;;RU 28 / KK 22;черновик разработчика
-send.did_you_body;screen /kp/send;Если отправили, отмечу версию {{n}} как отправленную.;Жіберсеңіз, {{n}}-нұсқаны жіберілді деп белгілеймін.;;;оставить как есть: {{n}};RU 48 / KK 47;черновик разработчика
-send.marked;screen /kp/send;Отправлено {{date}};Жіберілді {{date}};;;оставить как есть: {{date}};RU 11 / KK 10;черновик разработчика
-send.wa_failed;screen /kp/send, kp/service;Не получилось открыть WhatsApp.;WhatsApp ашылмады.;;;;RU 31 / KK 18;черновик разработчика
-kp.waiting_sync;screen /kp/send, screen /kp/[id];Ждёт связи;Байланысты күтуде;;;длиннее RU: RU 10 → KK 17 (×1.7);RU 10 / KK 17 · длиннее RU в 1.7 раза — проверить при 200%;черновик разработчика
-kp.no_version;screen /kp/send, screen /kp/[id];Строки КП откроются, когда появится интернет.;КҰ жолдары интернет пайда болғанда ашылады.;;;;RU 45 / KK 43;черновик разработчика
-kp.fields_missing;screen /kp/send, screen /kp/[id];Для PDF не хватает: {{list}};PDF үшін жетіспейді: {{list}};;;оставить как есть: {{list}};RU 20 / KK 21;черновик разработчика
-kp.req_number;screen /kp/send, screen /kp/[id];номер;нөмірі;;;;RU 5 / KK 6;черновик разработчика
-kp.req_date;screen /kp/send, screen /kp/[id];дата;күні;;;;RU 4 / KK 4;черновик разработчика
-kp.req_validity;screen /kp/send, screen /kp/[id];срок действия;қолданылу мерзімі;;;;RU 13 / KK 17;черновик разработчика
-kp.req_seller_bin_iin;screen /kp/send, screen /kp/[id];ваш БИН или ИИН;сіздің БСН немесе ЖСН;;;;RU 15 / KK 21;черновик разработчика
-kp.req_seller_address;screen /kp/send, screen /kp/[id];ваш адрес;сіздің мекенжайыңыз;;;длиннее RU: RU 9 → KK 19 (×2.1);RU 9 / KK 19 · длиннее RU в 2.1 раза — проверить при 200%;черновик разработчика
-kp.req_seller_bank;screen /kp/send, screen /kp/[id];ваш банк;сіздің банкіңіз;;;длиннее RU: RU 8 → KK 15 (×1.9);RU 8 / KK 15 · длиннее RU в 1.9 раза — проверить при 200%;черновик разработчика
-kp.req_buyer_name;screen /kp/send, screen /kp/[id];клиент;клиент;;;KK = RU: не переведено или заимствованное слово — подтвердить;RU 6 / KK 6;черновик разработчика
-kp.req_buyer_bin;screen /kp/send, screen /kp/[id];БИН клиента;клиенттің БСН-і;;;;RU 11 / KK 15;черновик разработчика
-kp.req_items_unit;screen /kp/send, screen /kp/[id];единицы у позиций;позициялардың өлшемі;;;;RU 17 / KK 20;черновик разработчика
-kp.req_vat;screen /kp/send, screen /kp/[id];НДС;ҚҚС;;;;RU 3 / KK 3;черновик разработчика
-kp.req_signature_stamp;screen /kp/send, screen /kp/[id];подпись и печать;қолтаңба мен мөр;;;;RU 16 / KK 16;черновик разработчика
+send.title;screen /kp/send, screen /kp/[id];Отправляю;Жіберіп жатырмын;;;длиннее RU: RU 9 → KK 16 (×1.8);RU 9 / KK 16 · длиннее RU в 1.8 раза — проверить при 200%;черновик разработчика
 kp.version_offline;screen /kp/version;Эта версия откроется, когда появится интернет.;Бұл нұсқа интернет болғанда ашылады.;;;;RU 46 / KK 36;черновик разработчика
 kp.v_frozen;screen /kp/version;Эту версию получил клиент {{date}}. Она не меняется.;Бұл нұсқаны клиент {{date}} алды. Ол өзгермейді.;;;оставить как есть: {{date}};RU 44 / KK 40;черновик разработчика
 kp.v_is_current;screen /kp/version;С этой версией вы сейчас работаете.;Қазір осы нұсқамен жұмыс істеп жатырсыз.;;;;RU 35 / KK 40;черновик разработчика
@@ -1101,39 +1134,41 @@ kp.v_by_phrase;screen /kp/versions;по фразе «{{text}}»;сөз бойы�
 kp.v_by_phrase_plain;screen /kp/versions;по фразе;сөз бойынша;;;;RU 8 / KK 11;черновик разработчика
 kp.v_no_total;screen /kp/versions;итог не полный;жиыны толық емес;;;;RU 14 / KK 16;черновик разработчика
 kp.v_open_hint;screen /kp/versions;Открыть эту версию;Осы нұсқаны ашу;;;;RU 18 / KK 15;черновик разработчика
-tpl.hint.custom;screen /more;пустая — назовёте сами;бос — атын өзіңіз қоясыз;;;;RU 22 / KK 24;черновик разработчика
-more.other_pages;screen /more;Другие страницы;Басқа беттер;;;;RU 15 / KK 12;черновик разработчика
+consent.mode_full;screen /legal;Хранение в Казахстане и передача сервисам ИИ;Қазақстанда сақтау және ЖИ сервистеріне беру;;;;RU 44 / KK 44;черновик разработчика
+consent.mode_no_ai;screen /legal;Только хранение в Казахстане (без ИИ);Тек Қазақстанда сақтау (ЖИ-сіз);;;;RU 37 / KK 31;черновик разработчика
+consent.kind.pd_processing;screen /legal;Хранение данных;Деректерді сақтау;;;;RU 15 / KK 17;черновик разработчика
+consent.kind.ai_cross_border;screen /legal;Передача сервисам ИИ;ЖИ сервистеріне беру;;;;RU 20 / KK 20;черновик разработчика
+consent.kind.terms;screen /legal;Условия и 18+;Шарттар және 18+;;;;RU 13 / KK 16;черновик разработчика
+consent.kind.push_content;screen /legal;Текст в уведомлениях;Хабарландырудағы мәтін;;;;RU 20 / KK 22;черновик разработчика
+legal.version;screen /legal;Версия: {{v}};Нұсқа: {{v}};;;оставить как есть: {{v}};RU 8 / KK 7;черновик разработчика
+legal.push_title;screen /legal;Уведомления;Хабарландырулар;;;;RU 11 / KK 15;черновик разработчика
+legal.accepted_at;screen /legal;Принято: {{when}};Қабылданды: {{when}};;;оставить как есть: {{when}};RU 9 / KK 12;черновик разработчика
+legal.versions;screen /legal;Принятые тексты;Қабылданған мәтіндер;;;;RU 15 / KK 20;черновик разработчика
+legal.none;screen /legal;Согласий пока нет.;Әзірге келісім жоқ.;;;;RU 18 / KK 19;черновик разработчика
+consent.storage_title;screen /legal, consent/ConsentForm;1. Хранение в Казахстане;1. Қазақстанда сақтау;;;;RU 24 / KK 21;черновик разработчика
+consent.storage_body;screen /legal, consent/ConsentForm;Ваши записи, голос и фото я храню на серверах в Казахстане.;Жазбаларыңызды, дауысыңызды және суреттеріңізді Қазақстандағы серверлерде сақтаймын.;;;;RU 59 / KK 84;черновик разработчика
+consent.cross_title;screen /legal, consent/ConsentForm;2. Передача сервисам ИИ за рубеж;2. Шетелдегі ЖИ сервистеріне беру;;;;RU 32 / KK 33;черновик разработчика
+consent.cross_body;screen /legal, consent/ConsentForm;Чтобы понимать голос и документы, я отправляю текст, записи голоса и фото одному из сервисов ИИ (США). Они не обучаются на ваших данных и хранят их не дольше {{days}} дней для защиты от злоупотреблений.;Дауыс пен құжаттарды түсіну үшін мәтінді, дауыс жазбаларын және суреттерді ЖИ сервистерінің біріне (АҚШ) жіберемін. Олар сіздің деректеріңізбен оқымайды және теріс пайдаланудан қорғау үшін {{days}} күннен артық сақтамайды.;;;оставить как есть: {{days}};RU 194 / KK 214;черновик разработчика
+consent.recipients;screen /legal, consent/ConsentForm;Anthropic, OpenAI, Google, Groq;Anthropic, OpenAI, Google, Groq;;;;RU 31 / KK 31;черновик разработчика
+legal.policy;screen /legal, screen /settings;Политика конфиденциальности;Құпиялылық саясаты;;;;RU 27 / KK 18;черновик разработчика
+legal.terms;screen /legal, screen /settings;Условия;Шарттар;;;;RU 7 / KK 7;черновик разработчика
+legal.consents;screen /legal, screen /settings;Согласия;Келісімдер;;;;RU 8 / KK 10;черновик разработчика
 more.my_pages;screen /more;Мои страницы;Менің беттерім;;;;RU 12 / KK 14;ТЗ §7.3 (черновик)
-more.chat;screen /more;Переписка;Хат алмасу;;;;RU 9 / KK 10;ТЗ §7.3 (черновик)
-more.settings;screen /more;Настройки;Баптаулар;;;;RU 9 / KK 9;черновик разработчика
-more.help;screen /more;Помощь;Көмек;;;;RU 6 / KK 5;черновик разработчика
 more.add_page;screen /more;Своя страница;Өз бетім;;;;RU 13 / KK 8;черновик разработчика
-more.alarms;screen /more;Будильники;Оятқыштар;;;;RU 10 / KK 9;черновик разработчика
-more.alarms_ok;screen /more;Проверено ✓;Тексерілді ✓;;;;RU 11 / KK 12;черновик разработчика
-more.alarms_fix;screen /more;Нужно настроить;Баптау керек;;;;RU 15 / KK 12;черновик разработчика
-more.duplicates_meta;screen /more;Похожих записей: {{count}};Ұқсас жазбалар: {{count}};;;оставить как есть: {{count}};RU 17 / KK 16;черновик разработчика
-phone.more_row;screen /more;Укажите номер;Нөміріңізді көрсетіңіз;;;длиннее RU: RU 13 → KK 22 (×1.7);RU 13 / KK 22 · длиннее RU в 1.7 раза — проверить при 200%;черновик разработчика
-phone.more_hint;screen /more;Чтобы не потерять записи;Жазбалар жоғалмас үшін;;;;RU 24 / KK 22;черновик разработчика
-phone.linked;screen /more;Номер указан;Нөмір көрсетілген;;;;RU 12 / KK 17;черновик разработчика
-phone.sign_in_row;screen /more;Войти по номеру;Нөмірмен кіру;;;;RU 15 / KK 13;черновик разработчика
-phone.sign_in_hint;screen /more;Пока записи только на этом телефоне;Әзірге жазбалар тек осы телефонда;;;;RU 35 / KK 33;черновик разработчика
-trash.hint;screen /more;Можно вернуть в течение 30 дней;30 күн ішінде қайтаруға болады;;;;RU 31 / KK 30;черновик разработчика
+more.your_pages;screen /more;Ваши страницы;Сіздің беттеріңіз;;;;RU 13 / KK 17;черновик разработчика
+more.profile;screen /more;Профиль;Профиль;;;KK = RU: не переведено или заимствованное слово — подтвердить;RU 7 / KK 7;черновик разработчика
+more.profile_hint;screen /more;Аккаунт и настройки;Аккаунт және баптаулар;;;;RU 19 / KK 22;черновик разработчика
 account_consent.row;screen /more;Подтвердите согласие;Келісімді растаңыз;;;;RU 20 / KK 18;черновик разработчика
 account_consent.row_hint;screen /more;Пока записи только на этом телефоне;Әзірге жазбалар тек осы телефонда;;;;RU 35 / KK 33;черновик разработчика
-account.my_data_hint;screen /more;Скачать, где хранятся, удалить;Жүктеу, қайда сақталады, жою;;;;RU 30 / KK 28;черновик разработчика
-more.later;screen /more, components/AddSheet;Появится позже;Кейінірек пайда болады;;;длиннее RU: RU 14 → KK 22 (×1.6);RU 14 / KK 22 · длиннее RU в 1.6 раза — проверить при 200%;черновик разработчика
 more.title;screen /more, components/useCurrentPage;Ещё;Тағы;;;;RU 3 / KK 4;ТЗ §7.3 (черновик)
-account.delete;screen /more, screen /delete-account, screen /my-data;Удалить аккаунт и все данные;Аккаунтты және барлық деректерді жою;;;;RU 28 / KK 36;черновик разработчика
-habits.title;screen /more, screen /did, screen /habits;Что я для вас настроил;Сіз үшін не баптадым;;;;RU 22 / KK 20;черновик разработчика
+more.did;screen /more, screen /chat, screen /did, components/AnswerBanner;Что я сделал;Не жасадым;;;;RU 12 / KK 10;черновик разработчика
 more.import;screen /more, screen /my-data;Принести заметки;Жазбаларды әкелу;;;;RU 16 / KK 16;черновик разработчика
-more.duplicates;screen /more, screen /my-data;Повторы;Қайталанғандар;;;длиннее RU: RU 7 → KK 14 (×2.0);RU 7 / KK 14 · длиннее RU в 2.0 раза — проверить при 200%;черновик разработчика
-account.my_data;screen /more, screen /my-data;Мои данные;Менің деректерім;;;длиннее RU: RU 10 → KK 16 (×1.6);RU 10 / KK 16 · длиннее RU в 1.6 раза — проверить при 200%;черновик разработчика
 gallery.limit;screen /more, screen /my-pages, screen /pages-gallery, components/MovePageSheet;Можно до 20 страниц. Уберите ненужную в «Мои страницы».;20 бетке дейін болады. Керек емесін «Менің беттерім» ішінде алып тастаңыз.;;;;RU 55 / KK 74;черновик разработчика
-more.all_records;screen /more, screen /records, components/useCurrentPage;Все записи;Барлық жазбалар;;;;RU 10 / KK 15;черновик разработчика
-trash.title;screen /more, screen /trash, screen /my-data, components/useCurrentPage;Удалённые записи;Өшірілген жазбалар;;;;RU 16 / KK 18;черновик разработчика
-lang.ru;screen /more, screen /welcome;Русский;Русский;;;;RU 7 / KK 7;черновик разработчика
-lang.kk;screen /more, screen /welcome;Қазақша;Қазақша;;;;RU 7 / KK 7;черновик разработчика
-lang.choose;screen /more, screen /welcome;Язык;Тіл;;;;RU 4 / KK 3;черновик разработчика
+more.settings;screen /more, screen /settings;Настройки;Баптаулар;;;;RU 9 / KK 9;черновик разработчика
+phone.linked;screen /more, screen /settings;Номер указан;Нөмір көрсетілген;;;;RU 12 / KK 17;черновик разработчика
+phone.sign_in_row;screen /more, screen /settings;Войти по номеру;Нөмірмен кіру;;;;RU 15 / KK 13;черновик разработчика
+phone.sign_in_hint;screen /more, screen /settings;Пока записи только на этом телефоне;Әзірге жазбалар тек осы телефонда;;;;RU 35 / KK 33;черновик разработчика
+account.my_data;screen /my-data;Мои данные;Менің деректерім;;;длиннее RU: RU 10 → KK 16 (×1.6);RU 10 / KK 16 · длиннее RU в 1.6 раза — проверить при 200%;черновик разработчика
 account.export_what;screen /my-data;Соберу архив: записи, страницы, напоминания, траты, КП и переписку. Это займёт пару минут.;Мұрағат жинаймын: жазбалар, беттер, еске салғыштар, шығындар, КҰ және хат алмасу. Бірнеше минут кетеді.;;;;RU 90 / KK 103;черновик разработчика
 account.export_making;screen /my-data;Готовлю архив…;Мұрағатты дайындап жатырмын…;;;длиннее RU: RU 14 → KK 28 (×2.0);RU 14 / KK 28 · длиннее RU в 2.0 раза — проверить при 200%;черновик разработчика
 account.export_get;screen /my-data;Скачать (до {{until}});Жүктеу ({{until}} дейін);;;оставить как есть: {{until}};RU 13 / KK 15;черновик разработчика
@@ -1142,6 +1177,7 @@ account.export_expired;screen /my-data;Ссылка устарела. Скача
 account.export_link_hint;screen /my-data;Откроется окно «Поделиться»: отправьте ссылку себе или откройте её. Ссылка работает 24 часа.;«Бөлісу» терезесі ашылады: сілтемені өзіңізге жіберіңіз не ашыңыз. Сілтеме 24 сағат жұмыс істейді.;;;;RU 92 / KK 98;черновик разработчика
 account.where_title;screen /my-data;Где хранятся;Қайда сақталады;;;;RU 12 / KK 15;черновик разработчика
 account.where;screen /my-data;В Казахстане, на защищённых серверах.;Қазақстанда, қорғалған серверлерде.;;;;RU 37 / KK 35;черновик разработчика
+more.duplicates;screen /my-data, screen /settings;Повторы;Қайталанғандар;;;длиннее RU: RU 7 → KK 14 (×2.0);RU 7 / KK 14 · длиннее RU в 2.0 раза — проверить при 200%;черновик разработчика
 pages.my;screen /my-pages;Мои страницы;Менің беттерім;;«бет» для «страница» понятно (или «парақ»)?;;RU 12 / KK 14;ТЗ §7.3 (черновик)
 pages.in_tabs;screen /my-pages;Первые {{n}} — во вкладках внизу;Алғашқы {{n}} — төмендегі қойындыларда;;;оставить как есть: {{n}};RU 27 / KK 33;черновик разработчика
 pages.today_fixed;screen /my-pages;всегда первая;әрқашан бірінші;;;;RU 13 / KK 15;черновик разработчика
@@ -1159,7 +1195,6 @@ move.down;screen /my-pages, components/page/DocumentsView, components/page/Stick
 move.drag_hint;screen /my-pages, components/page/NotebookView, components/RecordRow;Нажмите и держите, чтобы перетащить;Сүйреу үшін басып ұстап тұрыңыз;;;;RU 35 / KK 31;черновик разработчика
 move.up_a11y;screen /my-pages, screen /page-settings/[id], components/page/NotebookView, components/page/StickersView +2;Выше: {{what}};Жоғары: {{what}};;;оставить как есть: {{what}};RU 6 / KK 8 · только для чтения с экрана, длина свободна;черновик разработчика
 move.down_a11y;screen /my-pages, screen /page-settings/[id], components/page/NotebookView, components/page/StickersView +2;Ниже: {{what}};Төмен: {{what}};;;оставить как есть: {{what}};RU 6 / KK 7 · только для чтения с экрана, длина свободна;черновик разработчика
-common.close;screen /my-pages, screen /record/[id], screen /chat, screen /draft/[id] +15;Закрыть;Жабу;;;;RU 7 / KK 4 · кнопка: при 200% ~12 букв в строке, переносится;ТЗ §7.3 (черновик)
 notify.title;screen /notify;Сохранил;Сақтадым;;;;RU 8 / KK 8;черновик разработчика
 notify.block;screen /notify;Напомню громко, чтобы не пропустили;Өткізіп алмауыңыз үшін қатты ескертемін;;;;RU 35 / KK 39;черновик разработчика
 notify.allow;screen /notify;Разрешить уведомления;Хабарландыруларға рұқсат беру;;;;RU 21 / KK 29;черновик разработчика
@@ -1216,7 +1251,6 @@ view.layout.shopping;screen /page-settings/[id], components/page/NotebookView, p
 view.layout.planner;screen /page-settings/[id], components/page/NotebookView, pages/viewService;Ежедневник;Күнделік;;;;RU 10 / KK 8;черновик разработчика
 view.layout.tool;screen /page-settings/[id], components/page/NotebookView, pages/viewService;Как задумано;Ойластырылғандай;;;;RU 12 / KK 16;черновик разработчика
 view.err_custom_limit;screen /page-settings/[id], components/page/NotebookView, pages/viewService;Можно до 5 своих полей;Өз өрістеріңіз 5-тен аспайды;;;;RU 22 / KK 28;черновик разработчика
-page.order_done;screen /page-settings/[id], components/page/PageFrame;Готово;Дайын;;;;RU 6 / KK 5;черновик разработчика
 view.settings;screen /page-settings/[id], components/page/PageFrame;Настроить;Баптау;;;;RU 9 / KK 6;черновик разработчика
 notes.mode_rows;screen /page-settings/[id], components/page/StickersView, pages/viewService;Ряды;Қатарлар;;;длиннее RU: RU 4 → KK 8 (×2.0);RU 4 / KK 8 · длиннее RU в 2.0 раза — проверить при 200%;черновик разработчика
 notes.mode_board;screen /page-settings/[id], components/page/StickersView, pages/viewService;Доска;Тақта;;;;RU 5 / KK 5;черновик разработчика
@@ -1313,7 +1347,9 @@ check.save;screen /record/[id];Сохранить;Сақтау;;;;RU 9 / KK 6 ·
 check.cancel;screen /record/[id];Отмена;Болдырмау;;;;RU 6 / KK 9 · кнопка: при 200% ~12 букв в строке, переносится;ТЗ §7.3 (черновик)
 check.badge;screen /record/[id], components/page/stickerLabel, components/page/StickersView, components/RecordRow;проверьте;тексеріңіз;;;;RU 9 / KK 10;ТЗ §7.3 (черновик)
 ai.label;screen /record/[id], screen /chat, screen /draft/[id], screen /kp/new +2;Подготовил помощник (ИИ) по вашим записям — проверьте;Көмекші (ЖИ) жазбаларыңыз бойынша дайындады — тексеріңіз;;Понятно ли «ЖИ» людям 45+ или писать полностью «жасанды интеллект»?;;RU 53 / KK 56;ТЗ §7.3 (черновик)
+common.close;screen /record/[id], screen /draft/[id], screen /habits, components/ChangesSheet +9;Закрыть;Жабу;;;;RU 7 / KK 4 · кнопка: при 200% ~12 букв в строке, переносится;ТЗ §7.3 (черновик)
 page.empty;screen /records, components/page/ClassicView;Скажите или напишите что угодно — я сохраню;Кез келген нәрсені айтыңыз немесе жазыңыз — сақтаймын;;;;RU 43 / KK 53;черновик разработчика
+more.all_records;screen /records, screen /settings, components/useCurrentPage;Все записи;Барлық жазбалар;;;;RU 10 / KK 15;черновик разработчика
 rem.title_new;screen /reminder-new;Новое напоминание;Жаңа ескерту;;;;RU 17 / KK 12;черновик разработчика
 rem.title_parsed;screen /reminder-new;Понял так:;Былай түсіндім:;;;;RU 10 / KK 15;ТЗ §7.3 (черновик)
 rem.what;screen /reminder-new;О чём напомнить;Не туралы ескерту керек;;;длиннее RU: RU 15 → KK 23 (×1.5);RU 15 / KK 23 · длиннее RU в 1.5 раза — проверить при 200%;черновик разработчика
@@ -1340,15 +1376,38 @@ rem.need_title;screen /reminder-new;Напишите, о чём напомнит
 rem.no_repeat;screen /reminder-new;Повторы по дням — позже. Сейчас напоминание один раз.;Күн сайын қайталау — кейінірек. Қазір ескерту бір рет.;;;;RU 53 / KK 54;черновик разработчика
 rem.choose_time;screen /reminder-new;Выберите время: утром или вечером;Уақытты таңдаңыз: таңертең бе, кешке ме;;;;RU 33 / KK 39;черновик разработчика
 rem.close;screen /reminder-new, components/ReminderCards;Закрыть;Жабу;;;;RU 7 / KK 4;ТЗ §7.3 (черновик)
-alarm.level_alarm;screen /reminder-new, components/page/PlannerView, components/ReminderCards, components/ReminderLists;Будильник;Оятқыш;;;;RU 9 / KK 6;черновик разработчика
-alarm.level_notification;screen /reminder-new, components/page/PlannerView, components/ReminderCards, components/ReminderLists;Уведомление;Хабарландыру;;;;RU 11 / KK 12;черновик разработчика
-rem.late_risk;screen /reminder-new, components/page/PlannerView, components/ReminderCards, components/ReminderLists;Может опоздать до 10 минут;10 минутқа дейін кешігуі мүмкін;;;;RU 26 / KK 31;черновик разработчика
+rem.late_risk;screen /reminder-new, components/page/PlannerView, components/ReminderLists;Может опоздать до 10 минут;10 минутқа дейін кешігуі мүмкін;;;;RU 26 / KK 31;черновик разработчика
 search.field;screen /search;Что найти;Нені табу керек;;;длиннее RU: RU 9 → KK 15 (×1.7);RU 9 / KK 15 · длиннее RU в 1.7 раза — проверить при 200%;черновик разработчика
 search.found;screen /search;Нашёл сразу: {{n}};Бірден таптым: {{n}};;;оставить как есть: {{n}};RU 13 / KK 15;черновик разработчика
 search.none;screen /search;Не нашёл. Попробуйте сказать другими словами.;Таппадым. Басқа сөздермен айтып көріңіз.;;;;RU 45 / KK 40;черновик разработчика
 search.save;screen /search;Это не вопрос? Сохранить как запись;Бұл сұрақ емес пе? Жазба ретінде сақтау;;;;RU 35 / KK 39 · кнопка: при 200% ~12 букв в строке, переносится;черновик разработчика
 search.saved;screen /search;Сохранено;Сақталды;;;;RU 9 / KK 8;ТЗ §7.3 (черновик)
+search.no_page;screen /search;Без страницы;Бетсіз;;;;RU 12 / KK 6;черновик разработчика
+search.answer;screen /search;Ответ;Жауап;;;;RU 5 / KK 5;черновик разработчика
+ai.label_short;screen /search, components/AnswerBanner, components/page/StickersView, components/PendingAnswerCard +1;Подготовил помощник (ИИ) — проверьте;Көмекші (ЖИ) дайындады — тексеріңіз;;;;RU 36 / KK 35;черновик разработчика
 search.title;screen /search, components/useCurrentPage;Поиск;Іздеу;;;;RU 5 / KK 5;черновик разработчика
+more.chat;screen /settings;Переписка;Хат алмасу;;;;RU 9 / KK 10;ТЗ §7.3 (черновик)
+more.alarms;screen /settings;Будильники;Оятқыштар;;;;RU 10 / KK 9;черновик разработчика
+more.alarms_ok;screen /settings;Проверено ✓;Тексерілді ✓;;;;RU 11 / KK 12;черновик разработчика
+more.alarms_fix;screen /settings;Нужно настроить;Баптау керек;;;;RU 15 / KK 12;черновик разработчика
+more.duplicates_meta;screen /settings;Похожих записей: {{count}};Ұқсас жазбалар: {{count}};;;оставить как есть: {{count}};RU 17 / KK 16;черновик разработчика
+phone.more_row;screen /settings;Укажите номер;Нөміріңізді көрсетіңіз;;;длиннее RU: RU 13 → KK 22 (×1.7);RU 13 / KK 22 · длиннее RU в 1.7 раза — проверить при 200%;черновик разработчика
+phone.more_hint;screen /settings;Чтобы не потерять записи;Жазбалар жоғалмас үшін;;;;RU 24 / KK 22;черновик разработчика
+account.my_data_hint;screen /settings;Скачать, где хранятся, удалить;Жүктеу, қайда сақталады, жою;;;;RU 30 / KK 28;черновик разработчика
+settings.account;screen /settings;Аккаунт;Аккаунт;;;KK = RU: не переведено или заимствованное слово — подтвердить;RU 7 / KK 7;черновик разработчика
+settings.data;screen /settings;Данные;Деректер;;;;RU 6 / KK 8;черновик разработчика
+settings.assistant;screen /settings;Помощник;Көмекші;;;;RU 8 / KK 7;черновик разработчика
+settings.look;screen /settings;Вид;Көрініс;;;длиннее RU: RU 3 → KK 7 (×2.3);RU 3 / KK 7 · длиннее RU в 2.3 раза — проверить при 200%;черновик разработчика
+settings.about;screen /settings;О приложении;Қосымша туралы;;;;RU 12 / KK 14;черновик разработчика
+settings.theme;screen /settings;Тема;Тақырып;;;;RU 4 / KK 7;черновик разработчика
+settings.theme_system;screen /settings;Как в телефоне;Телефондағыдай;;;;RU 14 / KK 14;черновик разработчика
+settings.theme_light;screen /settings;Светлая;Ашық;;;;RU 7 / KK 4;черновик разработчика
+settings.theme_dark;screen /settings;Тёмная;Қараңғы;;;;RU 6 / KK 7;черновик разработчика
+settings.telegram;screen /settings;Вход через Telegram;Telegram арқылы кіру;;;;RU 19 / KK 20;черновик разработчика
+settings.mail;screen /settings;Личная почта;Жеке пошта;;;;RU 12 / KK 10;черновик разработчика
+settings.soon;screen /settings;Скоро;Жақында;;;;RU 5 / KK 7;черновик разработчика
+settings.support;screen /settings;Поддержка;Қолдау;;;;RU 9 / KK 6;черновик разработчика
+settings.version;screen /settings;Версия;Нұсқа;;;;RU 6 / KK 5;черновик разработчика
 stack.records;screen /stack/[id];Записей: {{count}};Жазбалар: {{count}};;;оставить как есть: {{count}};RU 9 / KK 10;черновик разработчика
 stack.rename;screen /stack/[id];Переименовать;Атын өзгерту;;;;RU 13 / KK 12;черновик разработчика
 stack.rename_title;screen /stack/[id];Как назвать стопку?;Топтаманы қалай атаймыз?;;;;RU 19 / KK 24;черновик разработчика
@@ -1406,30 +1465,22 @@ trash.empty;screen /trash;Здесь пусто. Удалённые записи
 trash.restore;screen /trash;Вернуть;Қайтару;;;;RU 7 / KK 7;черновик разработчика
 trash.restored;screen /trash;Запись вернулась;Жазба қайтарылды;;;;RU 16 / KK 16;черновик разработчика
 trash.days_left;screen /trash;Удалю насовсем через {{n}} дн.;{{n}} күннен кейін біржола өшіремін;;;оставить как есть: {{n}};RU 25 / KK 30;черновик разработчика
-tour.welcome;screen /welcome;Добро пожаловать!;Қош келдіңіз!;;;;RU 17 / KK 13;ТЗ §7.3 (черновик)
-tour.title;screen /welcome;Я наведу порядок в ваших заметках, делах и документах;Жазбаларыңызды, істеріңізді және құжаттарыңызды ретке келтіремін;;;;RU 53 / KK 64;черновик разработчика
-tour.ask;screen /welcome;Что вас интересует? Вы можете:;Сізді не қызықтырады? Сіз:;;;;RU 30 / KK 26;ТЗ §7.3 (черновик)
-tour.can_voice;screen /welcome;Сказать — я запомню и напомню;Айту — есте сақтаймын және еске саламын;;;;RU 29 / KK 39;черновик разработчика
-tour.can_photo;screen /welcome;Сфотографировать чек — я сохраню сумму;Чекті суретке түсіру — соманы сақтаймын;;;;RU 38 / KK 39;черновик разработчика
-tour.can_find;screen /welcome;Найти что угодно словами;Кез келген нәрсені сөзбен табу;;;;RU 24 / KK 30;черновик разработчика
-tour.can_kp;screen /welcome;Сделать КП из ТЗ;ТТ бойынша КҰ жасау;;;;RU 16 / KK 19;черновик разработчика
-tour.can_money;screen /welcome;Посчитать расходы;Шығындарды есептеу;;;;RU 17 / KK 18;черновик разработчика
-tour.pages_title;screen /welcome;Страницы — как вам удобно;Беттер — өзіңізге ыңғайлы;;;;RU 25 / KK 25;черновик разработчика
-tour.pages;screen /welcome;Одна запись может быть на нескольких страницах.;Бір жазба бірнеше бетте бола алады.;;;;RU 47 / KK 35;черновик разработчика
-tour.demo_result;screen /welcome;Разложил 12 заметок в 4 стопки. Повторы 12 → 4;12 жазбаны 4 топқа бөлдім. Қайталау 12 → 4;;;;RU 46 / KK 42;черновик разработчика
-tour.demo_result_a11y;screen /welcome;Пример. Разложил 12 заметок в 4 стопки. Повторов было 12, стало 4;Мысал. 12 жазбаны 4 топқа бөлдім. Қайталау 12 еді, 4 болды;;;;RU 65 / KK 58 · только для чтения с экрана, длина свободна;черновик разработчика
-tour.example;screen /welcome;пример;мысал;;;;RU 6 / KK 5;черновик разработчика
-tour.next;screen /welcome;Дальше;Әрі қарай;;;;RU 6 / KK 9;черновик разработчика
+trash.title;screen /trash, screen /my-data, screen /settings, components/useCurrentPage;Удалённые записи;Өшірілген жазбалар;;;;RU 16 / KK 18;черновик разработчика
 tour.start;screen /welcome;Начать;Бастау;;;;RU 6 / KK 6;черновик разработчика
-tour.step;screen /welcome;Шаг {{n}} из {{total}};{{total}} қадамның {{n}}-і;;;оставить как есть: {{n}} {{total}};RU 8 / KK 12;черновик разработчика
 tour.for_other;screen /welcome;Настраиваю для другого человека;Басқа адамға баптап жатырмын;;;;RU 31 / KK 28;черновик разработчика
-tpl.short.notes;screen /welcome, chat/service, components/TemplateCard, components/TodaySheet +3;Заметки;Жазбалар;;;;"RU 7 / KK 8 · подпись вкладки: при 200% ~4–5 букв в строке, переносится; короче — лучше";ТЗ §7.3 (черновик)
-tpl.short.tasks;screen /welcome, chat/service, components/TemplateCard, components/TodaySheet +3;Дела;Істер;;«Істер» или «Тапсырмалар» для «Дела»?;;"RU 4 / KK 5 · подпись вкладки: при 200% ~4–5 букв в строке, переносится; короче — лучше";черновик разработчика
-tpl.short.shopping;screen /welcome, chat/service, components/TemplateCard, components/TodaySheet +3;Покупки;Сатып алу;;;;"RU 7 / KK 9 · подпись вкладки: при 200% ~4–5 букв в строке, переносится; короче — лучше";черновик разработчика
-tpl.short.documents;screen /welcome, chat/service, components/TemplateCard, components/TodaySheet +3;Документы;Құжаттар;;;;"RU 9 / KK 8 · подпись вкладки: при 200% ~4–5 букв в строке, переносится; короче — лучше";черновик разработчика
-tpl.short.expenses;screen /welcome, chat/service, components/TemplateCard, components/TodaySheet +3;Расходы;Шығындар;;;;"RU 7 / KK 8 · подпись вкладки: при 200% ~4–5 букв в строке, переносится; короче — лучше";ТЗ §7.3 (черновик)
-tpl.short.custom;screen /welcome, chat/service, components/TemplateCard, components/TodaySheet +3;Моя;Менің;;;;"RU 3 / KK 5 · подпись вкладки: при 200% ~4–5 букв в строке, переносится; короче — лучше";черновик разработчика
-tour.skip;screen /welcome, components/Gallery;Пропустить;Өткізіп жіберу;;;;RU 10 / KK 14;черновик разработчика
+welcome.title;screen /welcome;Скажите — я запомню, напомню и найду;Айтыңыз — мен есте сақтаймын, еске саламын және табамын;;;длиннее RU: RU 36 → KK 55 (×1.5);RU 36 / KK 55 · длиннее RU в 1.5 раза — проверить при 200%;черновик разработчика
+welcome.body;screen /welcome;Заметки, дела, покупки и документы — в одном месте. Говорите обычными словами.;Жазбалар, істер, сатып алулар мен құжаттар — бір жерде. Қарапайым сөзбен айтыңыз.;;;;RU 78 / KK 81;черновик разработчика
+welcome.policy_before;screen /welcome;"Нажимая «Начать», вы принимаете ";"«Бастау» түймесін басу арқылы сіз ";;;типографика: space at an edge;RU 32 / KK 34;черновик разработчика
+welcome.policy;screen /welcome;Политику конфиденциальности;Құпиялылық саясатын;;;;RU 27 / KK 19;черновик разработчика
+welcome.policy_and;screen /welcome;" и ";" және ";;;типографика: space at an edge;RU 3 / KK 6;черновик разработчика
+welcome.terms;screen /welcome;Условия;Шарттарды;;;;RU 7 / KK 9;черновик разработчика
+welcome.policy_after;screen /welcome;.;" қабылдайсыз.";;;типографика: space at an edge · длиннее RU: RU 1 → KK 13 (×13.0);RU 1 / KK 13 · длиннее RU в 13.0 раза — проверить при 200%;черновик разработчика
+welcome.ex_pill;screen /welcome;Таблетка · 8:00;Дәрі · 8:00;;;;RU 15 / KK 11;черновик разработчика
+welcome.ex_code;screen /welcome;Код домофона 4512;Домофон коды 4512;;;;RU 17 / KK 17;черновик разработчика
+welcome.ex_receipt;screen /welcome;Чек · 289 990 ₸;Түбіртек · 289 990 ₸;;;;RU 15 / KK 20;черновик разработчика
+lang.ru;screen /welcome, screen /settings;Русский;Русский;;;;RU 7 / KK 7;черновик разработчика
+lang.kk;screen /welcome, screen /settings;Қазақша;Қазақша;;;;RU 7 / KK 7;черновик разработчика
+lang.choose;screen /welcome, screen /settings;Язык;Тіл;;;;RU 4 / KK 3;черновик разработчика
 planner.timed_refused;services;У этого дела есть время — его место задаёт время. Перенесите время;Бұл істің уақыты бар — орнын уақыты анықтайды. Уақытын ауыстырыңыз;;;;RU 66 / KK 66;черновик разработчика
 exp.share_title;share/ShareAskHost;Что это?;Бұл не?;;;;RU 8 / KK 7;черновик разработчика
 exp.share_saved;share/ShareAskHost;Файл сохранил. Записать его в Расходы?;Файлды сақтадым. Оны «Шығындарға» жазайын ба?;;;;RU 38 / KK 45;черновик разработчика
@@ -1453,25 +1504,60 @@ today.tile_left;today/tiles;Осталось {{n}};{{n}} қалды;;;остав
 today.tile_all_bought;today/tiles;Всё куплено;Бәрі сатып алынды;;;длиннее RU: RU 11 → KK 17 (×1.5);RU 11 / KK 17 · длиннее RU в 1.5 раза — проверить при 200%;черновик разработчика
 today.tile_no_spend;today/tiles;Сегодня трат нет;Бүгін шығын жоқ;;;;RU 16 / KK 15;черновик разработчика
 today.tile_spent;today/tiles;Сегодня {{sum}};Бүгін {{sum}};;;оставить как есть: {{sum}};RU 8 / KK 6;черновик разработчика
+tour.welcome;не найдено в коде (сервер / динамический ключ);Добро пожаловать!;Қош келдіңіз!;;;;RU 17 / KK 13;ТЗ §7.3 (черновик)
+tour.title;не найдено в коде (сервер / динамический ключ);Я наведу порядок в ваших заметках, делах и документах;Жазбаларыңызды, істеріңізді және құжаттарыңызды ретке келтіремін;;;;RU 53 / KK 64;черновик разработчика
+tour.ask;не найдено в коде (сервер / динамический ключ);Что вас интересует? Вы можете:;Сізді не қызықтырады? Сіз:;;;;RU 30 / KK 26;ТЗ §7.3 (черновик)
+tour.can_voice;не найдено в коде (сервер / динамический ключ);Сказать — я запомню и напомню;Айту — есте сақтаймын және еске саламын;;;;RU 29 / KK 39;черновик разработчика
+tour.can_photo;не найдено в коде (сервер / динамический ключ);Сфотографировать чек — я сохраню сумму;Чекті суретке түсіру — соманы сақтаймын;;;;RU 38 / KK 39;черновик разработчика
+tour.can_find;не найдено в коде (сервер / динамический ключ);Найти что угодно словами;Кез келген нәрсені сөзбен табу;;;;RU 24 / KK 30;черновик разработчика
+tour.can_kp;не найдено в коде (сервер / динамический ключ);Сделать КП из ТЗ;ТТ бойынша КҰ жасау;;;;RU 16 / KK 19;черновик разработчика
+tour.can_money;не найдено в коде (сервер / динамический ключ);Посчитать расходы;Шығындарды есептеу;;;;RU 17 / KK 18;черновик разработчика
+tour.pages_title;не найдено в коде (сервер / динамический ключ);Страницы — как вам удобно;Беттер — өзіңізге ыңғайлы;;;;RU 25 / KK 25;черновик разработчика
+tour.pages;не найдено в коде (сервер / динамический ключ);Одна запись может быть на нескольких страницах.;Бір жазба бірнеше бетте бола алады.;;;;RU 47 / KK 35;черновик разработчика
+tour.demo_result;не найдено в коде (сервер / динамический ключ);Разложил 12 заметок в 4 стопки. Повторы 12 → 4;12 жазбаны 4 топқа бөлдім. Қайталау 12 → 4;;;;RU 46 / KK 42;черновик разработчика
+tour.demo_result_a11y;не найдено в коде (сервер / динамический ключ);Пример. Разложил 12 заметок в 4 стопки. Повторов было 12, стало 4;Мысал. 12 жазбаны 4 топқа бөлдім. Қайталау 12 еді, 4 болды;;;;RU 65 / KK 58 · только для чтения с экрана, длина свободна;черновик разработчика
+tour.example;не найдено в коде (сервер / динамический ключ);пример;мысал;;;;RU 6 / KK 5;черновик разработчика
+tour.next;не найдено в коде (сервер / динамический ключ);Дальше;Әрі қарай;;;;RU 6 / KK 9;черновик разработчика
+tour.step;не найдено в коде (сервер / динамический ключ);Шаг {{n}} из {{total}};{{total}} қадамның {{n}}-і;;;оставить как есть: {{n}} {{total}};RU 8 / KK 12;черновик разработчика
 consent.storage_check;не найдено в коде (сервер / динамический ключ);Согласен на хранение в Казахстане;Қазақстанда сақтауға келісемін;;;;RU 33 / KK 30;черновик разработчика
 consent.cross_check;не найдено в коде (сервер / динамический ключ);Согласен на передачу сервисам ИИ за рубеж;Шетелдегі ЖИ сервистеріне беруге келісемін;;;;RU 41 / KK 42;черновик разработчика
 consent.push_line;не найдено в коде (сервер / динамический ключ);Apple и Google — только доставка уведомлений.;Apple мен Google — тек хабарламаларды жеткізу.;;;;RU 45 / KK 46;черновик разработчика
 consent.age;не найдено в коде (сервер / динамический ключ);Мне есть 18 лет, принимаю Условия.;Маған 18 жас толды, Шарттарды қабылдаймын.;;;;RU 34 / KK 42;черновик разработчика
 gallery.preview;не найдено в коде (сервер / динамический ключ);Как выглядит;Қалай көрінеді;;;;RU 12 / KK 14;черновик разработчика
 line.plus;не найдено в коде (сервер / динамический ключ);Добавить;Қосу;;;;RU 8 / KK 4;черновик разработчика
+today.hello;не найдено в коде (сервер / динамический ключ);Добрый день;Қайырлы күн;;;;RU 11 / KK 11;черновик разработчика
+today.did;не найдено в коде (сервер / динамический ключ);Я сделал за вас;Сіз үшін жасадым;;;;RU 15 / KK 16;черновик разработчика
 today.empty;не найдено в коде (сервер / динамический ключ);Пока ничего. Скажите или напишите что угодно — я сохраню;Әзірге ештеңе жоқ. Кез келген нәрсені айтыңыз немесе жазыңыз — сақтаймын;;;;RU 56 / KK 72;черновик разработчика
+today.profile;не найдено в коде (сервер / динамический ключ);Профиль и настройки;Профиль және баптаулар;;;;RU 19 / KK 22;черновик разработчика
+today.hello_name;не найдено в коде (сервер / динамический ключ);Добрый день, {{name}};Қайырлы күн, {{name}};;;оставить как есть: {{name}};RU 13 / KK 13;черновик разработчика
+today.upcoming;не найдено в коде (сервер / динамический ключ);Ближайшие напоминания;Жақын ескертулер;;;;RU 21 / KK 16;черновик разработчика
+today.shopping;не найдено в коде (сервер / динамический ключ);Покупки: {{titles}} ({{n}});Сатып алулар: {{titles}} ({{n}});;;оставить как есть: {{n}} {{titles}};RU 12 / KK 17;черновик разработчика
 today.nothing;не найдено в коде (сервер / динамический ключ);На сегодня ничего нет.;Бүгінге ештеңе жоқ.;;;;RU 22 / KK 19;черновик разработчика
+more.other_pages;не найдено в коде (сервер / динамический ключ);Другие страницы;Басқа беттер;;;;RU 15 / KK 12;черновик разработчика
+more.help;не найдено в коде (сервер / динамический ключ);Помощь;Көмек;;;;RU 6 / KK 5;черновик разработчика
+common.cancel;не найдено в коде (сервер / динамический ключ);Отмена;Бас тарту;;;;RU 6 / KK 9 · кнопка: при 200% ~12 букв в строке, переносится;черновик разработчика
 noai.voice;не найдено в коде (сервер / динамический ключ);Чтобы понимать голос, нужно согласие. Можно написать.;Дауысты түсіну үшін келісім керек. Жазуға болады.;;;;RU 53 / KK 49;черновик разработчика
+trash.hint;не найдено в коде (сервер / динамический ключ);Можно вернуть в течение 30 дней;30 күн ішінде қайтаруға болады;;;;RU 31 / KK 30;черновик разработчика
 rem.checking;не найдено в коде (сервер / динамический ключ);Смотрю…;Қарап жатырмын…;;;длиннее RU: RU 7 → KK 15 (×2.1);RU 7 / KK 15 · длиннее RU в 2.1 раза — проверить при 200%;черновик разработчика
 setup.all_done;не найдено в коде (сервер / динамический ключ);Всё готово;Бәрі дайын;;;;RU 10 / KK 10;черновик разработчика
+tasks.menu_a11y;не найдено в коде (сервер / динамический ключ);Ещё: {{title}};Тағы: {{title}};;;оставить как есть: {{title}};RU 5 / KK 6 · только для чтения с экрана, длина свободна;черновик разработчика
+tasks.seg_missed_n;не найдено в коде (сервер / динамический ключ);Пропущено ({{n}});Өткізілген ({{n}});;;оставить как есть: {{n}};RU 12 / KK 13;черновик разработчика
+missed.section;не найдено в коде (сервер / динамический ключ);Пропущено;Өткізілген;;;;RU 9 / KK 10;черновик разработчика
+stack.menu;не найдено в коде (сервер / динамический ключ);Ещё;Тағы;;;;RU 3 / KK 4;ТЗ §7.3 (черновик)
 stack.chips_more;не найдено в коде (сервер / динамический ключ);Ещё стопки: {{count}};Тағы топтамалар: {{count}};;;оставить как есть: {{count}};RU 12 / KK 17;черновик разработчика
 exp.prev;не найдено в коде (сервер / динамический ключ);Раньше;Бұрын;;;;RU 6 / KK 5;черновик разработчика
 exp.next;не найдено в коде (сервер / динамический ключ);Позже;Кейін;;;;RU 5 / KK 5;черновик разработчика
 exp.week_title;не найдено в коде (сервер / динамический ключ);{{from}} – {{to}};{{from}} – {{to}};;;оставить как есть: {{from}} {{to}};RU 3 / KK 3;черновик разработчика
+exp.total;не найдено в коде (сервер / динамический ключ);Итого;Барлығы;;;;RU 5 / KK 7;ТЗ §7.3 (черновик)
+exp.enter_hint;не найдено в коде (сервер / динамический ключ);Набрать сумму;Соманы теру;;;;RU 13 / KK 11;черновик разработчика
+exp.or_say;не найдено в коде (сервер / динамический ключ);Или скажите в строке внизу;Немесе төмендегі жолға айтыңыз;;;;RU 26 / KK 30;черновик разработчика
+exp.close_entry;не найдено в коде (сервер / динамический ключ);Свернуть;Жабу;;;;RU 8 / KK 4;ТЗ §7.3 (черновик)
 exp.need_sum;не найдено в коде (сервер / динамический ключ);Наберите сумму;Соманы теріңіз;;;;RU 14 / KK 14;черновик разработчика
 exp.day_other;не найдено в коде (сервер / динамический ключ);Другой день;Басқа күн;;;;RU 11 / KK 9;черновик разработчика
 exp.category_a11y;не найдено в коде (сервер / динамический ключ);{{title}};{{title}};;;оставить как есть: {{title}};RU 0 / KK 0 · только для чтения с экрана, длина свободна;черновик разработчика
 exp.more;не найдено в коде (сервер / динамический ключ);Ещё;Тағы;;;;RU 3 / KK 4;ТЗ §7.3 (черновик)
+exp.more_a11y;не найдено в коде (сервер / динамический ключ);Ещё: {{title}};Тағы: {{title}};;;оставить как есть: {{title}};RU 5 / KK 6 · только для чтения с экрана, длина свободна;черновик разработчика
+exp.check_all;не найдено в коде (сервер / динамический ключ);Показать все ({{count}});Барлығын көрсету ({{count}});;;оставить как есть: {{count}};RU 15 / KK 19;черновик разработчика
 kp.voice_stop;не найдено в коде (сервер / динамический ключ);Готово;Дайын;;;;RU 6 / KK 5;черновик разработчика
 kp.review_badge;не найдено в коде (сервер / динамический ключ);проверьте;тексеріңіз;;;;RU 9 / KK 10;ТЗ §7.3 (черновик)
 kp.kp_label;не найдено в коде (сервер / динамический ключ);КП;КҰ;;;;RU 2 / KK 2;черновик разработчика

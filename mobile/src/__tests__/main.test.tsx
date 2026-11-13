@@ -28,30 +28,47 @@ describe('main navigation', () => {
     expect(screen.getByTestId('tab-today')).toBeSelected();
   });
 
-  it('shows the assistant line above the tabs on every page with the «Про: <страница>» chip', async () => {
+  it('shows the assistant line above the tabs on every page, with no «Про: …» label (Ф-47)', async () => {
     const r = await renderRouter(APP_DIR, { initialUrl: '/' });
     const pages = usePages.getState().pages;
 
-    const check = (chip: string) => {
+    const check = () => {
       expect(screen.getByTestId('assistant-line')).toBeTruthy();
       expect(screen.getByTestId('assistant-plus')).toBeTruthy();
       expect(screen.getByTestId('assistant-input')).toBeTruthy();
       expect(screen.getByTestId('assistant-mic')).toBeTruthy();
-      expect(within(screen.getByTestId('context-chip')).getByText(chip)).toBeTruthy();
+      expect(screen.queryByTestId('context-chip')).toBeNull();
+      expect(screen.queryByText(/^Про:/)).toBeNull();
+      expect(screen.getByTestId('assistant-input').props.accessibilityLabel).toBe('Помощник. Скажите или напишите');
     };
 
-    check('Про: Сегодня');
-    const expected = ['Про: Заметки', 'Про: Дела и напоминания', 'Про: Расходы'];
-    // Pages past the two tabs live in «Ещё»; the line names whichever page is open.
-    for (const [i, page] of pages.slice(0, 2).entries()) {
+    check();
+    // Pages past the two tabs live in «Ещё».
+    for (const page of pages.slice(0, 2)) {
       await fireEvent.press(screen.getByTestId(`tab-${page.id}`));
       expect(r.getPathname()).toBe(`/page/${page.id}`);
       expect(screen.getByTestId(`tab-${page.id}`)).toBeSelected();
-      check(expected[i] ?? '');
+      check();
     }
     await fireEvent.press(screen.getByTestId('tab-more'));
     expect(r.getPathname()).toBe('/more');
-    check('Про: Ещё');
+    check();
+  });
+
+  it('offline, a note typed on «Расходы» is saved without a page and shows on «Заметки» until the server places it', async () => {
+    usePages.getState().addPage('expenses');
+    const pages = usePages.getState().pages;
+    const exp = pages.find((p) => p.templateKey === 'expenses')!;
+    const notes = pages.find((p) => p.templateKey === 'notes')!;
+    await renderRouter(APP_DIR, { initialUrl: `/page/${exp.id}` });
+    await fireEvent.changeText(screen.getByTestId('assistant-input'), 'Плитка для ванной 3 метра');
+    await fireEvent.press(screen.getByTestId('assistant-send'));
+    const pending = await outbox.listPending();
+    expect(pending[0]?.payload).toMatchObject({ text: 'Плитка для ванной 3 метра', kind: 'note' });
+    expect(pending[0]?.payload).not.toHaveProperty('pageId');
+    expect((await testRecords.list())[0]?.pageId).toBeNull();
+    await fireEvent.press(screen.getByTestId(`tab-${notes.id}`));
+    await settle(() => screen.queryByText('Плитка для ванной 3 метра') !== null);
   });
 
   it('typing a message writes to the outbox and shows the answer banner → «Открыть ответ» → Переписка', async () => {
@@ -61,7 +78,9 @@ describe('main navigation', () => {
 
     const pending = await outbox.listPending();
     expect(pending.map((e) => e.kind)).toEqual(['item.create']);
-    expect(pending[0]?.payload).toMatchObject({ text: 'Купить хлеб', pageId: 'today', kind: 'note', source: 'typed' });
+    expect(pending[0]?.payload).toMatchObject({ text: 'Купить хлеб', kind: 'note', source: 'typed' });
+    // Ф-47: no page from the line; the server places it by its rules.
+    expect(pending[0]?.payload).not.toHaveProperty('pageId');
     expect((await testRecords.list())[0]).toMatchObject({ text: 'Купить хлеб', status: 'queued' });
 
     expect(screen.getByTestId('answer-banner')).toBeTruthy();
@@ -70,8 +89,9 @@ describe('main navigation', () => {
     expect(r.getPathname()).toBe('/chat');
     expect(screen.getByText('Переписка')).toBeTruthy();
     expect(screen.getByLabelText('Вы: Купить хлеб')).toBeTruthy();
-    // Same assistant line in Переписка, over all pages
-    expect(within(screen.getByTestId('context-chip')).getByText('Про: все страницы')).toBeTruthy();
+    // Same assistant line in Переписка, no scope label (Ф-47).
+    expect(screen.getByTestId('assistant-input')).toBeTruthy();
+    expect(screen.queryByTestId('context-chip')).toBeNull();
   });
 
   it('mic → «Слушаю…» with timer and level ring → «Готово» → voice record queued + «Сохранено»', async () => {

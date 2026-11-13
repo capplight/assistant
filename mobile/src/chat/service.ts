@@ -516,14 +516,18 @@ export async function ask(
 }
 
 /** The phrase is saved as a record on its page, the way the line did it before week 6. */
-async function saveNote(text: string, pageId: string): Promise<void> {
+/**
+ * A note from the line saved on the phone (offline, «Без ИИ», the service down): without a page (Ф-47). It shows
+ * on «Заметки» until the server places it by its own rules at sync; the open page is never forced on it.
+ */
+async function saveNote(text: string): Promise<void> {
   const capture = await getCapture();
-  await capture.saveText({ text, source: 'typed', pageId });
+  await capture.saveText({ text, source: 'typed' });
 }
 
 /** Never reached the server, and the phrase looked like a note: it is saved here instead. */
 async function saveInstead(answerId: string, question: ChatMessage): Promise<void> {
-  await saveNote(question.text, question.pageId);
+  await saveNote(question.text);
   store().updateMessage(answerId, {
     status: 'done',
     activity: null,
@@ -628,7 +632,7 @@ export async function sendFromLine(text: string, page: AskPage): Promise<LineRes
     return 'saved';
   }
   if (guess === 'note' && (noAi || !lineRouting.serverDecides || !chatAllowed())) {
-    await saveNote(text, page.id);
+    await saveNote(text);
     addLocalTurn(text, page, { status: 'done', saved: true, text: i18n.t('line.saved') });
     return 'saved';
   }

@@ -378,3 +378,105 @@ async def test_message_limit_per_day_and_taps_are_free(env):  # noqa: F811
         r = await _send(c, h, "Отмена", choice={"reply_id": str(reply), "option": "cancel"})
         assert r.status_code == 200, r.text
         await app.state.ctx.chat.drain()
+
+
+# --- Ф-47: the person never picks the page; the open page only resolves «это / здесь / сюда» ---
+
+
+async def _entry_ids(c, h, pid: str) -> set[str]:  # type: ignore[no-untyped-def]
+    return {e["item"]["id"] for e in await entries(c, h, pid)}
+
+
+async def test_milk_said_on_notes_goes_to_shopping(env):  # noqa: F811
+    from assistant.tasks import TasksReply
+    from assistant.tasks.parse import TaskLine
+    from tests.api.test_week9_db import Script9, router9
+
+    script = Script9(tasks=TasksReply(list="shopping", items=[TaskLine(title="Молоко", qty=None)],
+                                      day="none"))  # fmt: skip
+    async with client(env.make_app(router9(env.maker, script))) as c:
+        h = await _first_launch(c)
+        notes = (await _pages(c, h))["notes"]["id"]
+        evs = await _say(c, h, "купить молоко", page_id=notes)
+        ev = last(evs, "action")
+        shop = (await _pages(c, h))["shopping"]["id"]
+        assert ev["action"]["summary"]["ru"].startswith("Добавил в Покупки")
+        item = ev["tasks"][0]["item_id"]
+        assert item in await _entry_ids(c, h, shop)
+        assert item not in await _entry_ids(c, h, notes)
+
+
+async def test_a_note_said_on_a_custom_page_goes_by_the_rules(env):  # noqa: F811
+    async with client(env.make_app(router_with(env.maker, Script()))) as c:
+        h = await _first_launch(c)
+        dacha = await page(c, h, "Дача")
+        notes = (await _pages(c, h))["notes"]["id"]
+        evs = await _say(c, h, "запиши мастер Ерлан плитка", page_id=dacha)
+        action = last(evs, "action")["action"]
+        assert action["kind"] == "save_item"
+        assert action["summary"]["ru"] == "Записал в «Заметки»."
+        item = action["changes"][0]["item_id"]
+        assert item in await _entry_ids(c, h, notes)
+        assert item not in await _entry_ids(c, h, dacha)
+
+
+async def test_add_here_on_a_custom_page_is_the_persons_choice(env):  # noqa: F811
+    import re
+
+    def current(req) -> str:  # type: ignore[no-untyped-def]
+        return re.search(r"Текущая страница: (p\d+)", _all_text(req)).group(1)  # type: ignore[union-attr]
+
+    script = Script([
+        lambda req: [ToolCall("c1", "create", {"page": None, "text": "Мастер Ерлан, плитка",
+                                               "title": None})],
+        ChatReply(answer="Записал.", citations=[], insufficient=False),
+        # the model names the open page although the person did not: the rules decide
+        lambda req: [ToolCall("c2", "create", {"page": current(req), "text": "Код домофона 45",
+                                               "title": None})],
+        ChatReply(answer="Записал.", citations=[], insufficient=False),
+    ])  # fmt: skip
+    async with client(env.make_app(router_with(env.maker, script))) as c:
+        h = await _first_launch(c)
+        dacha = await page(c, h, "Дача")
+        notes = (await _pages(c, h))["notes"]["id"]
+        evs = await _say(c, h, "добавь сюда мастер Ерлан, плитка", page_id=dacha)
+        item = last(evs, "action")["action"]["changes"][0]["item_id"]
+        assert item in await _entry_ids(c, h, dacha)
+        evs = await _say(c, h, "добавь код домофона 45", page_id=dacha)
+        got = last(evs, "action")["action"]["changes"][0]["item_id"]
+        assert got not in await _entry_ids(c, h, dacha)
+        assert got in await _entry_ids(c, h, notes)
+
+
+async def test_delete_this_is_the_selected_record(env):  # noqa: F811
+    from tests.chat.test_chat_db import record
+
+    async with client(env.make_app(router_with(env.maker, Script()))) as c:
+        h = await _first_launch(c)
+        dacha = await page(c, h, "Дача")
+        a = await record(c, h, env.maker, "Мастер Ерлан, плитка", dacha)
+        b = await record(c, h, env.maker, "Код домофона 45", dacha)
+        evs = await _say(c, h, "удали это", page_id=dacha, visible_item_ids=[a, b],
+                         selected_item_id=b)  # fmt: skip
+        assert by_name(evs, "action") or by_name(evs, "confirm")
+        gone = (await c.get(f"/v1/items/{b}", headers=h)).json()
+        kept = (await c.get(f"/v1/items/{a}", headers=h)).json()
+        assert kept.get("deleted_at") is None
+        assert gone.get("deleted_at") is not None or by_name(evs, "confirm")
+
+
+async def test_a_record_synced_without_a_page_is_placed_by_the_rules(env):  # noqa: F811
+    async with client(env.make_app()) as c:
+        h = await _first_launch(c)
+        r = await c.post("/v1/items", json={"client_id": str(uuid.uuid4()),
+                                            "text": "Мастер Ерлан, плитка"}, headers=h)
+        assert r.status_code == 201, r.text
+        notes = (await _pages(c, h))["notes"]["id"]
+        assert r.json()["item"]["id"] in await _entry_ids(c, h, notes)
+
+
+async def _say(c, h, text_: str, **kw):  # type: ignore[no-untyped-def]
+    r = await c.post("/v1/chat/messages", json={"client_id": str(uuid.uuid4()), "text": text_,
+                                                 **kw}, headers=h)  # fmt: skip
+    assert r.status_code == 200, r.text
+    return events(r.text)

@@ -299,6 +299,37 @@ describe('screens', () => {
     await settle(() => screen.queryByTestId('task-srv-t9') !== null);
   });
 
+  it('Ф-47: said on «Заметки», «купить молоко» goes where the server puts it; the open page is only hidden context', async () => {
+    const s = server();
+    await online(s);
+    const t = task('srv-t10', { title: 'Молоко', item_id: 'srv-i10' });
+    const act0 = action('a10', 'Добавил в Покупки: молоко.', { page: { id: 'srv-shop', title: 'Покупки', icon: 'shopping' } });
+    s.on('POST /chat/messages', () => ({
+      status: 200,
+      sse: chatReply([
+        { event: 'accepted', data: { message_id: 'u1', reply_id: 'r1' } },
+        { event: 'action', data: { reply_id: 'r1', action: act0, changed_item_ids: [], tasks: [t] } },
+        { event: 'done', data: { reply_id: 'r1', state: 'done', answer_kind: 'action', action_id: 'a10', limited: false } },
+      ]),
+    }));
+    usePages.setState((st) => ({
+      pages: st.pages.map((p) =>
+        p.templateKey === 'shopping' ? { ...p, serverId: 'srv-shop' } : p.templateKey === 'notes' ? { ...p, serverId: 'srv-notes' } : p,
+      ),
+    }));
+    await renderRouter(APP_DIR, { initialUrl: `/page/${page('notes').id}` });
+    // No «Про: …» label, nothing to pick.
+    expect(screen.queryByTestId('context-chip')).toBeNull();
+    expect(screen.queryByText(/^Про:/)).toBeNull();
+    await fireEvent.changeText(screen.getByTestId('assistant-input'), 'купить молоко');
+    await fireEvent.press(screen.getByTestId('assistant-send'));
+    await settle(() => screen.queryByTestId('undo-strip-open') !== null);
+    // The open page goes along only so that «это / здесь» resolve; the server decides the place.
+    expect(s.callsTo('POST /chat/messages')[0]?.body).toMatchObject({ text: 'купить молоко', page_id: 'srv-notes' });
+    expect(screen.getByTestId('undo-strip-text')).toHaveTextContent('Добавил в Покупки: молоко.');
+    expect(useTasks.getState().tasks['srv-t10']?.title).toBe('Молоко');
+  });
+
   it('a reminder phrase online goes to chat (not /reminders/parse): `reminder_draft` opens S13, [Сохранить] sends its `message_id`', async () => {
     const s = server();
     await online(s);

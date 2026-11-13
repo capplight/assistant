@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { ChevronDown, Mic, PencilLine, Plus, SendHorizontal } from 'lucide-react-native';
+import { Mic, PencilLine, Plus, SendHorizontal } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, TextInput, View, useWindowDimensions } from 'react-native';
@@ -23,9 +23,10 @@ import { VoiceListening } from './VoiceListening';
 
 /**
  * The persistent assistant line — one capsule (design-system §3 AssistantCapsule, ux-audit P0-1):
- * [+ 36] [Про: <page> ▾ · field] (mic 40), 52 high, `surface` + floating shadow, 8 above the tab bar.
- * The «Про: …» toggle sits inside the capsule (no row of its own) and steps aside while a phrase is typed;
- * at ≥150 % font it takes a line of its own inside the capsule, which then grows.
+ * [+ 36] [field] (mic 40), 52 high, `surface` + floating shadow, 8 above the tab bar.
+ * Ф-47: no «Про: …» label and no scope to pick — the assistant decides where a record goes and where to look.
+ * The open page still goes with each phrase as hidden context (`page_id`, visible / selected records) so that
+ * «это / здесь» resolve.
  * Same on every page, above the tabs. A typed phrase goes to the one conversation (src/chat): a
  * text answer shows in the banner above, a change shows on the page with «Отменить»; without the
  * server a note is saved here (offline-first). Voice is still a local record + outbox entry. Voice: fragments ≤3 min, no live transcription (R-17). «Без ИИ»: no mic —
@@ -43,14 +44,12 @@ export function AssistantLine({
   const noAi = useOnboarding(selectNoAi);
   const consentGiven = useOnboarding((s) => s.consent !== null);
   const store = useAssistant();
-  const { setAboutAll, setListening } = store;
+  const { setListening } = store;
   const language = useOnboarding((s) => s.language);
   const showToast = useToast((s) => s.show);
-  // In «Переписка» the line always works over all pages.
-  const aboutAll = scope === 'all' || store.aboutAll;
   const [text, setText] = useState('');
   const [addOpen, setAddOpen] = useState(false);
-  // «Я в магазине»: only the chip and the mic until the person starts writing.
+  // «Я в магазине»: only a «Написать» strip and the mic until the person starts writing.
   const [opened, setOpened] = useState(false);
   const folded = compact && !opened && text.trim().length === 0;
   // Leaving the mode folds it again next time (state from the prop, no effect).
@@ -67,7 +66,8 @@ export function AssistantLine({
   const onVoiceFinished = async (fragments: Fragment[]) => {
     setListening(false);
     const capture = await getCapture();
-    await capture.saveVoice({ fragments, pageId: current.id });
+    // Ф-47: no page — the server places it by its rules (shows on «Заметки» until then).
+    await capture.saveVoice({ fragments });
     showToast(t('saved'));
   };
   const voice = useVoiceRecorder(onVoiceFinished);
@@ -106,7 +106,6 @@ export function AssistantLine({
     await voice.start();
   };
 
-  const chipLabel = aboutAll ? t('line.about_all') : t('line.about', { page: current.title });
   const placeholder = noAi ? t('line.no_ai_hint') : t('line.placeholder');
 
   const send = async () => {
@@ -127,19 +126,19 @@ export function AssistantLine({
     }
   };
 
-  const chip = (
+  // Folded («Я в магазине»): the placeholder opens the field.
+  const openField = (
     <Pressable
-      testID="context-chip"
+      testID="assistant-line-open"
       accessibilityRole="button"
-      accessibilityLabel={aboutAll ? t('line.about_all_a11y') : t('line.about_a11y', { page: current.title })}
-      disabled={scope === 'all'}
-      onPress={() => setAboutAll(!aboutAll)}
-      style={[styles.chip, { minHeight: theme.size.minTouch, paddingLeft: theme.space[1], gap: 2 }]}
+      accessibilityLabel={t('line.write')}
+      onPress={() => {
+        setOpened(true);
+        inputRef.current?.focus();
+      }}
+      style={[styles.open, { minHeight: theme.size.minTouch }]}
     >
-      <AppText variant="callout" color="ink2" style={[styles.shrink, { fontFamily: theme.type.sectionLabel.fontFamily }]}>
-        {chipLabel}
-      </AppText>
-      <ChevronDown size={theme.size.iconSm} color={theme.colors.iconSecondary} strokeWidth={theme.icon.strokeWidth} />
+      <AppText color="ink3">{placeholder}</AppText>
     </Pressable>
   );
 
@@ -158,7 +157,7 @@ export function AssistantLine({
     <TextInput
       ref={inputRef}
       testID="assistant-input"
-      accessibilityLabel={t('line.a11y', { page: current.title })}
+      accessibilityLabel={t('line.a11y')}
       accessibilityHint={t(current.hintKey)}
       placeholder={placeholder}
       placeholderTextColor={theme.colors.ink3}
@@ -297,25 +296,13 @@ export function AssistantLine({
         />
       ) : folded ? (
         <View testID="assistant-line-folded" style={[styles.row, { gap: theme.space[2], justifyContent: 'space-between', paddingLeft: theme.space[3] }]}>
-          <View style={styles.shrink}>{chip}</View>
+          <View style={styles.flex}>{openField}</View>
           {right}
         </View>
-      ) : theme.largeFont ? (
-        // ≥150%: two rows — chip, then [+] field (mic)
-        <>
-          <View style={[styles.row, { paddingHorizontal: theme.space[3] }]}>{chip}</View>
-          {/* The field grows upwards; [+] and mic / send stay at its bottom edge, within thumb reach. */}
-          <View testID="assistant-line-row" style={[styles.row, styles.end]}>
-            {plus}
-            <View style={styles.flex}>{field}</View>
-            {right}
-          </View>
-        </>
       ) : (
+        // The field grows upwards (4 lines, 3 at ≥150 %); [+] and mic / send stay at its bottom edge.
         <View testID="assistant-line-row" style={[styles.row, styles.end]}>
           {plus}
-          {/* The «Про: …» toggle in the capsule while the field is empty; typing gives the field the room. */}
-          {text.length === 0 ? <View style={styles.chipBox}>{chip}</View> : null}
           <View style={styles.flex}>{field}</View>
           {right}
         </View>
@@ -334,8 +321,7 @@ const styles = StyleSheet.create({
   end: { alignItems: 'flex-end' },
   flex: { flex: 1 },
   shrink: { flexShrink: 1 },
-  chip: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start' },
-  chipBox: { flexShrink: 1, maxWidth: '45%' },
+  open: { justifyContent: 'center' },
   input: { paddingVertical: 12 },
   round: { alignItems: 'center', justifyContent: 'center' },
 });

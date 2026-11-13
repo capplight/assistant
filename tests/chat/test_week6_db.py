@@ -481,9 +481,13 @@ async def test_make_page_and_move_one_action_undo_all(w6):
 
 
 async def test_create_refuses_invented_numbers(w6):
+    def here(req: AdapterRequest) -> str:  # the open page, named by the person («в Покупки»)
+        return re.search(r"Текущая страница: (p\d+)", _all_text(req)).group(1)  # type: ignore[union-attr]
+
     script = Script([
-        [ToolCall("c1", "create", {"page": None, "text": "Купить хлеб за 5000", "title": None})],
-        lambda req: [ToolCall("c2", "create", {"page": None, "text": "Купить хлеб",
+        lambda req: [ToolCall("c1", "create", {"page": here(req), "text": "Купить хлеб за 5000",
+                                               "title": None})],
+        lambda req: [ToolCall("c2", "create", {"page": here(req), "text": "Купить хлеб",
                                                "title": None})],
         ChatReply(answer="Записал.", citations=[], insufficient=False),
     ])  # fmt: skip
@@ -802,7 +806,8 @@ async def test_plain_notes_are_saved_in_the_persons_words(w6, phrase, saved):
         item_id = action["changed_item_ids"][0]
         item = (await c.get(f"/v1/items/{item_id}", headers=h)).json()
         assert item["text"] == saved
-        assert item_id in {r["item"] for r in await rows(w6.maker, pid)}
+        # Ф-47 (week 19): not onto the open page by itself; the page rules decide (none here)
+        assert item_id not in {r["item"] for r in await rows(w6.maker, pid)}
         if isinstance(router, Router):
             assert script.n("ChatReply") == 0  # nobody rewrote the note
         if phrase == PHONE or phrase.startswith("запиши"):

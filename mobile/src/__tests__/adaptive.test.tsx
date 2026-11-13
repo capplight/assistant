@@ -33,8 +33,8 @@ describe.each(['/', 'notes'] as const)('%s', (route) => {
       expect(flat(id).width).toBeGreaterThanOrEqual(48);
       expect(flat(id).height).toBeGreaterThanOrEqual(48);
     }
-    // The «Про: …» toggle lives inside the capsule, not on a row of its own above the field (≥150 %: own line inside).
-    expect(screen.getByTestId('context-chip')).toBeTruthy();
+    // Ф-47: no «Про: …» label in the capsule.
+    expect(screen.queryByTestId('context-chip')).toBeNull();
   });
 });
 

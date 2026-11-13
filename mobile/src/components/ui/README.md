@@ -45,7 +45,7 @@ Import everything from `@/components/ui`. Tokens: `@/theme` (`useTheme()`, `useL
 | `TabBar` | `tabs [{key,label,icon,active,onPress}]` | `BottomTabs` (done: 4 tabs max — Сегодня + 2 pages + Ещё; 1 page at ≥150 %) |
 | `BottomFade` | `height` | — (content dissolves above the floating bottom) |
 
-Already migrated: `BottomTabs`, `AssistantLine` (one capsule; «Про: …» inside, hidden while typing, own line at ≥150 %;
+Already migrated: `BottomTabs`, `AssistantLine` (one capsule; no «Про: …» label — Ф-47;
 voice / send / «Написать» / keyboard / undo unchanged), `MainFooter`, `UndoStrip`, `ToastHost`, `AnswerBanner` (look only),
 `AddSheet` and `PageNameSheet` (on `Sheet`), all `Checkbox` uses. Week 19 (screens): «Сегодня» (`Header`, sun `NextCard`,
 one flat `DayCard` of `TodayRow`s with `CheckCircle`, tiles on `Sheet`), `AnswerBanner` (header «Помощник» + ✕, tonal chip),

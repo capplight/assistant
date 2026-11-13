@@ -10,7 +10,7 @@ export type CurrentPage =
   | { kind: 'more'; id: 'more'; title: string; hintKey: string }
   | { kind: 'other'; id: string; title: string; hintKey: string };
 
-/** Which page the user is on — drives the active tab and the «Про: …» chip. */
+/** Which page the user is on — drives the active tab and the hidden page context of the line («это / здесь», Ф-47). */
 export function useCurrentPage(): CurrentPage {
   const pathname = usePathname();
   const { t } = useTranslation();

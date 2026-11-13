@@ -143,11 +143,10 @@ describe('US-25: a question on one page, the answer with a source from another',
     await settle(() => lastAnswer()?.status === 'done');
     await fireEvent.press(screen.getByTestId('source-srv-erlan'));
     await settle(() => r.getPathname() === '/record/erlan');
-    expect(within(screen.getByTestId('context-chip')).getByText('Про: Заметки')).toBeTruthy();
+    expect(screen.getByTestId(`tab-${page('notes').id}`)).toBeSelected();
     expect(screen.getByText('Ерлан, ремонт, 120 000 до 20-го')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('record-back'));
     await settle(() => r.getPathname() === `/page/${page('shopping').id}`);
-    expect(within(screen.getByTestId('context-chip')).getByText('Про: Покупки')).toBeTruthy();
     expect(screen.getByTestId('answer-banner')).toBeTruthy();
   });
 
