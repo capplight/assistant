@@ -57,6 +57,13 @@ const text = (id: string) => {
   const c = screen.getByTestId(id).props.children;
   return Array.isArray(c) ? c.join('') : String(c);
 };
+/** The editor's bar «Итого + Отправить» says the whole total in one label. */
+const label = (id: string) => String(screen.getByTestId(id).props.accessibilityLabel);
+/** A line row opens its sheet (research pattern 7); the price / quantity rows are there. */
+async function openLine(i: number) {
+  await fireEvent.press(screen.getByTestId(`kp-line-${i}`));
+  await settle(() => screen.queryByTestId('kp-line-sheet') !== null);
+}
 
 describe('lump-sum lines (kp-calc.v2)', () => {
   it('decoders keep `kind`, «Объём» as text, the subject, «Исх. №» and «Условия»', () => {
@@ -74,11 +81,16 @@ describe('lump-sum lines (kp-calc.v2)', () => {
     finishOnboarding('full');
     putFull(kpFullOut({ document: row(), version: version(), needs_profile: false }));
     await renderRouter(APP_DIR, { initialUrl: '/kp/doc-l' });
-    await settle(() => screen.queryByTestId('kp-line-1-price') !== null);
+    await settle(() => screen.queryByTestId('kp-line-1') !== null);
     expect(text('kp-line-0-volume')).toBe('Объём: 1 здание');
-    expect(text('kp-line-0-calc')).toBe('Стоимость: 1 500 000 ₸');
-    expect(text('kp-line-1-calc')).toBe('Стоимость: укажите');
+    expect(text('kp-line-0-sum')).toBe('1 500 000 ₸');
+    expect(text('kp-line-1-sum')).toBe('укажите');
+    await openLine(0);
+    expect(text('kp-line-sheet-calc')).toBe('Стоимость: 1 500 000 ₸');
     expect(screen.queryByTestId('kp-line-0-qty')).toBeNull(); // a lump sum has no quantity
+    await fireEvent.press(screen.getByTestId('kp-line-sheet-close'));
+    await settle(() => screen.queryByTestId('kp-line-sheet') === null);
+    await openLine(1);
     expect(screen.getByTestId('kp-line-1-price').props.accessibilityLabel).toBe('Изменить стоимость: Технический надзор');
 
     await fireEvent.press(screen.getByTestId('kp-line-1-price'));
@@ -86,17 +98,18 @@ describe('lump-sum lines (kp-calc.v2)', () => {
     for (const k of ['2', '5', '0', '0', '0', '0']) await fireEvent.press(screen.getByTestId(`kp-edit-keys-${k}`));
     await fireEvent.press(screen.getByTestId('kp-edit-save'));
     await settle(() => outbox.all().some((r) => r.kind === 'kp.patch'));
-    expect(text('kp-total')).toBe('Итого: 1 750 000 ₸');
+    expect(label('kp-total')).toBe('Итого: 1 750 000 ₸');
     expect(screen.getByTestId('kp-sum-total').props.accessibilityLabel).toBe('Итого без НДС: 1 750 000 ₸');
     expect(outbox.all().find((r) => r.kind === 'kp.patch')!.payload).toMatchObject({ ops: [{ path: '/items/i2/unit_price', value: '250000.00' }] });
 
+    await openLine(0);
     await fireEvent.press(screen.getByTestId('kp-line-0-volume-edit'));
     await settle(() => screen.queryByTestId('kp-volume-input') !== null);
     await fireEvent.changeText(screen.getByTestId('kp-volume-input'), '2 здания');
     await fireEvent.press(screen.getByTestId('kp-volume-save'));
     await settle(() => outbox.all().filter((r) => r.kind === 'kp.patch').length === 2);
     expect(text('kp-line-0-volume')).toBe('Объём: 2 здания');
-    expect(text('kp-total')).toBe('Итого: 1 750 000 ₸'); // text, never multiplied
+    expect(label('kp-total')).toBe('Итого: 1 750 000 ₸'); // text, never multiplied
 
     await fireEvent.press(screen.getByTestId('kp-add-line'));
     await settle(() => screen.queryByTestId('kp-add') !== null);
@@ -106,15 +119,16 @@ describe('lump-sum lines (kp-calc.v2)', () => {
     await fireEvent.changeText(screen.getByTestId('kp-add-price'), '300 000');
     await fireEvent.press(screen.getByTestId('kp-add-save'));
     await settle(() => outbox.all().filter((r) => r.kind === 'kp.patch').length === 3);
-    expect(text('kp-total')).toBe('Итого: 2 050 000 ₸');
+    expect(label('kp-total')).toBe('Итого: 2 050 000 ₸');
     const add = outbox.all().filter((r) => r.kind === 'kp.patch')[2]!;
     expect(add.payload).toMatchObject({ ops: [{ op: 'add', path: '/items/-', value: { kind: 'lump', name: 'Пусконаладка', volume: '1 объект', unit_price: '300000.00' } }] });
+    await openLine(2);
     expect(screen.getByTestId('kp-line-2-price').props.accessibilityState).toMatchObject({ disabled: true }); // waits for the server's id
 
     const st = useUndo.getState().strip;
     if (st?.kind === 'custom') st.onUndo();
     await settle(() => screen.queryByTestId('kp-line-2') === null);
-    expect(text('kp-total')).toBe('Итого: 1 750 000 ₸');
+    expect(label('kp-total')).toBe('Итого: 1 750 000 ₸');
     expect((await outbox.get(add.id))!.status).toBe('failed'); // dropped, never sent
     expect(screen.getAllByText(/ИИ/)).toHaveLength(1);
   });
@@ -134,7 +148,8 @@ describe('lump-sum lines (kp-calc.v2)', () => {
     await fireEvent.changeText(screen.getByTestId('kp-add-price'), '450');
     await fireEvent.press(screen.getByTestId('kp-add-save'));
     await settle(() => screen.queryByTestId('kp-line-2') !== null);
-    expect(text('kp-line-2-calc')).toBe('100 м × 450 ₸ = 45 000 ₸');
+    expect(text('kp-line-2-calc')).toBe('100 м × 450 ₸');
+    expect(text('kp-line-2-sum')).toBe('45 000 ₸');
     expect(useKp.getState().docEdits['doc-l']!.data.items[2]).toMatchObject({ kind: 'qty', qty: '100', unit_price: '450.00' });
     expect(outbox.all().filter((r) => r.kind === 'kp.patch')).toHaveLength(1); // a hand edit works in «Без ИИ» too
   });
@@ -157,7 +172,8 @@ describe('lump sums never go into «Мой прайс» (founder 2026-11-11)', (
     v.items.push({ id: 'i3', kind: 'qty', name: 'Кабель', volume: null, qty: '100', unit_price: null, discount_pct: '0', price_source: 'missing', price_label: 'укажите цену', review_fields: [], amount: null } as never);
     putFull(kpFullOut({ document: row(), version: v, needs_profile: false }));
     await renderRouter(APP_DIR, { initialUrl: '/kp/doc-l' });
-    await settle(() => screen.queryByTestId('kp-line-1-price') !== null);
+    await settle(() => screen.queryByTestId('kp-line-1') !== null);
+    await openLine(1);
     await fireEvent.press(screen.getByTestId('kp-line-1-price'));
     await settle(() => screen.queryByTestId('kp-edit') !== null);
     expect(screen.queryByTestId('kp-edit-to-list')).toBeNull();
@@ -165,6 +181,7 @@ describe('lump sums never go into «Мой прайс» (founder 2026-11-11)', (
     await fireEvent.press(screen.getByTestId('kp-edit-save'));
     await settle(() => outbox.all().some((r) => r.kind === 'kp.patch'));
     expect(outbox.all().find((r) => r.kind === 'kp.patch')!.payload).not.toHaveProperty('savePrices');
+    await openLine(2);
     await fireEvent.press(screen.getByTestId('kp-line-2-price'));
     await settle(() => screen.queryByTestId('kp-edit-to-list') !== null);
   });

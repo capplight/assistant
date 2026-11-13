@@ -1,8 +1,8 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Modal, Pressable, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ellipsis, FilePlus, FolderOpen, Layers } from 'lucide-react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { CollectionOut } from '@/api/types';
@@ -14,7 +14,7 @@ import { stackToPage } from '@/pages/viewService';
 import { useTheme } from '@/theme';
 
 import { AppText } from './AppText';
-import { Button } from './ui/Button';
+import { ActionList, Button, Card, Chip, Icon, Sheet } from './ui';
 import { PageIcon } from './Icon';
 
 const ICON_KEYS = new Set(['documents', 'tasks', 'shopping', 'work', 'money', 'other', 'people', 'health', 'home']);
@@ -67,20 +67,17 @@ export function StackCards({ page, entries, piles = false }: { page: Page; entri
   return (
     <View style={{ gap: theme.space[3] }}>
       {repeats > 0 ? (
-        <View
-          testID="notes-repeats"
-          style={[styles.card, { borderColor: theme.colors.separator, backgroundColor: theme.colors.surface, borderRadius: theme.radius.lg, padding: theme.space[3], gap: theme.space[2] }]}
-        >
+        <Card testID="notes-repeats" tone="brandTint" style={{ gap: theme.space[2], padding: theme.space[3] }}>
           <AppText>{t('dup.notes_card', { count: repeats })}</AppText>
           <Button
             testID="notes-repeats-open"
             label={t('dup.look')}
             accessibilityLabel={t('dup.look_a11y')}
-            variant="secondary"
-            minHeight={theme.size.minTouch}
+            variant="text"
+            style={styles.start}
             onPress={() => router.push('/duplicates')}
           />
-        </View>
+        </Card>
       ) : null}
       {stacks.length > 0 ? (
         <AppText variant="sectionLabel" accessibilityRole="header">
@@ -99,10 +96,9 @@ export function StackCards({ page, entries, piles = false }: { page: Page; entri
           <View key={c.id} testID={piles ? `pile-${c.id}` : undefined} style={[{ paddingBottom: theme.space[1] }, grid ? styles.flex : null]}>
             <View
               style={[
-                styles.card,
                 grid ? styles.flex : null,
+                theme.elevation.card,
                 {
-                  borderColor: theme.colors.separator,
                   backgroundColor: bg,
                   borderRadius: piles ? theme.radius.md : theme.radius.lg,
                   padding: theme.space[3],
@@ -115,32 +111,41 @@ export function StackCards({ page, entries, piles = false }: { page: Page; entri
                 accessibilityRole="button"
                 accessibilityLabel={`${t('stack.count_a11y', { title: name, count })}${ba ? `. ${ba}` : ''}`}
                 onPress={() => open(c)}
-                style={{ minHeight: theme.size.buttonHeight, gap: theme.space[1] }}
+                onLongPress={() => setMenu(c)}
+                delayLongPress={400}
+                style={{ minHeight: theme.size.minTouch, gap: theme.space[1] }}
               >
                 <View style={[styles.row, { gap: theme.space[2] }]}>
-                  <PageIcon name={stackIcon(c)} color={theme.colors.ink} size={24} />
-                  <AppText variant="title2" style={styles.flex}>
+                  <PageIcon name={stackIcon(c)} color={theme.colors.ink2} size={20} />
+                  <AppText variant="headline" style={styles.flex}>
                     {name}
                   </AppText>
-                  <AppText variant="title2">{String(count)}</AppText>
+                  <AppText variant="headline" color="ink2">
+                    {String(count)}
+                  </AppText>
                 </View>
-                {ba ? <AppText variant="callout">{ba}</AppText> : null}
-                {preview ? <AppText numberOfLines={2}>{preview}</AppText> : null}
+                {ba ? <AppText variant="footnote">{ba}</AppText> : null}
+                {preview ? (
+                  <AppText variant="callout" color="ink" numberOfLines={2}>
+                    {preview}
+                  </AppText>
+                ) : null}
               </Pressable>
               <View style={[styles.row, { justifyContent: 'flex-end' }]}>
-                <Button
+                <Pressable
                   testID={`stack-menu-${c.id}`}
-                  label={`⋯ ${t('stack.menu')}`}
+                  accessibilityRole="button"
                   accessibilityLabel={t('stack.menu_a11y', { title: name })}
-                  variant="text"
-                  minHeight={theme.size.minTouch}
                   onPress={() => setMenu(c)}
-                />
+                  style={[styles.center, { width: theme.size.minTouch, height: theme.size.minTouch }]}
+                >
+                  <Icon icon={Ellipsis} size="sm" color="iconSecondary" />
+                </Pressable>
               </View>
             </View>
             {/* the sheet under it (+4): a stack, not a folder; a pile of stickers has two */}
-            <View style={[styles.under, { borderColor: theme.colors.separator, borderRadius: piles ? theme.radius.md : theme.radius.lg, backgroundColor: piles ? bg : theme.colors.bg }]} />
-            {piles ? <View style={[styles.under2, { borderColor: theme.colors.separator, borderRadius: theme.radius.md, backgroundColor: bg }]} /> : null}
+            <View style={[styles.under, { borderRadius: piles ? theme.radius.md : theme.radius.lg, backgroundColor: theme.colors.surfaceSunken }]} />
+            {piles ? <View style={[styles.under2, { borderRadius: theme.radius.md, backgroundColor: theme.colors.separator }]} /> : null}
           </View>
         );
       })}
@@ -151,75 +156,64 @@ export function StackCards({ page, entries, piles = false }: { page: Page; entri
             const name = stackTitle(c, i18n.language);
             const count = stackCount(c, entries);
             return (
-              <Pressable
+              <Chip
                 key={c.id}
                 testID={`stack-chip-${c.id}`}
-                accessibilityRole="button"
+                variant="neutral"
+                label={`${name} · ${count}`}
                 accessibilityLabel={t('stack.count_a11y', { title: name, count })}
                 onPress={() => open(c)}
-                style={[
-                  styles.chip,
-                  { minHeight: theme.size.minTouch, borderColor: theme.colors.iconSecondary, borderRadius: theme.radius.md, paddingHorizontal: theme.space[3] },
-                ]}
-              >
-                <AppText>{`${name} ${count}`}</AppText>
-              </Pressable>
+              />
             );
           })}
         </View>
       ) : null}
-      <Modal visible={!!menu} transparent animationType="slide" onRequestClose={() => setMenu(null)}>
-        <View style={[styles.scrim, { backgroundColor: theme.colors.scrim }]}>
-          <SafeAreaView
-            edges={['bottom']}
-            style={{ backgroundColor: theme.colors.surface, borderTopLeftRadius: theme.radius.sheet, borderTopRightRadius: theme.radius.sheet, padding: theme.space[5], gap: theme.space[2] }}
-          >
-            {menu ? (
-              <>
-                <AppText variant="title2" accessibilityRole="header">
-                  {stackTitle(menu, i18n.language)}
-                </AppText>
-                <Button
-                  testID="stack-menu-open"
-                  label={t('stack.open')}
-                  variant="secondary"
-                  onPress={() => {
-                    const c = menu;
-                    setMenu(null);
-                    open(c);
-                  }}
-                />
-                <Button
-                  testID="stack-menu-to-page"
-                  label={t('stack.to_page')}
-                  accessibilityHint={t('stack.to_page_hint')}
-                  variant="secondary"
-                  onPress={() => {
-                    const c = menu;
-                    setMenu(null);
-                    void stackToPage(c).then((pageId) => {
-                      if (pageId) router.navigate({ pathname: '/page/[id]', params: { id: pageId } });
-                    });
-                  }}
-                />
-                <Button
-                  testID="stack-menu-take-apart"
-                  label={t('stack.take_apart')}
-                  accessibilityHint={t('stack.take_apart_hint')}
-                  variant="text"
-                  onPress={() => {
-                    const c = menu;
-                    setMenu(null);
-                    void takeApartStack(c);
-                  }}
-                />
-                <AppText variant="callout">{t('stack.take_apart_hint')}</AppText>
-                <Button testID="stack-menu-close" label={t('common.close')} variant="text" onPress={() => setMenu(null)} />
-              </>
-            ) : null}
-          </SafeAreaView>
-        </View>
-      </Modal>
+      {menu ? (
+        <Sheet visible testID="stack-menu-sheet" title={stackTitle(menu, i18n.language)} onClose={() => setMenu(null)}>
+          <ActionList
+            actions={[
+              {
+                key: 'open',
+                testID: 'stack-menu-open',
+                label: t('stack.open'),
+                icon: FolderOpen,
+                onPress: () => {
+                  const c = menu;
+                  setMenu(null);
+                  open(c);
+                },
+              },
+              {
+                key: 'to-page',
+                testID: 'stack-menu-to-page',
+                label: t('stack.to_page'),
+                hint: t('stack.to_page_hint'),
+                icon: FilePlus,
+                onPress: () => {
+                  const c = menu;
+                  setMenu(null);
+                  void stackToPage(c).then((pageId) => {
+                    if (pageId) router.navigate({ pathname: '/page/[id]', params: { id: pageId } });
+                  });
+                },
+              },
+              {
+                key: 'apart',
+                testID: 'stack-menu-take-apart',
+                label: t('stack.take_apart'),
+                hint: t('stack.take_apart_hint'),
+                icon: Layers,
+                onPress: () => {
+                  const c = menu;
+                  setMenu(null);
+                  void takeApartStack(c);
+                },
+              },
+            ]}
+          />
+          <AppText variant="footnote">{t('stack.take_apart_hint')}</AppText>
+        </Sheet>
+      ) : null}
     </View>
   );
 }
@@ -227,9 +221,8 @@ export function StackCards({ page, entries, piles = false }: { page: Page; entri
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
   flex: { flex: 1 },
-  card: { borderWidth: 1 },
-  under: { position: 'absolute', left: 4, right: -4, top: 4, bottom: -2, borderWidth: 1, zIndex: -1 },
-  under2: { position: 'absolute', left: 8, right: -8, top: 8, bottom: -6, borderWidth: 1, zIndex: -2 },
-  chip: { borderWidth: 1, justifyContent: 'center' },
-  scrim: { flex: 1, justifyContent: 'flex-end' },
+  center: { alignItems: 'center', justifyContent: 'center' },
+  start: { alignSelf: 'flex-start' },
+  under: { position: 'absolute', left: 6, right: 6, top: 6, bottom: -2, zIndex: -1 },
+  under2: { position: 'absolute', left: 12, right: 12, top: 12, bottom: -6, zIndex: -2 },
 });

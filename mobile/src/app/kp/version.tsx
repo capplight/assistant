@@ -7,6 +7,7 @@ import type { KpVersionOut } from '@/api/types';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/Screen';
+import { Header } from '@/components/ui/Header';
 import { loadVersion, revertTo, shareKpFile, type FileResult } from '@/kp/service';
 import { cachedVersion, sentVersion, useKp } from '@/kp/store';
 import { kpView, money, priceLabel, priceMoney, qtyShown, shortDate, vatText } from '@/kp/view';
@@ -67,13 +68,14 @@ export default function KpVersionScreen() {
   return (
     <Screen testID="kp-version-screen">
       <View style={{ gap: theme.space[4] }}>
-        <Button testID="kp-version-back" label={`‹ ${t('kp.back')}`} variant="text" minHeight={theme.size.minTouch} style={{ alignSelf: 'flex-start' }} onPress={back} />
-        <AppText variant="largeTitle" accessibilityRole="header">
-          {[t('kp.version_n', { n }), version.data.client.name].filter(Boolean).join(' · ')}
-        </AppText>
+        <Header
+          title={t('kp.version_n', { n })}
+          meta={version.data.client.name ?? undefined}
+          back={{ testID: 'kp-version-back', label: t('kp.back'), onPress: back }}
+        />
         <AppText variant="callout">{shortDate(version.created_at, i18n.language)}</AppText>
         {sent ? (
-          <View testID="kp-version-frozen" style={{ padding: theme.space[3], borderRadius: theme.radius.lg, borderWidth: 2, borderColor: theme.colors.success }}>
+          <View testID="kp-version-frozen" style={{ padding: theme.space[3], borderRadius: theme.radius.lg, backgroundColor: theme.colors.successTint }}>
             <AppText>{t('kp.v_frozen', { date: shortDate(sentAt, i18n.language) }).trim()}</AppText>
           </View>
         ) : null}

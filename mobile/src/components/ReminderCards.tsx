@@ -1,11 +1,8 @@
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { BellRing, TriangleAlert } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
-import { Pressable, View } from 'react-native';
-import { useShallow } from 'zustand/react/shallow';
+import { StyleSheet, View } from 'react-native';
 
-import { dayText, timeText } from '@/alarms/format';
-import { lateRisk, upcoming } from '@/alarms/plan';
 import { dropPhrase } from '@/alarms/service';
 import { alarmRisk } from '@/alarms/setup';
 import { useAlarms } from '@/alarms/store';
@@ -13,10 +10,12 @@ import { useTheme } from '@/theme';
 
 import { AppText } from './AppText';
 import { Button } from './ui/Button';
+import { Card } from './ui/Card';
+import { Icon } from './ui/Icon';
 
 /**
- * «Будильники могут не сработать на этом телефоне [Исправить]» (alarm.risk, 2-design 4.8): a step
- * of S15 is not done. Only once there is something to ring or S15 was shown.
+ * «Будильники могут не сработать на этом телефоне · Исправить» (alarm.risk): a narrow line, not a block
+ * (ux-audit P0-3) — only once something rings (a reminder exists) or S15 was shown, and a step of S15 is not done.
  */
 export function AlarmRiskBanner() {
   const theme = useTheme();
@@ -30,70 +29,28 @@ export function AlarmRiskBanner() {
     <View
       testID="alarm-risk"
       accessibilityLiveRegion="polite"
-      style={{
-        flexDirection: theme.largeFont ? 'column' : 'row',
-        alignItems: theme.largeFont ? 'stretch' : 'center',
-        gap: theme.space[2],
-        padding: theme.space[3],
-        marginBottom: theme.space[4],
-        borderRadius: theme.radius.lg,
-        backgroundColor: theme.colors.highlightTint,
-      }}
+      style={[
+        styles.row,
+        {
+          flexWrap: 'wrap',
+          gap: theme.space[2],
+          paddingLeft: theme.space[3],
+          marginBottom: theme.space[2],
+          borderRadius: theme.radius.lg,
+          backgroundColor: theme.colors.warningTint,
+        },
+      ]}
     >
-      <AppText style={{ flex: theme.largeFont ? undefined : 1 }}>{`⚠ ${t('alarm.risk')}`}</AppText>
-      <Button testID="alarm-risk-fix" label={t('alarm.fix')} variant="secondary" minHeight={theme.size.minTouch} onPress={() => router.push('/alarm-setup')} />
-    </View>
-  );
-}
-
-/** The next reminders (24 h) on «Сегодня»: «Будильник · 10:00 · Позвонить Ерлану». Week 9 brings the full list. */
-export function UpcomingReminders() {
-  const theme = useTheme();
-  const { t } = useTranslation();
-  const src = useAlarms(useShallow((s) => ({ reminders: s.reminders, fires: s.fires, local: s.local, deviceId: s.deviceId })));
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 60_000);
-    return () => clearInterval(timer);
-  }, []);
-  const list = upcoming({ ...src, now }, 24 * 60 * 60_000);
-  const late = useAlarms((s) => lateRisk(s.caps));
-  return (
-    <View style={{ marginBottom: theme.space[6] }}>
-      <AppText variant="sectionLabel" accessibilityRole="header" style={{ marginBottom: theme.space[3] }}>
-        {t('today.upcoming')}
+      <Icon icon={TriangleAlert} size="sm" color="warning" />
+      <AppText variant="callout" color="ink" style={[styles.flex, { minWidth: 160, paddingVertical: theme.space[2] }]}>
+        {t('alarm.risk')}
       </AppText>
-      {list.map((a) => {
-        const level = a.level === 'alarm' ? t('alarm.level_alarm') : t('alarm.level_notification');
-        const line = `${a.level === 'alarm' ? '🔔 ' : ''}${level} · ${timeText(a.fireAt)} · ${a.title}`;
-        return (
-          <Pressable
-            key={a.group}
-            testID={`upcoming-${a.group}`}
-            accessibilityLabel={`${level}. ${timeText(a.fireAt)}. ${a.title}. ${dayText(a.fireAt, now)}`}
-            style={{ minHeight: theme.size.minTouch, justifyContent: 'center', borderBottomWidth: 1, borderBottomColor: theme.colors.separator, paddingVertical: theme.space[2] }}
-          >
-            <AppText color={a.level === 'alarm' ? 'danger' : 'ink'}>{line}</AppText>
-            {late ? (
-              <AppText variant="callout" color="warning">
-                {t('rem.late_risk')}
-              </AppText>
-            ) : null}
-          </Pressable>
-        );
-      })}
-      <Button
-        testID="today-new-reminder"
-        label={t('today.new_reminder')}
-        variant="secondary"
-        style={{ marginTop: theme.space[3] }}
-        onPress={() => router.push('/reminder-new')}
-      />
+      <Button testID="alarm-risk-fix" label={t('alarm.fix')} variant="text" onPress={() => router.push('/alarm-setup')} />
     </View>
   );
 }
 
-/** A phrase that waited for the internet came back parsed: «Проверьте напоминание» → S13. */
+/** A phrase that waited for the internet came back parsed: «Проверьте напоминание» [Проверить] → S13. */
 export function ReminderDraftStrip() {
   const theme = useTheme();
   const { t } = useTranslation();
@@ -107,16 +64,24 @@ export function ReminderDraftStrip() {
     router.push({ pathname: '/reminder-new', params });
   };
   return (
-    <View
-      testID="reminder-draft"
-      accessibilityLiveRegion="polite"
-      style={{ marginHorizontal: theme.space[3], marginBottom: theme.space[2], padding: theme.space[3], gap: theme.space[2], borderRadius: theme.radius.lg, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.separator }}
-    >
-      <AppText numberOfLines={3}>{t('rem.draft_ready', { text: ready.text })}</AppText>
-      <View style={{ flexDirection: theme.largeFont ? 'column' : 'row', gap: theme.space[2] }}>
-        <Button testID="reminder-draft-open" label={t('rem.check')} variant="secondary" style={theme.largeFont ? undefined : { flex: 1 }} onPress={open} />
-        <Button testID="reminder-draft-close" label={t('rem.close')} variant="text" style={theme.largeFont ? undefined : { flex: 1 }} onPress={() => dropPhrase(ready.id)} />
-      </View>
+    <View testID="reminder-draft" accessibilityLiveRegion="polite">
+      <Card tone="raised" style={[{ gap: theme.space[2], borderRadius: theme.radius.xl }, theme.elevation.floating]}>
+        <View style={[styles.row, { gap: theme.space[2], alignItems: 'flex-start' }]}>
+          <Icon icon={BellRing} size="sm" color="brand" />
+          <AppText numberOfLines={3} style={styles.flex}>
+            {t('rem.draft_ready', { text: ready.text })}
+          </AppText>
+        </View>
+        <View style={[styles.row, { flexWrap: 'wrap', gap: theme.space[2] }]}>
+          <Button testID="reminder-draft-open" label={t('rem.check')} variant="secondary" size="small" onPress={open} />
+          <Button testID="reminder-draft-close" label={t('rem.close')} variant="text" onPress={() => dropPhrase(ready.id)} />
+        </View>
+      </Card>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center' },
+  flex: { flex: 1 },
+});

@@ -1,12 +1,11 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { Check, ChevronLeft, TriangleAlert } from 'lucide-react-native';
+import { Check, TriangleAlert } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/ui/Button';
+import { BackButton, Button, Sheet } from '@/components/ui';
 import { Screen } from '@/components/Screen';
 import { isTrashed } from '@/db/records';
 import { recordTitle, sourceLine, statusLine } from '@/records/format';
@@ -63,18 +62,8 @@ export default function RecordScreen() {
     else router.navigate('/records');
   };
 
-  const backRow = (
-    <Pressable
-      testID="record-back"
-      accessibilityRole="button"
-      accessibilityLabel={ret ? t('record.back_answer') : t('common.back')}
-      onPress={back}
-      style={[styles.back, { minHeight: theme.size.minTouch }]}
-    >
-      <ChevronLeft size={24} color={theme.colors.brand} />
-      <AppText color="brand">{ret ? t('record.back_answer') : t('common.back')}</AppText>
-    </Pressable>
-  );
+  // The one «‹ Назад» of stack screens (design-system §3 Header).
+  const backRow = <BackButton testID="record-back" label={ret ? t('record.back_answer') : t('common.back')} onPress={back} />;
 
   if (record === undefined) return <Screen testID="record-loading" edges={['top']}>{null}</Screen>;
   const closeSheet = () => {
@@ -105,7 +94,7 @@ export default function RecordScreen() {
       <AppText variant="title2" accessibilityRole="header" style={{ marginBottom: theme.space[1] }}>
         {title}
       </AppText>
-      <AppText variant="callout" style={{ marginBottom: theme.space[1] }}>
+      <AppText variant="footnote" style={{ marginBottom: theme.space[1] }}>
         {sourceLine(record, i18n.language, t)}
       </AppText>
       {status ? (
@@ -166,15 +155,18 @@ export default function RecordScreen() {
               }
               disabled={row.verified}
               onPress={() => setAsking(row)}
-              style={{
-                minHeight: theme.size.minTouch,
-                padding: theme.space[3],
-                borderRadius: theme.radius.sm,
-                backgroundColor: row.verified ? theme.colors.surface : theme.colors.highlightTint,
-                gap: theme.space[1],
-              }}
+              style={[
+                {
+                  minHeight: theme.size.minTouch,
+                  padding: theme.space[3],
+                  borderRadius: theme.radius.md,
+                  backgroundColor: row.verified ? theme.colors.surface : theme.colors.highlightTint,
+                  gap: 2,
+                },
+                row.verified ? theme.elevation.card : null,
+              ]}
             >
-              <AppText variant="callout">{fieldLabel(row.kind)}</AppText>
+              <AppText variant="footnote">{fieldLabel(row.kind)}</AppText>
               <AppText variant="number">{row.value ?? ''}</AppText>
               <View style={[styles.mark, { gap: theme.space[1] }]}>
                 {row.verified ? <Check size={18} color={theme.colors.success} /> : null}
@@ -216,25 +208,7 @@ export default function RecordScreen() {
       />
 
       {asking ? (
-        <Modal visible transparent animationType="slide" onRequestClose={closeSheet}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            style={[styles.scrim, { backgroundColor: theme.colors.scrim }]}
-          >
-            <SafeAreaView
-              edges={['bottom']}
-              testID="check-sheet"
-              style={[
-                {
-                  backgroundColor: theme.colors.surface,
-                  borderTopLeftRadius: theme.radius.sheet,
-                  borderTopRightRadius: theme.radius.sheet,
-                  padding: theme.space[5],
-                  gap: theme.space[3],
-                },
-                theme.elevation.floating,
-              ]}
-            >
+        <Sheet visible testID="check-sheet" closeButton={false} onClose={closeSheet}>
               <AppText variant="callout">{fieldLabel(asking.kind)}</AppText>
               {fixing === null ? (
                 <>
@@ -254,7 +228,7 @@ export default function RecordScreen() {
                     <Button
                       testID="check-fix"
                       label={t('check.fix')}
-                      variant="secondary"
+                      variant="text"
                       onPress={() => setFixing(asking.value ?? '')}
                     />
                   ) : null}
@@ -278,12 +252,10 @@ export default function RecordScreen() {
                       theme.type.body,
                       {
                         minHeight: theme.size.buttonHeight,
-                        borderWidth: 1,
-                        borderColor: theme.colors.iconSecondary,
-                        borderRadius: theme.radius.sm,
-                        paddingHorizontal: theme.space[3],
+                        borderRadius: theme.radius.md,
+                        paddingHorizontal: theme.space[4],
                         color: theme.colors.ink,
-                        backgroundColor: theme.colors.bg,
+                        backgroundColor: theme.colors.surfaceSunken,
                       },
                     ]}
                   />
@@ -301,18 +273,14 @@ export default function RecordScreen() {
                   <Button testID="check-fix-cancel" label={t('check.cancel')} variant="text" onPress={closeSheet} />
                 </>
               )}
-            </SafeAreaView>
-          </KeyboardAvoidingView>
-        </Modal>
+        </Sheet>
       ) : null}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  back: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start' },
   banner: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
   mark: { flexDirection: 'row', alignItems: 'center' },
   flex: { flex: 1, minWidth: 160 },
-  scrim: { flex: 1, justifyContent: 'flex-end' },
 });

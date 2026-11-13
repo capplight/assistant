@@ -115,10 +115,20 @@ export async function loadConsentTexts(api: Api, locale: Locale): Promise<Consen
   }
 }
 
-/** POST /v1/consents body for the button pressed, with the exact version + hash that was shown. */
-export function buildConsentRequest(mode: 'full' | 'no_ai', texts: ConsentTexts): ConsentsIn {
+const SCREENS: readonly ConsentsIn['screen'][] = ['S05', 'welcome', 'settings', 'import'];
+
+/** The `screen` of `POST /v1/consents`: what the server's `consent_screen` names (features.md), or `welcome`. */
+export function consentScreen(v: string | null | undefined): ConsentsIn['screen'] {
+  return SCREENS.find((x) => x === v) ?? 'welcome';
+}
+
+/**
+ * POST /v1/consents body for the button pressed, with the exact version + hash that was shown. `screen`: S05
+ * (the old consent screen, still used for another account) or `welcome` (Ф-34: «Начать» with the policy line).
+ */
+export function buildConsentRequest(mode: 'full' | 'no_ai', texts: ConsentTexts, screen: ConsentsIn['screen'] = 'S05'): ConsentsIn {
   return {
-    screen: 'S05',
+    screen,
     age_confirmed_18: true, // the 18+ line is part of the `terms` text both buttons accept
     consents: KINDS_BY_MODE[mode].map((kind) => {
       const t = texts[kind as keyof ConsentTexts];

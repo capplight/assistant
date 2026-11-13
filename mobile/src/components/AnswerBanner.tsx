@@ -1,7 +1,8 @@
 import { router } from 'expo-router';
 import React, { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AccessibilityInfo, findNodeHandle, StyleSheet, View } from 'react-native';
+import { X } from 'lucide-react-native';
+import { AccessibilityInfo, findNodeHandle, Pressable, StyleSheet, View } from 'react-native';
 
 import { useAlarms } from '@/alarms/store';
 import { answerProposal, cancelPick, markDelivery, retry } from '@/chat/service';
@@ -13,6 +14,8 @@ import { useTheme } from '@/theme';
 import { answerNotice, useLocalHitTitles } from './answerText';
 import { AppText } from './AppText';
 import { Button } from './ui/Button';
+import { Icon } from './ui/Icon';
+import { pressedStyle } from './ui/motion';
 import { LocalHitChips, SourceChips } from './SourceChips';
 import { useCurrentPage } from './useCurrentPage';
 
@@ -62,7 +65,7 @@ export function AnswerBanner() {
     },
     theme.elevation.floating,
   ];
-  const buttonsRow = [styles.row, { gap: theme.space[2], flexDirection: theme.largeFont ? ('column' as const) : ('row' as const), flexWrap: 'wrap' as const }];
+  const buttonsRow = [styles.row, { gap: theme.space[2], flexDirection: 'row' as const, flexWrap: 'wrap' as const, alignItems: 'center' as const }];
 
   if (picking?.messageId === message.id) {
     return (
@@ -89,8 +92,28 @@ export function AnswerBanner() {
     router.push({ pathname: '/reminder-new', params: { text, ...(phrase ? { phraseId: phrase.id } : {}) } });
   };
 
+  // The usual answer: «Помощник» + ✕ on top, the answer, its sources and the label, «Открыть ответ» as a tonal chip.
+  const usual = message.notice !== 'offline_reminder' && !onlyNotice;
   return (
     <View testID="answer-banner" accessibilityLiveRegion="polite" style={box}>
+      {usual ? (
+        <View style={[styles.head, { gap: theme.space[2] }]}>
+          <AppText variant="sectionLabel" style={styles.flex}>
+            {t('answer.assistant')}
+          </AppText>
+          <Pressable
+            testID="answer-close"
+            accessibilityRole="button"
+            accessibilityLabel={t('answer.close')}
+            onPress={close}
+            style={({ pressed }) => [styles.target, { width: theme.size.minTouch, height: theme.size.minTouch, marginVertical: -theme.space[2], marginRight: -theme.space[2] }, pressedStyle(pressed)]}
+          >
+            <View style={[styles.target, { width: 28, height: 28, borderRadius: 14, backgroundColor: theme.colors.surfaceSunken }]}>
+              <Icon icon={X} size="sm" color="ink2" />
+            </View>
+          </Pressable>
+        </View>
+      ) : null}
       {message.saved ? (
         <AppText numberOfLines={2}>{savedLine}</AppText>
       ) : message.text ? (
@@ -113,38 +136,25 @@ export function AnswerBanner() {
         <SourceChips messageId={message.id} sources={message.sources} max={2} onMore={openAnswer} />
       ) : null}
       {message.status === 'done' && message.aiGenerated && message.text ? (
-        <AppText testID="answer-ai-label" variant="callout" /* the «ИИ» label is shown whole, never cut (2-design §8) */>
+        <AppText testID="answer-ai-label" variant="footnote" /* the «ИИ» label is shown whole, never cut (2-design §8) */>
           {t('ai.label_short')}
         </AppText>
       ) : null}
       {message.notice === 'maybe_done' ? (
-        <Button testID="answer-did" label={t('more.did')} variant="text" onPress={() => router.push('/did')} />
+        <Button testID="answer-did" label={t('more.did')} variant="text" onPress={() => router.push('/did')} style={styles.start} />
       ) : message.status === 'interrupted' ? (
-        <Button testID="answer-retry" label={t('answer.retry')} variant="text" onPress={() => void retry(message.id)} />
+        <Button testID="answer-retry" label={t('answer.retry')} variant="text" onPress={() => void retry(message.id)} style={styles.start} />
       ) : null}
       {message.notice === 'offline_reminder' ? (
         <View style={buttonsRow}>
-          <Button testID="answer-set-by-hand" label={t('rem.set_by_hand')} variant="secondary" style={theme.largeFont ? undefined : styles.flex} onPress={setByHand} />
-          <Button testID="answer-ok" label={t('common.ok')} variant="text" style={theme.largeFont ? undefined : styles.flex} onPress={close} />
+          <Button testID="answer-set-by-hand" label={t('rem.set_by_hand')} variant="secondary" size="small" onPress={setByHand} />
+          <Button testID="answer-ok" label={t('common.ok')} variant="text" onPress={close} />
         </View>
       ) : onlyNotice ? (
-        <Button testID="answer-ok" label={t('common.ok')} variant="secondary" onPress={close} />
+        <Button testID="answer-ok" label={t('common.ok')} variant="secondary" size="small" onPress={close} style={styles.start} />
       ) : (
         <View style={buttonsRow}>
-          <Button
-            testID="answer-open"
-            label={t('answer.open')}
-            variant="secondary"
-            style={theme.largeFont ? undefined : styles.flex}
-            onPress={openAnswer}
-          />
-          <Button
-            testID="answer-close"
-            label={t('answer.close')}
-            variant="text"
-            style={theme.largeFont ? undefined : styles.flex}
-            onPress={close}
-          />
+          <Button testID="answer-open" label={t('answer.open')} variant="secondary" size="small" onPress={openAnswer} />
         </View>
       )}
     </View>
@@ -192,4 +202,7 @@ const styles = StyleSheet.create({
   box: {},
   row: {},
   flex: { flex: 1 },
+  head: { flexDirection: 'row', alignItems: 'center' },
+  target: { alignItems: 'center', justifyContent: 'center' },
+  start: { alignSelf: 'flex-start' },
 });

@@ -1,15 +1,15 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowDown, ArrowUp, Check, Lock } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/ui/Button';
 import { PageIcon } from '@/components/Icon';
 import { AddFieldSheet, ChoiceSheet } from '@/components/page/FieldSheets';
 import { effectiveLayout, hasTool } from '@/components/page/registry';
+import { Button, Card, CheckMark, Header, Icon, ListGroup, ListRow, SegmentedControl, Sheet } from '@/components/ui';
 import { StandaloneUndoStrip } from '@/components/UndoStrip';
 import { catalogTemplate, fieldTitle, MAX_CUSTOM_FIELDS, useCatalog } from '@/pages/catalog';
 import { facetKey, useFacets } from '@/pages/facets';
@@ -21,31 +21,33 @@ import { changeView, layoutLabel } from '@/pages/viewService';
 import { formatShortDate, recordTitle } from '@/records/format';
 import { usePageEntries } from '@/records/useRecords';
 import { getApi, syncBlocked } from '@/services';
+import { useFeatures } from '@/store/features';
 import { useOnboarding } from '@/store/onboarding';
 import { usePages } from '@/store/pages';
-import { MAX_FONT_SCALE, useTheme } from '@/theme';
+import { MAX_FONT_SCALE, readableColumn, useLayout, useTheme, withAlpha } from '@/theme';
 import { newId } from '@/utils/id';
 
 const ICONS: IconKey[] = ['home', 'money', 'documents', 'shopping', 'health', 'people', 'work', 'other'];
 const SORTS = ['position', 'newest', 'oldest', 'title'] as const;
 
 /**
- * S38 «Настроить страницу» (2-design 4.6, S38; R-51 widened by Ф-31, template-screens 2.8): the
- * live example «Так выглядит запись» on top; name; 8 icons; fields — ★ with a lock («Нужно для
- * работы — скрыть нельзя»), the others with a 48 pt switch and ↑ ↓; «+ Своё поле» (≤5, 5 types);
- * «Вид» from what the template allows, «Простой список» always (Ф-30); sort and grouping;
- * «Вернуть как было» through S25 with «Нет» in focus. Every change applies at once, offline too,
- * with «Отменить» in the strip at the bottom; «Готово» only closes. What the person sets here is
- * theirs: the assistant changes it only after their «Да».
+ * S38 «Настроить страницу». Ф-40: for the beta only the name, the icon and the view (`page_settings_full` off).
+ * With the switch on, the full screen comes back (2-design 4.6, template-screens 2.8): the live example, fields
+ * with ★ locked, «+ Своё поле» (≤5), sort and grouping, «Вернуть как было» through S25 with «Нет» first.
+ * Every change applies at once, offline too, with «Отменить» in the strip at the bottom; «‹ Назад» only closes.
+ * What the person sets here is theirs: the assistant changes it only after their «Да».
  */
 export default function PageSettingsScreen() {
   const theme = useTheme();
+  const layoutInfo = useLayout();
   const { t, i18n } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const page = usePages((s) => s.pages.find((p) => p.id === id));
   const server = useCatalog((s) => s.server);
   const values = useFacets((s) => s.values);
   const entries = usePageEntries(page);
+  const full = useFeatures((f) => f.page_settings_full);
+  const boardOn = useFeatures((f) => f.board);
   const { title } = usePageLabels();
   const [name, setName] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -61,12 +63,12 @@ export default function PageSettingsScreen() {
   }, []);
 
   const close = () => (router.canGoBack() ? router.back() : router.replace(page ? { pathname: '/page/[id]', params: { id: page.id } } : '/'));
+  const pad = { paddingHorizontal: layoutInfo.gutter };
 
   if (!page) {
     return (
-      <SafeAreaView testID="page-settings-missing" style={[styles.root, { backgroundColor: theme.colors.bg, padding: theme.screenPadding }]}>
-        <Button testID="settings-back" label={`‹ ${t('common.back')}`} variant="text" minHeight={theme.size.minTouch} onPress={close} style={styles.start} />
-        <AppText>{t('page.not_found')}</AppText>
+      <SafeAreaView testID="page-settings-missing" style={[styles.root, pad, { backgroundColor: theme.colors.bg }]}>
+        <Header title={t('page.not_found')} back={{ onPress: close, testID: 'settings-back' }} />
       </SafeAreaView>
     );
   }
@@ -101,255 +103,273 @@ export default function PageSettingsScreen() {
     { key: '', label: t('view.group_none') },
     ...fields.filter((f) => f.visible && groupable(f)).map((f) => ({ key: f.id, label: fname(f) })),
   ];
-
-  const section = (key: string) => (
-    <AppText variant="sectionLabel" accessibilityRole="header" style={{ marginTop: theme.space[5] }}>
-      {t(key)}
-    </AppText>
-  );
+  const layouts = tpl.layouts.filter((l) => l === layout || hasTool(page.templateKey, l, tpl.defaultLayout));
+  const square = { width: theme.size.minTouch, height: theme.size.minTouch, alignItems: 'center', justifyContent: 'center' } as const;
+  const iconD = theme.size.minTouch;
 
   return (
     <SafeAreaView testID="page-settings" edges={['top']} style={[styles.root, { backgroundColor: theme.colors.bg }]}>
-      <View style={[styles.row, { paddingHorizontal: theme.screenPadding, gap: theme.space[2], borderBottomWidth: 1, borderBottomColor: theme.colors.separator }]}>
-        <Button testID="settings-back" label={`‹ ${t('common.back')}`} variant="text" minHeight={theme.size.minTouch} onPress={close} />
-        <AppText variant="title2" accessibilityRole="header" style={[styles.flex, { textAlign: 'center' }]}>
-          {t('view.settings')}
-        </AppText>
-        <Button testID="settings-done" label={t('page.order_done')} variant="text" minHeight={theme.size.minTouch} onPress={close} />
-      </View>
-      <ScrollView contentContainerStyle={{ padding: theme.screenPadding, gap: theme.space[2] }} keyboardShouldPersistTaps="handled">
-        {section('view.example')}
-        <View
-          testID="settings-example"
-          accessibilityLabel={listed
-            .filter((f) => f.visible)
-            .map((f) => `${fname(f)}: ${exampleValue(f)}`)
-            .join('. ')}
-          style={[styles.card, { borderColor: theme.colors.separator, backgroundColor: theme.colors.surface, borderRadius: theme.radius.lg, padding: theme.space[4], gap: theme.space[1] }]}
-        >
-          {listed
-            .filter((f) => f.visible)
-            .map((f, i) => (
-              <AppText key={f.id} testID={`settings-example-${f.id}`} variant={i === 0 ? 'bodyStrong' : 'callout'} color="ink">
-                {i === 0 ? exampleValue(f) : `${fname(f)}: ${exampleValue(f)}`}
-              </AppText>
-            ))}
-        </View>
+      <ScrollView
+        contentContainerStyle={[pad, { paddingTop: theme.space[2], paddingBottom: theme.space[8] }]}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={[readableColumn(layoutInfo.contentMaxWidth), { gap: theme.space[5] }]}>
+          <Header title={t('view.settings')} back={{ onPress: close, testID: 'settings-back' }} />
 
-        {section('view.name')}
-        <TextInput
-          testID="settings-name"
-          accessibilityLabel={t('view.name')}
-          value={currentName}
-          onChangeText={setName}
-          onBlur={saveName}
-          onSubmitEditing={saveName}
-          maxLength={60}
-          maxFontSizeMultiplier={MAX_FONT_SCALE}
-          style={[
-            theme.type.body,
-            {
-              minHeight: theme.size.buttonHeight,
-              borderWidth: 1,
-              borderColor: theme.colors.iconSecondary,
-              borderRadius: theme.radius.sm,
-              paddingHorizontal: theme.space[3],
-              color: theme.colors.ink,
-              backgroundColor: theme.colors.surface,
-            },
-          ]}
-        />
-
-        {section('view.icon')}
-        <View accessibilityRole="radiogroup" style={[styles.row, { flexWrap: 'wrap', gap: theme.space[2] }]}>
-          {ICONS.map((k) => (
-            <Pressable
-              key={k}
-              testID={`settings-icon-${k}`}
-              accessibilityRole="radio"
-              accessibilityLabel={t(`view.icons.${k}`)}
-              accessibilityState={{ checked: page.icon === k }}
-              onPress={() => void changeView(page, { kind: 'icon', icon: k })}
-              style={{
-                width: theme.size.buttonHeight,
-                height: theme.size.buttonHeight,
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: theme.radius.md,
-                borderWidth: page.icon === k ? 2 : 1,
-                borderColor: page.icon === k ? theme.colors.brand : theme.colors.separator,
-              }}
-            >
-              <PageIcon name={k} size={26} color={page.icon === k ? theme.colors.brand : theme.colors.ink} />
-            </Pressable>
-          ))}
-        </View>
-
-        {section('view.fields')}
-        {listed.map((f, i) => {
-          const label = fname(f);
-          const a11y = f.required
-            ? t('view.field_required_a11y', { field: label })
-            : t(f.visible ? 'view.field_on_a11y' : 'view.field_off_a11y', { field: label });
-          return (
-            <View
-              key={f.id}
-              testID={`settings-field-${f.id}`}
-              style={[styles.row, { minHeight: theme.size.buttonHeight, gap: theme.space[2], borderBottomWidth: 1, borderBottomColor: theme.colors.separator, flexWrap: theme.largeFont ? 'wrap' : 'nowrap' }]}
-            >
-              {f.required ? (
-                <View accessible accessibilityLabel={a11y} style={[styles.row, styles.flex, { gap: theme.space[2], minHeight: theme.size.minTouch }]}>
-                  <Lock size={22} color={theme.colors.ink2} />
-                  <View style={styles.flex}>
-                    <AppText>{label}</AppText>
-                    <AppText testID={`settings-field-lock-${f.id}`} variant="callout">
-                      {t('view.required')}
+          {full ? (
+            <Section title={t('view.example')}>
+              <Card
+                testID="settings-example"
+                accessibilityLabel={listed
+                  .filter((f) => f.visible)
+                  .map((f) => `${fname(f)}: ${exampleValue(f)}`)
+                  .join('. ')}
+                style={{ gap: theme.space[1] }}
+              >
+                {listed
+                  .filter((f) => f.visible)
+                  .map((f, i) => (
+                    <AppText key={f.id} testID={`settings-example-${f.id}`} variant={i === 0 ? 'bodyStrong' : 'callout'} color="ink">
+                      {i === 0 ? exampleValue(f) : `${fname(f)}: ${exampleValue(f)}`}
                     </AppText>
-                  </View>
-                </View>
-              ) : (
-                <Pressable
-                  testID={`settings-field-toggle-${f.id}`}
-                  accessibilityRole="switch"
-                  accessibilityLabel={a11y}
-                  accessibilityState={{ checked: f.visible }}
-                  onPress={() => void changeView(page, { kind: 'field_visible', fieldId: f.id, visible: !f.visible })}
-                  style={[styles.row, styles.flex, { gap: theme.space[2], minHeight: theme.size.minTouch }]}
-                >
-                  <View
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: 6,
-                      borderWidth: 2,
-                      borderColor: theme.colors.brand,
-                      backgroundColor: f.visible ? theme.colors.brand : 'transparent',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
+                  ))}
+              </Card>
+            </Section>
+          ) : null}
+
+          <Section title={t('view.name')}>
+            <TextInput
+              testID="settings-name"
+              accessibilityLabel={t('view.name')}
+              value={currentName}
+              onChangeText={setName}
+              onBlur={saveName}
+              onSubmitEditing={saveName}
+              maxLength={60}
+              maxFontSizeMultiplier={MAX_FONT_SCALE}
+              style={[
+                theme.type.body,
+                {
+                  minHeight: theme.size.buttonHeight,
+                  borderRadius: theme.radius.md,
+                  paddingHorizontal: theme.space[4],
+                  color: theme.colors.ink,
+                  backgroundColor: theme.colors.surfaceSunken,
+                },
+              ]}
+            />
+          </Section>
+
+          <Section title={t('view.icon')}>
+            <View accessibilityRole="radiogroup" style={[styles.row, { flexWrap: 'wrap', gap: theme.space[2] }]}>
+              {ICONS.map((k) => {
+                const on = page.icon === k;
+                return (
+                  <Pressable
+                    key={k}
+                    testID={`settings-icon-${k}`}
+                    accessibilityRole="radio"
+                    accessibilityLabel={t(`view.icons.${k}`)}
+                    accessibilityState={{ checked: on }}
+                    onPress={() => void changeView(page, { kind: 'icon', icon: k })}
+                    style={({ pressed }) => [
+                      styles.center,
+                      {
+                        width: iconD,
+                        height: iconD,
+                        borderRadius: iconD / 2,
+                        backgroundColor: on ? theme.colors.brandTint : pressed ? theme.colors.surfaceSunken : theme.colors.surface,
+                      },
+                      on ? null : theme.elevation.card,
+                    ]}
                   >
-                    {f.visible ? <Check size={22} color={theme.colors.onBrand} /> : null}
-                  </View>
-                  <View style={styles.flex}>
-                    <AppText color={f.visible ? 'ink' : 'ink2'}>{label}</AppText>
-                    {f.custom ? <AppText variant="callout">{typeName(f)}</AppText> : null}
-                  </View>
-                </Pressable>
-              )}
-              <View style={[styles.row, { gap: theme.space[1] }]}>
-                <Pressable
-                  testID={`settings-field-up-${f.id}`}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('move.up_a11y', { what: label })}
-                  accessibilityState={{ disabled: i === 0 }}
-                  disabled={i === 0}
-                  onPress={() => void changeView(page, { kind: 'field_move', fieldId: f.id, step: -1 })}
-                  style={[styles.square, { width: theme.size.minTouch, height: theme.size.minTouch, opacity: i === 0 ? 0.35 : 1 }]}
-                >
-                  <ArrowUp size={24} color={theme.colors.brand} />
-                </Pressable>
-                <Pressable
-                  testID={`settings-field-down-${f.id}`}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('move.down_a11y', { what: label })}
-                  accessibilityState={{ disabled: i === listed.length - 1 }}
-                  disabled={i === listed.length - 1}
-                  onPress={() => void changeView(page, { kind: 'field_move', fieldId: f.id, step: 1 })}
-                  style={[styles.square, { width: theme.size.minTouch, height: theme.size.minTouch, opacity: i === listed.length - 1 ? 0.35 : 1 }]}
-                >
-                  <ArrowDown size={24} color={theme.colors.brand} />
-                </Pressable>
-                {f.custom ? (
-                  <Button
-                    testID={`settings-field-remove-${f.id}`}
-                    label={t('view.remove_field')}
-                    accessibilityLabel={t('view.remove_field_a11y', { field: label })}
-                    variant="text"
-                    minHeight={theme.size.minTouch}
-                    onPress={() => void changeView(page, { kind: 'custom_remove', fieldId: f.id })}
-                  />
-                ) : null}
-              </View>
+                    <PageIcon name={k} size={24} color={on ? theme.colors.brand : theme.colors.ink2} />
+                  </Pressable>
+                );
+              })}
             </View>
-          );
-        })}
-        <View style={[styles.row, { gap: theme.space[3], flexWrap: 'wrap', marginTop: theme.space[2] }]}>
-          <Button
-            testID="settings-add-field"
-            label={t('view.add_field')}
-            variant="secondary"
-            minHeight={theme.size.buttonHeight}
-            disabled={ownCount >= MAX_CUSTOM_FIELDS}
-            onPress={() => setAdding(true)}
-          />
-          <AppText testID="settings-own-count" variant="callout">
-            {ownCount >= MAX_CUSTOM_FIELDS ? t('view.err_custom_limit') : t('view.own_count', { count: ownCount, max: MAX_CUSTOM_FIELDS })}
-          </AppText>
-        </View>
+          </Section>
 
-        {section('view.view')}
-        <View accessibilityRole="radiogroup" style={{ gap: theme.space[2] }}>
-          {tpl.layouts.filter((l) => l === layout || hasTool(page.templateKey, l, tpl.defaultLayout)).map((l: Layout) => (
-            <Pressable
-              key={l}
-              testID={`settings-layout-${l}`}
-              accessibilityRole="radio"
-              accessibilityState={{ checked: layout === l }}
-              onPress={() => void changeView(page, { kind: 'layout', layout: l })}
-              style={{
-                minHeight: theme.size.buttonHeight,
-                borderRadius: theme.radius.md,
-                borderWidth: layout === l ? 2 : 1,
-                borderColor: layout === l ? theme.colors.brand : theme.colors.separator,
-                paddingHorizontal: theme.space[3],
-                justifyContent: 'center',
-              }}
-            >
-              <AppText color={layout === l ? 'brand' : 'ink'}>{`${layout === l ? '● ' : '○ '}${t(`view.layout.${layoutLabel(page.templateKey, l)}`)}`}</AppText>
-              {l === 'list' && page.templateKey !== 'custom' ? <AppText variant="callout">{t('view.simple_hint')}</AppText> : null}
-            </Pressable>
-          ))}
-        </View>
-        {/* Weeks 16а–16б: the stickers' two modes, the same switch as on the page (Ф-28). */}
-        {page.templateKey === 'notes' && layout === 'builtin:notes_board' ? (
-          <View accessibilityRole="tablist" style={[styles.row, { gap: theme.space[2] }]}>
-            {([false, true] as const).map((on) => {
-              const board = page.view?.mode === 'board';
-              return (
+          <Section title={t('view.view')}>
+            <Card padded={false} style={styles.clip}>
+              <View accessibilityRole="radiogroup">
+                {layouts.map((l: Layout, i) => {
+                  const on = layout === l;
+                  return (
+                    <Pressable
+                      key={l}
+                      testID={`settings-layout-${l}`}
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: on }}
+                      onPress={() => void changeView(page, { kind: 'layout', layout: l })}
+                      style={({ pressed }) => [
+                        styles.row,
+                        {
+                          minHeight: theme.size.rowHeight,
+                          paddingHorizontal: theme.space[4],
+                          paddingVertical: theme.space[2],
+                          gap: theme.space[3],
+                          backgroundColor: pressed ? withAlpha(theme.colors.surfaceSunken, 0.5) : 'transparent',
+                        },
+                      ]}
+                    >
+                      <View style={styles.flex}>
+                        <AppText color="ink" style={on ? { fontFamily: theme.type.headline.fontFamily } : undefined}>
+                          {t(`view.layout.${layoutLabel(page.templateKey, l)}`)}
+                        </AppText>
+                        {l === 'list' && page.templateKey !== 'custom' ? <AppText variant="footnote">{t('view.simple_hint')}</AppText> : null}
+                      </View>
+                      {on ? <Icon icon={Check} color="brand" /> : null}
+                      {i < layouts.length - 1 ? (
+                        <View style={[styles.divider, { left: theme.space[4], backgroundColor: theme.colors.separator }]} />
+                      ) : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </Card>
+            {/* Weeks 16а–16б: the stickers' two modes — only while «Доска» is on (Ф-38). */}
+            {boardOn && page.templateKey === 'notes' && layout === 'builtin:notes_board' ? (
+              <SegmentedControl<'rows' | 'board'>
+                segments={[
+                  { key: 'rows', label: t('notes.mode_rows'), testID: 'settings-notes-rows' },
+                  { key: 'board', label: t('notes.mode_board'), testID: 'settings-notes-board' },
+                ]}
+                value={page.view?.mode === 'board' ? 'board' : 'rows'}
+                onChange={(k) => {
+                  const board = page.view?.mode === 'board';
+                  if ((k === 'board') !== board) void changeView(page, { kind: 'board', on: k === 'board' });
+                }}
+              />
+            ) : null}
+          </Section>
+
+          {full ? (
+            <Section title={t('view.fields')}>
+              <Card padded={false} style={styles.clip}>
+                {listed.map((f, i) => {
+                  const label = fname(f);
+                  const a11y = f.required
+                    ? t('view.field_required_a11y', { field: label })
+                    : t(f.visible ? 'view.field_on_a11y' : 'view.field_off_a11y', { field: label });
+                  return (
+                    <View
+                      key={f.id}
+                      testID={`settings-field-${f.id}`}
+                      style={[
+                        styles.row,
+                        { minHeight: theme.size.rowHeight, paddingLeft: theme.space[3], gap: theme.space[2], flexWrap: theme.largeFont ? 'wrap' : 'nowrap' },
+                      ]}
+                    >
+                      {f.required ? (
+                        <View accessible accessibilityLabel={a11y} style={[styles.row, styles.flex, { gap: theme.space[3], minHeight: theme.size.minTouch }]}>
+                          <Icon icon={Lock} size="sm" color="iconSecondary" />
+                          <View style={styles.flex}>
+                            <AppText>{label}</AppText>
+                            <AppText testID={`settings-field-lock-${f.id}`} variant="footnote">
+                              {t('view.required')}
+                            </AppText>
+                          </View>
+                        </View>
+                      ) : (
+                        <Pressable
+                          testID={`settings-field-toggle-${f.id}`}
+                          accessibilityRole="switch"
+                          accessibilityLabel={a11y}
+                          accessibilityState={{ checked: f.visible }}
+                          onPress={() => void changeView(page, { kind: 'field_visible', fieldId: f.id, visible: !f.visible })}
+                          style={[styles.row, styles.flex, { gap: theme.space[3], minHeight: theme.size.minTouch }]}
+                        >
+                          <CheckMark checked={f.visible} />
+                          <View style={styles.flex}>
+                            <AppText color={f.visible ? 'ink' : 'ink2'}>{label}</AppText>
+                            {f.custom ? <AppText variant="footnote">{typeName(f)}</AppText> : null}
+                          </View>
+                        </Pressable>
+                      )}
+                      <View style={styles.row}>
+                        <Pressable
+                          testID={`settings-field-up-${f.id}`}
+                          accessibilityRole="button"
+                          accessibilityLabel={t('move.up_a11y', { what: label })}
+                          accessibilityState={{ disabled: i === 0 }}
+                          disabled={i === 0}
+                          onPress={() => void changeView(page, { kind: 'field_move', fieldId: f.id, step: -1 })}
+                          style={[square, { opacity: i === 0 ? 0.35 : 1 }]}
+                        >
+                          <Icon icon={ArrowUp} size="sm" color="brand" />
+                        </Pressable>
+                        <Pressable
+                          testID={`settings-field-down-${f.id}`}
+                          accessibilityRole="button"
+                          accessibilityLabel={t('move.down_a11y', { what: label })}
+                          accessibilityState={{ disabled: i === listed.length - 1 }}
+                          disabled={i === listed.length - 1}
+                          onPress={() => void changeView(page, { kind: 'field_move', fieldId: f.id, step: 1 })}
+                          style={[square, { opacity: i === listed.length - 1 ? 0.35 : 1 }]}
+                        >
+                          <Icon icon={ArrowDown} size="sm" color="brand" />
+                        </Pressable>
+                        {f.custom ? (
+                          <Button
+                            testID={`settings-field-remove-${f.id}`}
+                            label={t('view.remove_field')}
+                            accessibilityLabel={t('view.remove_field_a11y', { field: label })}
+                            variant="text"
+                            labelColor="danger"
+                            onPress={() => void changeView(page, { kind: 'custom_remove', fieldId: f.id })}
+                          />
+                        ) : null}
+                      </View>
+                      {i < listed.length - 1 ? (
+                        <View style={[styles.divider, { left: theme.space[3], backgroundColor: theme.colors.separator }]} />
+                      ) : null}
+                    </View>
+                  );
+                })}
+              </Card>
+              <View style={[styles.row, { gap: theme.space[3], flexWrap: 'wrap' }]}>
                 <Button
-                  key={String(on)}
-                  testID={`settings-notes-${on ? 'board' : 'rows'}`}
-                  label={t(on ? 'notes.mode_board' : 'notes.mode_rows')}
-                  variant={on === board ? 'primary' : 'secondary'}
-                  minHeight={theme.size.minTouch}
-                  accessibilityRole="tab"
-                  accessibilityState={{ selected: on === board }}
-                  style={styles.flex}
-                  onPress={() => {
-                    if (on !== board) void changeView(page, { kind: 'board', on });
-                  }}
+                  testID="settings-add-field"
+                  label={t('view.add_field')}
+                  variant="secondary"
+                  size="small"
+                  disabled={ownCount >= MAX_CUSTOM_FIELDS}
+                  onPress={() => setAdding(true)}
                 />
-              );
-            })}
-          </View>
-        ) : null}
+                <AppText testID="settings-own-count" variant="footnote">
+                  {ownCount >= MAX_CUSTOM_FIELDS ? t('view.err_custom_limit') : t('view.own_count', { count: ownCount, max: MAX_CUSTOM_FIELDS })}
+                </AppText>
+              </View>
+            </Section>
+          ) : null}
 
-        {section('view.order_section')}
-        <SettingRow testID="settings-sort" label={t('view.sort')} value={t(`view.sort_${page.view?.sort ?? 'position'}`)} onPress={() => setSheet('sort')} />
-        <SettingRow
-          testID="settings-group"
-          label={t('view.group')}
-          value={groupOptions.find((o) => o.key === (page.view?.groupBy ?? ''))?.label ?? t('view.group_none')}
-          onPress={() => setSheet('group')}
-        />
+          {full ? (
+            <ListGroup title={t('view.order_section')}>
+              <ListRow
+                testID="settings-sort"
+                title={t('view.sort')}
+                accessibilityLabel={`${t('view.sort')}: ${t(`view.sort_${page.view?.sort ?? 'position'}`)}`}
+                right={<AppText color="ink2">{t(`view.sort_${page.view?.sort ?? 'position'}`)}</AppText>}
+                chevron
+                onPress={() => setSheet('sort')}
+              />
+              <ListRow
+                testID="settings-group"
+                title={t('view.group')}
+                right={
+                  <AppText color="ink2">{groupOptions.find((o) => o.key === (page.view?.groupBy ?? ''))?.label ?? t('view.group_none')}</AppText>
+                }
+                chevron
+                onPress={() => setSheet('group')}
+              />
+            </ListGroup>
+          ) : null}
 
-        <Button
-          testID="settings-reset"
-          label={t('view.reset')}
-          variant="text"
-          style={{ marginTop: theme.space[6], alignSelf: 'flex-start' }}
-          onPress={() => setSheet('reset')}
-        />
+          {full ? (
+            <Button testID="settings-reset" label={t('view.reset')} variant="text" style={styles.start} onPress={() => setSheet('reset')} />
+          ) : null}
+        </View>
       </ScrollView>
       <StandaloneUndoStrip />
 
@@ -404,52 +424,46 @@ export default function PageSettingsScreen() {
   );
 }
 
-function SettingRow({ testID, label, value, onPress }: { testID: string; label: string; value: string; onPress: () => void }) {
+function Section({ title, children }: { title: string; children: ReactNode }) {
   const theme = useTheme();
   return (
-    <Pressable
-      testID={testID}
-      accessibilityRole="button"
-      accessibilityLabel={`${label}: ${value}`}
-      onPress={onPress}
-      style={[styles.row, { minHeight: theme.size.buttonHeight, gap: theme.space[2], borderBottomWidth: 1, borderBottomColor: theme.colors.separator, flexWrap: 'wrap' }]}
-    >
-      <AppText style={styles.flex}>{label}</AppText>
-      <AppText color="brand">{`${value} ›`}</AppText>
-    </Pressable>
+    <View style={{ gap: theme.space[2] }}>
+      <AppText variant="sectionLabel" color="ink2" accessibilityRole="header" style={{ paddingHorizontal: theme.space[1] }}>
+        {title}
+      </AppText>
+      {children}
+    </View>
   );
 }
 
 /** S25: the question with the numbers; «Нет» first in focus, «Да» never in focus by default. */
 function ConfirmSheet({ title, body, yes, onYes, onNo }: { title: string; body: string; yes: string; onYes: () => void; onNo: () => void }) {
-  const theme = useTheme();
   const { t } = useTranslation();
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onNo}>
-      <View style={[styles.scrim, { backgroundColor: theme.colors.scrim }]}>
-        <SafeAreaView
-          edges={['bottom']}
-          testID="confirm-sheet"
-          style={{ backgroundColor: theme.colors.surface, borderTopLeftRadius: theme.radius.sheet, borderTopRightRadius: theme.radius.sheet, padding: theme.space[5], gap: theme.space[3] }}
-        >
-          <AppText variant="title2" accessibilityRole="header">
-            {title}
-          </AppText>
-          <AppText>{body}</AppText>
+    <Sheet
+      visible
+      testID="confirm-sheet"
+      title={title}
+      closeButton={false}
+      onClose={onNo}
+      footer={
+        <>
           <Button testID="confirm-no" label={t('view.no')} variant="secondary" onPress={onNo} />
-          <Button testID="confirm-yes" label={yes} onPress={onYes} />
-        </SafeAreaView>
-      </View>
-    </Modal>
+          <Button testID="confirm-yes" label={yes} variant="text" labelColor="danger" onPress={onYes} />
+        </>
+      }
+    >
+      <AppText>{body}</AppText>
+    </Sheet>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
   row: { flexDirection: 'row', alignItems: 'center' },
+  center: { alignItems: 'center', justifyContent: 'center' },
   flex: { flex: 1 },
   start: { alignSelf: 'flex-start' },
-  card: { borderWidth: 1 },
-  square: { alignItems: 'center', justifyContent: 'center' },
-  scrim: { flex: 1, justifyContent: 'flex-end' },
+  clip: { overflow: 'hidden' },
+  divider: { position: 'absolute', right: 0, bottom: 0, height: StyleSheet.hairlineWidth },
 });

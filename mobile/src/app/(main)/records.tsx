@@ -1,10 +1,11 @@
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { FlatList, View } from 'react-native';
+import { FlatList } from 'react-native';
 
-import { AppText } from '@/components/AppText';
+import { PageEmpty } from '@/components/page/PageEmpty';
 import { RecordRow } from '@/components/RecordRow';
 import { Screen } from '@/components/Screen';
+import { Header } from '@/components/ui';
 import { useAllRecords } from '@/records/useRecords';
 import { useTheme } from '@/theme';
 
@@ -16,32 +17,16 @@ export default function AllRecordsScreen() {
   const theme = useTheme();
   const { t } = useTranslation();
   const records = useAllRecords();
+  // ux-audit P0-7: a stack screen has «‹ Назад».
+  const back = () => (router.canGoBack() ? router.back() : router.replace('/more'));
   return (
     <Screen testID="all-records" edges={['top']} scroll={false}>
       <FlatList
         data={records ?? []}
         keyExtractor={(r) => r.id}
-        contentContainerStyle={{ paddingVertical: theme.space[4] }}
-        ListHeaderComponent={
-          <AppText variant="largeTitle" accessibilityRole="header" style={{ marginBottom: theme.space[4] }}>
-            {t('more.all_records')}
-          </AppText>
-        }
-        ListEmptyComponent={
-          records ? (
-            <View
-              style={{
-                backgroundColor: theme.colors.surface,
-                borderColor: theme.colors.separator,
-                borderWidth: 1,
-                borderRadius: theme.radius.lg,
-                padding: theme.space[4],
-              }}
-            >
-              <AppText>{t('page.empty')}</AppText>
-            </View>
-          ) : undefined
-        }
+        contentContainerStyle={{ paddingTop: theme.space[2], paddingBottom: theme.space[4] }}
+        ListHeaderComponent={<Header title={t('more.all_records')} back={{ onPress: back, testID: 'records-back' }} />}
+        ListEmptyComponent={records ? <PageEmpty lines={[t('page.empty')]} /> : undefined}
         renderItem={({ item }) => (
           <RecordRow
             record={item}

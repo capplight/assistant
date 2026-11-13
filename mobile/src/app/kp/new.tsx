@@ -7,6 +7,7 @@ import { AppText } from '@/components/AppText';
 import { Button } from '@/components/ui/Button';
 import { CheckBadge } from '@/components/kp/KpParts';
 import { Screen } from '@/components/Screen';
+import { BackButton } from '@/components/ui/Header';
 import { VoiceListening } from '@/components/VoiceListening';
 import { getMedia, type PickedMedia } from '@/expenses/media';
 import { assistantOn, dropJob, pumpJobs, startKp } from '@/kp/service';
@@ -112,8 +113,8 @@ export default function NewKpScreen() {
 
   const header = (
     <View style={styles.row}>
-      <Button testID="kp-new-close" label={`‹ ${t('kp.back')}`} variant="text" minHeight={theme.size.minTouch} onPress={close} />
-      <AppText variant="callout" style={{ marginLeft: 'auto' }}>
+      <BackButton testID="kp-new-close" label={t('kp.back')} onPress={close} />
+      <AppText variant="footnote" style={{ marginLeft: 'auto' }}>
         {t('kp.step', { n: 1 })}
       </AppText>
     </View>
@@ -279,7 +280,7 @@ export default function NewKpScreen() {
           maxFontSizeMultiplier={MAX_FONT_SCALE}
           style={[
             theme.type.body,
-            { color: theme.colors.ink, minHeight: 160, borderWidth: 1, borderColor: theme.colors.iconSecondary, borderRadius: theme.radius.sm, padding: theme.space[3], textAlignVertical: 'top', backgroundColor: theme.colors.surface },
+            { color: theme.colors.ink, minHeight: 160, borderRadius: theme.radius.sm, padding: theme.space[3], textAlignVertical: 'top', backgroundColor: theme.colors.surfaceSunken },
           ]}
         />
         <Button testID="kp-new-text-save" label={t('kp.text_save')} disabled={!text.trim()} onPress={() => void saveText()} />

@@ -1,9 +1,8 @@
 import { router } from 'expo-router';
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, MoreHorizontal } from 'lucide-react-native';
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Plus } from 'lucide-react-native';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FlatList, Modal, Pressable, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import type { ExpenseOut } from '@/api/types';
 import { formatMinor, inPeriod, minorToDecimal, periodOf, shiftPeriod, toMinor, type Period } from '@/expenses/calc';
@@ -15,20 +14,26 @@ import { addExpense, changeExpense, deleteExpense, reorderCategories } from '@/e
 import { useExpenses } from '@/expenses/store';
 import { kickSync, syncBlocked } from '@/services';
 import { localDate } from '@/tasks/rows';
-import { useTheme } from '@/theme';
+import { readableColumn, useLayout, useTheme } from '@/theme';
 
 import { AmountText } from '../AmountText';
 import { AppText } from '../AppText';
-import { Button } from '../ui/Button';
 import { RecordRow } from '../RecordRow';
 import { useMinuteClock } from '../ReminderLists';
-import { BringButton, CheckCards, DuplicateCards, JobLines, PlanCards, sourceWord } from './ExpenseInbox';
-import { CategoryChips, DayChip, EntryPanel, Sheet, SumDisplay, useSum } from './ExpenseParts';
+import { Button } from '../ui/Button';
+import { ActionList } from '../ui/Sheet';
+import { Card } from '../ui/Card';
+import { Icon } from '../ui/Icon';
+import { pressedStyle } from '../ui/motion';
+import { SegmentedControl } from '../ui/SegmentedControl';
+import { categoryLook } from './expenseColors';
+import { AttentionCard, AttentionSheet, attentionItems, BringButton, sourceWord, useBringKinds } from './ExpenseInbox';
+import { CategoryChips, CategoryDot, DayChip, EntryPanel, Sheet, SumDisplay, useSum } from './ExpenseParts';
 import { ExpenseKeypad } from './ExpenseKeypad';
 import type { ViewProps } from './registry';
 
-/** The keys fold to one button when there are more spendings than this (template-screens 2.2). */
-export const FOLD_AFTER = 10;
+/** «По категориям»: the top rows under the stacked bar (pattern 4); the rest behind «Все категории». */
+export const TOP_CATEGORIES = 5;
 /** How often «Читаю чек…» wakes the outbox while the page is open. */
 const READ_POLL_MS = 3000;
 /** The new line is marked this long. */
@@ -36,18 +41,17 @@ const MARK_MS = 600;
 
 type Kind = 'week' | 'month' | 'year';
 
-type Item = { type: 'day'; day: FeedDay } | { type: 'row'; e: ExpenseOut; last: boolean; day: FeedDay };
-
 /**
- * «Расходы» — the expense calculator (template-screens 2.2; replaces S40 and keeps its rules): the
- * board with the period's total (counted by code in tiyn, the same rules as the server's
- * `calc.py`), the 64 pt keys where «1200+350» is added by code, the 8 chips in the person's order,
- * the bars by category and the feed like a receipt, by day with «Итого за день». Everything here
- * works offline and in «Без ИИ»; only a free phrase in the line waits for the server.
- * ≥150%: the keys open on the whole screen, the chips are one column, the board's number grows to 1.6×.
+ * «Расходы» (research/expenses-documents.md, patterns 1–6; screens.html «Расходы»). One big total for the
+ * period with no box (counted by code in tiyn, the same rules as the server's `calc.py`), one «Требует
+ * внимания» card for everything to check / merge / read, the categories as a colour system (stacked bar + top
+ * rows, icon = bar = segment colour), the feed by day in cards. «Записать трату» opens the keys in a sheet
+ * (tap a category = the same sheet with it picked). Everything works offline and in «Без ИИ».
+ * ≥840: overview on the left, the feed on the right.
  */
 export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
   const theme = useTheme();
+  const layout = useLayout();
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
   const today = localDate(useMinuteClock());
@@ -55,15 +59,17 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
   const edits = useExpenses((s) => s.edits);
   const server = useExpenses((s) => s.categories);
   const orderEdit = useExpenses((s) => s.orderEdit);
+  const kinds = useBringKinds();
   const [kind, setKind] = useState<Kind>('month');
   const [period, setPeriod] = useState<Period>(() => periodOf('month', today));
   const [onlyToCheck, setOnlyToCheck] = useState(false);
-  const [entryOpen, setEntryOpen] = useState<boolean | null>(null);
-  const [fullEntry, setFullEntry] = useState(false);
+  const [entry, setEntry] = useState<{ category: Category | null } | null>(null);
   const [menu, setMenu] = useState<string | null>(null);
   const [marked, setMarked] = useState<string | null>(null);
   const [kaspi, setKaspi] = useState(false);
   const [editFirst, setEditFirst] = useState(false);
+  const [attention, setAttention] = useState(false);
+  const [allBars, setAllBars] = useState(false);
   const jobs = useExpenses((s) => s.jobs);
   const statements = useExpenses((s) => s.statements);
   const duplicates = useExpenses((s) => s.duplicates);
@@ -90,14 +96,6 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
   const b = useMemo(() => board(live, period, server), [live, period, server]);
   const days = useMemo(() => feed(live, period, { onlyToCheck, server }), [live, period, onlyToCheck, server]);
   const catBars = useMemo(() => bars(b, server, lang, t('exp.no_category')), [b, server, lang, t]);
-  const items = useMemo(() => {
-    const out: Item[] = [];
-    for (const day of days) {
-      out.push({ type: 'day', day });
-      day.entries.forEach((e, i) => out.push({ type: 'row', e, day, last: i === day.entries.length - 1 }));
-    }
-    return out;
-  }, [days]);
 
   useEffect(() => {
     if (!marked) return;
@@ -112,7 +110,10 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
     () => live.filter((e) => e.review_fields.includes('amount') && !e.id.startsWith('local:')).sort((a, b) => (a.created_at < b.created_at ? 1 : -1)),
     [live],
   );
-  const openEntry = () => (theme.largeFont ? setFullEntry(true) : setEntryOpen(true));
+  const queue = useMemo(
+    () => attentionItems({ jobs: shownJobs, toCheck, pairs, plans, statements: kinds.statements, qr: kinds.qr }),
+    [shownJobs, toCheck, pairs, plans, kinds.statements, kinds.qr],
+  );
   const reading = shownJobs.some((j) => j.state === 'reading');
 
   // «Читаю чек…»: while the page is open the server is asked again soon (the outbox keeps its own
@@ -126,8 +127,10 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
   }, [reading]);
 
   const empty = live.length === 0;
-  // Open on the first visit and on an empty page; folded when there are more than 10 spendings.
-  const open = !theme.largeFont && (entryOpen ?? (empty || live.length <= FOLD_AFTER));
+  const openEntry = (category: Category | null = null) => {
+    setAttention(false);
+    setEntry({ category });
+  };
 
   const pick = (k: Kind) => {
     setKind(k);
@@ -143,11 +146,17 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
     if (!inPeriod(x.day, period)) setPeriod(periodOf(kind, x.day));
   };
 
-  const header = (
-    <View style={{ gap: theme.space[4], marginBottom: theme.space[3] }}>
-      {frameTop}
-      <PeriodSegments value={kind} onChange={pick} />
-      <BoardCard
+  const shownBars = allBars ? catBars : catBars.slice(0, TOP_CATEGORIES);
+  const overview = (
+    <View style={{ gap: theme.space[4] }}>
+      <SegmentedControl
+        testID="exp-periods"
+        accessibilityLabel={t('exp.periods_a11y')}
+        segments={(['week', 'month', 'year'] as const).map((k) => ({ key: k, label: t(`exp.period_${k}`), testID: `exp-period-${k}` }))}
+        value={kind}
+        onChange={pick}
+      />
+      <Overview
         title={periodTitle(period, lang)}
         board={b}
         onShift={(step) => setPeriod((p) => shiftPeriod(p, step))}
@@ -155,101 +164,122 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
         onlyToCheck={onlyToCheck}
         onToCheck={() => setOnlyToCheck((v) => !v)}
       />
-      <PlanCards plans={plans} />
-      <JobLines jobs={shownJobs} today={today} onType={openEntry} />
-      <DuplicateCards pairs={pairs} today={today} />
-      <CheckCards
-        entries={toCheck}
-        today={today}
-        onVerify={(e) =>
-          void changeExpense(
-            e.id,
-            { review_fields: e.review_fields.filter((f) => f !== 'amount' && f !== 'spent_on') },
-            t('exp.verified', { amount: formatMinor(toMinor(e.amount) ?? 0n, e.currency) }),
-          )
-        }
-        onEdit={(e) => {
-          setEditFirst(true);
-          setMenu(e.id);
-        }}
-        onShowAll={() => setOnlyToCheck(true)}
-      />
+      <AttentionCard items={queue} onOpen={() => setAttention(true)} />
       {ordering ? <CategoryOrder chips={chips} pending={orderEdit?.keys ?? null} /> : null}
-      {open ? (
-        <InlineEntry today={today} chips={chips} onSave={save} onFold={live.length > 0 ? () => setEntryOpen(false) : null} />
-      ) : (
-        <Button
-          testID="exp-enter"
-          label={t('exp.enter')}
-          minHeight={theme.size.buttonHeight}
-          onPress={() => (theme.largeFont ? setFullEntry(true) : setEntryOpen(true))}
-        />
-      )}
-      {open ? (
-        <AppText variant="callout" testID="exp-or-say">
-          {empty ? t('exp.empty_hint') : t('exp.or_say')}
-        </AppText>
+      {empty ? (
+        <View style={{ gap: theme.space[2] }}>
+          <AppText testID="exp-or-say" color="ink2">
+            {t('exp.empty_hint')}
+          </AppText>
+          {kinds.statements ? (
+            <Button testID="exp-kaspi" label={t('exp.kaspi_link')} variant="text" onPress={() => setKaspi(true)} style={styles.start} />
+          ) : null}
+        </View>
       ) : null}
-      <BringButton pageId={page.id} />
-      {empty ? <Button testID="exp-kaspi" label={t('exp.kaspi_link')} variant="text" minHeight={theme.size.minTouch} onPress={() => setKaspi(true)} style={styles.start} /> : null}
       {catBars.length > 0 ? (
-        <View testID="exp-bars" style={{ gap: theme.space[3] }}>
+        <View testID="exp-bars" style={{ gap: theme.space[2] }}>
           <AppText variant="sectionLabel" accessibilityRole="header">
             {t('exp.by_category')}
           </AppText>
-          {catBars.map((bar) => (
-            <View
-              key={bar.key || 'none'}
-              testID={`exp-bar-${bar.key || 'none'}`}
-              accessible
-              accessibilityLabel={t('exp.by_category_a11y', { title: bar.title, amount: formatMinor(bar.minor), share: Math.round(bar.share) })}
-              style={{ gap: theme.space[1] }}
-            >
-              <View style={[styles.row, { gap: theme.space[2] }]}>
-                <AppText style={styles.flex}>{bar.title}</AppText>
-                <AppText testID={`exp-bar-amount-${bar.key || 'none'}`} variant="number">
-                  {formatMinor(bar.minor)}
-                </AppText>
-              </View>
-              <View style={{ height: 10, borderRadius: 5, backgroundColor: theme.colors.separator, overflow: 'hidden' }}>
-                <View style={{ width: `${Math.max(2, bar.share)}%`, height: 10, backgroundColor: theme.colors.brand }} />
-              </View>
-            </View>
-          ))}
+          <View
+            testID="exp-stack"
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            style={{ flexDirection: 'row', minHeight: 12, borderRadius: 6, overflow: 'hidden', gap: 2, backgroundColor: theme.colors.surfaceSunken }}
+          >
+            {catBars.map((bar) => (
+              <View key={bar.key || 'none'} style={{ flexGrow: Math.max(1, bar.share), flexBasis: 0, backgroundColor: categoryLook(theme, bar.key || null).color }} />
+            ))}
+          </View>
+          <Card padded={false}>
+            {shownBars.map((bar, i) => {
+              const cat = categoryByKey(server, bar.key || null);
+              const chip = cat ? (chips.find((c) => c.key === cat.key) ?? null) : null;
+              const look = categoryLook(theme, bar.key || null);
+              return (
+                <Pressable
+                  key={bar.key || 'none'}
+                  testID={`exp-bar-${bar.key || 'none'}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('exp.by_category_a11y', { title: bar.title, amount: formatMinor(bar.minor), share: Math.round(bar.share) })}
+                  accessibilityHint={t('exp.bar_hint')}
+                  onPress={() => openEntry(chip)}
+                  style={({ pressed }) => [
+                    styles.rowCenter,
+                    { gap: theme.space[3], paddingLeft: theme.space[3] + 2, minHeight: theme.size.rowHeight },
+                    pressed ? { backgroundColor: theme.colors.surfaceSunken } : null,
+                  ]}
+                >
+                  <CategoryDot categoryKey={bar.key || null} size={32} />
+                  <View
+                    style={[
+                      styles.rowCenter,
+                      styles.flex,
+                      { gap: theme.space[2], paddingRight: theme.space[3], paddingVertical: theme.space[2], flexWrap: theme.largeFont ? 'wrap' : 'nowrap' },
+                      i < shownBars.length - 1 ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.separator } : null,
+                    ]}
+                  >
+                    <View style={[styles.flex, { gap: 4, minWidth: theme.largeFont ? '60%' : undefined }]}>
+                      <AppText>{bar.title}</AppText>
+                      <View style={{ height: 4, borderRadius: 2, backgroundColor: look.tint, overflow: 'hidden' }}>
+                        <View style={{ width: `${Math.max(2, bar.share)}%`, height: 4, backgroundColor: look.color }} />
+                      </View>
+                    </View>
+                    <AppText testID={`exp-bar-amount-${bar.key || 'none'}`} variant="number">
+                      {formatMinor(bar.minor)}
+                    </AppText>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </Card>
+          {catBars.length > TOP_CATEGORIES ? (
+            <Button
+              testID="exp-bars-all"
+              label={allBars ? t('exp.bars_less') : t('exp.bars_all', { count: catBars.length })}
+              variant="text"
+              style={styles.start}
+              onPress={() => setAllBars((v) => !v)}
+            />
+          ) : null}
         </View>
       ) : null}
-      <AppText variant="sectionLabel" accessibilityRole="header">
-        {t('exp.feed')}
-      </AppText>
-      {days.length === 0 && !empty ? <AppText testID="exp-feed-none">{t('exp.feed_none')}</AppText> : null}
     </View>
   );
 
-  const renderItem = ({ item }: { item: Item }) => {
-    if (item.type === 'day') {
-      return (
-        <View testID={`exp-day-${item.day.date}`} style={[styles.row, { alignItems: 'center', gap: theme.space[2], paddingTop: theme.space[4], paddingBottom: theme.space[2] }]}>
-          <View style={[styles.flex, styles.dash, { borderColor: theme.colors.iconSecondary }]} />
-          <AppText variant="bodyStrong" accessibilityRole="header">
-            {dayLabel(item.day.date, today, lang, t)}
-          </AppText>
-          <View style={[styles.flex, styles.dash, { borderColor: theme.colors.iconSecondary }]} />
-        </View>
-      );
-    }
-    return (
-      <View>
-        <FeedLine e={item.e} today={today} marked={marked === item.e.id || marked === `local:${item.e.client_id}`} onMenu={() => setMenu(item.e.id)} />
-        {item.last ? (
-          <View style={[styles.row, styles.dashTop, { borderColor: theme.colors.iconSecondary, paddingVertical: theme.space[2] }]}>
-            <AppText testID={`exp-day-total-${item.day.date}`} variant="number" style={[styles.flex, styles.right]}>
-              {t('exp.day_total', { amount: formatMinor(item.day.total) })}
-            </AppText>
-          </View>
-        ) : null}
+  const feedTitle = (
+    <View style={{ gap: theme.space[2] }}>
+      <AppText variant="sectionLabel" accessibilityRole="header">
+        {t('exp.feed')}
+      </AppText>
+      {days.length === 0 && !empty ? <AppText testID="exp-feed-none" color="ink2">{t('exp.feed_none')}</AppText> : null}
+    </View>
+  );
+
+  const renderDay = ({ item }: { item: FeedDay }) => (
+    <View style={{ gap: theme.space[2], paddingTop: theme.space[4] }}>
+      <View testID={`exp-day-${item.date}`} style={[styles.rowCenter, { gap: theme.space[2], paddingHorizontal: theme.space[1], flexWrap: 'wrap' }]}>
+        <AppText variant="sectionLabel" accessibilityRole="header" style={styles.flex}>
+          {dayLabel(item.date, today, lang, t)}
+        </AppText>
+        <AppText testID={`exp-day-total-${item.date}`} variant="callout" accessibilityLabel={t('exp.day_total', { amount: formatMinor(item.total) })} style={styles.tabular}>
+          {formatMinor(item.total)}
+        </AppText>
       </View>
-    );
-  };
+      <Card padded={false}>
+        {item.entries.map((e, i) => (
+          <FeedLine
+            key={e.id}
+            e={e}
+            today={today}
+            last={i === item.entries.length - 1}
+            marked={marked === e.id || marked === `local:${e.client_id}`}
+            onOpen={() => setMenu(e.id)}
+          />
+        ))}
+      </Card>
+    </View>
+  );
 
   // Records on the page that are not a spending (moved here, a voice not read yet, a phrase saved as a note): still shown.
   const expenseItems = new Set(Object.values(stored).map((e) => e.item_id).filter((x): x is string => !!x));
@@ -272,27 +302,89 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
 
   const menuEntry = menu ? live.find((e) => e.id === menu) : undefined;
   const recordOf = (e: ExpenseOut) => (entries ?? []).find((x) => x.record.serverId && x.record.serverId === e.item_id)?.record ?? null;
+  const column = { ...readableColumn(), paddingHorizontal: layout.gutter };
+  const two = layout.twoPane;
+
+  const list = (
+    <FlatList
+      testID="exp-list"
+      data={days}
+      keyExtractor={(d) => d.date}
+      renderItem={renderDay}
+      ListHeaderComponent={
+        <View style={{ gap: theme.space[4] }}>
+          {two ? null : (
+            <>
+              {frameTop}
+              {overview}
+            </>
+          )}
+          {feedTitle}
+        </View>
+      }
+      ListFooterComponent={footer ?? undefined}
+      contentContainerStyle={[column, { paddingTop: theme.space[4], paddingBottom: theme.space[6] }]}
+      keyboardShouldPersistTaps="handled"
+    />
+  );
 
   return (
-    <>
-      <FlatList
-        testID="exp-list"
-        data={items}
-        keyExtractor={(it) => (it.type === 'day' ? `d:${it.day.date}` : `e:${it.e.id}`)}
-        renderItem={renderItem}
-        ListHeaderComponent={header}
-        ListFooterComponent={footer ?? undefined}
-        contentContainerStyle={{ paddingHorizontal: theme.screenPadding, paddingTop: theme.space[4], paddingBottom: theme.space[8] }}
-        keyboardShouldPersistTaps="handled"
-      />
-      {fullEntry ? (
-        <FullEntry
+    <View style={styles.flex}>
+      {two ? (
+        <View style={[styles.row, styles.flex]}>
+          <ScrollView testID="exp-overview-pane" style={{ flex: 1 }} contentContainerStyle={[column, { paddingTop: theme.space[4], paddingBottom: theme.space[6], gap: theme.space[4] }]}>
+            {frameTop}
+            {overview}
+          </ScrollView>
+          <View testID="exp-feed-pane" style={styles.flex}>
+            {list}
+          </View>
+        </View>
+      ) : (
+        list
+      )}
+      <View
+        testID="exp-actions"
+        style={[styles.row, readableColumn(), { gap: theme.space[2], paddingHorizontal: layout.gutter, paddingVertical: theme.space[2], flexWrap: theme.largeFont ? 'wrap' : 'nowrap' }]}
+      >
+        <Button
+          testID="exp-enter"
+          label={t('exp.enter')}
+          icon={<Icon icon={Plus} size="sm" color="onBrand" />}
+          style={theme.largeFont ? { flexBasis: '100%' } : styles.flex}
+          onPress={() => openEntry()}
+        />
+        <BringButton pageId={page.id} style={theme.largeFont ? { flexBasis: '100%' } : undefined} />
+      </View>
+      {entry ? (
+        <EntrySheet
           today={today}
           chips={chips}
-          onClose={() => setFullEntry(false)}
+          initial={entry.category}
+          onClose={() => setEntry(null)}
           onSave={async (x) => {
-            setFullEntry(false);
+            setEntry(null);
             await save(x);
+          }}
+        />
+      ) : null}
+      {attention ? (
+        <AttentionSheet
+          items={queue}
+          today={today}
+          onClose={() => setAttention(false)}
+          onType={() => openEntry()}
+          onVerify={(e) =>
+            void changeExpense(
+              e.id,
+              { review_fields: e.review_fields.filter((f) => f !== 'amount' && f !== 'spent_on') },
+              t('exp.verified', { amount: formatMinor(toMinor(e.amount) ?? 0n, e.currency) }),
+            )
+          }
+          onEdit={(e) => {
+            setAttention(false);
+            setEditFirst(true);
+            setMenu(e.id);
           }}
         />
       ) : null}
@@ -321,50 +413,12 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
           <AppText>{t('exp.kaspi_3')}</AppText>
         </Sheet>
       ) : null}
-    </>
-  );
-}
-
-function PeriodSegments({ value, onChange }: { value: Kind; onChange: (k: Kind) => void }) {
-  const theme = useTheme();
-  const { t } = useTranslation();
-  const items: { key: Kind; label: string }[] = [
-    { key: 'week', label: t('exp.period_week') },
-    { key: 'month', label: t('exp.period_month') },
-    { key: 'year', label: t('exp.period_year') },
-  ];
-  return (
-    <View accessibilityRole="tablist" accessibilityLabel={t('exp.periods_a11y')} style={{ flexDirection: theme.largeFont ? 'column' : 'row', gap: theme.space[2] }}>
-      {items.map((it) => {
-        const on = it.key === value;
-        return (
-          <Pressable
-            key={it.key}
-            testID={`exp-period-${it.key}`}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: on }}
-            onPress={() => onChange(it.key)}
-            style={{
-              flex: theme.largeFont ? undefined : 1,
-              minHeight: theme.size.minTouch,
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: theme.radius.md,
-              borderWidth: on ? 3 : 1,
-              borderColor: on ? theme.colors.brand : theme.colors.iconSecondary,
-              backgroundColor: on ? theme.colors.surface : 'transparent',
-            }}
-          >
-            <AppText variant={on ? 'bodyStrong' : 'body'}>{it.label}</AppText>
-          </Pressable>
-        );
-      })}
     </View>
   );
 }
 
-/** The «табло»: ‹ period ›, the total, «23 траты · ⚠ проверить: 2», other currencies apart. */
-function BoardCard({
+/** Pattern 1: «‹ Ноябрь ›», the total 40 with no box, one context line «23 траты · ⚠ проверить 2». */
+function Overview({
   title,
   board: b,
   onShift,
@@ -385,51 +439,48 @@ function BoardCard({
   const spent = main?.total ?? 0n;
   const currency = main?.currency ?? 'KZT';
   const amount = formatMinor(spent, currency);
-  const arrow = (step: -1 | 1) => (
-    <Pressable
-      testID={step < 0 ? 'exp-prev' : 'exp-next'}
-      accessibilityRole="button"
-      accessibilityLabel={t(step < 0 ? 'exp.prev_a11y' : 'exp.next_a11y')}
-      accessibilityState={{ disabled: step > 0 && !canNext }}
-      disabled={step > 0 && !canNext}
-      onPress={() => onShift(step)}
-      style={{ width: theme.size.minTouch, height: theme.size.minTouch, alignItems: 'center', justifyContent: 'center', opacity: step > 0 && !canNext ? 0.35 : 1 }}
-    >
-      {step < 0 ? <ChevronLeft size={28} color={theme.colors.ink} /> : <ChevronRight size={28} color={theme.colors.ink} />}
-    </Pressable>
-  );
+  const arrow = (step: -1 | 1) => {
+    const off = step > 0 && !canNext;
+    return (
+      <Pressable
+        testID={step < 0 ? 'exp-prev' : 'exp-next'}
+        accessibilityRole="button"
+        accessibilityLabel={t(step < 0 ? 'exp.prev_a11y' : 'exp.next_a11y')}
+        accessibilityState={{ disabled: off }}
+        disabled={off}
+        onPress={() => onShift(step)}
+        style={({ pressed }) => [{ width: theme.size.minTouch, height: theme.size.minTouch, alignItems: 'center', justifyContent: 'center', opacity: off ? 0.35 : 1 }, pressedStyle(pressed)]}
+      >
+        <Icon icon={step < 0 ? ChevronLeft : ChevronRight} color="brand" />
+      </Pressable>
+    );
+  };
   return (
-    <View
-      testID="exp-board"
-      style={{ backgroundColor: theme.colors.surface, borderWidth: 2, borderColor: theme.colors.iconSecondary, borderRadius: theme.radius.lg, padding: theme.space[4], gap: theme.space[2] }}
-    >
-      <View style={[styles.row, { alignItems: 'center' }]}>
+    <View testID="exp-board" style={{ gap: theme.space[1] }}>
+      <View style={styles.rowCenter}>
         {arrow(-1)}
-        <AppText testID="exp-period-title" variant="title2" accessibilityRole="header" style={[styles.flex, styles.center]}>
+        <AppText testID="exp-period-title" variant="headline" accessibilityRole="header" style={[styles.flex, styles.center]}>
           {title}
         </AppText>
         {arrow(1)}
       </View>
-      <AppText variant="callout" style={styles.right}>
-        {t('exp.total')}
-      </AppText>
       <AmountText
         testID="exp-total"
         variant="amount"
         maxScale={1.6}
-        inset={theme.screenPadding * 2 + theme.space[4] * 2 + 4}
+        inset={theme.screenPadding * 2}
         accessibilityLabel={t('exp.total_a11y', { period: title, amount: spokenAmount(minorToDecimal(spent), currency) })}
         accessibilityLiveRegion="polite"
-        style={styles.right}
+        style={styles.center}
       >
         {amount}
       </AmountText>
       {!main || main.count === 0 ? (
-        <AppText testID="exp-empty-total" variant="callout" style={styles.right}>
+        <AppText testID="exp-empty-total" variant="callout" style={styles.center}>
           {t('exp.empty_total')}
         </AppText>
       ) : (
-        <View style={[styles.row, { justifyContent: 'flex-end', flexWrap: 'wrap', gap: theme.space[2], alignItems: 'center' }]}>
+        <View style={[styles.rowCenter, { justifyContent: 'center', flexWrap: 'wrap', columnGap: theme.space[2] }]}>
           <AppText testID="exp-count" variant="callout">
             {t('exp.count', { count: main.count })}
           </AppText>
@@ -442,20 +493,20 @@ function BoardCard({
               onPress={onToCheck}
               style={{ minHeight: theme.size.minTouch, justifyContent: 'center' }}
             >
-              <AppText color="warning" variant="bodyStrong">
-                {onlyToCheck ? t('exp.to_check_all') : t('exp.to_check', { n: b.review })}
+              <AppText color="warning" variant="callout" style={{ fontFamily: theme.type.sectionLabel.fontFamily }}>
+                {onlyToCheck ? t('exp.to_check_all') : `· ${t('exp.to_check', { n: b.review })} ›`}
               </AppText>
             </Pressable>
           ) : null}
         </View>
       )}
       {main && main.income > 0n ? (
-        <AppText testID="exp-income" variant="callout" style={styles.right}>
+        <AppText testID="exp-income" variant="callout" style={styles.center}>
           {t('exp.income', { amount: formatMinor(main.income, main.currency) })}
         </AppText>
       ) : null}
       {b.apart.length > 0 ? (
-        <AppText testID="exp-apart" variant="callout" style={styles.right}>
+        <AppText testID="exp-apart" variant="callout" style={styles.center}>
           {t('exp.apart', { list: b.apart.map((x) => formatMinor(x.total, x.currency)).join(', ') })}
         </AppText>
       ) : null}
@@ -465,85 +516,46 @@ function BoardCard({
 
 type SaveInput = { minor: bigint; expression: string | null; category: Category | null; day: string };
 
-function useEntryState(today: string) {
-  const sum = useSum();
-  const [category, setCategory] = useState<Category | null>(null);
-  const [day, setDay] = useState(today);
-  const reset = () => {
-    sum.setText('');
-    setCategory(null);
-    setDay(today);
-  };
-  const input = (): SaveInput | null =>
-    sum.minor !== null ? { minor: sum.minor, expression: storedExpression(sum.text), category, day } : null;
-  return { sum, category, setCategory, day, setDay, reset, input };
-}
-
-function InlineEntry({ today, chips, onSave, onFold }: { today: string; chips: Category[]; onSave: (x: SaveInput) => Promise<void>; onFold: (() => void) | null }) {
-  const theme = useTheme();
+/** Pattern 2: «Записать трату» → the sheet: the sum 40, the categories in one row, «Сегодня ▾», the keys. */
+function EntrySheet({
+  today,
+  chips,
+  initial,
+  onSave,
+  onClose,
+}: {
+  today: string;
+  chips: Category[];
+  initial: Category | null;
+  onSave: (x: SaveInput) => Promise<void>;
+  onClose: () => void;
+}) {
   const { t } = useTranslation();
-  const st = useEntryState(today);
+  const sum = useSum();
+  const [category, setCategory] = useState<Category | null>(initial);
+  const [day, setDay] = useState(today);
   return (
-    <View style={{ backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.separator, borderRadius: theme.radius.lg, padding: theme.space[3], gap: theme.space[2] }}>
+    <Sheet testID="exp-entry-sheet" title={t('exp.entry_title')} onClose={onClose}>
       <EntryPanel
-        sum={st.sum}
-        day={st.day}
+        sum={sum}
+        day={day}
         today={today}
-        onDay={st.setDay}
+        onDay={setDay}
         categories={chips}
-        category={st.category?.key ?? null}
-        onCategory={(c) => st.setCategory((prev) => (prev?.key === c.key ? null : c))}
+        category={category?.key ?? null}
+        onCategory={(c) => setCategory((prev) => (prev?.key === c.key ? null : c))}
         saveLabel={t('exp.save')}
         onSave={() => {
-          const x = st.input();
-          if (!x) return;
-          st.reset();
-          void onSave(x);
+          if (sum.minor === null) return;
+          void onSave({ minor: sum.minor, expression: storedExpression(sum.text), category, day });
         }}
       />
-      {onFold ? <Button testID="exp-fold" label={t('exp.close_entry')} variant="text" minHeight={theme.size.minTouch} onPress={onFold} /> : null}
-    </View>
+    </Sheet>
   );
 }
 
-/** ≥150%: the keys on the whole screen; the board and the feed stay below on the page. */
-function FullEntry({ today, chips, onSave, onClose }: { today: string; chips: Category[]; onSave: (x: SaveInput) => Promise<void>; onClose: () => void }) {
-  const theme = useTheme();
-  const { t } = useTranslation();
-  const st = useEntryState(today);
-  return (
-    <Modal visible animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView testID="exp-full-entry" style={{ flex: 1, backgroundColor: theme.colors.bg }}>
-        <FlatList
-          data={[]}
-          renderItem={() => null}
-          ListHeaderComponent={
-            <View style={{ padding: theme.screenPadding, gap: theme.space[3] }}>
-              <Button testID="exp-full-close" label={t('exp.close_entry')} variant="text" minHeight={theme.size.minTouch} onPress={onClose} style={styles.start} />
-              <EntryPanel
-                sum={st.sum}
-                day={st.day}
-                today={today}
-                onDay={st.setDay}
-                categories={chips}
-                category={st.category?.key ?? null}
-                onCategory={(c) => st.setCategory((prev) => (prev?.key === c.key ? null : c))}
-                saveLabel={t('exp.save')}
-                onSave={() => {
-                  const x = st.input();
-                  if (x) void onSave(x);
-                }}
-              />
-            </View>
-          }
-        />
-      </SafeAreaView>
-    </Modal>
-  );
-}
-
-/** One line of the receipt: what, the category, the amount on the right (tabular), «⋯». */
-function FeedLine({ e, today, marked, onMenu }: { e: ExpenseOut; today: string; marked: boolean; onMenu: () => void }) {
+/** Pattern 5: one row of the feed (≥56): the category circle, what + category, the amount; a tap opens it. */
+function FeedLine({ e, today, last, marked, onOpen }: { e: ExpenseOut; today: string; last: boolean; marked: boolean; onOpen: () => void }) {
   const theme = useTheme();
   const { t, i18n } = useTranslation();
   const server = useExpenses((s) => s.categories);
@@ -560,54 +572,56 @@ function FeedLine({ e, today, marked, onMenu }: { e: ExpenseOut; today: string; 
   const from = sourceWord(e.source, t);
   const meta = [catTitle, from, waits ? t('exp.waits') : null].filter(Boolean).join(' · ');
   return (
-    <View
+    <Pressable
       testID={`exp-row-${e.id}`}
-      style={[
-        styles.row,
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityHint={t('exp.row_hint')}
+      onPress={onOpen}
+      style={({ pressed }) => [
+        styles.rowCenter,
         {
-          alignItems: 'center',
-          gap: theme.space[2],
-          minHeight: theme.size.buttonHeight,
-          paddingVertical: theme.space[2],
-          paddingHorizontal: theme.space[1],
-          backgroundColor: marked ? theme.colors.highlightTint : 'transparent',
-          borderRadius: theme.radius.sm,
-          flexWrap: theme.largeFont ? 'wrap' : 'nowrap',
+          gap: theme.space[3],
+          paddingLeft: theme.space[3] + 2,
+          minHeight: 56,
+          backgroundColor: marked ? theme.colors.highlightTint : pressed ? theme.colors.surfaceSunken : 'transparent',
         },
       ]}
     >
-      <View testID={`exp-row-label-${e.id}`} accessible accessibilityLabel={label} style={[styles.flex, { minWidth: theme.largeFont ? '60%' : undefined }]}>
-        <AppText variant="bodyStrong">{title}</AppText>
-        <AppText variant="callout">{meta}</AppText>
-      </View>
-      <View style={{ alignItems: 'flex-end' }}>
-        <AppText
-          testID={`exp-row-amount-${e.id}`}
-          variant="number"
-          style={toCheck ? { backgroundColor: theme.colors.highlightTint, paddingHorizontal: theme.space[1], borderRadius: 4 } : undefined}
-        >
-          {formatMinor(signed, e.currency)}
-        </AppText>
-        {toCheck ? (
-          <AppText variant="callout" color="warning">
-            {`⚠ ${t('exp.check')}`}
-          </AppText>
-        ) : null}
-      </View>
-      <Pressable
-        testID={`exp-row-menu-${e.id}`}
-        accessibilityRole="button"
-        accessibilityLabel={t('exp.more_a11y', { title })}
-        onPress={onMenu}
-        style={{ width: theme.size.minTouch, height: theme.size.minTouch, alignItems: 'center', justifyContent: 'center' }}
+      <CategoryDot categoryKey={e.category_key} />
+      <View
+        style={[
+          styles.rowCenter,
+          styles.flex,
+          { gap: theme.space[2], paddingVertical: theme.space[2], paddingRight: theme.space[3], flexWrap: theme.largeFont ? 'wrap' : 'nowrap' },
+          last ? null : { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.separator },
+        ]}
       >
-        <MoreHorizontal size={24} color={theme.colors.ink2} />
-      </Pressable>
-    </View>
+        <View style={[styles.flex, { minWidth: theme.largeFont ? '60%' : undefined }]}>
+          <AppText>{title}</AppText>
+          <AppText variant="callout">{meta}</AppText>
+        </View>
+        <View style={{ alignItems: 'flex-end' }}>
+          <AppText
+            testID={`exp-row-amount-${e.id}`}
+            variant="number"
+            color={e.direction === 'refund' ? 'success' : 'ink'}
+            style={toCheck ? { backgroundColor: theme.colors.highlightTint, paddingHorizontal: theme.space[1], borderRadius: 4 } : undefined}
+          >
+            {formatMinor(signed, e.currency)}
+          </AppText>
+          {toCheck ? (
+            <AppText variant="footnote" color="warning">
+              {t('exp.check')}
+            </AppText>
+          ) : null}
+        </View>
+      </View>
+    </Pressable>
   );
 }
 
-/** «⋯» of a spending: Категория on top (template-screens 3), the amount, the day, «Верно», «Удалить». */
+/** A spending opened: the amount, Категория on top (template-screens 3), the day, then the actions as rows. */
 function ExpenseSheet({
   e,
   today,
@@ -637,11 +651,13 @@ function ExpenseSheet({
   return (
     <Sheet testID="exp-sheet" title={`${title} · ${amount}`} onClose={onClose}>
       {e.line_items && e.line_items.length > 0 ? (
-        <View testID="exp-sheet-lines" style={{ gap: theme.space[1] }}>
+        <View testID="exp-sheet-lines" style={{ gap: theme.space[1], backgroundColor: theme.colors.surfaceSunken, borderRadius: theme.radius.md, padding: theme.space[3] }}>
           <AppText variant="sectionLabel">{t('exp.sheet_lines')}</AppText>
           {e.line_items.map((l, i) => (
             <View key={`${i}:${l.name}`} style={[styles.row, { gap: theme.space[2] }]}>
-              <AppText style={styles.flex}>{l.qty ? `${l.name} × ${l.qty}` : l.name}</AppText>
+              <AppText variant="callout" color="ink" style={styles.flex}>
+                {l.qty ? `${l.name} × ${l.qty}` : l.name}
+              </AppText>
               {l.total ? <AppText variant="number">{formatMinor(toMinor(l.total) ?? 0n, e.currency)}</AppText> : null}
             </View>
           ))}
@@ -670,18 +686,6 @@ function ExpenseSheet({
         today={today}
         onChange={(d) => void changeExpense(e.id, { spent_on: d }, t('exp.day_set', { day: dayLabel(d, today, lang, t) }))}
       />
-      {toCheck ? (
-        <Button
-          testID="exp-sheet-verify"
-          label={t('exp.sheet_verify')}
-          accessibilityHint={t('exp.sheet_verify_hint')}
-          variant="secondary"
-          onPress={() => {
-            onClose();
-            void changeExpense(e.id, { review_fields: [] }, t('exp.verified', { amount }));
-          }}
-        />
-      ) : null}
       {editing ? (
         <View style={{ gap: theme.space[3] }}>
           <SumDisplay testID="exp-sheet-sum" text={sum.text} />
@@ -702,19 +706,36 @@ function ExpenseSheet({
             }}
           />
         </View>
-      ) : (
-        <Button testID="exp-sheet-amount" label={t('exp.sheet_amount')} variant="secondary" onPress={() => setEditing(true)} />
-      )}
-      {hasRecord ? <Button testID="exp-sheet-open" label={t('exp.sheet_open')} variant="secondary" onPress={onOpenRecord} /> : null}
-      <Button
-        testID="exp-sheet-delete"
-        label={t('exp.sheet_delete')}
-        variant="text"
-        labelColor="danger"
-        onPress={() => {
-          onClose();
-          void deleteExpense(e.id, t('exp.deleted', { amount }));
-        }}
+      ) : null}
+      <ActionList
+        actions={[
+          ...(toCheck
+            ? [
+                {
+                  key: 'verify',
+                  testID: 'exp-sheet-verify',
+                  label: t('exp.sheet_verify'),
+                  hint: t('exp.sheet_verify_hint'),
+                  onPress: () => {
+                    onClose();
+                    void changeExpense(e.id, { review_fields: [] }, t('exp.verified', { amount }));
+                  },
+                },
+              ]
+            : []),
+          ...(editing ? [] : [{ key: 'amount', testID: 'exp-sheet-amount', label: t('exp.sheet_amount'), onPress: () => setEditing(true) }]),
+          ...(hasRecord ? [{ key: 'open', testID: 'exp-sheet-open', label: t('exp.sheet_open'), onPress: onOpenRecord }] : []),
+          {
+            key: 'delete',
+            testID: 'exp-sheet-delete',
+            label: t('exp.sheet_delete'),
+            danger: true,
+            onPress: () => {
+              onClose();
+              void deleteExpense(e.id, t('exp.deleted', { amount }));
+            },
+          },
+        ]}
       />
     </Sheet>
   );
@@ -733,49 +754,49 @@ function CategoryOrder({ chips, pending }: { chips: Category[]; pending: string[
     [next[i], next[j]] = [next[j]!, next[i]!];
     void reorderCategories(next, manual ? keys : null, t('exp.reordered'));
   };
+  const arrow = (c: Category, i: number, step: -1 | 1, name: string) => {
+    const off = step < 0 ? i === 0 : i === chips.length - 1;
+    return (
+      <Pressable
+        testID={`exp-order-${step < 0 ? 'up' : 'down'}-${c.key}`}
+        accessibilityRole="button"
+        accessibilityLabel={t(step < 0 ? 'exp.cat_up_a11y' : 'exp.cat_down_a11y', { title: name })}
+        accessibilityState={{ disabled: off }}
+        disabled={off}
+        onPress={() => move(i, step)}
+        style={({ pressed }) => [{ width: theme.size.minTouch, height: theme.size.minTouch, alignItems: 'center', justifyContent: 'center', opacity: off ? 0.35 : 1 }, pressedStyle(pressed)]}
+      >
+        <Icon icon={step < 0 ? ArrowUp : ArrowDown} size="sm" color="brand" />
+      </Pressable>
+    );
+  };
   return (
     <View testID="exp-cat-order" style={{ gap: theme.space[2] }}>
       <AppText variant="callout">{t('exp.order_hint')}</AppText>
-      {chips.map((c, i) => {
-        const name = categoryTitle(c, i18n.language);
-        return (
-          <View key={c.key} style={[styles.row, { alignItems: 'center', gap: theme.space[2], minHeight: theme.size.minTouch }]}>
-            <AppText testID={`exp-order-${i}`} style={styles.flex}>
-              {name}
-            </AppText>
-            <Button
-              testID={`exp-order-up-${c.key}`}
-              label=""
-              icon={<ArrowUp size={22} color={theme.colors.brand} />}
-              accessibilityLabel={t('exp.cat_up_a11y', { title: name })}
-              variant="secondary"
-              minHeight={theme.size.minTouch}
-              disabled={i === 0}
-              onPress={() => move(i, -1)}
-            />
-            <Button
-              testID={`exp-order-down-${c.key}`}
-              label=""
-              icon={<ArrowDown size={22} color={theme.colors.brand} />}
-              accessibilityLabel={t('exp.cat_down_a11y', { title: name })}
-              variant="secondary"
-              minHeight={theme.size.minTouch}
-              disabled={i === chips.length - 1}
-              onPress={() => move(i, 1)}
-            />
-          </View>
-        );
-      })}
+      <Card padded={false}>
+        {chips.map((c, i) => {
+          const name = categoryTitle(c, i18n.language);
+          return (
+            <View key={c.key} style={[styles.rowCenter, { gap: theme.space[2], minHeight: theme.size.rowHeight, paddingLeft: theme.space[3] + 2 }]}>
+              <CategoryDot categoryKey={c.key} size={28} />
+              <AppText testID={`exp-order-${i}`} style={styles.flex}>
+                {name}
+              </AppText>
+              {arrow(c, i, -1, name)}
+              {arrow(c, i, 1, name)}
+            </View>
+          );
+        })}
+      </Card>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row' },
+  rowCenter: { flexDirection: 'row', alignItems: 'center' },
   flex: { flex: 1 },
-  right: { textAlign: 'right' },
   center: { textAlign: 'center' },
   start: { alignSelf: 'flex-start' },
-  dash: { borderTopWidth: 1, borderStyle: 'dashed', height: 1 },
-  dashTop: { borderTopWidth: 1, borderStyle: 'dashed' },
+  tabular: { fontVariant: ['tabular-nums'] },
 });

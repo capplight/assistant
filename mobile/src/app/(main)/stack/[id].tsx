@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { FlatList, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/ui/Button';
+import { Button, Header } from '@/components/ui';
 import { PageIcon } from '@/components/Icon';
 import { PageNameSheet } from '@/components/PageNameSheet';
 import { RecordRow } from '@/components/RecordRow';
@@ -47,8 +47,7 @@ export default function StackScreen() {
   if (!stack || gone) {
     return (
       <Screen testID="stack-missing" edges={['top']}>
-        <Button testID="stack-back" label={`‹ ${t('common.back')}`} variant="text" minHeight={theme.size.minTouch} onPress={back} style={styles.start} />
-        <AppText>{t('stack.not_found')}</AppText>
+        <Header title={t('stack.not_found')} back={{ onPress: back, testID: 'stack-back' }} />
       </Screen>
     );
   }
@@ -64,26 +63,26 @@ export default function StackScreen() {
         testID="stack-records"
         data={rows}
         keyExtractor={(e) => e.record.id}
-        contentContainerStyle={{ paddingVertical: theme.space[4] }}
+        contentContainerStyle={{ paddingTop: theme.space[2], paddingBottom: theme.space[4] }}
         ListHeaderComponent={
-          <View style={{ gap: theme.space[3], marginBottom: theme.space[4] }}>
-            <Button testID="stack-back" label={`‹ ${t('common.back')}`} variant="text" minHeight={theme.size.minTouch} onPress={back} style={styles.start} />
-            <View style={[styles.row, { gap: theme.space[3] }]}>
-              <PageIcon name={stackIcon(stack)} color={theme.colors.ink} size={28} />
-              <AppText variant="largeTitle" accessibilityRole="header" style={styles.flex}>
-                {name}
-              </AppText>
-            </View>
-            <AppText testID="stack-count">{t('stack.records', { count })}</AppText>
-            {ba ? <AppText variant="callout">{ba}</AppText> : null}
+          <View style={{ gap: theme.space[2], marginBottom: theme.space[3] }}>
+            <Header title={name} back={{ onPress: back, testID: 'stack-back' }}>
+              <View style={[styles.row, { gap: theme.space[2] }]}>
+                <PageIcon name={stackIcon(stack)} color={theme.colors.ink2} size={20} />
+                <AppText testID="stack-count" variant="callout">
+                  {t('stack.records', { count })}
+                </AppText>
+              </View>
+              {ba ? <AppText variant="footnote">{ba}</AppText> : null}
+            </Header>
             <View style={[styles.row, { gap: theme.space[2], flexWrap: 'wrap' }]}>
-              <Button testID="stack-rename" label={t('stack.rename')} variant="secondary" minHeight={theme.size.minTouch} onPress={() => setRenaming(true)} />
+              <Button testID="stack-rename" label={t('stack.rename')} variant="secondary" size="small" onPress={() => setRenaming(true)} />
               <Button
                 testID="stack-to-page"
                 label={t('stack.to_page')}
                 accessibilityHint={t('stack.to_page_hint')}
                 variant="secondary"
-                minHeight={theme.size.minTouch}
+                size="small"
                 onPress={() =>
                   void stackToPage(stack).then((pageId) => {
                     if (pageId) router.navigate({ pathname: '/page/[id]', params: { id: pageId } });
@@ -154,6 +153,5 @@ export default function StackScreen() {
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
   flex: { flex: 1 },
-  start: { alignSelf: 'flex-start' },
   end: { alignSelf: 'flex-end' },
 });

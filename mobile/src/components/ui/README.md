@@ -47,15 +47,24 @@ Import everything from `@/components/ui`. Tokens: `@/theme` (`useTheme()`, `useL
 
 Already migrated: `BottomTabs`, `AssistantLine` (one capsule; «Про: …» inside, hidden while typing, own line at ≥150 %;
 voice / send / «Написать» / keyboard / undo unchanged), `MainFooter`, `UndoStrip`, `ToastHost`, `AnswerBanner` (look only),
-`AddSheet` and `PageNameSheet` (on `Sheet`), all `Checkbox` uses.
+`AddSheet` and `PageNameSheet` (on `Sheet`), all `Checkbox` uses. Week 19 (screens): «Сегодня» (`Header`, sun `NextCard`,
+one flat `DayCard` of `TodayRow`s with `CheckCircle`, tiles on `Sheet`), `AnswerBanner` (header «Помощник» + ✕, tonal chip),
+`PendingAnswerCard` and the reminder draft on `Card`, «Переписка» (`Header` «‹ Свернуть», bubble, menu on `Sheet`),
+`FeedbackSheet` on `Sheet`, welcome (Ф-34), «Ещё» (`ListGroup`, Ф-41), «Настройки» and «Политика / Условия / Согласия».
 
-**Still to move onto the kit (screen agents):** sheets `ChangesSheet`, `FeedbackSheet`, `MovePageSheet`, `RecordMenuSheet`,
-`TodaySheet` (no radius today), `StackCards`, `page/FieldSheets`, `page/ExpenseParts`, `page/ExpensesView`, `page/PlannerView`,
-`page/StickersView`, `page/BoardView`, and the `Modal`s in `(main)/import`, `(main)/my-pages`, `(main)/record/[id]`, `chat`,
-`habits`, `page-settings/[id]`; «Назад» in `duplicates`, `import`, `my-pages`, `record/[id]`, `stack/[id]`, `did`, `habits`,
-`kp/[id]`, `my-data`, `page-settings/[id]`, `Gallery` → `Header`/`BackButton`; the `⋯` copies → `HeaderButton` / long press;
-`TaskRow` / `PlannerView` squares → `CheckCircle`; `ReminderLists` segments → `SegmentedControl`; `PageFrame` header
-(one line: title + 🔍 + ⋯, ux-audit P0-2); `Screen` keeps working (bg + gutters + 600 column).
+Pages (week 19): `PageFrame` header is one `Header` line — title, 🔍 (`page-search`, opens the field), ⋯ (`page-menu` →
+`Sheet` with «Порядок», «Переименовать», «Настроить»); «Заметки» = `StickyNote` cells in `layout.noteColumns` (no ⋯, long
+press = menu, `Ряды | Доска` only with `board` on); `TaskRow` / `PlannerView` / `ShoppingView` / `NotebookView` / `duplicates`
+on `CheckMark`; `ReminderLists` `Segments` on `SegmentedControl`; «Покупки»: row tap = bought, amount as text → `qty-sheet`;
+`StackCards`, `PlannerView` slot menu, `StickersView` colours, `my-pages`, `record/[id]`, `page-settings/[id]` on `Sheet`;
+`Header` / `BackButton` in `records`, `trash`, `stack/[id]`, `duplicates`, `my-pages`, `record/[id]`, `page-settings/[id]`;
+S38 shows name / icon / view only unless `page_settings_full` (Ф-40). Kit additions: `Header.titleTestID`; `StickyNote`
+`highlighted`, `accessibilityActions`, `children` (status / AI label lines).
+
+**Still to move onto the kit (screen agents):** sheets `ChangesSheet`, `MovePageSheet`, `RecordMenuSheet`, `page/FieldSheets`,
+`page/ExpenseParts`, `page/ExpensesView`, `page/BoardView` (hidden by `board`), the `Modal`s in `(main)/import`, `habits`;
+«Назад» in `import`, `did`, `habits`, `kp/[id]`, `my-data`, `Gallery` → `Header`/`BackButton`; `Screen` keeps working
+(bg + gutters + 600 column); `SearchResults` `FindField` still has its outline.
 
 ## Feature switches
 
@@ -63,7 +72,8 @@ voice / send / «Написать» / keyboard / undo unchanged), `MainFooter`, 
 `docs/api/features.md`): fetched at start and on foreground, last answer cached, offline defaults = Ф-33…Ф-44
 (`FEATURE_DEFAULTS`). Hide what is off (`board`, `statements_pdf`, `receipt_qr`, `assistant_views`, `page_settings_full`,
 `telegram_login`, `personal_mail`, `setup_for_other`, `today.*`, `pages.first_use`). Tests: `happyServer()` answers
-`FEATURES_BODY`; override with `.on('GET /features', …)`. No screen reads it yet.
+`FEATURES_BODY`; override with `.on('GET /features', …)`. Read by: «Сегодня» (`today.*`), welcome (`setup_for_other`,
+`consent_screen`), «Настройки» (`telegram_login`, `personal_mail`).
 
 ## Adaptive rules (every screen)
 

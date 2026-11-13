@@ -10,6 +10,7 @@ import { CheckBadge } from '@/components/kp/KpParts';
 import { NumberSheet } from '@/components/kp/NumberSheet';
 import { Sheet } from '@/components/page/ExpenseParts';
 import { Screen } from '@/components/Screen';
+import { Header } from '@/components/ui/Header';
 import { StandaloneUndoStrip } from '@/components/UndoStrip';
 import { priceText } from '@/kp/calc';
 import { addPrices, changePrice, refreshPrices, removePrice } from '@/kp/service';
@@ -52,10 +53,7 @@ export default function PriceListScreen() {
     <View style={styles.root}>
       <Screen testID="prices-screen">
         <View style={{ gap: theme.space[4] }}>
-          <Button testID="prices-back" label={`‹ ${t('kp.back')}`} variant="text" minHeight={theme.size.minTouch} style={{ alignSelf: 'flex-start' }} onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} />
-          <AppText variant="largeTitle" accessibilityRole="header">
-            {t('kp.prices_screen')}
-          </AppText>
+          <Header title={t('kp.prices_screen')} back={{ testID: 'prices-back', label: t('kp.back'), onPress: () => (router.canGoBack() ? router.back() : router.replace('/')) }} />
           <AppText testID="prices-count" variant="callout">
             {[t('kp.prices_count', { count: list.length }), updatedAt ? t('kp.prices_updated', { date: shortDate(updatedAt, i18n.language) }) : null].filter(Boolean).join(' · ')}
           </AppText>
@@ -69,7 +67,7 @@ export default function PriceListScreen() {
               value={q}
               onChangeText={setQ}
               maxFontSizeMultiplier={MAX_FONT_SCALE}
-              style={[theme.type.body, { color: theme.colors.ink, minHeight: theme.size.buttonHeight, borderWidth: 1, borderColor: theme.colors.iconSecondary, borderRadius: theme.radius.sm, paddingHorizontal: theme.space[3], backgroundColor: theme.colors.surface }]}
+              style={[theme.type.body, { color: theme.colors.ink, minHeight: theme.size.buttonHeight, borderRadius: theme.radius.sm, paddingHorizontal: theme.space[3], backgroundColor: theme.colors.surfaceSunken }]}
             />
           ) : (
             <AppText testID="prices-empty">{t('kp.prices_empty')}</AppText>
@@ -172,7 +170,7 @@ function AddPriceSheet({ onClose }: { onClose: () => void }) {
         }}
         keyboardType={numeric ? 'decimal-pad' : 'default'}
         maxFontSizeMultiplier={MAX_FONT_SCALE}
-        style={[theme.type.body, { color: theme.colors.ink, minHeight: theme.size.buttonHeight, borderWidth: 1, borderColor: theme.colors.iconSecondary, borderRadius: theme.radius.sm, paddingHorizontal: theme.space[3], backgroundColor: theme.colors.bg }]}
+        style={[theme.type.body, { color: theme.colors.ink, minHeight: theme.size.buttonHeight, borderRadius: theme.radius.sm, paddingHorizontal: theme.space[3], backgroundColor: theme.colors.surfaceSunken }]}
       />
     </View>
   );

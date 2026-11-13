@@ -1,15 +1,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  AccessibilityInfo,
-  findNodeHandle,
-  KeyboardAvoidingView,
-  Modal,
-  ScrollView,
-  StyleSheet,
-  View,
-} from 'react-native';
+import { Check, Flag } from 'lucide-react-native';
+import { AccessibilityInfo, findNodeHandle, KeyboardAvoidingView, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/AppText';
@@ -18,6 +11,8 @@ import { AssistantLine } from '@/components/AssistantLine';
 import { ToastLine, useToastAnchor } from '@/components/Toast';
 import { KEYBOARD_BEHAVIOR, useKeyboardHeight } from '@/components/useKeyboard';
 import { Button } from '@/components/ui/Button';
+import { Header } from '@/components/ui/Header';
+import { ActionList, Sheet } from '@/components/ui/Sheet';
 import { FeedbackSheet } from '@/components/FeedbackSheet';
 import { LocalHitChips, SourceChips } from '@/components/SourceChips';
 import { actionText, canReport, loadHistory, retry, undoAction } from '@/chat/service';
@@ -25,7 +20,8 @@ import { useAssistant, type ChatMessage } from '@/store/assistant';
 import { useTheme } from '@/theme';
 
 /**
- * S36 «Переписка» — one conversation for all pages (R-52), full screen, «Свернуть» on top, the same
+ * S36 «Переписка» — one conversation for all pages (R-52), full screen, `Header` with «‹ Свернуть»; what you said
+ * is a `brandTint` bubble on the right, the answer is text without a bubble (design-system §3 AnswerSheet); the same
  * assistant line at the bottom (over all pages). Dividers «— на странице X, 14:20 —» are headers.
  * Opened from the banner («Открыть ответ», `focus`), it is scrolled to that answer and the screen
  * reader starts there. History is kept on the phone and completed from the server when online.
@@ -79,20 +75,13 @@ export default function ChatScreen() {
       style={[styles.root, { backgroundColor: theme.colors.bg }]}
       edges={['top', 'bottom']}
     >
-      <View style={[styles.header, { paddingHorizontal: theme.screenPadding, borderBottomColor: theme.colors.separator }]}>
-        <AppText variant="largeTitle" accessibilityRole="header" style={styles.flex}>
-          {t('chat.title')}
-        </AppText>
-        <Button
-          testID="chat-collapse"
-          variant="text"
-          minHeight={theme.size.minTouch}
-          label={t('chat.collapse')}
-          onPress={collapse}
-        />
+      <View style={{ paddingHorizontal: theme.screenPadding }}>
+        <View style={[styles.column, { maxWidth: theme.size.maxContentWidth }]}>
+          <Header title={t('chat.title')} back={{ onPress: collapse, label: t('chat.collapse'), testID: 'chat-collapse' }} />
+        </View>
       </View>
       <KeyboardAvoidingView style={styles.root} behavior={KEYBOARD_BEHAVIOR}>
-        <ScrollView ref={scrollRef} contentContainerStyle={{ padding: theme.screenPadding, gap: theme.space[3] }}>
+        <ScrollView ref={scrollRef} contentContainerStyle={{ padding: theme.screenPadding, gap: theme.space[4], width: '100%', maxWidth: theme.size.maxContentWidth, alignSelf: 'center' }}>
           {messages.length === 0 ? <AppText color="ink2">{t('chat.empty')}</AppText> : null}
           {messages.map((m, i) => {
             const prev = messages[i - 1];
@@ -106,14 +95,27 @@ export default function ChatScreen() {
                 onLayout={focused ? (e) => setFocusY(e.nativeEvent.layout.y) : undefined}
               >
                 {divider ? (
-                  <AppText variant="callout" accessibilityRole="header" style={styles.center}>
+                  <AppText variant="footnote" accessibilityRole="header" style={styles.center}>
                     {t('chat.divider', { page: m.pageTitle, time: time(m.at) })}
                   </AppText>
                 ) : null}
                 {m.role === 'user' ? (
-                  <AppText variant="callout" color="ink">
-                    {t('chat.you', { text: m.text })}
-                  </AppText>
+                  <View
+                    accessible
+                    accessibilityLabel={t('chat.you', { text: m.text })}
+                    style={[
+                      styles.bubble,
+                      {
+                        backgroundColor: theme.colors.brandTint,
+                        paddingHorizontal: theme.space[3],
+                        paddingVertical: theme.space[2],
+                        borderRadius: theme.radius.lg,
+                        borderBottomRightRadius: theme.radius.xs,
+                      },
+                    ]}
+                  >
+                    <AppText color="ink">{m.text}</AppText>
+                  </View>
                 ) : (
                   <View ref={focused ? focusRef : undefined} accessible={focused} style={{ gap: theme.space[2] }}>
                     <Answer m={m} onMore={() => setMenuFor(m)} />
@@ -127,32 +129,22 @@ export default function ChatScreen() {
         <AssistantLine scope="all" keyboardHeight={keyboard} />
       </KeyboardAvoidingView>
 
-      <Modal visible={menuFor !== null} transparent animationType="slide" onRequestClose={() => setMenuFor(null)}>
-        <View style={[styles.scrim, { backgroundColor: theme.colors.scrim }]}>
-          <SafeAreaView
-            edges={['bottom']}
-            testID="answer-menu"
-            style={{
-              backgroundColor: theme.colors.surface,
-              borderTopLeftRadius: theme.radius.sheet,
-              borderTopRightRadius: theme.radius.sheet,
-              padding: theme.space[5],
-              gap: theme.space[2],
-            }}
-          >
-            <Button
-              testID="answer-report"
-              label={t('feedback.open')}
-              variant="secondary"
-              onPress={() => {
+      <Sheet testID="answer-menu" visible={menuFor !== null} onClose={() => setMenuFor(null)}>
+        <ActionList
+          actions={[
+            {
+              key: 'report',
+              testID: 'answer-report',
+              icon: Flag,
+              label: t('feedback.open'),
+              onPress: () => {
                 setReportFor(menuFor);
                 setMenuFor(null);
-              }}
-            />
-            <Button label={t('common.close')} variant="text" onPress={() => setMenuFor(null)} />
-          </SafeAreaView>
-        </View>
-      </Modal>
+              },
+            },
+          ]}
+        />
+      </Sheet>
       <FeedbackSheet message={reportFor} onClose={() => setReportFor(null)} />
     </SafeAreaView>
   );
@@ -172,6 +164,9 @@ function Answer({ m, onMore }: { m: ChatMessage; onMore: () => void }) {
       {m.text && !action ? <AppText>{m.text}</AppText> : null}
       {action ? (
         <View style={[styles.actionRow, { gap: theme.space[2] }]}>
+          <View style={[styles.done, { width: 20, height: 20, borderRadius: 10, backgroundColor: action.undone ? theme.colors.iconSecondary : theme.colors.brand }]}>
+            <Check size={14} color={theme.colors.onBrand} strokeWidth={2.5} />
+          </View>
           <AppText testID={`chat-action-${m.id}`} style={styles.flex}>
             {action.undone
               ? t('chat.action_undone', { text: actionText(action, i18n.language) })
@@ -191,7 +186,7 @@ function Answer({ m, onMore }: { m: ChatMessage; onMore: () => void }) {
         </>
       ) : null}
       {m.sources && m.sources.length > 0 ? <SourceChips messageId={m.id} sources={m.sources} /> : null}
-      {generated ? <AppText variant="callout">{t('ai.label')}</AppText> : null}
+      {generated ? <AppText variant="footnote">{t('ai.label')}</AppText> : null}
       {m.notice === 'maybe_done' ? (
         <Button testID={`chat-did-${m.id}`} label={t('more.did')} variant="text" onPress={() => router.push('/did')} />
       ) : m.status === 'interrupted' ? (
@@ -208,10 +203,11 @@ function Answer({ m, onMore }: { m: ChatMessage; onMore: () => void }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1 },
+  column: { width: '100%', alignSelf: 'center' },
+  bubble: { alignSelf: 'flex-end', maxWidth: '85%' },
+  done: { alignItems: 'center', justifyContent: 'center' },
   flex: { flex: 1 },
   center: { textAlign: 'center' },
-  scrim: { flex: 1, justifyContent: 'flex-end' },
   actions: { flexDirection: 'row', justifyContent: 'flex-end' },
   actionRow: { flexDirection: 'row', alignItems: 'center' },
 });

@@ -232,22 +232,24 @@ describe('«Заметки» — the sticker wall «Ряды»', () => {
     await renderRouter(APP_DIR, { initialUrl: `/page/${notes.id}` });
     await settle(() => screen.queryByTestId('sticker-n1') !== null);
     expect(screen.getByTestId('page-view-notes:builtin:notes_board')).toBeTruthy();
-    // The frame stays the same.
-    for (const id of ['page-title', 'page-order', 'page-settings', 'page-find']) expect(screen.getByTestId(id)).toBeTruthy();
+    // The frame stays the same: one line — the title, 🔍 and ⋯ (ux-audit P0-2); no ⋯ on a sticker.
+    for (const id of ['page-title', 'page-search', 'page-menu']) expect(screen.getByTestId(id)).toBeTruthy();
+    expect(screen.queryByTestId('page-find')).toBeNull();
+    expect(screen.queryByTestId('record-menu-n1')).toBeNull();
     expect(screen.getByTestId('record-n1').props.accessibilityLabel).toMatch(/^Стикер 1 из 3\. белый\. Код домофона/);
 
-    await fireEvent.press(screen.getByTestId('record-menu-n1'));
+    await fireEvent(screen.getByTestId('record-n1'), 'longPress');
     await fireEvent.press(screen.getByTestId('menu-color'));
     await settle(() => screen.queryByTestId('color-sheet') !== null);
     expect(screen.getByTestId('color-white').props.accessibilityState).toEqual({ checked: true });
     await fireEvent.press(screen.getByTestId('color-yellow'));
-    await settle(() => bg('sticker-n1') === lightNoteColors.yellow);
+    await settle(() => bg('record-n1') === lightNoteColors.yellow);
     expect(stripText()).toBe('Жёлтый: Код домофона\n4512');
     const row = outbox.all().find((r) => r.kind === 'page.item_look')!;
     expect(row.payload).toMatchObject({ color: 'yellow' });
     // «Отменить» while it waits: it never goes, the colour is back.
     await fireEvent.press(screen.getByTestId('undo-strip-undo'));
-    await settle(() => bg('sticker-n1') === lightNoteColors.white);
+    await settle(() => bg('record-n1') === lightNoteColors.white);
     expect((await outbox.get(row.id))?.status).toBe('failed');
 
     s.on('PATCH /pages/*/items/*', (c) => ({
@@ -260,7 +262,7 @@ describe('«Заметки» — the sticker wall «Ряды»', () => {
       },
     }));
     s.offline = false;
-    await fireEvent.press(screen.getByTestId('record-menu-n2'));
+    await fireEvent(screen.getByTestId('record-n2'), 'longPress');
     await fireEvent.press(screen.getByTestId('menu-color'));
     await settle(() => screen.queryByTestId('color-green') !== null);
     await fireEvent.press(screen.getByTestId('color-green'));
@@ -269,7 +271,7 @@ describe('«Заметки» — the sticker wall «Ряды»', () => {
     });
     await settle(() => s.callsTo('PATCH /pages/srv-notes/items/srv-n2').length === 1);
     expect(s.callsTo('PATCH /pages/srv-notes/items/srv-n2')[0]!.body).toMatchObject({ color: 'green' });
-    await settle(() => bg('sticker-n2') === lightNoteColors.green);
+    await settle(() => bg('record-n2') === lightNoteColors.green);
     // Sent: «Отменить» is the undo of its action.
     await fireEvent.press(screen.getByTestId('undo-strip-undo'));
     await act(async () => {
@@ -289,10 +291,10 @@ describe('«Заметки» — the sticker wall «Ряды»', () => {
     await renderRouter(APP_DIR, { initialUrl: `/page/${notes.id}` });
     await settle(() => screen.queryByTestId('sticker-n2') !== null);
     expect(screen.getByTestId('record-n2').props.accessibilityLabel).toMatch(/^Стикер 2 из 2/);
-    await fireEvent.press(screen.getByTestId('record-menu-n2'));
+    await fireEvent(screen.getByTestId('record-n2'), 'longPress');
     await fireEvent.press(screen.getByTestId('menu-pin'));
     // The pin is decoration (the label says «приколот»): hidden from screen readers.
-    await settle(() => screen.queryByTestId('sticker-pin-n2', { includeHiddenElements: true }) !== null);
+    await settle(() => screen.queryByTestId('record-n2-pin', { includeHiddenElements: true }) !== null);
     expect(screen.getByTestId('record-n2').props.accessibilityLabel).toMatch(/^Стикер 1 из 2\. белый\. приколот/);
     expect(stripText()).toBe('Приколол: Вторая');
     expect(outbox.all().find((r) => r.kind === 'page.item_look')!.payload).toMatchObject({ pinned: true });
@@ -328,22 +330,22 @@ describe('«Заметки» — the sticker wall «Ряды»', () => {
     await settle(() => screen.queryByTestId('sticker-n1') !== null);
     await fireEvent.changeText(screen.getByTestId('assistant-input'), 'раскрась по темам');
     await fireEvent.press(screen.getByTestId('assistant-send'));
-    await settle(() => bg('sticker-n1') === lightNoteColors.yellow && bg('sticker-n2') === lightNoteColors.yellow);
+    await settle(() => bg('record-n1') === lightNoteColors.yellow && bg('record-n2') === lightNoteColors.yellow);
     expect(within(screen.getByTestId('undo-strip')).getByText('Раскрасил 2 стикера по темам: Ремонт — жёлтый.')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('undo-strip-undo'));
     await settle(() => s.callsTo('POST /actions/apaint/undo').length === 1);
   });
 
-  it('≥150%: one column, the colour is a band on paper; empty: an example sticker', async () => {
+  it('≥150%: one column of full-width stickers in their colour (design-system §3 StickyNote)', async () => {
     Dimensions.set({ window: { width: 390, height: 844, scale: 3, fontScale: 2 }, screen: { width: 390, height: 844, scale: 3, fontScale: 2 } });
     const s = server();
     await online(s);
     s.offline = true;
     const notes = await serverPage('notes', [{ id: 'n1', text: 'Код', link: { appearance: { color: 'pink' } } }]);
     await renderRouter(APP_DIR, { initialUrl: `/page/${notes.id}` });
-    await settle(() => screen.queryByTestId('sticker-band-n1') !== null);
-    expect(bg('sticker-band-n1')).toBe(lightNoteColors.pink);
-    expect(bg('sticker-n1')).toBe(lightNoteColors.white);
+    await settle(() => screen.queryByTestId('record-n1') !== null);
+    expect(bg('record-n1')).toBe(lightNoteColors.pink);
+    expect(screen.queryByTestId('sticker-band-n1')).toBeNull();
   });
 });
 
@@ -406,7 +408,7 @@ describe('«Дела» — the day planner', () => {
     await renderRouter(APP_DIR, { initialUrl: `/page/${tasks.id}` });
     await settle(() => screen.queryByTestId('task-t2') !== null);
     expect(screen.queryByTestId('task-t3')).toBeNull();
-    expect(screen.getByTestId('seg-missed')).toHaveTextContent('Пропущено (1)');
+    expect(screen.getByTestId('seg-missed')).toHaveTextContent('Пропущено · 1');
     await fireEvent.press(screen.getByTestId('task-t2'));
     await settle(() => screen.queryByTestId('group-done') !== null);
     expect(screen.getByTestId('group-done')).toHaveTextContent('Сделано (1)');
@@ -437,7 +439,7 @@ describe('«Покупки» — the fridge list and «Я в магазине»'
     return { outbox, shop };
   }
 
-  it('«Осталось 2 из 3»; «− 2 +» at once and as PATCH /tasks with `version`; «Убрать все купленные» is one call, one «Отменить»', async () => {
+  it('«Осталось 2 из 3»; the amount is text, «− 2 +» in its sheet, at once and as PATCH /tasks with `version`; «Убрать все купленные» is one call, one «Отменить»', async () => {
     const s = server();
     s.on('PATCH /tasks/*', (c) => ({ status: 200, body: { task: task('m', { title: 'Молоко', item_id: 'srv-s1', qty: (c.body as { qty: string }).qty, version: 4, seq: 50 }), action: action('aqty', 'Изменил: молоко') } }))
       .on('POST /tasks/clear-done', () => ({ status: 200, body: { tasks: [task('y', { deleted_at: iso(t0()), seq: 60, done: true })], action: action('aclr', 'Убрал купленное: яйца.'), page_patches: [], repeated: false } }));
@@ -447,8 +449,12 @@ describe('«Покупки» — the fridge list and «Я в магазине»'
     expect(screen.getByTestId('page-view-shopping:builtin:shopping')).toBeTruthy();
     expect(screen.getByTestId('shop-left')).toHaveTextContent('Осталось 2 из 3');
     expect(screen.getByTestId('qty-m')).toHaveTextContent('2');
+    // No steppers on the rows (notes-tasks-shopping rule 7): a tap on the amount opens them.
+    expect(screen.queryByTestId('qty-plus-m')).toBeNull();
+    await fireEvent.press(screen.getByTestId('qty-m'));
+    await settle(() => screen.queryByTestId('qty-sheet') !== null);
     await fireEvent.press(screen.getByTestId('qty-plus-m'));
-    await settle(() => screen.getByTestId('qty-m').props.children === '3');
+    await settle(() => screen.getByTestId('qty-value-m').props.children === '3');
     expect(stripText()).toBe('Молоко: 3');
     await act(async () => {
       await sync(outbox);
@@ -480,6 +486,7 @@ describe('«Покупки» — the fridge list and «Я в магазине»'
     await act(async () => usePages.getState().setLook(shop.id, look));
     await renderRouter(APP_DIR, { initialUrl: `/page/${shop.id}` });
     await settle(() => screen.queryByTestId('group-where:Магнум') !== null);
+    await fireEvent.press(screen.getByTestId('page-menu'));
     await fireEvent.press(screen.getByTestId('page-order'));
     await settle(() => screen.queryByTestId('group-up-Аптека') !== null);
     await fireEvent.press(screen.getByTestId('group-up-Аптека'));

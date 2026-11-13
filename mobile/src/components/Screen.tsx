@@ -46,7 +46,7 @@ export function Screen({
           style={[
             pad,
             styles.center,
-            { paddingVertical: theme.space[3], borderTopWidth: 1, borderTopColor: theme.colors.separator },
+            { paddingVertical: theme.space[3] },
           ]}
         >
           <View style={[styles.inner, { maxWidth: theme.size.maxContentWidth }]}>{footer}</View>

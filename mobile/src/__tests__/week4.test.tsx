@@ -606,6 +606,11 @@ describe('re-adding a removed page', () => {
 });
 
 describe('«Найти на странице»', () => {
+  /** The field opens on 🔍 in the header (ux-audit P0-2: no permanent field). */
+  const findField = async () => {
+    if (!screen.queryByTestId('page-find')) await fireEvent.press(screen.getByTestId('page-search'));
+    return screen.getByTestId('page-find');
+  };
   beforeEach(() => {
     resetApp();
     finishOnboarding();
@@ -621,12 +626,12 @@ describe('«Найти на странице»', () => {
     await fill();
     await renderRouter(APP_DIR, { initialUrl: `/page/${notes().id}` });
     await settle(() => screen.queryByText('Купить ёлку') !== null);
-    await fireEvent.changeText(screen.getByTestId('page-find'), 'елк');
+    await fireEvent.changeText(await findField(), 'елк');
     await settle(() => screen.queryByText('Қала туралы жазба') === null);
     expect(screen.getByText('Купить ёлку')).toBeTruthy();
-    await fireEvent.changeText(screen.getByTestId('page-find'), 'кала');
+    await fireEvent.changeText(await findField(), 'кала');
     await settle(() => screen.queryByText('Қала туралы жазба') !== null);
-    await fireEvent.changeText(screen.getByTestId('page-find'), '7011234567');
+    await fireEvent.changeText(await findField(), '7011234567');
     await settle(() => screen.queryByText('Телефон +7 701 123 45 67') !== null);
   });
 
@@ -635,7 +640,7 @@ describe('«Найти на странице»', () => {
     const custom = usePages.getState().pages.find((p) => p.templateKey === 'custom')!;
     await testRecords.insertLocal({ id: 'a', kind: 'note', source: 'typed', text: 'Плитка в ванную', pageId: 'today' });
     const r = await renderRouter(APP_DIR, { initialUrl: `/page/${custom.id}` });
-    await fireEvent.changeText(screen.getByTestId('page-find'), 'плитка');
+    await fireEvent.changeText(await findField(), 'плитка');
     await settle(() => screen.queryByTestId('page-find-none') !== null);
     expect(screen.getByText('На этой странице такого нет')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('page-find-all'));
@@ -646,7 +651,7 @@ describe('«Найти на странице»', () => {
 
   it('what was typed stays with its page when switching tabs', async () => {
     await renderRouter(APP_DIR, { initialUrl: `/page/${notes().id}` });
-    await fireEvent.changeText(screen.getByTestId('page-find'), 'что-то');
+    await fireEvent.changeText(await findField(), 'что-то');
     const tasks = usePages.getState().pages.find((p) => p.templateKey === 'tasks')!;
     await fireEvent.press(screen.getByTestId(`tab-${tasks.id}`));
     await settle(() => screen.getByTestId('page-find').props.value === '');
@@ -660,7 +665,7 @@ describe('«Найти на странице»', () => {
     await testPages.markSynced(notes().id, pageOut(notes().id, 3, { id: 'srv-notes', template_key: 'notes', title: 'Заметки' }));
     usePages.setState({ pages: usePages.getState().pages.map((p) => (p.id === notes().id ? { ...p, serverId: 'srv-notes' } : p)) });
     await renderRouter(APP_DIR, { initialUrl: `/page/${notes().id}` });
-    await fireEvent.changeText(screen.getByTestId('page-find'), 'молоком');
+    await fireEvent.changeText(await findField(), 'молоком');
     await settle(() => s.callsTo('GET /search').length > 0);
     expect(s.callsTo('GET /search')[0]?.query).toEqual({ q: 'молоком', page_id: 'srv-notes' });
   });

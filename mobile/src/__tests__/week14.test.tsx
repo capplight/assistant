@@ -101,6 +101,18 @@ const text = (id: string) => {
   const c = screen.getByTestId(id).props.children;
   return Array.isArray(c) ? c.join('') : String(c);
 };
+/** The editor's bar «Итого + Отправить» says the whole total in one label. */
+const label = (id: string) => String(screen.getByTestId(id).props.accessibilityLabel);
+/** A line row opens its sheet (research pattern 7); the price / quantity rows are there. */
+async function openLine(i: number) {
+  await fireEvent.press(screen.getByTestId(`kp-line-${i}`));
+  await settle(() => screen.queryByTestId('kp-line-sheet') !== null);
+}
+/** PDF, Word and the versions live in «⋯». */
+async function openMore() {
+  await fireEvent.press(screen.getByTestId('kp-more'));
+  await settle(() => screen.queryByTestId('kp-more-sheet') !== null);
+}
 const stripText = () => {
   const st = useUndo.getState().strip;
   return st?.kind === 'custom' ? st.text : null;
@@ -216,14 +228,20 @@ describe('S17: preview and tap-edits', () => {
     putFull(kpFullOut(full()));
     await renderRouter(APP_DIR, { initialUrl: '/kp/doc-1' });
     await settle(() => screen.queryByTestId('kp-screen') !== null);
-    expect(text('kp-total')).toBe('Итого: 341 000 ₸ с НДС');
-    expect(text('kp-line-0-source')).toBe('из прайса «Прайс 2026»');
+    expect(label('kp-total')).toBe('Итого: 341 000 ₸ с НДС');
+    // A good price says where it came from in the line's sheet; a doubt or a gap stays on the row.
+    expect(screen.queryByTestId('kp-line-0-source')).toBeNull();
+    await openLine(0);
+    expect(text('kp-line-sheet-source')).toBe('из прайса «Прайс 2026»');
+    await fireEvent.press(screen.getByTestId('kp-line-sheet-close'));
+    await settle(() => screen.queryByTestId('kp-line-sheet') === null);
     expect(text('kp-line-1-source')).toBe('⚠ из прайса: «Автомат ВА47-29 16А» — та ли позиция?');
     expect(text('kp-line-2-source')).toBe('укажите цену');
     expect(screen.getByTestId('kp-line-1-check')).toBeTruthy(); // qty to check
     expect(text('kp-missing-count')).toBe('Нет цены: 1. Итог ещё не полный');
     expect(screen.getAllByText('Подготовил помощник (ИИ) по вашим записям — проверьте')).toHaveLength(1);
 
+    await openLine(2);
     await fireEvent.press(screen.getByTestId('kp-line-2-price'));
     await settle(() => screen.queryByTestId('kp-edit') !== null);
     for (const k of ['1', '8', '5', '0', '0']) await fireEvent.press(screen.getByTestId(`kp-edit-keys-${k}`));
@@ -231,21 +249,28 @@ describe('S17: preview and tap-edits', () => {
     await fireEvent.press(screen.getByTestId('kp-edit-save'));
     await settle(() => outbox.all().some((r) => r.kind === 'kp.patch'));
     // 341 000 + 4 × 18 500 = 415 000, VAT 16% inside = 57 241,38 (by code, before the server answers).
-    expect(text('kp-total')).toBe('Итого: 415 000 ₸ с НДС');
+    expect(label('kp-total')).toBe('Итого: 415 000 ₸ с НДС');
     expect(screen.getByTestId('kp-vat').props.accessibilityLabel).toBe('В том числе НДС 16%: 57 241,38 ₸');
-    expect(text('kp-line-2-source')).toBe('вы указали');
-    expect(text('kp-line-2-calc')).toBe('4 шт × 18 500 ₸ = 74 000 ₸');
+    expect(screen.queryByTestId('kp-line-2-source')).toBeNull(); // no gap left on the row
+    expect(text('kp-line-2-calc')).toBe('4 шт × 18 500 ₸');
+    expect(text('kp-line-2-sum')).toBe('74 000 ₸');
+    await openLine(2);
+    expect(text('kp-line-sheet-source')).toBe('вы указали');
+    expect(text('kp-line-sheet-calc')).toBe('4 шт × 18 500 ₸ = 74 000 ₸');
+    await fireEvent.press(screen.getByTestId('kp-line-sheet-close'));
+    await settle(() => screen.queryByTestId('kp-line-sheet') === null);
     expect(screen.queryByTestId('kp-missing-count')).toBeNull();
     const row0 = outbox.all().find((r) => r.kind === 'kp.patch')!;
     expect(row0.payload).toMatchObject({ docId: 'doc-1', ops: [{ op: 'replace', path: '/items/i3/unit_price', value: '18500.00' }] });
     expect(stripText()).toBe('Цена: Щит ЩРН-24');
 
+    await openMore();
     await fireEvent.press(screen.getByTestId('kp-pdf'));
     await settle(() => screen.queryByTestId('kp-pdf-result') !== null);
     expect(text('kp-pdf-result')).toMatch(/нужен интернет/);
 
     undo();
-    await settle(() => text('kp-total') === 'Итого: 341 000 ₸ с НДС');
+    await settle(() => label('kp-total') === 'Итого: 341 000 ₸ с НДС');
     expect(text('kp-line-2-source')).toBe('укажите цену');
     expect((await outbox.get(row0.id))!.status).toBe('failed'); // dropped, never sent
   });
@@ -268,7 +293,8 @@ describe('S17: preview and tap-edits', () => {
     });
     putFull(kpFullOut(full()));
     await renderRouter(APP_DIR, { initialUrl: '/kp/doc-1' });
-    await settle(() => screen.queryByTestId('kp-line-2-price') !== null);
+    await settle(() => screen.queryByTestId('kp-line-2') !== null);
+    await openLine(2);
     await fireEvent.press(screen.getByTestId('kp-line-2-price'));
     await settle(() => screen.queryByTestId('kp-edit') !== null);
     for (const k of ['1', '8', '5', '0', '0']) await fireEvent.press(screen.getByTestId(`kp-edit-keys-${k}`));
@@ -276,8 +302,9 @@ describe('S17: preview and tap-edits', () => {
     await settle(() => s.callsTo('POST /documents/doc-1/patch').length === 1);
     expect(s.callsTo('POST /documents/doc-1/patch')[0]!.body).toMatchObject({ base_version: 1, save_prices: true, ops: [{ path: '/items/i3/unit_price', value: '18500.00' }] });
     await settle(() => useKp.getState().versions['doc-1']?.n === 2 && !useKp.getState().docEdits['doc-1']);
-    expect(text('kp-total')).toBe('Итого: 415 000 ₸ с НДС');
+    expect(label('kp-total')).toBe('Итого: 415 000 ₸ с НДС');
 
+    await openMore();
     await fireEvent.press(screen.getByTestId('kp-pdf'));
     await settle(() => shared.length === 2);
     expect(shared[0]).toMatchObject({ url: 'http://api.test/v1/documents/doc-1/files/f1', name: 'КП_ТОО_Тест_v2.pdf' });

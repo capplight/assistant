@@ -300,11 +300,16 @@ describe('«Расходы» — the calculator', () => {
     await renderRouter(APP_DIR, { initialUrl: `/page/${expensesPage().id}` });
     await settle(() => screen.queryByTestId('exp-board') !== null);
     expect(screen.getByTestId('page-view-expenses:builtin:expenses')).toBeTruthy();
-    for (const id of ['page-title', 'page-settings', 'page-find']) expect(screen.getByTestId(id)).toBeTruthy();
+    // The frame's one header line: title, 🔍, ⋯ («Настроить» and «Порядок» live in ⋯, ux-audit P0-2).
+    for (const id of ['page-title', 'page-search', 'page-menu']) expect(screen.getByTestId(id)).toBeTruthy();
     expect(text('exp-total')).toBe('0 ₸');
     expect(screen.getByTestId('exp-empty-total')).toBeTruthy();
     // Empty: the keys are open, with the hint.
     expect(screen.getByTestId('exp-or-say')).toBeTruthy();
+    // «Записать трату» opens the keys in a sheet (research pattern 2).
+    expect(screen.queryByTestId('exp-keypad')).toBeNull();
+    await fireEvent.press(screen.getByTestId('exp-enter'));
+    await settle(() => screen.queryByTestId('exp-entry-sheet') !== null);
     await typeSum(['1', '2', '0', '0', 'plus', '3', '5', '0']);
     expect(text('exp-sum-text')).toBe('1 200 + 350 ₸');
     expect(text('exp-sum-total')).toBe('= 1 550 ₸');
@@ -313,6 +318,7 @@ describe('«Расходы» — the calculator', () => {
     await fireEvent.press(screen.getByTestId('exp-cat-groceries'));
     await fireEvent.press(screen.getByTestId('exp-keypad-save'));
     await settle(() => text('exp-total') === '1 550 ₸');
+    expect(screen.queryByTestId('exp-entry-sheet')).toBeNull(); // the sheet closes on «Записать»
     expect(stripText()).toBe('Записал 1 550 ₸ · Продукты');
     const row = outbox.all().find((r) => r.kind === 'expense.create')!;
     expect(row.payload).toMatchObject({ body: { expression: '1200+350', category_id: null, source: 'form' }, categoryKey: 'groceries' });
@@ -334,8 +340,8 @@ describe('«Расходы» — the calculator', () => {
     applyServer([expense('e9', { amount: '5000.00', note: 'бензин', category_key: 'groceries' })], serverCategories());
     await renderRouter(APP_DIR, { initialUrl: `/page/${expensesPage().id}` });
     await settle(() => screen.queryByTestId('exp-row-e9') !== null);
-    expect(screen.getByTestId('exp-row-label-e9').props.accessibilityLabel).toBe('Трата. 5000 тенге. Бензин. groceries. Сегодня');
-    await fireEvent.press(screen.getByTestId('exp-row-menu-e9'));
+    expect(screen.getByTestId('exp-row-e9').props.accessibilityLabel).toBe('Трата. 5000 тенге. Бензин. groceries. Сегодня');
+    await fireEvent.press(screen.getByTestId('exp-row-e9'));
     await settle(() => screen.queryByTestId('exp-sheet') !== null);
     await fireEvent.press(screen.getByTestId('exp-sheet-cat-transport'));
     await settle(() => outbox.all().some((r) => r.kind === 'expense.patch'));
@@ -352,6 +358,7 @@ describe('«Расходы» — the calculator', () => {
     await (await getSyncEngine()).run();
     await renderRouter(APP_DIR, { initialUrl: `/page/${expensesPage().id}` });
     await settle(() => screen.queryByTestId('exp-board') !== null);
+    await fireEvent.press(screen.getByTestId('exp-enter'));
     await typeSum(['5', '000']);
     await fireEvent.press(screen.getByTestId('exp-cat-groceries'));
     await fireEvent.press(screen.getByTestId('exp-keypad-save'));
@@ -420,6 +427,7 @@ describe('«Расходы» — the calculator', () => {
     await withPageRecord('e1');
     await renderRouter(APP_DIR, { initialUrl: `/page/${expensesPage().id}` });
     await settle(() => screen.queryByTestId('exp-row-e1') !== null);
+    await fireEvent.press(screen.getByTestId('page-menu'));
     await fireEvent.press(screen.getByTestId('page-order'));
     await settle(() => screen.queryByTestId('exp-cat-order') !== null);
     await fireEvent.press(screen.getByTestId('exp-order-up-home'));
@@ -438,15 +446,15 @@ describe('«Расходы» — the calculator', () => {
     await (await getSyncEngine()).run();
     await renderRouter(APP_DIR, { initialUrl: `/page/${expensesPage().id}` });
     await settle(() => screen.queryByTestId('exp-to-check') !== null);
-    expect(screen.getByTestId('exp-row-label-e1').props.accessibilityLabel).toMatch(/проверьте сумму/);
-    await fireEvent.press(screen.getByTestId('exp-row-menu-e1'));
+    expect(screen.getByTestId('exp-row-e1').props.accessibilityLabel).toMatch(/проверьте сумму/);
+    await fireEvent.press(screen.getByTestId('exp-row-e1'));
     await settle(() => screen.queryByTestId('exp-sheet-verify') !== null);
     await fireEvent.press(screen.getByTestId('exp-sheet-verify'));
     await settle(() => s.callsTo('PATCH /expenses/e1').length === 1);
     expect(s.callsTo('PATCH /expenses/e1')[0]!.body).toMatchObject({ confirm: ['amount'], version: 1 });
   });
 
-  it('200%: «Ввести трату» opens the keys on the whole screen; the chips are one column', async () => {
+  it('200%: «Записать трату» opens the keys in the sheet; the chips are one column', async () => {
     Dimensions.set({ window: { width: 390, height: 844, scale: 3, fontScale: 2 }, screen: { width: 390, height: 844, scale: 3, fontScale: 2 } });
     resetApp();
     finishOnboarding('full');
@@ -454,7 +462,7 @@ describe('«Расходы» — the calculator', () => {
     await settle(() => screen.queryByTestId('exp-enter') !== null);
     expect(screen.queryByTestId('exp-keypad')).toBeNull();
     await fireEvent.press(screen.getByTestId('exp-enter'));
-    await settle(() => screen.queryByTestId('exp-full-entry') !== null);
+    await settle(() => screen.queryByTestId('exp-entry-sheet') !== null);
     expect(screen.getByTestId('exp-total').props.maxFontSizeMultiplier).toBe(1.6);
     const group = screen.getByTestId('exp-cat-group');
     const style = Array.isArray(group.props.style) ? Object.assign({}, ...group.props.style) : group.props.style;
@@ -462,7 +470,7 @@ describe('«Расходы» — the calculator', () => {
     await typeSum(['7']);
     await fireEvent.press(screen.getByTestId('exp-keypad-save'));
     await settle(() => text('exp-total') === '7 ₸');
-    expect(screen.queryByTestId('exp-full-entry')).toBeNull();
+    expect(screen.queryByTestId('exp-entry-sheet')).toBeNull();
   });
 });
 

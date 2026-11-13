@@ -1,7 +1,7 @@
 import { act, fireEvent, renderRouter, screen } from 'expo-router/testing-library';
 import { AccessibilityInfo, Dimensions, StyleSheet } from 'react-native';
 
-import { manualOut, placeOut } from '@/api/endpoints';
+import { FEATURE_DEFAULTS, manualOut, placeOut } from '@/api/endpoints';
 import { boardStats } from '@/components/page/BoardView';
 import type { InMemoryOutboxRepository } from '@/db';
 import { linkFrom } from '@/db/pages';
@@ -24,10 +24,11 @@ import { catalogTemplate } from '@/pages/catalog';
 import type { ItemPlacePayload } from '@/pages/manual';
 import { applyChange, EMPTY_VIEW, viewBody } from '@/pages/viewModel';
 import { getSyncEngine, notifyDataChanged } from '@/services';
+import { useFeatureStore } from '@/store/features';
 import { usePages, type Page } from '@/store/pages';
 import { useUndo } from '@/store/undo';
 import { gutterFor } from '@/theme';
-import { happyServer, itemOut, linkOut, type FakeServer } from '@/testing/fakeServer';
+import { FEATURES_BODY, happyServer, itemOut, linkOut, type FakeServer } from '@/testing/fakeServer';
 import { APP_DIR, finishOnboarding, resetApp, settle, testPages, testRecords } from '@/testing/helpers';
 
 /**
@@ -63,8 +64,10 @@ function action(id: string, summary: string) {
   };
 }
 
-function server(): FakeServer {
+/** «Доска» is behind the `board` switch (Ф-38): these tests turn it on; `boardOff` checks it hidden. */
+function server(board = true): FakeServer {
   const s = happyServer();
+  s.on('GET /features', () => ({ status: 200, body: { ...FEATURES_BODY, board } }));
   s.on('POST /actions/*/undo', (c) => ({
     status: 200,
     body: { action: { ...action(c.path.split('/')[2]!, 'x'), undoable: false, undone_at: iso(Date.now()) }, undo: null, partial: false, repeated: false, message_ru: null, page_patches: [] },
@@ -77,8 +80,10 @@ function server(): FakeServer {
   return s;
 }
 
-async function start(s: FakeServer, mode: 'full' | 'no_ai' = 'full'): Promise<InMemoryOutboxRepository> {
+async function start(s: FakeServer, mode: 'full' | 'no_ai' = 'full', board = true): Promise<InMemoryOutboxRepository> {
   const outbox = resetApp({ fetch: s.fetch });
+  // The last answer of GET /features (kept offline too).
+  useFeatureStore.getState().set({ ...FEATURE_DEFAULTS, board });
   finishOnboarding(mode);
   await (await getSyncEngine()).run();
   return outbox;
@@ -408,6 +413,23 @@ describe('«Заметки» — «Ряды» and «Доска»', () => {
     expect(stripText()).toBe('Подвинул: Заметка 1');
   });
 
+  it('Ф-38: with `board` off there is no «Ряды | Доска» and a page saved as a board shows as the grid', async () => {
+    const s = server(false);
+    await start(s, 'full', false);
+    s.offline = true;
+    const notes = await notesPage([
+      { id: 'n1', text: 'Внизу', link: { board_x: 0.1, board_y: 400, board_z: 1 } },
+      { id: 'n2', text: 'Справа', link: { board_x: 0.6, board_y: 20, board_z: 1 } },
+    ]);
+    await boardMode(notes);
+    await renderRouter(APP_DIR, { initialUrl: `/page/${notes.id}` });
+    await settle(() => screen.queryByTestId('sticker-n1') !== null);
+    expect(screen.queryByTestId('notes-mode-board')).toBeNull();
+    expect(screen.queryByTestId('board')).toBeNull();
+    expect(screen.queryByTestId('notes-board-rows')).toBeNull();
+    expect(order()).toEqual(['n1', 'n2']);
+  });
+
   it('≥150%: the board as rows, top to bottom and left to right; «Выше» swaps two places', async () => {
     Dimensions.set({ window: { width: 390, height: 844, scale: 3, fontScale: 1.6 }, screen: { width: 390, height: 844, scale: 3, fontScale: 1.6 } });
     const s = server();
@@ -426,7 +448,7 @@ describe('«Заметки» — «Ряды» and «Доска»', () => {
     expect(order()).toEqual(['n3', 'n2', 'n1']);
     expect(screen.getByTestId('record-n3').props.accessibilityLabel).toMatch(/^Стикер 1 из 3/);
 
-    await fireEvent.press(screen.getByTestId('record-menu-n1'));
+    await fireEvent(screen.getByTestId('record-n1'), 'longPress');
     await fireEvent.press(screen.getByTestId('record-menu-up'));
     await settle(() => order().join() === 'n3,n1,n2');
     const p = places(outbox)[0]!.payload as ItemPlacePayload;

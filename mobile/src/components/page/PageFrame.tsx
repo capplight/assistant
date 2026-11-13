@@ -1,8 +1,8 @@
 import { router } from 'expo-router';
-import { PencilLine } from 'lucide-react-native';
+import { ArrowUpDown, Ellipsis, PencilLine, Search, SlidersHorizontal, X } from 'lucide-react-native';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 
 import { renamePage } from '@/pages/service';
 import { usePageLabels } from '@/pages/usePageLabels';
@@ -14,8 +14,7 @@ import { useView } from '@/store/view';
 import { useTheme } from '@/theme';
 
 import { AppText } from '../AppText';
-import { Button } from '../ui/Button';
-import { PageIcon } from '../Icon';
+import { ActionList, Button, Header, Sheet, type SheetAction } from '../ui';
 import { PageNameSheet } from '../PageNameSheet';
 import { Screen } from '../Screen';
 import { FindField, SearchMore } from '../SearchResults';
@@ -24,8 +23,9 @@ import { resolveView } from './registry';
 import { entryRow, shownEntries, sortEntries } from './rows';
 
 /**
- * `PageFrame` (template-screens 3): the same edges on every page so nobody gets lost — the title
- * with its icon (✎ on «Своя страница»), «Порядок», «Настроить» (S38), «Найти на странице» (S10).
+ * `PageFrame` (template-screens 3): the same edges on every page so nobody gets lost — one header line
+ * (ux-audit P0-2, design-system §3 Header): the title, 🔍 «Найти на странице» (S10, the field opens on
+ * tap) and ⋯ with «Порядок», «Переименовать» (custom pages) and «Настроить» (S38).
  * The middle is the template's tool from the registry (`resolveView`); while searching, the frame
  * shows the found records the same way on every page. The bottom edge — answer banner, «Отменить»,
  * the assistant line, tabs — is the main layout's footer, outside the tool.
@@ -47,6 +47,8 @@ export function PageFrame({ page }: { page: Page }) {
   const clearHighlight = useView((st) => st.clearHighlight);
   const setVisible = useView((st) => st.setVisible);
   const [ordering, setOrdering] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const view = resolveView(page);
 
   // The marker goes after 600 ms (Reduce Motion: the same, it is a colour, not a move).
@@ -66,52 +68,64 @@ export function PageFrame({ page }: { page: Page }) {
   }, [entries, page.id, setVisible]);
 
   const hasRecords = (entries?.length ?? 0) > 0;
+  const searchShown = searchOpen || searching;
+  const closeSearch = () => {
+    setSearchOpen(false);
+    setFind({ pageId: page.id, q: '' });
+  };
+  const menuActions: SheetAction[] = [
+    ...(hasRecords && !searching
+      ? [{ key: 'order', testID: 'page-order', label: t('page.order'), icon: ArrowUpDown, onPress: () => (setMenuOpen(false), setOrdering(true)) }]
+      : []),
+    ...(page.templateKey === 'custom'
+      ? [{ key: 'rename', testID: 'page-rename', label: t('page.rename'), icon: PencilLine, onPress: () => (setMenuOpen(false), setRenaming(true)) }]
+      : []),
+    {
+      key: 'settings',
+      testID: 'page-settings',
+      label: t('view.settings'),
+      hint: t('view.settings_a11y', { page: title(page) }),
+      icon: SlidersHorizontal,
+      onPress: () => {
+        setMenuOpen(false);
+        router.push({ pathname: '/page-settings/[id]', params: { id: page.id } });
+      },
+    },
+  ];
+  // One line (ux-audit P0-2): the title, 🔍 and ⋯; «Порядок», «Настроить» live in ⋯; the field opens on 🔍.
   const top = (
-    <View style={{ gap: theme.space[4] }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.space[3], flexWrap: 'wrap' }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.space[3], flexGrow: 1, flexShrink: 1, minWidth: '50%' }}>
-          <PageIcon name={page.icon} color={theme.colors.ink} size={28} />
-          <AppText testID="page-title" variant="largeTitle" accessibilityRole="header" style={{ flexShrink: 1 }}>
-            {title(page)}
+    <View style={{ gap: theme.space[2] }}>
+      <Header
+        testID="page-header"
+        title={title(page)}
+        titleTestID="page-title"
+        actions={[
+          {
+            key: 'search',
+            testID: 'page-search',
+            icon: searchShown ? X : Search,
+            label: searchShown ? t('common.close') : t('page.find'),
+            onPress: () => (searchShown ? closeSearch() : setSearchOpen(true)),
+          },
+          { key: 'menu', testID: 'page-menu', icon: Ellipsis, label: t('move.menu_a11y', { what: title(page) }), onPress: () => setMenuOpen(true) },
+        ]}
+      />
+      {searchShown ? (
+        <FindField testID="page-find" label={t('page.find')} value={q} onChange={(value) => setFind({ pageId: page.id, q: value })} />
+      ) : null}
+      {ordering ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.space[2], flexWrap: 'wrap' }}>
+          <AppText testID="page-order-hint" variant="callout" accessibilityLiveRegion="polite" style={{ flex: 1, minWidth: '50%' }}>
+            {t('page.order_hint')}
           </AppText>
-          {page.templateKey === 'custom' ? (
-            <Pressable
-              testID="page-rename"
-              accessibilityRole="button"
-              accessibilityLabel={t('page.rename')}
-              onPress={() => setRenaming(true)}
-              style={{ width: theme.size.minTouch, height: theme.size.minTouch, alignItems: 'center', justifyContent: 'center' }}
-            >
-              <PencilLine size={24} color={theme.colors.brand} />
-            </Pressable>
-          ) : null}
-        </View>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.space[1] }}>
-          {(hasRecords && !searching) || ordering ? (
-            <Button
-              testID="page-order"
-              label={ordering ? t('page.order_done') : t('page.order')}
-              variant={ordering ? 'primary' : 'text'}
-              minHeight={theme.size.minTouch}
-              accessibilityState={{ selected: ordering }}
-              onPress={() => setOrdering((o) => !o)}
-            />
-          ) : null}
           <Button
-            testID="page-settings"
-            label={t('view.settings')}
-            accessibilityLabel={t('view.settings_a11y', { page: title(page) })}
-            variant="text"
-            minHeight={theme.size.minTouch}
-            onPress={() => router.push({ pathname: '/page-settings/[id]', params: { id: page.id } })}
+            testID="page-order"
+            label={t('page.order_done')}
+            size="small"
+            accessibilityState={{ selected: true }}
+            onPress={() => setOrdering(false)}
           />
         </View>
-      </View>
-      <FindField testID="page-find" label={t('page.find')} value={q} onChange={(value) => setFind({ pageId: page.id, q: value })} />
-      {ordering ? (
-        <AppText testID="page-order-hint" variant="callout" accessibilityLiveRegion="polite">
-          {t('page.order_hint')}
-        </AppText>
       ) : null}
     </View>
   );
@@ -160,6 +174,11 @@ export function PageFrame({ page }: { page: Page }) {
       <View testID={`page-view-${view.key}`} style={{ flex: 1 }}>
         {middle}
       </View>
+      {menuOpen ? (
+        <Sheet testID="page-menu-sheet" visible onClose={() => setMenuOpen(false)} title={title(page)}>
+          <ActionList actions={menuActions} />
+        </Sheet>
+      ) : null}
       {renaming ? (
         <PageNameSheet
           initial={page.title ?? ''}

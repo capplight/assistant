@@ -125,10 +125,10 @@ export default function ReminderScreen() {
       style={[
         styles.chip,
         {
+          // design-system §3 Chip: neutral `surfaceSunken`, the chosen one `brand` — no outlines.
           minHeight: theme.size.minTouch,
-          borderRadius: theme.radius.md,
-          borderColor: selected ? theme.colors.brand : theme.colors.iconSecondary,
-          backgroundColor: selected ? theme.colors.brand : theme.colors.surface,
+          borderRadius: theme.radius.round,
+          backgroundColor: selected ? theme.colors.brand : theme.colors.surfaceSunken,
           paddingHorizontal: theme.space[4],
         },
       ]}
@@ -145,10 +145,12 @@ export default function ReminderScreen() {
       onPress={onPress}
       style={[
         styles.step,
-        { minWidth: theme.size.buttonHeight + 16, minHeight: theme.size.buttonHeight, paddingHorizontal: theme.space[2], borderRadius: theme.radius.md, borderColor: theme.colors.iconSecondary },
+        { minWidth: theme.size.buttonHeight + 16, minHeight: theme.size.buttonHeight, paddingHorizontal: theme.space[2], borderRadius: theme.radius.round, backgroundColor: theme.colors.brandTint },
       ]}
     >
-      <AppText variant="title2">{sign}</AppText>
+      <AppText variant="title2" color="brand">
+        {sign}
+      </AppText>
     </Pressable>
   );
 
@@ -189,12 +191,11 @@ export default function ReminderScreen() {
             marginTop: theme.space[2],
             marginBottom: theme.space[5],
             minHeight: theme.size.buttonHeight,
-            borderWidth: 1,
-            borderColor: theme.colors.iconSecondary,
-            borderRadius: theme.radius.sm,
+            borderRadius: theme.radius.md,
             padding: theme.space[3],
+            paddingHorizontal: theme.space[4],
             color: theme.colors.ink,
-            backgroundColor: theme.colors.surface,
+            backgroundColor: theme.colors.surfaceSunken,
           },
         ]}
       />
@@ -276,6 +277,6 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
   wrap: { flexDirection: 'row', flexWrap: 'wrap' },
   flex: { flex: 1 },
-  chip: { borderWidth: 1, justifyContent: 'center' },
-  step: { borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  chip: { justifyContent: 'center' },
+  step: { alignItems: 'center', justifyContent: 'center' },
 });

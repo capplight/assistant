@@ -63,13 +63,15 @@ type HeaderProps = {
   /** Under the title (a segmented control); stays inside the header. */
   children?: ReactNode;
   testID?: string;
+  /** testID of the title text (screens whose tests look for their title). */
+  titleTestID?: string;
 };
 
 /**
  * Screen header (design-system §3 Header): «‹ Назад» row on stack screens, meta, `largeTitle`, ≤2 round buttons.
  * One line: «Порядок» and «Настроить» live in ⋯. The title wraps (KK at 200 %), the buttons keep their place.
  */
-export function Header({ title, meta, back, actions = [], children, testID }: HeaderProps) {
+export function Header({ title, meta, back, actions = [], children, testID, titleTestID }: HeaderProps) {
   const theme = useTheme();
   if (__DEV__ && actions.length > 2) console.warn('Header: at most 2 actions; put the rest into ⋯');
   return (
@@ -78,7 +80,7 @@ export function Header({ title, meta, back, actions = [], children, testID }: He
       <View style={[styles.row, { gap: theme.space[2] }]}>
         <View style={styles.flex}>
           {meta ? <AppText variant="footnote">{meta}</AppText> : null}
-          <AppText variant="largeTitle" accessibilityRole="header">
+          <AppText testID={titleTestID} variant="largeTitle" accessibilityRole="header">
             {title}
           </AppText>
         </View>

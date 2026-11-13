@@ -69,7 +69,7 @@ describe('main navigation', () => {
     await fireEvent.press(screen.getByTestId('answer-open'));
     expect(r.getPathname()).toBe('/chat');
     expect(screen.getByText('Переписка')).toBeTruthy();
-    expect(screen.getByText('Вы: Купить хлеб')).toBeTruthy();
+    expect(screen.getByLabelText('Вы: Купить хлеб')).toBeTruthy();
     // Same assistant line in Переписка, over all pages
     expect(within(screen.getByTestId('context-chip')).getByText('Про: все страницы')).toBeTruthy();
   });

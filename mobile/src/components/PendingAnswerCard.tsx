@@ -1,5 +1,6 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
+import { MessageCircle } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 
@@ -10,6 +11,8 @@ import { useTheme } from '@/theme';
 import { answerNotice } from './answerText';
 import { AppText } from './AppText';
 import { Button } from './ui/Button';
+import { Card } from './ui/Card';
+import { Icon } from './ui/Icon';
 
 /**
  * «Ответ готов: …» [Открыть ответ] on «Сегодня» (2-design 4.4 п. 3, US-26): an answer that was
@@ -30,56 +33,40 @@ export function PendingAnswerCard() {
   if (!message) return null;
   const body = message.text || answerNotice(message, t) || '';
   return (
-    <View
-      testID="pending-answer"
-      accessibilityLiveRegion="polite"
-      style={[
-        styles.box,
-        {
-          backgroundColor: theme.colors.surface,
-          borderColor: theme.colors.separator,
-          borderRadius: theme.radius.lg,
-          padding: theme.space[4],
-          marginBottom: theme.space[6],
-          gap: theme.space[2],
-        },
-      ]}
-    >
-      <AppText variant="sectionLabel" accessibilityRole="header">
-        {t('answer.ready')}
-      </AppText>
-      <AppText testID="pending-answer-text" numberOfLines={2}>
-        {body}
-      </AppText>
-      {message.aiGenerated && message.text ? (
-        <AppText variant="callout" numberOfLines={1}>
-          {t('ai.label_short')}
+    <View testID="pending-answer" accessibilityLiveRegion="polite" style={{ marginBottom: theme.space[3] }}>
+      <Card style={{ gap: theme.space[2] }}>
+        <View style={[styles.row, { gap: theme.space[2] }]}>
+          <Icon icon={MessageCircle} size="sm" color="brand" />
+          <AppText variant="sectionLabel" accessibilityRole="header" style={styles.flex}>
+            {t('answer.ready')}
+          </AppText>
+        </View>
+        <AppText testID="pending-answer-text" numberOfLines={2}>
+          {body}
         </AppText>
-      ) : null}
-      <View style={{ gap: theme.space[2], flexDirection: theme.largeFont ? 'column' : 'row' }}>
-        <Button
-          testID="pending-open"
-          label={t('answer.open')}
-          variant="secondary"
-          style={theme.largeFont ? undefined : styles.flex}
-          onPress={() => {
-            const id = openPending();
-            if (id) router.push({ pathname: '/chat', params: { focus: id } });
-          }}
-        />
-        <Button
-          testID="pending-close"
-          label={t('answer.close')}
-          variant="text"
-          style={theme.largeFont ? undefined : styles.flex}
-          onPress={closePending}
-        />
-      </View>
+        {message.aiGenerated && message.text ? (
+          // The «ИИ» label is shown whole, never cut.
+          <AppText variant="footnote">{t('ai.label_short')}</AppText>
+        ) : null}
+        <View style={[styles.row, { gap: theme.space[2], flexWrap: 'wrap' }]}>
+          <Button
+            testID="pending-open"
+            label={t('answer.open')}
+            variant="secondary"
+            size="small"
+            onPress={() => {
+              const id = openPending();
+              if (id) router.push({ pathname: '/chat', params: { focus: id } });
+            }}
+          />
+          <Button testID="pending-close" label={t('answer.close')} variant="text" onPress={closePending} />
+        </View>
+      </Card>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  box: { borderWidth: 1 },
+  row: { flexDirection: 'row', alignItems: 'center' },
   flex: { flex: 1 },
 });

@@ -22,6 +22,7 @@ import { useTasks } from '@/tasks/store';
 import { useToday } from '@/today/service';
 import { useDedup } from '@/dedup/store';
 import { setFilePickerForTests } from '@/dedup/pickFile';
+import { useSchemePreference } from '@/theme';
 import { useCatalog } from '@/pages/catalog';
 import { useFacets } from '@/pages/facets';
 import { useExpenses } from '@/expenses/store';
@@ -69,6 +70,7 @@ export let testAlarms = new FakeAlarms();
 export function resetApp(o: { fetch?: FetchLike; push?: FakePush; alarms?: FakeAlarms } = {}): InMemoryOutboxRepository {
   useOnboarding.getState().reset();
   useFeatureStore.getState().reset();
+  useSchemePreference.getState().set('system');
   useAlarms.getState().reset();
   useTasks.getState().reset();
   useExpenses.getState().reset();

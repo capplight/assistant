@@ -1,4 +1,6 @@
 import { fireEvent, renderRouter, screen } from 'expo-router/testing-library';
+import { StyleSheet } from 'react-native';
+import { lightColors } from '@/theme';
 
 import { kpEditOut, kpFullOut, kpSendOut, kpVersionsOut, messageDraftOut, sendExecuteOut } from '@/api/endpoints';
 import { describeChange, kpSink, putFull } from '@/kp/service';
@@ -84,6 +86,18 @@ const text = (id: string) => {
   const c = screen.getByTestId(id).props.children;
   return Array.isArray(c) ? c.join('') : String(c);
 };
+/** The editor's bar «Итого + Отправить» says the whole total in one label. */
+const label = (id: string) => String(screen.getByTestId(id).props.accessibilityLabel);
+/** A line row opens its sheet (research pattern 7); the price / quantity rows are there. */
+async function openLine(i: number) {
+  await fireEvent.press(screen.getByTestId(`kp-line-${i}`));
+  await settle(() => screen.queryByTestId('kp-line-sheet') !== null);
+}
+/** PDF, Word and the versions live in «⋯». */
+async function openMore() {
+  await fireEvent.press(screen.getByTestId('kp-more'));
+  await settle(() => screen.queryByTestId('kp-more-sheet') !== null);
+}
 
 type Shared = { download: { url: string; name: string; headers?: Record<string, string> }[]; shared: { uri: string; mime: string }[]; mails: MailDraft[]; urls: string[] };
 
@@ -204,8 +218,8 @@ describe('S17: a change by a phrase', () => {
     await settle(() => screen.queryByTestId('kp-change') !== null);
     expect(s.callsTo('POST /documents/doc-1/edit')[0]!.body).toMatchObject({ base_version: 1, text: 'скидка 5% на автомат' });
     expect(text('kp-change-text')).toBe('Изменил: скидка 5% на автомат. Итого: 341 000 → 335 200 ₸');
-    expect(text('kp-total')).toBe('Итого: 335 200 ₸ с НДС');
-    expect(screen.getByTestId('kp-line-1').props.style.backgroundColor).toBeDefined(); // lit for 600 ms
+    expect(label('kp-total')).toBe('Итого: 335 200 ₸ с НДС');
+    expect(StyleSheet.flatten(screen.getByTestId('kp-line-1').props.style).backgroundColor).toBe(lightColors.highlightTint); // lit for 600 ms
     await fireEvent.press(screen.getByTestId('kp-change-what'));
     expect(text('kp-change-row-disc-i2')).toBe('• Автомат 16А: скидка 0% → 5%');
     await fireEvent.press(screen.getByTestId('kp-change-undo'));
@@ -249,6 +263,7 @@ describe('S17: a change by a phrase', () => {
     await renderRouter(APP_DIR, { initialUrl: '/kp/doc-1' });
     await settle(() => screen.queryByTestId('kp-phrase-no-ai') !== null);
     expect(screen.queryByTestId('kp-phrase-input')).toBeNull();
+    await openLine(0);
     expect(screen.getByTestId('kp-line-0-price')).toBeTruthy();
     expect(screen.getAllByText(/ИИ/)).toHaveLength(1); // the single label of the КП
   });
@@ -271,13 +286,13 @@ describe('versions', () => {
     expect(text('kp-version-total')).toBe('Итого: 341 000 ₸ с НДС');
     await fireEvent.press(screen.getByTestId('kp-version-revert'));
     await settle(() => screen.queryByTestId('kp-screen') !== null);
-    expect(text('kp-total')).toBe('Итого: 341 000 ₸ с НДС');
+    expect(label('kp-total')).toBe('Итого: 341 000 ₸ с НДС');
     const r = outbox.all().find((x) => x.kind === 'kp.revert')!;
     expect(r.payload).toMatchObject({ docId: 'doc-1', n: 1 });
     const st = useUndo.getState().strip;
     expect(st?.kind === 'custom' && st.text).toBe('Вернул версию 1');
     if (st?.kind === 'custom') st.onUndo();
-    await settle(() => text('kp-total') === 'Итого: 335 200 ₸ с НДС');
+    await settle(() => label('kp-total') === 'Итого: 335 200 ₸ с НДС');
     expect((await outbox.get(r.id))!.status).toBe('failed'); // dropped, never sent
   });
 
@@ -292,7 +307,8 @@ describe('versions', () => {
     const log = sharePort();
     putFull(kpFullOut(full()));
     await renderRouter(APP_DIR, { initialUrl: '/kp/doc-1' });
-    await settle(() => screen.queryByTestId('kp-docx') !== null);
+    await settle(() => screen.queryByTestId('kp-more') !== null);
+    await openMore();
     await fireEvent.press(screen.getByTestId('kp-docx'));
     await settle(() => log.shared.length === 1);
     expect(s.callsTo('POST /documents/doc-1/render')[0]!.query).toMatchObject({ format: 'docx' });

@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 
 import { dayOffset, dayText, timeText } from '@/alarms/format';
@@ -27,6 +27,7 @@ import { useTheme } from '@/theme';
 
 import { AppText } from './AppText';
 import { Button } from './ui/Button';
+import { SegmentedControl } from './ui/SegmentedControl';
 
 /** The clock for lists that change with time (a reminder passes, a row becomes «Пропущено»). */
 export function useMinuteClock(): number {
@@ -86,8 +87,7 @@ export function MissedList({ rows, now }: { rows: MissedRow[]; now: number }) {
             testID={`missed-${row.key}`}
             accessibilityLabel={line}
             style={{
-              borderWidth: 2,
-              borderColor: theme.colors.danger,
+              backgroundColor: theme.colors.dangerTint,
               borderRadius: theme.radius.lg,
               padding: theme.space[3],
               gap: theme.space[2],
@@ -101,6 +101,7 @@ export function MissedList({ rows, now }: { rows: MissedRow[]; now: number }) {
                 testID={`missed-done-${row.key}`}
                 label={t('missed.done')}
                 accessibilityLabel={t('missed.done_a11y', { title: row.title })}
+                size="small"
                 style={theme.largeFont ? undefined : { flex: 1 }}
                 onPress={() => void done(row)}
               />
@@ -108,7 +109,7 @@ export function MissedList({ rows, now }: { rows: MissedRow[]; now: number }) {
                 testID={`missed-move-${row.key}`}
                 label={t('missed.move')}
                 accessibilityLabel={t('missed.move_a11y', { title: row.title })}
-                variant="secondary"
+                variant="text"
                 style={theme.largeFont ? undefined : { flex: 1 }}
                 onPress={() =>
                   router.push({
@@ -194,15 +195,13 @@ export function ReminderRows({
                 flex: 1,
                 minHeight: theme.size.buttonHeight,
                 justifyContent: 'center',
-                borderBottomWidth: 1,
+                borderBottomWidth: StyleSheet.hairlineWidth,
                 borderBottomColor: theme.colors.separator,
                 paddingVertical: theme.space[2],
               }}
             >
-              <AppText
-                color={a.level === 'alarm' ? 'danger' : 'ink'}
-              >{`${a.level === 'alarm' ? '🔔 ' : ''}${time} ${a.title}`}</AppText>
-              <AppText variant="callout">{level}</AppText>
+              <AppText>{a.title}</AppText>
+              <AppText variant="footnote">{`${time} · ${level}`}</AppText>
               {late ? (
                 <AppText variant="callout" color="warning">
                   {t('rem.late_risk')}
@@ -227,58 +226,34 @@ export function ReminderRows({
   );
 }
 
-/** Сегодня · Скоро · Пропущено: three big buttons, the chosen one marked (not only by colour). */
+/**
+ * Сегодня · Скоро · Пропущено — the one `SegmentedControl` (design-system §3; screens.html «Дела»): the count sits
+ * inside the label («Пропущено · 1»); at ≥150 % the segments stack.
+ */
 export function Segments({
   value,
   onChange,
   missedCount,
+  todayCount,
+  soonCount,
 }: {
   value: Segment;
   onChange: (s: Segment) => void;
   missedCount: number;
+  todayCount?: number;
+  soonCount?: number;
 }) {
-  const theme = useTheme();
   const { t } = useTranslation();
-  const items: { key: Segment; label: string }[] = [
-    { key: 'today', label: t('tasks.seg_today') },
-    { key: 'soon', label: t('tasks.seg_soon') },
-    { key: 'missed', label: missedCount > 0 ? t('tasks.seg_missed_n', { n: missedCount }) : t('tasks.seg_missed') },
-  ];
   return (
-    <View
-      accessibilityRole="tablist"
-      style={{ flexDirection: theme.largeFont ? 'column' : 'row', gap: theme.space[2] }}
-    >
-      {items.map((it) => {
-        const on = it.key === value;
-        return (
-          <Pressable
-            key={it.key}
-            testID={`seg-${it.key}`}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: on }}
-            onPress={() => onChange(it.key)}
-            style={{
-              flex: theme.largeFont ? undefined : 1,
-              minHeight: theme.size.minTouch,
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: theme.radius.md,
-              borderWidth: on ? 3 : 1,
-              borderColor: on ? theme.colors.brand : theme.colors.iconSecondary,
-              backgroundColor: on ? theme.colors.surface : 'transparent',
-              paddingHorizontal: theme.space[2],
-            }}
-          >
-            <AppText
-              variant={on ? 'bodyStrong' : 'body'}
-              color={it.key === 'missed' && missedCount > 0 ? 'danger' : 'ink'}
-            >
-              {it.label}
-            </AppText>
-          </Pressable>
-        );
-      })}
-    </View>
+    <SegmentedControl<Segment>
+      testID="tasks-segments"
+      value={value}
+      onChange={onChange}
+      segments={[
+        { key: 'today', testID: 'seg-today', label: t('tasks.seg_today'), count: todayCount || undefined },
+        { key: 'soon', testID: 'seg-soon', label: t('tasks.seg_soon'), count: soonCount || undefined },
+        { key: 'missed', testID: 'seg-missed', label: t('tasks.seg_missed'), count: missedCount > 0 ? missedCount : undefined },
+      ]}
+    />
   );
 }

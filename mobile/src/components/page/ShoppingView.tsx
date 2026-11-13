@@ -1,14 +1,14 @@
 import { useKeepAwake } from 'expo-keep-awake';
-import { ChevronLeft, Minus, Plus, ShoppingCart } from 'lucide-react-native';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Minus, Plus, ShoppingCart } from 'lucide-react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import type { TaskOut } from '@/api/types';
 import type { LocalRecord } from '@/db';
+import { changeTask, clearBought, qtyCount, qtyText, shownTask } from '@/tasks/edit';
 import { changeView } from '@/pages/viewService';
 import { useView } from '@/store/view';
-import { changeTask, clearBought, qtyCount, qtyText, shownTask } from '@/tasks/edit';
 import '@/tasks/actions'; // the undo of a tick (registers `tickUndo`)
 import { listRows, localDate, type ListRow } from '@/tasks/rows';
 import { listsForPage, setDone } from '@/tasks/service';
@@ -16,10 +16,10 @@ import { useTasks } from '@/tasks/store';
 import { useTheme } from '@/theme';
 
 import { AppText } from '../AppText';
-import { Button } from '../ui/Button';
 import type { MenuExtra } from '../RecordMenuSheet';
 import { useMinuteClock } from '../ReminderLists';
 import { TaskRow } from '../TaskRow';
+import { BackButton, Button, Card, Icon, Sheet } from '../ui';
 import { EntryList, type EntryCtx } from './EntryList';
 import { PageEmpty } from './PageEmpty';
 import { fromList, type EntryRow, type Row } from './rows';
@@ -61,10 +61,11 @@ export function byPlace(
 }
 
 /**
- * «Покупки» — the list on the fridge (template-screens 2.4; week 11а, replaces the week 9 list).
- * «Осталось 5 из 8» with a bar, rows by «Где купить», «− 2 +» for «Сколько» (48 pt), «Куплено (3)»
- * grey with «Вернуть» and «Убрать все» (one «Отменить»), and [Я в магазине]. Ticks at once, offline
- * and in «Без ИИ» (week 9 outbox, «Отменить»). ≥150%: the count goes under the name.
+ * «Покупки» — the list on the fridge (notes-tasks-shopping rule 7; template-screens 2.4). «Осталось 5 из 8» with a
+ * bar, rows by «Где купить». A tap anywhere on the row = bought (Bring!); the circle is 24; the amount is text on
+ * the right («2 шт», 15 ink2) and a tap on it opens the sheet with «− 2 +» — no steppers on the rows. Long press:
+ * the shared menu. «Куплено (3)» goes below, grey, with «Вернуть» and «Убрать все» (one «Отменить»), and
+ * [Я в магазине]. Ticks at once, offline and in «Без ИИ» (week 9 outbox, «Отменить»).
  */
 export function ShoppingView({ page, entries, frameTop, ordering }: ViewProps) {
   const theme = useTheme();
@@ -76,6 +77,7 @@ export function ShoppingView({ page, entries, frameTop, ordering }: ViewProps) {
   const shop = useView((st) => st.shopMode === page.id);
   const setShopMode = useView((st) => st.setShopMode);
   const today = localDate(useMinuteClock());
+  const [qtyFor, setQtyFor] = useState<string | null>(null);
 
   // Leaving the page leaves the mode (tabs and the full line come back).
   useEffect(() => () => setShopMode(null), [page.id, setShopMode]);
@@ -88,6 +90,7 @@ export function ShoppingView({ page, entries, frameTop, ordering }: ViewProps) {
   const named = groups.filter((g) => g.where !== null).map((g) => g.where!);
   const total = lr.open.length + lr.done.length;
   const taskByItem = useMemo(() => new Map(tasks.filter((x) => x.item_id).map((x) => [x.item_id!, x])), [tasks]);
+  const qtyTask = qtyFor ? (tasks.find((x) => x.id === qtyFor) ?? null) : null;
 
   const rows = useMemo(() => {
     const out: Row[] = [];
@@ -120,31 +123,35 @@ export function ShoppingView({ page, entries, frameTop, ordering }: ViewProps) {
     ];
   };
 
+  const progress = total > 0 ? (total - lr.open.length) / total : 0;
   const header = (
-    <View style={{ marginBottom: theme.space[3], gap: theme.space[3] }}>
+    <View style={{ marginBottom: theme.space[2], gap: theme.space[3] }}>
       {frameTop}
       {total > 0 ? (
         <View style={{ gap: theme.space[2] }}>
-          <AppText testID="shop-left" variant="title2" accessibilityLiveRegion="polite">
-            {t('shop.left', { left: lr.open.length, total })}
-          </AppText>
+          <View style={[styles.row, { gap: theme.space[2], flexWrap: 'wrap' }]}>
+            <AppText testID="shop-left" variant="headline" accessibilityLiveRegion="polite" style={styles.flex}>
+              {t('shop.left', { left: lr.open.length, total })}
+            </AppText>
+            {lr.open.length > 0 ? (
+              <Button
+                testID="shop-mode"
+                label={t('shop.in_store')}
+                variant="secondary"
+                size="small"
+                icon={<Icon icon={ShoppingCart} size="sm" color="brand" />}
+                onPress={() => setShopMode(page.id)}
+              />
+            ) : null}
+          </View>
           <View
             accessibilityRole="progressbar"
             accessibilityValue={{ min: 0, max: total, now: total - lr.open.length }}
-            style={{ height: 8, borderRadius: 4, backgroundColor: theme.colors.separator, overflow: 'hidden' }}
+            style={{ height: 6, borderRadius: 3, backgroundColor: theme.colors.surfaceSunken, overflow: 'hidden' }}
           >
-            <View style={{ width: `${Math.round(((total - lr.open.length) / total) * 100)}%`, height: 8, backgroundColor: theme.colors.success }} />
+            <View style={{ width: `${Math.round(progress * 100)}%`, height: 6, borderRadius: 3, backgroundColor: theme.colors.brand }} />
           </View>
         </View>
-      ) : null}
-      {lr.open.length > 0 ? (
-        <Button
-          testID="shop-mode"
-          label={t('shop.in_store')}
-          icon={<ShoppingCart size={24} color={theme.colors.onBrand} />}
-          minHeight={theme.size.buttonHeight}
-          onPress={() => setShopMode(page.id)}
-        />
       ) : null}
     </View>
   );
@@ -152,6 +159,7 @@ export function ShoppingView({ page, entries, frameTop, ordering }: ViewProps) {
   const renderEntry = (row: EntryRow, ctx: EntryCtx) => {
     const task = row.task;
     if (!task) return null;
+    const counted = qtyCount(task.qty) !== null && !!task.qty;
     return (
       <View onLayout={ctx.onLayout}>
         <TaskRow
@@ -159,15 +167,11 @@ export function ShoppingView({ page, entries, frameTop, ordering }: ViewProps) {
           done={row.done}
           showReturn
           highlighted={ctx.highlighted}
-          qty={theme.largeFont ? undefined : <QtyStepper task={task} />}
+          qtyLabel={task.qty}
+          onQty={counted ? () => setQtyFor(task.id) : undefined}
           onToggle={() => void setDone(task.id, !row.done)}
           onMenu={ctx.moves?.onMenu}
         />
-        {theme.largeFont && !row.done ? (
-          <View style={{ paddingLeft: 44, paddingBottom: theme.space[2] }}>
-            <QtyStepper task={task} />
-          </View>
-        ) : null}
       </View>
     );
   };
@@ -198,8 +202,8 @@ export function ShoppingView({ page, entries, frameTop, ordering }: ViewProps) {
           label="↑"
           accessibilityLabel={t('shop.group_up_a11y', { name })}
           variant="secondary"
+          size="small"
           disabled={i <= 0}
-          minHeight={theme.size.minTouch}
           onPress={() => moveGroup(name, -1)}
         />
         <Button
@@ -207,8 +211,8 @@ export function ShoppingView({ page, entries, frameTop, ordering }: ViewProps) {
           label="↓"
           accessibilityLabel={t('shop.group_down_a11y', { name })}
           variant="secondary"
+          size="small"
           disabled={i >= named.length - 1}
-          minHeight={theme.size.minTouch}
           onPress={() => moveGroup(name, 1)}
         />
       </View>
@@ -226,29 +230,32 @@ export function ShoppingView({ page, entries, frameTop, ordering }: ViewProps) {
     ) : undefined;
 
   return (
-    <EntryList
-      page={page}
-      rows={rows}
-      header={header}
-      footer={footer}
-      ordering={ordering}
-      renderEntry={renderEntry}
-      menuExtra={menuExtra}
-      groupTitle={groupTitle}
-      renderGroup={renderGroup}
-      empty={entries ? <PageEmpty lines={[t('shop.empty')]} /> : null}
-    />
+    <>
+      <EntryList
+        page={page}
+        rows={rows}
+        header={header}
+        footer={footer}
+        ordering={ordering}
+        renderEntry={renderEntry}
+        menuExtra={menuExtra}
+        groupTitle={groupTitle}
+        renderGroup={renderGroup}
+        empty={entries ? <PageEmpty icon={ShoppingCart} lines={[t('shop.empty')]} /> : null}
+      />
+      {qtyTask ? <QtySheet task={qtyTask} onClose={() => setQtyFor(null)} /> : null}
+    </>
   );
 }
 
-/** «− 2 +»: 48 pt buttons; only for a plain count («1 кг» stays as written). */
-function QtyStepper({ task }: { task: TaskOut }) {
+/** «Сколько»: the one place with «− 2 +» (a plain count; «1 кг» stays as written and has no sheet). */
+function QtySheet({ task, onClose }: { task: TaskOut; onClose: () => void }) {
   const theme = useTheme();
   const { t } = useTranslation();
-  const n = qtyCount(task.qty);
-  if (n === null) return task.qty ? <AppText variant="callout">{task.qty}</AppText> : null;
+  const n = qtyCount(task.qty) ?? 1;
   const set = (m: number) => void changeTask(task.id, { qty: qtyText(m) }, t('shop.qty_set', { title: task.title, n: m }));
-  const btn = (testID: string, label: string, disabled: boolean, onPress: () => void, icon: ReactNode) => (
+  const d = theme.size.buttonHeight;
+  const btn = (testID: string, label: string, disabled: boolean, onPress: () => void, icon: typeof Plus) => (
     <Pressable
       testID={testID}
       accessibilityRole="button"
@@ -256,35 +263,37 @@ function QtyStepper({ task }: { task: TaskOut }) {
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
-      style={{
-        width: theme.size.minTouch,
-        height: theme.size.minTouch,
-        borderRadius: theme.radius.md,
-        borderWidth: 1,
-        borderColor: theme.colors.iconSecondary,
-        alignItems: 'center',
-        justifyContent: 'center',
-        opacity: disabled ? 0.35 : 1,
-      }}
+      style={({ pressed }) => [
+        styles.round,
+        { width: d, height: d, borderRadius: d / 2, backgroundColor: theme.colors.brandTint, opacity: disabled ? 0.4 : pressed ? 0.7 : 1 },
+      ]}
     >
-      {icon}
+      <Icon icon={icon} color="brand" />
     </Pressable>
   );
   return (
-    <View style={[styles.row, { gap: theme.space[1] }]}>
-      {btn(`qty-minus-${task.id}`, t('shop.qty_less_a11y', { title: task.title }), n <= 1, () => set(n - 1), <Minus size={22} color={theme.colors.brand} />)}
-      <AppText testID={`qty-${task.id}`} variant="number" accessibilityLabel={t('shop.qty_a11y', { n })} style={{ minWidth: 28, textAlign: 'center' }}>
-        {String(n)}
-      </AppText>
-      {btn(`qty-plus-${task.id}`, t('shop.qty_more_a11y', { title: task.title }), n >= 999, () => set(n + 1), <Plus size={22} color={theme.colors.brand} />)}
-    </View>
+    <Sheet visible testID="qty-sheet" title={t('shop.qty_title', { title: task.title })} onClose={onClose}>
+      <View style={[styles.row, { justifyContent: 'center', gap: theme.space[6], paddingVertical: theme.space[3] }]}>
+        {btn(`qty-minus-${task.id}`, t('shop.qty_less_a11y', { title: task.title }), n <= 1, () => set(n - 1), Minus)}
+        <AppText
+          testID={`qty-value-${task.id}`}
+          variant="amount"
+          accessibilityLabel={t('shop.qty_a11y', { n })}
+          accessibilityLiveRegion="polite"
+          style={{ minWidth: 56, textAlign: 'center' }}
+        >
+          {String(n)}
+        </AppText>
+        {btn(`qty-plus-${task.id}`, t('shop.qty_more_a11y', { title: task.title }), n >= 999, () => set(n + 1), Plus)}
+      </View>
+    </Sheet>
   );
 }
 
 /**
- * «Я в магазине» (same page, another look): rows of `title1`, ≥72 pt, the whole row is the tick,
- * groups by shop, no frame and no chips, the screen stays on (expo-keep-awake) while it is open,
- * and after 30 minutes without a touch it asks «Ещё в магазине?». No network needed.
+ * «Я в магазине» (notes-tasks-shopping rule 7): no frame, no tabs; big high-contrast rows (64, `title2` semibold
+ * `ink`), the whole row is the tick; groups by shop; the screen stays on (expo-keep-awake); after 30 minutes
+ * without a touch «Ещё в магазине?» comes up at the bottom. No network needed.
  */
 function ShopMode({ open, left, onExit }: { open: { where: string | null; rows: ListRow[] }[]; left: number; onExit: () => void }) {
   useKeepAwake('shop-mode');
@@ -304,48 +313,62 @@ function ShopMode({ open, left, onExit }: { open: { where: string | null; rows: 
   }, []);
 
   return (
-    <View testID="shop-mode-screen" style={{ flex: 1 }} onTouchStart={touched}>
-      <View style={[styles.row, { justifyContent: 'space-between', gap: theme.space[2], paddingVertical: theme.space[2], flexWrap: 'wrap' }]}>
-        <Button
-          testID="shop-exit"
-          label={t('shop.exit')}
-          variant="secondary"
-          icon={<ChevronLeft size={24} color={theme.colors.brand} />}
-          minHeight={theme.size.buttonHeight}
-          onPress={onExit}
-        />
-        <AppText testID="shop-mode-left" variant="largeTitle" accessibilityLiveRegion="polite">
+    <View testID="shop-mode-screen" style={styles.flexCol} onTouchStart={touched}>
+      <View style={{ paddingTop: theme.space[2], gap: theme.space[1] }}>
+        <BackButton testID="shop-exit" label={t('shop.exit')} onPress={onExit} />
+        <AppText testID="shop-mode-left" variant="largeTitle" accessibilityRole="header" accessibilityLiveRegion="polite">
           {t('shop.left_short', { left })}
         </AppText>
       </View>
-      {asking ? (
-        <View testID="shop-still" accessibilityLiveRegion="polite" style={{ gap: theme.space[2], padding: theme.space[3], borderWidth: 2, borderColor: theme.colors.brand, borderRadius: theme.radius.lg, marginBottom: theme.space[3] }}>
-          <AppText variant="title2">{t('shop.still_q')}</AppText>
-          <View style={{ flexDirection: theme.largeFont ? 'column' : 'row', gap: theme.space[2] }}>
-            <Button testID="shop-still-yes" label={t('shop.still_yes')} style={theme.largeFont ? undefined : styles.flex} onPress={() => { setAsking(false); touched(); }} />
-            <Button testID="shop-still-exit" label={t('shop.exit')} variant="secondary" style={theme.largeFont ? undefined : styles.flex} onPress={onExit} />
-          </View>
-        </View>
-      ) : null}
       <ScrollView contentContainerStyle={{ paddingBottom: theme.space[6] }}>
         {left === 0 ? (
-          <AppText testID="shop-all-done" variant="largeTitle">
+          <AppText testID="shop-all-done" variant="title1" style={{ paddingTop: theme.space[6] }}>
             {t('shop.all_done')}
           </AppText>
         ) : null}
         {open.map((g) => (
-          <View key={g.where ?? '-'}>
+          <View key={g.where ?? '-'} style={{ marginTop: theme.space[3] }}>
             {g.where ? (
-              <AppText variant="sectionLabel" accessibilityRole="header" style={{ paddingTop: theme.space[3] }}>
+              <AppText variant="headline" accessibilityRole="header" style={{ paddingBottom: theme.space[1] }}>
                 {g.where}
               </AppText>
             ) : null}
-            {g.rows.map((r) =>
-              r.task ? <TaskRow key={r.task.id} task={r.task} done={r.done} big onToggle={() => void setDone(r.task!.id, !r.done)} /> : null,
-            )}
+            <Card padded={false} style={{ paddingHorizontal: theme.space[2] }}>
+              {g.rows.map((r, i) =>
+                r.task ? (
+                  <TaskRow
+                    key={r.task.id}
+                    task={r.task}
+                    done={r.done}
+                    big
+                    separator={i < g.rows.length - 1}
+                    onToggle={() => void setDone(r.task!.id, !r.done)}
+                  />
+                ) : null,
+              )}
+            </Card>
           </View>
         ))}
       </ScrollView>
+      {asking ? (
+        <Card testID="shop-still" tone="raised" style={[{ gap: theme.space[3], marginBottom: theme.space[3] }, theme.elevation.floating]}>
+          <AppText variant="headline" accessibilityLiveRegion="polite">
+            {t('shop.still_q')}
+          </AppText>
+          <View style={{ flexDirection: theme.largeFont ? 'column' : 'row', gap: theme.space[2] }}>
+            <Button
+              testID="shop-still-yes"
+              label={t('shop.still_yes')}
+              style={theme.largeFont ? undefined : styles.flex}
+              onPress={() => {
+                setAsking(false);
+                touched();
+              }}
+            />
+            <Button testID="shop-still-exit" label={t('shop.exit')} variant="secondary" style={theme.largeFont ? undefined : styles.flex} onPress={onExit} />
+          </View>
+        </Card>
+      ) : null}
     </View>
   );
 }
@@ -353,4 +376,6 @@ function ShopMode({ open, left, onExit }: { open: { where: string | null; rows: 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
   flex: { flex: 1 },
+  flexCol: { flex: 1 },
+  round: { alignItems: 'center', justifyContent: 'center' },
 });

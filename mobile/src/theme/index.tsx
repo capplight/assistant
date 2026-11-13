@@ -1,6 +1,9 @@
 import { useMemo } from 'react';
 import { useColorScheme, useWindowDimensions } from 'react-native';
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+
+import { persistStorage } from '@/store/storage';
 
 import { darkColors, darkNoteColors, lightColors, lightNoteColors, type ColorTokens, type NoteColorKey } from './colors';
 import { elevation, icon, motion, radius, size, space, type Elevation } from './layout';
@@ -15,14 +18,16 @@ export * from './typography';
 export type Scheme = 'light' | 'dark';
 export type SchemePreference = 'system' | Scheme;
 
-/**
- * «Как в телефоне» by default. The override is for the future Settings switch (S23) and for tests;
- * not persisted yet (no setting screen offers it).
- */
-export const useSchemePreference = create<{ preference: SchemePreference; set: (p: SchemePreference) => void }>((set) => ({
-  preference: 'system',
-  set: (preference) => set({ preference }),
-}));
+/** «Как в телефоне» by default; «Настройки → Тема» overrides it (kept on the phone). */
+export const useSchemePreference = create<{ preference: SchemePreference; set: (p: SchemePreference) => void }>()(
+  persist(
+    (set) => ({
+      preference: 'system',
+      set: (preference) => set({ preference }),
+    }),
+    { name: 'theme.v1', storage: persistStorage, partialize: (s) => ({ preference: s.preference }) },
+  ),
+);
 
 export type Theme = {
   scheme: Scheme;

@@ -3,12 +3,12 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import type { Key } from '@/expenses/expression';
-import { useTheme } from '@/theme';
+import { pressScale, useTheme } from '@/theme';
 
 import { AppText } from '../AppText';
 
-/** Keys are 64 pt with ≥8 pt between (template-screens 5); their labels grow to 1.5× at most. */
-export const KEY_SIZE = 64;
+/** Keys are 56 pt with 8 pt between (research/expenses-documents.md, pattern 3); labels grow to 1.5× at most. */
+export const KEY_SIZE = 56;
 const KEY_LABEL_SCALE = 1.5;
 
 const ROWS: (Key | 'save')[][] = [
@@ -21,8 +21,8 @@ const ROWS: (Key | 'save')[][] = [
 const KEY_ID: Record<string, string> = { '⌫': 'erase', '+': 'plus', '−': 'minus', ',': 'comma', '000': '000' };
 
 /**
- * The calculator keys of «Расходы» (template-screens 2.2): a 4×4 grid that stays a grid at 200%
- * (the keys are 64 pt already), «Записать» is the one accent button. Each key has a spoken name.
+ * The calculator keys of «Расходы» (pattern 3): a flat 4×4 grid of tonal keys, no borders, digits 28, «+ −» in
+ * `brand`, «Записать» filled `brand`. Stays a grid at 200% (labels capped at 1.5×). Each key has a spoken name.
  */
 export function ExpenseKeypad({
   onKey,
@@ -60,8 +60,8 @@ export function ExpenseKeypad({
                     {
                       minHeight: KEY_SIZE,
                       borderRadius: theme.radius.md,
-                      backgroundColor: theme.colors.brand,
-                      opacity: !canSave ? 0.45 : pressed ? 0.85 : 1,
+                      backgroundColor: pressed && canSave ? theme.colors.brandPressed : theme.colors.brand,
+                      opacity: !canSave ? 0.4 : 1,
                     },
                   ]}
                 >
@@ -84,20 +84,19 @@ export function ExpenseKeypad({
                   {
                     minHeight: KEY_SIZE,
                     borderRadius: theme.radius.md,
-                    borderWidth: op ? 2 : 1,
-                    borderColor: op ? theme.colors.brand : theme.colors.iconSecondary,
-                    backgroundColor: pressed ? theme.colors.separator : theme.colors.surface,
+                    backgroundColor: pressed ? theme.colors.separator : op ? theme.colors.brandTint : theme.colors.surfaceSunken,
+                    transform: pressed ? [{ scale: pressScale }] : undefined,
                   },
                 ]}
               >
                 {k === '⌫' ? (
-                  <Delete size={28} color={theme.colors.ink} />
+                  <Delete size={26} color={theme.colors.ink} strokeWidth={1.75} />
                 ) : (
                   <AppText
                     variant="title2"
                     color={op ? 'brand' : 'ink'}
                     maxFontSizeMultiplier={KEY_LABEL_SCALE}
-                    style={[styles.center, { fontVariant: ['tabular-nums'] }]}
+                    style={[styles.center, styles.digit]}
                   >
                     {k}
                   </AppText>
@@ -115,4 +114,5 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row' },
   key: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   center: { textAlign: 'center' },
+  digit: { fontSize: 28, lineHeight: 34, fontVariant: ['tabular-nums'] },
 });

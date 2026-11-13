@@ -1,57 +1,53 @@
 import { router, useFocusEffect } from 'expo-router';
-import { ChevronRight } from 'lucide-react-native';
 import { useCallback, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
+import { useShallow } from 'zustand/react/shallow';
 
-import type { ActionOut, SuggestionOut } from '@/api/types';
+import { dayOffset, dayText, timeText } from '@/alarms/format';
+import { upcoming } from '@/alarms/plan';
+import { act } from '@/alarms/service';
+import { useAlarms } from '@/alarms/store';
+import type { SuggestionOut } from '@/api/types';
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/ui/Button';
 import { PendingAnswerCard } from '@/components/PendingAnswerCard';
 import { AlarmRiskBanner } from '@/components/ReminderCards';
-import { MissedList, ReminderRows, useMinuteClock, useMissed } from '@/components/ReminderLists';
+import { useMinuteClock, useMissed } from '@/components/ReminderLists';
 import { Screen } from '@/components/Screen';
-import { TaskRow } from '@/components/TaskRow';
-import { NextCard, PageTiles, TodayHeader, type NextItem } from '@/components/TodaySheet';
-import { selectSortedPages, usePages } from '@/store/pages';
-import { todayTiles } from '@/today/tiles';
+import { DayCard, NextCard, PageTiles, SectionLabel, ShoppingLine, TodayHeader, TodayRow, type NextItem } from '@/components/TodaySheet';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
 import { useExpenses } from '@/expenses/store';
-import { act } from '@/alarms/service';
+import { useFeatures } from '@/store/features';
 import { selectNoAi, useOnboarding } from '@/store/onboarding';
-import { undoServerAction } from '@/tasks/actions';
+import { selectSortedPages, usePages } from '@/store/pages';
 import { localDate } from '@/tasks/rows';
 import { doneAt, isDone, liveTasks, pageForList, setDone } from '@/tasks/service';
 import { useTasks } from '@/tasks/store';
+import { markMissedDone } from '@/today/missed';
 import { canSayYes, refreshToday, sayNo, sayYes, useToday, visibleSuggestions } from '@/today/service';
-import { useToast } from '@/store/toast';
+import { todayTiles } from '@/today/tiles';
 import { useTheme } from '@/theme';
-import { useShallow } from 'zustand/react/shallow';
-import { upcoming } from '@/alarms/plan';
-import { useAlarms } from '@/alarms/store';
 
 const DAY = 86_400_000;
-const DEFAULT_SECTIONS = ['banner', 'missed', 'today', 'tiles', 'done_for_you', 'proposals', 'tip'];
-/** The server may name the tiles section either way (today.md week 16). */
-const SECTION_ALIAS: Record<string, string> = { page_tiles: 'tiles' };
 
 /**
- * S06 «Сегодня» — system page, always first, cannot be removed (R-49); «за 3 с понять, что важно».
- * Week 9 (docs/api/today.md): missed reminders as red rows [Сделано] [Перенести], today's alarms
- * and to-dos with boxes, «Покупки: хлеб, молоко (3)», «Я сделал за вас» with «Отменить» and
- * «Что я сделал ›» (S20), ≤2 proposals and ≤1 tip with [Да] / [Не сейчас].
- * Built from what the phone holds, so it works offline and in «Без ИИ»; `GET /today` (when the tab
- * is shown) adds suggestions, the order of the sections and the greeting.
- * Week 16 — the tear-off sheet (template-screens 2.7): the day's number large, «Дальше» as the
- * first card (the nearest ring or to-do, [Сделано] [Отложить на 10 минут]), ≤2 tiles of other
- * pages (`page_tiles`, by the server's rule; offline the phone counts «Покупки» and «Расходы»),
- * «Сегодня свободно…» when there is nothing. «Без ИИ»: no proposals.
+ * S06 «Сегодня» (design-system §4 mock, ux-audit P0-3): three blocks only —
+ * 1. «Дальше»: the nearest ring today, else the first open to-do (the one sun card, [Сделано] [Отложить]);
+ * 2. «На сегодня»: one flat list — missed rings (time in red, the circle = a late «Сделано», the row = «Перенести»),
+ *    today's rings and to-dos with a circle, «Купить: молоко и ещё 3» in one line;
+ * 3. one tip in the first week (`today.tips_days` / `tips_per_day`, Ф-42).
+ * Page tiles only with `today.tiles`, proposals only with `today.proposals` (both off for the beta). The alarm risk
+ * is a narrow line, only once a ring exists. «Я сделал за вас» and «Новое напоминание» moved off the first screen
+ * («Ещё → Что я сделал», the line and «+»). Built from what the phone holds (offline, «Без ИИ»); `GET /today` adds
+ * suggestions and its reminders / tasks.
  */
 export default function TodayScreen() {
   const theme = useTheme();
   const { t } = useTranslation();
-  const name = useOnboarding((s) => s.displayName);
   const noAi = useOnboarding(selectNoAi);
   const startedAt = useOnboarding((s) => s.openedAt ?? s.doneAt);
+  const features = useFeatures((f) => f.today);
   const pages = usePages(useShallow(selectSortedPages));
   const expenseEntries = useExpenses((s) => s.entries);
   const now = useMinuteClock();
@@ -60,7 +56,6 @@ export default function TodayScreen() {
   const answered = useToday((s) => s.answered);
   const tasks = useTasks((s) => s.tasks);
   const ticks = useTasks((s) => s.ticks);
-  const actions = useTasks((s) => s.actions);
   const alarmSrc = useAlarms(useShallow((s) => ({ reminders: s.reminders, fires: s.fires, local: s.local, deviceId: s.deviceId })));
 
   useFocusEffect(
@@ -80,9 +75,7 @@ export default function TodayScreen() {
     .slice(0, 20);
   const toBuy = liveTasks(tasks, 'shopping').filter((x) => !isDone(x, ticks));
   const shopPage = pageForList('shopping');
-  const eod = dayStart + DAY;
-  const rings = upcoming({ ...alarmSrc, now }, eod - now);
-  const hasReminders = rings.length > 0;
+  const rings = upcoming({ ...alarmSrc, now }, dayStart + DAY - now);
 
   // «Дальше»: the nearest ring today, else the first open to-do of today.
   const firstRing = rings[0];
@@ -92,120 +85,88 @@ export default function TodayScreen() {
     : firstTodo
       ? { kind: 'task', key: firstTodo.id, title: firstTodo.title, at: null }
       : null;
+  const listRings = rings.filter((r) => !(next?.kind === 'reminder' && r.group === next.key));
   const listTodos = next?.kind === 'task' ? todos.filter((x) => x.id !== next.key) : todos;
 
-  const tiles = todayTiles({
-    pages,
-    startedAt,
-    now,
-    today,
-    server: last ? last.page_tiles : null,
-    toBuy,
-    expenses: Object.values(expenseEntries),
-    t,
-  });
+  const tiles = features.tiles
+    ? todayTiles({ pages, startedAt, now, today, server: last ? last.page_tiles : null, toBuy, expenses: Object.values(expenseEntries), t })
+    : [];
 
-  // «Я сделал за вас»: the assistant's own actions of the last 24 h, not undone, newest 3.
-  const mine = Object.values(actions)
-    .filter((a) => a.initiated_by === 'agent' && !a.undone_at && !a.undo_of && a.created_at && Date.parse(a.created_at) > now - DAY)
-    .sort((a, b) => Date.parse(b.created_at ?? '') - Date.parse(a.created_at ?? ''));
   const shown = visibleSuggestions(last, answered);
-  const proposals = noAi ? [] : shown.proposals;
-  const tip = noAi ? null : shown.tip;
+  const proposals = noAi || !features.proposals ? [] : shown.proposals;
+  const ageDays = startedAt ? (now - Date.parse(startedAt)) / DAY : 0;
+  const tipAllowed = !noAi && features.tips_per_day > 0 && (features.tips_days === 0 || ageDays < features.tips_days);
+  const tip = tipAllowed ? shown.tip : null;
 
-  const greeting = name ? t('today.hello_name', { name }) : t('today.hello');
-  const order = (last?.sections.length ? last.sections : DEFAULT_SECTIONS)
-    .map((x) => SECTION_ALIAS[x] ?? x)
-    .filter((x) => DEFAULT_SECTIONS.includes(x));
-  for (const x of DEFAULT_SECTIONS) if (!order.includes(x)) order.push(x);
-
-  const sections: Record<string, ReactNode> = {
-    banner: <PendingAnswerCard key="banner" />,
-    missed:
-      missed.length > 0 ? (
-        <View key="missed">
-          <AppText variant="sectionLabel" accessibilityRole="header" color="danger" style={{ marginBottom: theme.space[3] }}>
-            {t('missed.section')}
-          </AppText>
-          <MissedList rows={missed} now={now} />
-        </View>
-      ) : null,
-    today: (
-      <View key="today" style={{ marginBottom: theme.space[6] }}>
-        <AppText variant="sectionLabel" accessibilityRole="header" style={{ marginBottom: theme.space[3] }}>
-          {t('today.today')}
-        </AppText>
-        <View
-          style={{
-            backgroundColor: theme.colors.surface,
-            borderColor: theme.colors.separator,
-            borderWidth: 1,
-            borderRadius: theme.radius.lg,
-            paddingHorizontal: theme.space[4],
-            paddingVertical: theme.space[2],
-          }}
-        >
-          <ReminderRows segment="today" now={now} testPrefix="upcoming" skip={next?.kind === 'reminder' ? next.key : null} />
-          {listTodos.map((x) => (
-            <TaskRow key={x.id} task={x} done={isDone(x, ticks)} onToggle={() => void setDone(x.id, !isDone(x, ticks))} />
-          ))}
-          {toBuy.length > 0 ? (
-            <Pressable
-              testID="today-shopping"
-              accessibilityRole="button"
-              accessibilityHint={shopPage ? t('today.shopping_hint') : undefined}
-              onPress={shopPage ? () => router.navigate({ pathname: '/page/[id]', params: { id: shopPage.id } }) : undefined}
-              style={[styles.row, { minHeight: theme.size.buttonHeight, gap: theme.space[2] }]}
-            >
-              <AppText style={styles.flex}>
-                {t('today.shopping', { titles: toBuy.slice(0, 5).map((x) => x.title).join(', '), n: toBuy.length })}
-              </AppText>
-              {shopPage ? <ChevronRight size={22} color={theme.colors.ink2} /> : null}
-            </Pressable>
-          ) : null}
-          {!hasReminders && todos.length === 0 && toBuy.length === 0 ? (
-            <AppText testID="today-empty" style={{ paddingVertical: theme.space[2] }}>
-              {last?.empty && last.example ? t('today.free_example', { example: last.example }) : t('today.free')}
-            </AppText>
-          ) : next && rings.length - (next.kind === 'reminder' ? 1 : 0) === 0 && listTodos.length === 0 && toBuy.length === 0 ? (
-            <AppText testID="today-rest-empty" variant="callout" style={{ paddingVertical: theme.space[2] }}>
-              {t('today.nothing_else')}
-            </AppText>
-          ) : null}
-        </View>
-        <Button
-          testID="today-new-reminder"
-          label={t('today.new_reminder')}
-          variant="secondary"
-          style={{ marginTop: theme.space[3] }}
-          onPress={() => router.push('/reminder-new')}
+  // The flat list of the day.
+  const rows: { key: string; node: (separator: boolean) => ReactNode }[] = [];
+  for (const row of missed) {
+    const when = dayOffset(row.at, now) === 0 ? timeText(row.at) : `${dayText(row.at, now)}, ${timeText(row.at)}`;
+    rows.push({
+      key: `m-${row.key}`,
+      node: (sep) => (
+        <TodayRow
+          key={`m-${row.key}`}
+          testID={`missed-${row.key}`}
+          checkTestID={`missed-done-${row.key}`}
+          title={row.title}
+          time={when}
+          overdue
+          done={false}
+          label={t('missed.row', { time: when, title: row.title })}
+          onToggle={() => void markMissedDone(row, t)}
+          onPress={() => router.push({ pathname: '/reminder-new', params: { text: row.title, missedKey: row.key, editId: row.reminderId } })}
+          separator={sep}
         />
-      </View>
-    ),
-    tiles: <PageTiles key="tiles" tiles={tiles} />,
-    done_for_you: <DoneForYou key="done_for_you" list={mine.slice(0, 3)} />,
-    proposals:
-      proposals.length > 0 ? (
-        <View key="proposals" style={{ marginBottom: theme.space[6], gap: theme.space[3] }}>
-          <AppText variant="sectionLabel" accessibilityRole="header">
-            {t('today.suggest')}
-          </AppText>
-          {proposals.map((s) => (
-            <SuggestionCard key={s.id} s={s} />
-          ))}
-        </View>
-      ) : null,
-    tip: tip ? (
-      <View key="tip" style={{ marginBottom: theme.space[6] }}>
-        <SuggestionCard s={tip} />
-      </View>
-    ) : null,
-  };
+      ),
+    });
+  }
+  for (const r of listRings) {
+    rows.push({
+      key: `r-${r.group}`,
+      node: (sep) => (
+        <TodayRow
+          key={`r-${r.group}`}
+          testID={`upcoming-${r.group}`}
+          checkTestID={`upcoming-done-${r.group}`}
+          title={r.title}
+          time={timeText(r.fireAt)}
+          done={false}
+          label={`${r.level === 'alarm' ? t('alarm.level_alarm') : t('alarm.level_notification')}. ${timeText(r.fireAt)}. ${r.title}`}
+          onToggle={() => void act(r.group, 'done')}
+          separator={sep}
+        />
+      ),
+    });
+  }
+  for (const x of listTodos) {
+    const overdue = !!x.due_date && x.due_date < today;
+    rows.push({
+      key: `t-${x.id}`,
+      node: (sep) => (
+        <TodayRow
+          key={`t-${x.id}`}
+          testID={`task-${x.id}`}
+          checkTestID={`task-check-${x.id}`}
+          title={x.title}
+          time={overdue ? t('today.overdue') : undefined}
+          overdue={overdue}
+          done={isDone(x, ticks)}
+          onToggle={() => void setDone(x.id, !isDone(x, ticks))}
+          separator={sep}
+        />
+      ),
+    });
+  }
+  const openTotal = missed.length + listRings.length + listTodos.length + (next ? 1 : 0);
+  const doneCount = listTodos.filter((x) => isDone(x, ticks)).length;
+  const nothing = !next && rows.length === 0 && toBuy.length === 0;
 
   return (
     <Screen testID="page-today" edges={['top']}>
+      <TodayHeader now={now} />
+      <PendingAnswerCard />
       <AlarmRiskBanner />
-      <TodayHeader now={now} greeting={greeting} />
       {next ? (
         <NextCard
           next={next}
@@ -214,65 +175,46 @@ export default function TodayScreen() {
           onSnooze={next.kind === 'reminder' ? () => void act(next.key, 'snooze', 10) : undefined}
         />
       ) : null}
-      {order.map((k) => sections[k] ?? null)}
-    </Screen>
-  );
-}
-
-/** «Я сделал за вас»: what the assistant did by itself today, each with «Отменить»; then S20. */
-function DoneForYou({ list }: { list: ActionOut[] }) {
-  const theme = useTheme();
-  const { t, i18n } = useTranslation();
-  const showToast = useToast((s) => s.show);
-  return (
-    <View style={{ marginBottom: theme.space[6] }}>
-      {list.length > 0 ? (
-        <>
-          <AppText variant="sectionLabel" accessibilityRole="header" style={{ marginBottom: theme.space[3] }}>
-            {t('today.did')}
-          </AppText>
-          {list.map((a) => {
-            const text = (i18n.language === 'kk' && a.summary.kk) || a.summary.ru;
-            return (
-              <View
-                key={a.id}
-                testID={`did-today-${a.id}`}
-                style={[styles.row, { gap: theme.space[2], borderBottomColor: theme.colors.separator, borderBottomWidth: 1, minHeight: theme.size.buttonHeight }]}
-              >
-                <AppText style={styles.flex}>{text}</AppText>
-                {a.undoable ? (
-                  <Button
-                    testID={`did-today-undo-${a.id}`}
-                    label={t('common.undo')}
-                    accessibilityLabel={t('did.undo_a11y', { what: text })}
-                    variant="text"
-                    minHeight={theme.size.minTouch}
-                    onPress={() =>
-                      void undoServerAction(a.id).then((r) => {
-                        if (r.result === 'expired') showToast(t('changes.expired'), 4000);
-                        else if (r.result === 'failed') showToast(t('errors.generic'), 4000);
-                        else showToast(r.message ?? t('common.undone'), 3000);
-                      })
-                    }
-                  />
-                ) : null}
-              </View>
-            );
-          })}
-        </>
-      ) : null}
-      <Pressable
-        testID="today-did-all"
-        accessibilityRole="button"
-        onPress={() => router.push('/did')}
-        style={[styles.row, { minHeight: theme.size.buttonHeight, gap: theme.space[2] }]}
-      >
-        <AppText color="brand" style={styles.flex}>
-          {t('more.did')}
+      {nothing ? (
+        <Card testID="today-empty" style={{ marginTop: theme.space[2] }}>
+          <AppText color="ink2">{last?.empty && last.example ? t('today.free_example', { example: last.example }) : t('today.free')}</AppText>
+        </Card>
+      ) : rows.length > 0 || toBuy.length > 0 ? (
+        <View testID="today-list">
+          <SectionLabel title={t('today.for_today')} value={doneCount > 0 ? t('today.done_of', { done: doneCount, total: openTotal }) : undefined} />
+          <DayCard>
+            {rows.map((r, i) => r.node(i < rows.length - 1 || toBuy.length > 0))}
+            {toBuy.length > 0 ? (
+              <ShoppingLine
+                titles={toBuy.map((x) => x.title)}
+                hint={shopPage ? t('today.shopping_hint') : undefined}
+                onPress={shopPage ? () => router.navigate({ pathname: '/page/[id]', params: { id: shopPage.id } }) : undefined}
+              />
+            ) : null}
+          </DayCard>
+        </View>
+      ) : (
+        <AppText testID="today-rest-empty" variant="callout" style={{ marginTop: theme.space[3], paddingHorizontal: theme.space[1] }}>
+          {t('today.nothing_else')}
         </AppText>
-        <ChevronRight size={22} color={theme.colors.brand} />
-      </Pressable>
-    </View>
+      )}
+      <PageTiles tiles={tiles} />
+      {proposals.length > 0 ? (
+        <View testID="today-proposals">
+          <SectionLabel title={t('today.suggest')} />
+          <View style={{ gap: theme.space[2] }}>
+            {proposals.map((s) => (
+              <SuggestionCard key={s.id} s={s} />
+            ))}
+          </View>
+        </View>
+      ) : null}
+      {tip ? (
+        <View style={{ marginTop: theme.space[4] }}>
+          <SuggestionCard s={tip} />
+        </View>
+      ) : null}
+    </Screen>
   );
 }
 
@@ -282,40 +224,14 @@ function SuggestionCard({ s }: { s: SuggestionOut }) {
   const { t } = useTranslation();
   const yes = canSayYes(s);
   return (
-    <View
-      testID={`suggestion-${s.id}`}
-      style={{
-        borderWidth: 1,
-        borderColor: theme.colors.separator,
-        borderRadius: theme.radius.lg,
-        backgroundColor: theme.colors.surface,
-        padding: theme.space[4],
-        gap: theme.space[3],
-      }}
-    >
+    <Card testID={`suggestion-${s.id}`} style={{ gap: theme.space[3] }}>
       <AppText>{s.text_ru}</AppText>
-      <View style={{ flexDirection: theme.largeFont ? 'column' : 'row', gap: theme.space[2] }}>
+      <View style={{ flexDirection: theme.largeFont ? 'column' : 'row', flexWrap: 'wrap', gap: theme.space[2] }}>
         {yes ? (
-          <Button
-            testID={`suggestion-yes-${s.id}`}
-            label={s.yes_label ?? t('common.yes')}
-            style={theme.largeFont ? undefined : { flex: 1 }}
-            onPress={() => void sayYes(s)}
-          />
+          <Button testID={`suggestion-yes-${s.id}`} size="small" variant="secondary" label={s.yes_label ?? t('common.yes')} onPress={() => void sayYes(s)} />
         ) : null}
-        <Button
-          testID={`suggestion-no-${s.id}`}
-          label={s.no_label ?? t('common.not_now')}
-          variant="secondary"
-          style={theme.largeFont ? undefined : { flex: 1 }}
-          onPress={() => void sayNo(s)}
-        />
+        <Button testID={`suggestion-no-${s.id}`} size="small" variant="text" label={s.no_label ?? t('common.not_now')} onPress={() => void sayNo(s)} />
       </View>
-    </View>
+    </Card>
   );
 }
-
-const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  row: { flexDirection: 'row', alignItems: 'center' },
-});

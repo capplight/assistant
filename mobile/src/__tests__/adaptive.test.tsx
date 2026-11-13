@@ -37,3 +37,24 @@ describe.each(['/', 'notes'] as const)('%s', (route) => {
     expect(screen.getByTestId('context-chip')).toBeTruthy();
   });
 });
+
+/**
+ * The restyled screens of week 19 (Ф-34, Ф-41): «Ещё», «Настройки», the policy texts, «Переписка» and the welcome
+ * screen at the same matrix — structural audit, content ≤600 where the screen has its own column.
+ */
+describe.each([
+  ['/more', false],
+  ['/settings', false],
+  ['/legal?doc=policy', false],
+  ['/chat', false],
+  ['/welcome', true],
+] as const)('%s', (url, first) => {
+  it.each(AUDIT_MATRIX.map((w) => [`${w.width} @ ${w.fontScale}`, w] as const))('%s', async (_n, w) => {
+    setWindow(w);
+    resetApp();
+    if (!first) finishOnboarding('full');
+    await renderRouter(APP_DIR, { initialUrl: url });
+    for (let i = 0; i < 5; i++) await act(async () => void (await jest.advanceTimersByTimeAsync(40)));
+    expect(auditLayout(screen.toJSON(), { windowWidth: w.width })).toEqual([]);
+  });
+});

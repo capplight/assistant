@@ -8,6 +8,8 @@ import { unverifiedCount } from '@/records/review';
 import { useTheme } from '@/theme';
 
 import { AppText } from './AppText';
+import { Icon } from './ui/Icon';
+import { pressedStyle } from './ui/motion';
 
 /** Week 7 controls of a row on a page (F-41): every gesture also has a visible button. */
 export type RowMoves = {
@@ -83,11 +85,11 @@ export function RecordRow({
         styles.card,
         {
           backgroundColor: highlighted ? theme.colors.highlightTint : theme.colors.surface,
-          borderColor: lifted ? theme.colors.brand : theme.colors.separator,
           borderRadius: theme.radius.lg,
-          marginBottom: theme.space[3],
+          marginBottom: theme.space[2],
         },
-        lifted ? [theme.elevation.floating, { transform: [{ scale: 1.02 }] }] : null,
+        // design-system §3 Card: `surface` + the card shadow, no border; lifted = the floating shadow.
+        lifted ? [theme.elevation.floating, { transform: [{ scale: 1.02 }] }] : theme.elevation.card,
       ]}
     >
       <Pressable
@@ -105,19 +107,20 @@ export function RecordRow({
           {
             backgroundColor: highlighted ? theme.colors.highlightTint : theme.colors.surface,
             borderRadius: theme.radius.lg,
-            padding: theme.space[4],
+            paddingVertical: theme.space[3],
+            paddingHorizontal: theme.space[4],
             paddingRight: moves ? theme.space[1] : theme.space[4],
-            minHeight: theme.size.buttonHeight,
-            gap: theme.space[1],
-            opacity: pressed ? 0.85 : 1,
+            minHeight: theme.size.rowHeightMeta,
+            gap: 2,
           },
+          pressedStyle(pressed),
         ]}
       >
         <AppText numberOfLines={3}>{title}</AppText>
         {snippet && snippet !== title ? <AppText variant="callout">{snippet}</AppText> : null}
-        <AppText variant="callout">{source}</AppText>
-        {status ? <AppText variant="callout">{status}</AppText> : null}
-        {record.aiGenerated ? <AppText variant="callout">{t('ai.label_short')}</AppText> : null}
+        <AppText variant="footnote">{source}</AppText>
+        {status ? <AppText variant="footnote">{status}</AppText> : null}
+        {record.aiGenerated ? <AppText variant="footnote">{t('ai.label_short')}</AppText> : null}
         {toCheck ? (
           <View
             testID={`record-check-${record.id}`}
@@ -146,7 +149,7 @@ export function RecordRow({
             hitSlop={4}
             style={square}
           >
-            <Ellipsis size={24} color={theme.colors.brand} />
+            <Icon icon={Ellipsis} size="sm" color="iconSecondary" />
           </Pressable>
           {moves.showArrows ? (
             <>
@@ -159,7 +162,7 @@ export function RecordRow({
                 onPress={moves.onUp}
                 style={[square, { opacity: moves.onUp ? 1 : 0.35 }]}
               >
-                <ArrowUp size={24} color={theme.colors.brand} />
+                <Icon icon={ArrowUp} color="brand" />
               </Pressable>
               <Pressable
                 testID={`record-down-${record.id}`}
@@ -170,7 +173,7 @@ export function RecordRow({
                 onPress={moves.onDown}
                 style={[square, { opacity: moves.onDown ? 1 : 0.35 }]}
               >
-                <ArrowDown size={24} color={theme.colors.brand} />
+                <Icon icon={ArrowDown} color="brand" />
               </Pressable>
             </>
           ) : null}
@@ -181,7 +184,7 @@ export function RecordRow({
 }
 
 const styles = StyleSheet.create({
-  card: { borderWidth: 1, flexDirection: 'row' },
+  card: { flexDirection: 'row' },
   content: { flex: 1 },
   side: { alignItems: 'center' },
   badge: { alignSelf: 'flex-start' },

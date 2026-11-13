@@ -162,9 +162,9 @@ describe('«Сегодня» — the tear-off sheet', () => {
     finishOnboarding();
   });
 
-  it('the day on the sheet, «Сегодня свободно…» when nothing', async () => {
+  it('the date above «Сегодня», «Сегодня свободно…» when nothing', async () => {
     await renderRouter(APP_DIR, { initialUrl: '/' });
-    expect(screen.getByTestId('today-sheet')).toHaveTextContent(new RegExp(`^${new Date().getDate()}[^0-9]`));
+    expect(screen.getByTestId('today-header')).toHaveTextContent(new RegExp(`${new Date().getDate()}`));
     expect(screen.getByTestId('today-empty')).toHaveTextContent('Сегодня свободно. Скажите: «Напомни в пятницу оплатить свет»');
     expect(screen.queryByTestId('today-next')).toBeNull();
   });
@@ -278,7 +278,8 @@ describe('«Скачать мои данные»', () => {
     const shared: string[] = [];
     setSharePortForTests({ download: async () => '', share: async () => undefined, shareLink: async (url) => void shared.push(url) });
     await renderRouter(APP_DIR, { initialUrl: '/more' });
-    await fireEvent.press(screen.getByTestId('more-my_data'));
+    await fireEvent.press(screen.getByTestId('more-settings'));
+    await fireEvent.press(screen.getByTestId('settings-my_data'));
     await fireEvent.press(screen.getByTestId('export-start'));
     await settle(() => useAccount.getState().exportJob?.status === 'queued');
     expect(screen.getByTestId('export-status')).toHaveTextContent('Готовлю архив…');
@@ -306,7 +307,8 @@ describe('account deletion', () => {
     fileWipes.count = 0;
     await testRecords.insertLocal({ id: 'r1', kind: 'note', source: 'typed', text: 'Код 4512', occurredAt: Date.now() } as never);
     const r = await renderRouter(APP_DIR, { initialUrl: '/more' });
-    await fireEvent.press(screen.getByTestId('more-delete_account'));
+    await fireEvent.press(screen.getByTestId('more-settings'));
+    await fireEvent.press(screen.getByTestId('settings-delete_account'));
     await settle(() => screen.queryByText('• Через поддержку вернуть нельзя.') !== null);
     expect(screen.getByTestId('delete-irreversible')).toHaveTextContent(/Через 7 дней это уже не отменить/);
     await fireEvent.press(screen.getByTestId('delete-confirm'));

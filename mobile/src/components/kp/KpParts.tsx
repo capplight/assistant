@@ -11,8 +11,8 @@ import { useTheme } from '@/theme';
 import { AmountText } from '../AmountText';
 import { AppText } from '../AppText';
 
-/** Keys are 64 pt with 8 pt between (template-screens 5), like the calculator of «Расходы». */
-const KEY = 64;
+/** Keys are 56 pt with 8 pt between, flat and tonal, like the calculator of «Расходы» (pattern 3). */
+const KEY = 56;
 const KEYS = [
   ['1', '2', '3'],
   ['4', '5', '6'],
@@ -53,16 +53,14 @@ export function DigitKeypad({ onKey, testID = 'kp-keys' }: { onKey: (k: DigitKey
                 {
                   minHeight: KEY,
                   borderRadius: theme.radius.md,
-                  borderWidth: 1,
-                  borderColor: theme.colors.iconSecondary,
-                  backgroundColor: pressed ? theme.colors.separator : theme.colors.surface,
+                  backgroundColor: pressed ? theme.colors.separator : theme.colors.surfaceSunken,
                 },
               ]}
             >
               {k === '⌫' ? (
-                <Delete size={28} color={theme.colors.ink} />
+                <Delete size={26} color={theme.colors.ink} strokeWidth={1.75} />
               ) : (
-                <AppText variant="title2" maxFontSizeMultiplier={1.5} style={{ fontVariant: ['tabular-nums'] }}>
+                <AppText variant="title2" maxFontSizeMultiplier={1.5} style={{ fontSize: 28, lineHeight: 34, fontVariant: ['tabular-nums'] }}>
                   {k}
                 </AppText>
               )}
@@ -86,9 +84,9 @@ export function NumberDisplay({ text, unit, money = true, testID = 'kp-display' 
       accessible
       accessibilityLiveRegion="polite"
       accessibilityLabel={text ? (money ? t('kp.price_a11y', { amount: shown }) : shown) : t('kp.price_empty_a11y')}
-      style={{ borderWidth: 1, borderColor: theme.colors.iconSecondary, borderRadius: theme.radius.sm, padding: theme.space[3], backgroundColor: theme.colors.bg, alignItems: 'flex-end' }}
+      style={{ paddingVertical: theme.space[2], alignItems: 'center' }}
     >
-      <AmountText testID={`${testID}-text`} variant="largeTitle" maxScale={1.6} inset={theme.screenPadding * 2 + theme.space[3] * 2 + 2} style={{ textAlign: 'right' }}>
+      <AmountText testID={`${testID}-text`} variant="amount" maxScale={1.4} inset={theme.screenPadding * 2 + theme.space[5] * 2} color={text ? 'ink' : 'ink2'} style={{ textAlign: 'center' }}>
         {shown}
       </AmountText>
     </View>
@@ -152,21 +150,59 @@ export function StatusBar({
   );
 }
 
-/** The «лист» 48×64: a mini page drawn from the text (3 grey lines and the type in a word), never a photo. */
-export function MiniSheet({ type }: { type: string }) {
+/** Status colours (pattern 8): черновик neutral, отправлено brand, видел sun, принято success, отказ danger. */
+export function statusTone(theme: ReturnType<typeof useTheme>, status: DealStatus): { bg: string; fg: keyof ReturnType<typeof useTheme>['colors'] } {
+  const c = theme.colors;
+  switch (status) {
+    case 'sent':
+      return { bg: c.brandTint, fg: 'brand' };
+    case 'seen':
+      return { bg: c.highlightTint, fg: 'warning' };
+    case 'accepted':
+      return { bg: c.successTint, fg: 'success' };
+    case 'declined':
+      return { bg: c.dangerTint, fg: 'danger' };
+    default:
+      return { bg: c.surfaceSunken, fg: 'ink2' };
+  }
+}
+
+/**
+ * The coloured status badge of a КП row (22 tall, pattern 8). One button (48 target): the step is set in a sheet.
+ * The word's test id says which step is on: `${testID}-${status}-on`.
+ */
+export function StatusBadge({ status, onPress, testID, word }: { status: DealStatus; onPress: () => void; testID: string; word: string }) {
+  const theme = useTheme();
+  const { t } = useTranslation();
+  const tone = statusTone(theme, status);
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={t('kp.status_a11y', { status: word })}
+      onPress={onPress}
+      hitSlop={{ top: 13, bottom: 13, left: 4, right: 4 }}
+      style={({ pressed }) => [{ minHeight: 22, paddingHorizontal: theme.space[2], borderRadius: 11, backgroundColor: tone.bg, justifyContent: 'center', alignSelf: 'center', opacity: pressed ? 0.7 : 1 }]}
+    >
+      <AppText testID={`${testID}-${status}-on`} variant="caption" color={tone.fg}>
+        {word}
+      </AppText>
+    </Pressable>
+  );
+}
+
+/** The «лист» 36×44: a tonal mini page (3 lines), never a photo; the type is said in the row's label. */
+export function MiniSheet({ type: _type }: { type: string }) {
   const theme = useTheme();
   return (
     <View
       importantForAccessibility="no-hide-descendants"
       accessibilityElementsHidden
-      style={{ width: 48, height: 64, borderWidth: 1, borderColor: theme.colors.iconSecondary, borderRadius: 4, backgroundColor: theme.colors.surface, padding: 6, gap: 5 }}
+      style={{ width: 36, height: 44, borderRadius: theme.radius.xs, backgroundColor: theme.colors.surfaceSunken, padding: 6, gap: 4, justifyContent: 'center' }}
     >
-      {[1, 0.8, 0.9].map((w, i) => (
-        <View key={i} style={{ height: 3, width: `${w * 100}%`, backgroundColor: theme.colors.separator, borderRadius: 2 }} />
+      {[1, 0.7, 0.85, 0.5].map((w, i) => (
+        <View key={i} style={{ height: 3, width: `${w * 100}%`, backgroundColor: theme.colors.iconSecondary, opacity: 0.55, borderRadius: 2 }} />
       ))}
-      <AppText variant="callout" maxFontSizeMultiplier={1} style={{ fontSize: 11, lineHeight: 14, marginTop: 2 }} numberOfLines={1}>
-        {type}
-      </AppText>
     </View>
   );
 }

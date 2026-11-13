@@ -1,11 +1,14 @@
+import { router } from 'expo-router';
 import { act, fireEvent, renderRouter, screen } from 'expo-router/testing-library';
 
 import { missedRows } from '@/alarms/service';
 import { useAlarms } from '@/alarms/store';
-import { actionOut, decodeChatEvent, fireOut, reminderOut, taskOut, todayOut } from '@/api/endpoints';
+import { actionOut, decodeChatEvent, FEATURE_DEFAULTS, fireOut, reminderOut, taskOut, todayOut } from '@/api/endpoints';
 import type { FireOut, ReminderOut, TaskOut } from '@/api/types';
 import type { InMemoryOutboxRepository } from '@/db';
 import { getSyncEngine } from '@/services';
+import { useFeatureStore } from '@/store/features';
+import { useOnboarding } from '@/store/onboarding';
 import { usePages } from '@/store/pages';
 import { useUndo } from '@/store/undo';
 import { removePage, undoManual } from '@/pages/manual';
@@ -23,6 +26,7 @@ import { APP_DIR, finishOnboarding, resetApp, settle, testPages } from '@/testin
  */
 
 const MIN = 60_000;
+const DAY = 24 * 60 * MIN;
 const iso = (ms: number) => new Date(ms).toISOString();
 
 function task(id: string, extra: Partial<TaskOut> = {}): TaskOut {
@@ -325,7 +329,7 @@ describe('screens', () => {
     await settle(() => !!useTasks.getState().actions.ar); // «Что я сделал» has it, with «Отменить»
   });
 
-  it('«Сегодня»: a missed alarm is a red row; [Сделано] is a late `acked` (offline too) and the row goes', async () => {
+  it('«Сегодня»: a missed alarm is a row with the time in red; its circle is a late `acked` (offline too) and the row goes', async () => {
     const s = server();
     const outbox = await online(s);
     const due = Date.now() - 60 * MIN;
@@ -335,16 +339,20 @@ describe('screens', () => {
     s.offline = true;
     await renderRouter(APP_DIR, { initialUrl: '/' });
     await settle(() => screen.queryByTestId(`missed-${f.key}`) !== null);
-    expect(screen.getByTestId(`missed-${f.key}`)).toHaveTextContent(/Пропущено .* · Позвонить Ерлану/);
+    expect(screen.getByTestId(`missed-${f.key}`)).toHaveTextContent(/Позвонить Ерлану/);
+    expect(screen.getByTestId(`missed-${f.key}`).props.accessibilityLabel).toMatch(/Пропущено .* · Позвонить Ерлану/);
     await fireEvent.press(screen.getByTestId(`missed-done-${f.key}`));
     await settle(() => screen.queryByTestId(`missed-${f.key}`) === null);
     const row = outbox.all().find((x) => x.kind === 'reminder.events');
     expect((row?.payload as { events: { event: string; fire_id: string }[] }).events[0]).toMatchObject({ event: 'acked', fire_id: 'f1' });
   });
 
-  it('«Сегодня»: shopping summary, a proposal from /today with [Не сейчас], «Я сделал за вас» with «Отменить», «Что я сделал ›»', async () => {
+  it('«Сегодня»: shopping in one line; a proposal from /today only with `today.proposals`, [Не сейчас]; «Я сделал за вас» moved to «Что я сделал»', async () => {
     const s = server();
     await online(s);
+    const on = { ...FEATURE_DEFAULTS, today: { ...FEATURE_DEFAULTS.today, proposals: true } };
+    s.on('GET /features', () => ({ status: 200, body: on }));
+    useFeatureStore.getState().set(on);
     useTasks.setState({ tasks: { a: task('a', { title: 'Хлеб' }), b: task('b', { title: 'Молоко' }) } });
     s.on('POST /suggestions/*/dismiss', () => ({ status: 200, body: { suggestion: {} } }));
     s.on('GET /today', () => ({
@@ -361,18 +369,42 @@ describe('screens', () => {
     }));
     const r = await renderRouter(APP_DIR, { initialUrl: '/' });
     await settle(() => screen.queryByTestId('suggestion-s1') !== null);
-    expect(screen.getByTestId('today-shopping')).toHaveTextContent('Покупки: Хлеб, Молоко (2)');
+    expect(screen.getByTestId('today-shopping')).toHaveTextContent('Купить: Хлеб и ещё 1');
     expect(screen.getByTestId('suggestion-yes-s1')).toHaveTextContent('Да, добавить');
+    // No service blocks on the first screen (Ф-41, ux-audit P0-3).
+    expect(screen.queryByTestId('did-today-a1')).toBeNull();
     await fireEvent.press(screen.getByTestId('suggestion-no-s1'));
     await settle(() => screen.queryByTestId('suggestion-s1') === null);
     expect(s.callsTo('POST /suggestions/s1/dismiss')).toHaveLength(1);
-    expect(screen.getByTestId('did-today-a1')).toHaveTextContent(/^Записал: код домофона\./);
-    await fireEvent.press(screen.getByTestId('did-today-undo-a1'));
-    await settle(() => s.callsTo('POST /actions/a1/undo').length === 1);
-    await settle(() => screen.queryByTestId('did-today-a1') === null);
-    await fireEvent.press(screen.getByTestId('today-did-all'));
+    await act(async () => router.push('/did'));
     await settle(() => r.getPathname() === '/did');
-    expect(screen.getByTestId('did-a1')).toBeTruthy();
+    await settle(() => screen.queryByTestId('did-a1') !== null);
+  });
+
+  it('«Сегодня» with the beta switches: no proposals, no tiles; a tip only in the first week', async () => {
+    const s = server();
+    await online(s);
+    const tip = { id: 't1', kind: 'tip', key: 'say_reminder', text_ru: 'Скажите: «Напомни в 8 таблетку»', yes_label: null, no_label: 'Не сейчас', do: null, status: 'shown' };
+    s.on('GET /today', () => ({
+      status: 200,
+      body: {
+        sections: ['today', 'proposals', 'tip'],
+        today: { reminders: [], tasks: [], shopping: null },
+        missed: [],
+        done_for_you: { actions: [], count_today: 0 },
+        proposals: [{ id: 's1', kind: 'data_proposal', key: 'task_from_item', text_ru: 'Добавить в дела?', yes_label: 'Да', no_label: 'Не сейчас', do: { type: 'accept' }, status: 'shown' }],
+        tip,
+        page_tiles: [{ page_id: 'srv-x', template_key: 'shopping', title: 'Покупки', icon: null, text_ru: 'Осталось 5', pinned: true }],
+        empty: false,
+      },
+    }));
+    await renderRouter(APP_DIR, { initialUrl: '/' });
+    await settle(() => screen.queryByTestId('suggestion-t1') !== null);
+    expect(screen.queryByTestId('suggestion-s1')).toBeNull();
+    expect(screen.queryByTestId('today-tiles')).toBeNull();
+    // After the first week the tip is gone (tips_days = 7).
+    useOnboarding.setState({ openedAt: new Date(Date.now() - 8 * DAY).toISOString() });
+    await settle(() => screen.queryByTestId('suggestion-t1') === null);
   });
 
   it('S30: the rules from the server, [Убрать] → DELETE /habits/{id}, «Отменить» = undo of its action', async () => {

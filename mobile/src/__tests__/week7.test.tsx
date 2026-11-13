@@ -702,12 +702,13 @@ describe('on screen', () => {
   it('«⋯»: «Выше» twice keeps the sheet open, the strip offers «Отменить»; every control is labelled', async () => {
     await setup({ offline: true });
     await open();
-    expect(screen.getByTestId('record-menu-n3').props.accessibilityLabel).toBe('Ещё: Заметка 3');
+    // No «⋯» on a sticker (design-system §3 StickyNote): the menu is a long press and a screen-reader action.
+    expect(screen.queryByTestId('record-menu-n3')).toBeNull();
     const actions = (screen.getByTestId('record-n3').props.accessibilityActions as { name: string }[]).map(
       (a) => a.name,
     );
     expect(actions).toEqual(['up', 'down', 'moveTo', 'menu']);
-    await fireEvent.press(screen.getByTestId('record-menu-n3'));
+    await fireEvent(screen.getByTestId('record-n3'), 'longPress');
     await fireEvent.press(screen.getByTestId('record-menu-up'));
     await settle(() => rowsOnScreen().join() === 'n1,n3,n2,n4,n5');
     await fireEvent.press(screen.getByTestId('record-menu-up'));
@@ -725,6 +726,7 @@ describe('on screen', () => {
     await setup({ offline: true });
     await open();
     expect(screen.queryByTestId('record-down-n1')).toBeNull();
+    await fireEvent.press(screen.getByTestId('page-menu'));
     await fireEvent.press(screen.getByTestId('page-order'));
     expect(screen.getByTestId('record-up-n1').props.accessibilityState).toMatchObject({ disabled: true });
     expect(screen.getByTestId('record-down-n1').props.accessibilityLabel).toBe('Ниже: Заметка 1');
@@ -753,7 +755,7 @@ describe('on screen', () => {
   it('S39: «Переместить на страницу…» → «Расходы»: gone here, on «Расходы», [Открыть] there', async () => {
     await setup({ offline: true });
     await open();
-    await fireEvent.press(screen.getByTestId('record-menu-n2'));
+    await fireEvent(screen.getByTestId('record-n2'), 'longPress');
     await fireEvent.press(screen.getByTestId('record-menu-move'));
     await settle(() => screen.queryByTestId('move-sheet') !== null);
     expect(screen.getByTestId(`move-target-${page('notes').id}`).props.accessibilityState).toMatchObject({
@@ -773,7 +775,7 @@ describe('on screen', () => {
     await setup({ offline: true });
     await testPages.applyLink(srv.put(linkOut(SRV.tasks, 'srv-n1', 300)));
     await open();
-    await fireEvent.press(screen.getByTestId('record-menu-n1'));
+    await fireEvent(screen.getByTestId('record-n1'), 'longPress');
     await fireEvent.press(screen.getByTestId('record-menu-also'));
     await settle(() => screen.queryByTestId('move-sheet') !== null);
     await settle(

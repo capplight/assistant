@@ -173,6 +173,8 @@ const SCREENS: Case[] = [
   { route: 'kp/version', url: () => '/kp/version?doc=doc-1&n=1' },
   { route: 'kp/versions', url: () => '/kp/versions?doc=doc-1' },
   { route: 'kp/[id]', url: () => '/kp/doc-1' },
+  { route: 'legal', url: () => '/legal?doc=policy' },
+  { route: 'settings', url: () => '/settings' },
   { route: 'my-data', url: () => '/my-data' },
   { route: 'notify', url: () => '/notify' },
   { route: 'page-settings/[id]', url: (p) => `/page-settings/${p.custom!.id}` },

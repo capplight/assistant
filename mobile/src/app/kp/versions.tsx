@@ -5,8 +5,8 @@ import { Pressable, View } from 'react-native';
 
 import type { KpVersionRowOut } from '@/api/types';
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/Screen';
+import { Header } from '@/components/ui/Header';
 import { StandaloneUndoStrip } from '@/components/UndoStrip';
 import { decToMinor } from '@/kp/calc';
 import { loadVersions } from '@/kp/service';
@@ -68,10 +68,11 @@ export default function KpVersionsScreen() {
     <View style={{ flex: 1 }}>
       <Screen testID="kp-versions-screen">
         <View style={{ gap: theme.space[4] }}>
-          <Button testID="kp-versions-back" label={`‹ ${t('kp.back')}`} variant="text" minHeight={theme.size.minTouch} style={{ alignSelf: 'flex-start' }} onPress={back} />
-          <AppText variant="largeTitle" accessibilityRole="header">
-            {doc ? `${t('kp.versions_title')} · ${kpTitle(doc, t)}` : t('kp.versions_title')}
-          </AppText>
+          <Header
+            title={t('kp.versions_title')}
+            meta={doc ? kpTitle(doc, t) : undefined}
+            back={{ testID: 'kp-versions-back', label: t('kp.back'), onPress: back }}
+          />
           {state === 'offline' ? (
             <AppText testID="kp-versions-offline" variant="callout">
               {t('kp.versions_offline')}
@@ -104,9 +105,7 @@ export default function KpVersionsScreen() {
                   padding: theme.space[3],
                   gap: theme.space[1],
                   borderRadius: theme.radius.lg,
-                  borderWidth: isSent ? 2 : 1,
-                  borderColor: isSent ? theme.colors.success : theme.colors.separator,
-                  backgroundColor: pressed ? theme.colors.separator : theme.colors.surface,
+                  backgroundColor: pressed ? theme.colors.surfaceSunken : isSent ? theme.colors.successTint : theme.colors.surface,
                 })}
               >
                 <AppText variant="bodyStrong">{line1}</AppText>

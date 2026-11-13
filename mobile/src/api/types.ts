@@ -78,7 +78,7 @@ export type ConsentGrantIn = { kind: ServerConsentKind; version: string; text_ha
 
 export type ConsentsIn = {
   consents: ConsentGrantIn[];
-  screen: 'S05' | 'settings' | 'import';
+  screen: 'S05' | 'welcome' | 'settings' | 'import';
   age_confirmed_18: boolean;
 };
 

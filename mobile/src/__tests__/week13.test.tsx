@@ -236,6 +236,7 @@ const text = (id: string) => {
   return Array.isArray(c) ? c.join('') : String(c);
 };
 const live = () => liveEntries(useExpenses.getState().entries, useExpenses.getState().edits);
+const toCheckN = () => live().filter((e) => e.review_fields.includes('amount')).length;
 const octoberTotal = () => board(live(), periodOf('month', '2026-10-15')).main?.total ?? 0n;
 
 afterEach(() => {
@@ -467,6 +468,9 @@ describe('receipt photo, QR, «Проверьте сумму», «Объедин
     expect(stripText()).toBe('Сохранил чек. Прочитаю сумму и запишу в Расходы');
     await settle(() => screen.queryByTestId('exp-board') !== null && reads >= 1);
     // The server reads it: «Читаю чек…», then the spending with «Проверьте сумму».
+    // Everything to check is one «Требует внимания» card; the queue opens on a tap.
+    await settle(() => screen.queryByTestId('exp-attention') !== null && toCheckN() > 0);
+    await fireEvent.press(screen.getByTestId('exp-attention'));
     await settle(() => screen.queryByTestId('exp-check-r1') !== null);
     expect(s.callsTo('POST /expenses/from-item')[0]!.body).toMatchObject({ kind: 'receipt', save: true });
     expect(text('exp-check-amount-r1')).toBe('12 400 ₸');
@@ -560,6 +564,8 @@ describe('receipt photo, QR, «Проверьте сумму», «Объедин
     applyServer([expense('v1', { amount: '5400.00', source: 'voice', review_fields: ['amount'] })], serverCategories());
     await (await getSyncEngine()).run();
     await renderRouter(APP_DIR, { initialUrl: `/page/${expensesPage().id}` });
+    await settle(() => screen.queryByTestId('exp-attention') !== null);
+    await fireEvent.press(screen.getByTestId('exp-attention'));
     await settle(() => screen.queryByTestId('exp-check-edit-v1') !== null);
     await fireEvent.press(screen.getByTestId('exp-check-edit-v1'));
     await settle(() => screen.queryByTestId('exp-sheet-keypad') !== null);
@@ -586,6 +592,9 @@ describe('receipt photo, QR, «Проверьте сумму», «Объедин
     applyServer([keep, other], serverCategories());
     await (await getSyncEngine()).run();
     await renderRouter(APP_DIR, { initialUrl: `/page/${expensesPage().id}` });
+    await settle(() => screen.queryByTestId('exp-attention') !== null);
+    expect(text('exp-attention-count')).toBe('1');
+    await fireEvent.press(screen.getByTestId('exp-attention'));
     await settle(() => screen.queryByTestId('exp-dup-d1') !== null);
     expect(text('exp-total')).toBe('5 000 ₸');
     expect(text('exp-dup-other-d1')).toMatch(/MAGNUM CASH&CARRY · 2 500 ₸ · Сегодня · выписка/);
@@ -611,9 +620,12 @@ describe('receipt photo, QR, «Проверьте сумму», «Объедин
     finishOnboarding('full');
     applyServer([expense('v2', { amount: '700.00', source: 'voice', review_fields: ['amount', 'spent_on'] })], serverCategories());
     await renderRouter(APP_DIR, { initialUrl: `/page/${expensesPage().id}` });
+    await settle(() => screen.queryByTestId('exp-attention') !== null);
+    await fireEvent.press(screen.getByTestId('exp-attention'));
     await settle(() => screen.queryByTestId('exp-check-v2') !== null);
     expect(screen.getByTestId('exp-check-amount-v2').props.maxFontSizeMultiplier).toBe(1.6);
     expect(screen.getByTestId('exp-check-ok-v2').props.accessibilityLabel).toBe('Верно, 700 ₸');
+    await fireEvent.press(screen.getByTestId('exp-attention-sheet-close'));
     await fireEvent.press(screen.getByTestId('exp-bring'));
     await settle(() => screen.queryByTestId('exp-bring-camera') !== null);
     const style = screen.getByTestId('exp-bring-camera').props.style;

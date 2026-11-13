@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { CheckBadge } from '@/components/kp/KpParts';
 import { ChoiceSheet } from '@/components/page/FieldSheets';
 import { Screen } from '@/components/Screen';
+import { Header } from '@/components/ui/Header';
 import { StandaloneUndoStrip } from '@/components/UndoStrip';
 import { getMedia } from '@/expenses/media';
 import { editProfile, refreshProfile, setProfileImage, verifyProfileField } from '@/kp/service';
@@ -92,11 +93,9 @@ export default function CompanyScreen() {
             {
               color: theme.colors.ink,
               minHeight: theme.size.buttonHeight,
-              borderWidth: 1,
-              borderColor: review ? theme.colors.warning : theme.colors.iconSecondary,
               borderRadius: theme.radius.sm,
               paddingHorizontal: theme.space[3],
-              backgroundColor: review ? theme.colors.highlightTint : theme.colors.surface,
+              backgroundColor: review ? theme.colors.highlightTint : theme.colors.surfaceSunken,
             },
           ]}
         />
@@ -124,10 +123,7 @@ export default function CompanyScreen() {
     <View style={styles.root}>
       <Screen testID="company-screen">
         <View style={{ gap: theme.space[4] }}>
-          <Button testID="company-back" label={`‹ ${t('kp.back')}`} variant="text" minHeight={theme.size.minTouch} style={{ alignSelf: 'flex-start' }} onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} />
-          <AppText variant="largeTitle" accessibilityRole="header">
-            {t('kp.company_title')}
-          </AppText>
+          <Header title={t('kp.company_title')} back={{ testID: 'company-back', label: t('kp.back'), onPress: () => (router.canGoBack() ? router.back() : router.replace('/')) }} />
           <AppText variant="callout">{t('kp.company_hint')}</AppText>
           {field('name')}
           <View style={{ gap: theme.space[1] }}>
@@ -181,9 +177,9 @@ export default function CompanyScreen() {
             return (
               <View key={role} testID={`company-img-${role}`} style={[styles.row, { gap: theme.space[3], flexWrap: 'wrap' }]}>
                 {img ? (
-                  <Image source={{ uri: img.uri }} accessibilityIgnoresInvertColors style={{ width: 64, height: 64, borderRadius: 8, borderWidth: 1, borderColor: theme.colors.separator }} />
+                  <Image source={{ uri: img.uri }} accessibilityIgnoresInvertColors style={{ width: 64, height: 64, borderRadius: 8 }} />
                 ) : (
-                  <View style={{ width: 64, height: 64, borderRadius: 8, borderWidth: 1, borderStyle: 'dashed', borderColor: theme.colors.iconSecondary }} />
+                  <View style={{ width: 64, height: 64, borderRadius: 8, backgroundColor: theme.colors.surfaceSunken }} />
                 )}
                 <View style={{ flex: 1, minWidth: 140, gap: theme.space[1] }}>
                   <AppText variant="bodyStrong">{t(`kp.img_${role}`)}</AppText>

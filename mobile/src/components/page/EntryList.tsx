@@ -81,6 +81,7 @@ export function EntryList({
   renderGroup,
   today,
   columns = 1,
+  gap,
   onStep,
 }: {
   page: Page;
@@ -105,6 +106,8 @@ export function EntryList({
    * Выше / Ниже and «Порядок» ↑ ↓ move a sticker one place (template-screens 2.1). Needs `renderEntry`.
    */
   columns?: number;
+  /** Space between grid cells and lines (stickers: 8, design-system §3 StickyNote). */
+  gap?: number;
   /**
    * Weeks 16а–16б: «Выше / Ниже» do something else than the page order — the free board shown as
    * rows (≥150%, screen reader) swaps the places of two stickers. No drag then.
@@ -246,7 +249,8 @@ export function EntryList({
           onTouchCancel={() => setTouching(false)}
           onScrollBeginDrag={() => setTouching(true)}
           onMomentumScrollEnd={() => setTouching(false)}
-          contentContainerStyle={{ paddingVertical: theme.space[4] }}
+          // The header sits right under the safe area (≤56 dp, ux-audit P0-2); the end clears the floating bottom.
+          contentContainerStyle={{ paddingTop: theme.space[2], paddingBottom: theme.space[4] }}
           keyboardShouldPersistTaps="handled"
           ListHeaderComponent={header}
           ListFooterComponent={footer}
@@ -294,7 +298,7 @@ export function EntryList({
             if (item.type === 'line') {
               // A row of the grid: each cell is one record, in the page order (left to right).
               return (
-                <View style={{ flexDirection: 'row', gap: theme.space[3], marginBottom: theme.space[3] }}>
+                <View style={{ flexDirection: 'row', gap: gap ?? theme.space[3], marginBottom: gap ?? theme.space[3] }}>
                   {item.items.map((cell) => (
                     <View key={cell.entry.record.id} style={{ flex: 1 }}>
                       {renderRecord(cell, -1, undefined, false)}

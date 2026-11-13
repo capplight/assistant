@@ -1,14 +1,13 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Check } from 'lucide-react-native';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { DuplicateGroupOut, DuplicateMemberOut } from '@/api/types';
 import { cleanupPreview } from '@/api/endpoints';
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/ui/Button';
+import { Button, Card, CheckMark, Header } from '@/components/ui';
 import { Screen } from '@/components/Screen';
 import {
   confirmCleanup,
@@ -60,27 +59,13 @@ export default function DuplicatesScreen() {
 
   return (
     <Screen testID="page-duplicates" edges={['top']}>
-      <View style={[styles.row, { marginBottom: theme.space[4] }]}>
-        <Button
-          testID="dup-back"
-          label={`‹ ${t('common.back')}`}
-          variant="text"
-          minHeight={theme.size.minTouch}
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
-        />
-        <AppText variant="largeTitle" accessibilityRole="header" style={styles.flex}>
-          {t('dup.title')}
-        </AppText>
-      </View>
-      <AppText variant="callout" style={{ marginBottom: theme.space[4] }}>
-        {t('dup.hint')}
-      </AppText>
+      <Header title={t('dup.title')} back={{ onPress: () => (router.canGoBack() ? router.back() : router.replace('/')), testID: 'dup-back' }}>
+        <AppText variant="callout">{t('dup.hint')}</AppText>
+      </Header>
+      <View style={{ height: theme.space[3] }} />
 
       {cleanup && preview ? (
-        <View
-          testID="dup-batch"
-          style={[styles.card, { borderColor: theme.colors.iconSecondary, backgroundColor: theme.colors.surface, borderRadius: theme.radius.lg, padding: theme.space[4], gap: theme.space[3], marginBottom: theme.space[5] }]}
-        >
+        <Card testID="dup-batch" tone="brandTint" style={{ gap: theme.space[3], marginBottom: theme.space[5] }}>
           {/* «было 37, стало 1» reads as words to a screen reader (2-design 7.x check list). */}
           <AppText
             testID="dup-batch-title"
@@ -93,9 +78,9 @@ export default function DuplicatesScreen() {
           <AppText>{t('dup.batch_detail', { removed: preview.removed, after: preview.after })}</AppText>
           <View style={{ gap: theme.space[2] }}>
             <Button testID="dup-batch-yes" label={t('dup.batch_yes')} onPress={() => void confirmCleanup()} />
-            <Button testID="dup-batch-no" label={t('dup.batch_no')} variant="secondary" onPress={() => void rejectCleanup()} />
+            <Button testID="dup-batch-no" label={t('dup.batch_no')} variant="text" onPress={() => void rejectCleanup()} />
           </View>
-        </View>
+        </Card>
       ) : null}
 
       {groups.length > 0 ? (
@@ -179,12 +164,9 @@ function GroupCard({
   };
 
   return (
-    <View
-      testID={`dup-group-${group.id}`}
-      style={[styles.card, { borderColor: theme.colors.separator, backgroundColor: theme.colors.surface, borderRadius: theme.radius.lg, padding: theme.space[4], gap: theme.space[2], marginBottom: theme.space[4] }]}
-    >
-      <AppText variant="callout">{why ? `${t('dup.keep')} · ${why}` : t('dup.keep')}</AppText>
-      <AppText testID={`dup-keep-${group.id}`} variant="title2">
+    <Card testID={`dup-group-${group.id}`} style={{ gap: theme.space[2], marginBottom: theme.space[3] }}>
+      <AppText variant="footnote">{why ? `${t('dup.keep')} · ${why}` : t('dup.keep')}</AppText>
+      <AppText testID={`dup-keep-${group.id}`} variant="headline">
         {keepTitle}
       </AppText>
       {date(keep) ? <AppText variant="callout">{date(keep)}</AppText> : null}
@@ -194,7 +176,7 @@ function GroupCard({
       {others.slice(0, SHOWN_MEMBERS).map((m) => {
         const title = memberTitle(m, t);
         return (
-          <View key={m.item_id} style={[styles.row, { gap: theme.space[2], borderTopWidth: 1, borderTopColor: theme.colors.separator, paddingTop: theme.space[2] }]}>
+          <View key={m.item_id} style={[styles.row, { gap: theme.space[2], borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.separator, paddingTop: theme.space[2] }]}>
             <View style={styles.flex}>
               <AppText>{title}</AppText>
               {date(m) ? <AppText variant="callout">{date(m)}</AppText> : null}
@@ -220,22 +202,9 @@ function GroupCard({
         accessibilityLabel={t('dup.mark_a11y', { title: keepTitle })}
         accessibilityState={{ checked: marked }}
         onPress={() => onMark(marked ? undefined : keep.item_id)}
-        style={[styles.row, { minHeight: theme.size.buttonHeight, gap: theme.space[2], marginTop: theme.space[2] }]}
+        style={[styles.row, { minHeight: theme.size.minTouch, gap: theme.space[3], marginTop: theme.space[1] }]}
       >
-        <View
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: 6,
-            borderWidth: 2,
-            borderColor: theme.colors.brand,
-            backgroundColor: marked ? theme.colors.brand : 'transparent',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          {marked ? <Check size={22} color={theme.colors.onBrand} /> : null}
-        </View>
+        <CheckMark checked={marked} />
         <AppText>{t('dup.mark')}</AppText>
       </Pressable>
       <View style={{ gap: theme.space[2], marginTop: theme.space[2] }}>
@@ -243,6 +212,7 @@ function GroupCard({
           testID={`dup-merge-${group.id}`}
           label={t('dup.merge')}
           accessibilityLabel={t('dup.merge_a11y', { title: keepTitle })}
+          variant="secondary"
           disabled={busy}
           onPress={() => run(() => mergeGroup(group, keep.item_id))}
         />
@@ -250,17 +220,16 @@ function GroupCard({
           testID={`dup-different-${group.id}`}
           label={t('dup.different')}
           accessibilityLabel={t('dup.different_a11y', { title: keepTitle })}
-          variant="secondary"
+          variant="text"
           disabled={busy}
           onPress={() => run(() => dismissGroup(group))}
         />
       </View>
-    </View>
+    </Card>
   );
 }
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
   flex: { flex: 1 },
-  card: { borderWidth: 1 },
 });

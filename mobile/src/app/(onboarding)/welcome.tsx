@@ -1,245 +1,161 @@
 import { router } from 'expo-router';
-import { Camera, FileText, Mic, Search, Wallet } from 'lucide-react-native';
+import { BellRing, KeyRound, Mic, ReceiptText } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/ui/Button';
-import { MiniSchema } from '@/components/MiniSchema';
 import { Screen } from '@/components/Screen';
-import { LANGUAGES } from '@/i18n';
-import { TOUR_INTERESTS, useOnboarding, type TourInterest } from '@/store/onboarding';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { Icon, type LucideIcon } from '@/components/ui/Icon';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { buildConsentRequest, consentScreen } from '@/consent/texts';
+import { useConsentTexts } from '@/consent/useConsentTexts';
+import { getOutbox } from '@/db';
+import { LANGUAGES, type Language } from '@/i18n';
+import { finishWithDefaults } from '@/onboarding/service';
+import { kickSync } from '@/services';
+import { getFeatures, useFeatures } from '@/store/features';
+import { useOnboarding } from '@/store/onboarding';
 import { useTheme } from '@/theme';
 
-const FRAMES = 3;
-
-const INTEREST_ICON = { voice: Mic, photo: Camera, find: Search, kp: FileText, money: Wallet } as const;
-const INTEREST_KEY: Record<TourInterest, string> = {
-  voice: 'tour.can_voice',
-  photo: 'tour.can_photo',
-  find: 'tour.can_find',
-  kp: 'tour.can_kp',
-  money: 'tour.can_money',
-};
-
-/** S01–S02 — three frames, advance only by button (no auto-play), «Пропустить» on each (Ф-24). */
+/**
+ * The first launch (Ф-34): one welcome screen → «Начать» → «Сегодня». The line under the button says that
+ * «Начать» accepts the Privacy policy and the Terms (links); pressing it records the same consents S05 did
+ * (each text's kind, version, sha256, locale; `screen` = the server's `consent_screen`, `welcome`), then
+ * `POST /pages/batch {"path":"skipped"}` makes «Заметки» + «Дела». No page choice, no SMS, no alarm setup and no
+ * notification prompt here: those are asked when needed (the first reminder asks for notifications). S05, S41,
+ * the gallery and the phrase path stay in the code (Ф-33), off the first-launch path.
+ */
 export default function WelcomeScreen() {
   const theme = useTheme();
   const { t } = useTranslation();
-  const [frame, setFrame] = useState(0);
-  const { language, setLanguage, interests, toggleInterest, markWelcomeSeen, markOpened } = useOnboarding();
+  const language = useOnboarding((s) => s.language);
+  const setLanguage = useOnboarding((s) => s.setLanguage);
+  const markOpened = useOnboarding((s) => s.markOpened);
+  const forOther = useFeatures((f) => f.setup_for_other);
+  const texts = useConsentTexts(language);
+  const [busy, setBusy] = useState(false);
   useEffect(() => {
     markOpened(); // US-14 criterion A starts here
   }, [markOpened]);
 
-  const finish = (skipped: boolean) => {
-    markWelcomeSeen(skipped);
-    router.replace('/consent');
+  const begin = async () => {
+    if (busy) return;
+    setBusy(true);
+    const s = useOnboarding.getState();
+    const request = buildConsentRequest('full', texts, consentScreen(getFeatures().consent_screen));
+    s.markWelcomeSeen(false);
+    s.setPath('skipped'); // no page choice on the first launch (onboarding.md «skipped»)
+    s.acceptConsent(
+      'full',
+      request.consents.map((c) => ({ kind: c.kind, version: c.version, textHash: c.text_hash, locale: c.locale })),
+    );
+    // Local first; the outbox sends consents, then registers the device (devices need consent).
+    const outbox = await getOutbox();
+    await outbox.enqueue('consent.accept', { request });
+    await outbox.enqueue('device.register', {});
+    await outbox.enqueue('onboarding.welcome_seen', {});
+    kickSync();
+    await finishWithDefaults();
+    router.replace('/');
   };
 
-  const last = frame === FRAMES - 1;
+  const link = (label: string, doc: 'policy' | 'terms') => (
+    <AppText
+      variant="footnote"
+      color="brand"
+      testID={`welcome-policy-link-${doc}`}
+      accessibilityRole="link"
+      suppressHighlighting
+      onPress={() => router.push({ pathname: '/legal', params: { doc } })}
+      style={{ fontFamily: theme.type.sectionLabel.fontFamily }}
+    >
+      {label}
+    </AppText>
+  );
 
   return (
     <Screen
-      testID={`welcome-frame-${frame + 1}`}
+      testID="welcome-screen"
       footer={
         <View style={{ gap: theme.space[3] }}>
-          <View style={styles.dotsRow} accessible accessibilityLabel={t('tour.step', { n: frame + 1, total: FRAMES })}>
-            {Array.from({ length: FRAMES }, (_, i) => (
-              <View
-                key={i}
-                style={[styles.dot, { backgroundColor: i === frame ? theme.colors.brand : theme.colors.iconSecondary }]}
-              />
-            ))}
-            <AppText variant="callout" style={{ marginLeft: theme.space[2] }}>
-              {t('tour.step', { n: frame + 1, total: FRAMES })}
-            </AppText>
-          </View>
-          <Button
-            testID="welcome-next"
-            label={last ? t('tour.start') : t('tour.next')}
-            onPress={() => (last ? finish(false) : setFrame(frame + 1))}
-          />
+          <Button testID="welcome-start" label={t('tour.start')} disabled={busy} onPress={() => void begin()} />
+          <AppText testID="welcome-policy" variant="footnote" style={styles.center}>
+            {t('welcome.policy_before')}
+            {link(t('welcome.policy'), 'policy')}
+            {t('welcome.policy_and')}
+            {link(t('welcome.terms'), 'terms')}
+            {t('welcome.policy_after')}
+          </AppText>
+          {forOther ? (
+            <Button testID="welcome-for-other" variant="text" label={t('tour.for_other')} onPress={() => void begin()} />
+          ) : null}
         </View>
       }
     >
-      <View style={styles.skipRow}>
-        <Button
-          testID="welcome-skip"
-          variant="text"
-          minHeight={theme.size.minTouch}
-          label={t('tour.skip')}
-          onPress={() => finish(true)}
-        />
-      </View>
-
-      {frame === 0 && (
-        <View style={{ gap: theme.space[5] }}>
-          <View style={styles.sheets} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-            {[0, 1, 2].map((i) => (
-              <View
-                key={i}
-                style={{
-                  width: 64,
-                  height: 80,
-                  marginLeft: i === 0 ? 0 : -24,
-                  marginTop: i * 6,
-                  backgroundColor: theme.colors.surface,
-                  borderColor: theme.colors.separator,
-                  borderWidth: 1,
-                  borderRadius: theme.radius.lg,
-                }}
-              />
-            ))}
-          </View>
-          <AppText variant="largeTitle" accessibilityRole="header">
-            {t('tour.welcome')}
+      <View style={{ gap: theme.space[5], paddingTop: theme.space[4] }}>
+        <Illustration />
+        <View style={{ gap: theme.space[2] }}>
+          <AppText variant="title1" accessibilityRole="header" style={styles.center}>
+            {t('welcome.title')}
           </AppText>
-          <AppText>{t('tour.title')}</AppText>
-          <View
-            accessibilityRole="radiogroup"
+          <AppText variant="callout" style={styles.center}>
+            {t('welcome.body')}
+          </AppText>
+        </View>
+        <View style={[styles.lang, { maxWidth: theme.largeFont ? undefined : 320 }]}>
+          <SegmentedControl<Language>
+            testID="welcome-lang"
             accessibilityLabel={t('lang.choose')}
-            style={[styles.segment, { gap: theme.space[2] }]}
-          >
-            {LANGUAGES.map((lang) => {
-              const selected = lang === language;
-              return (
-                <Pressable
-                  key={lang}
-                  testID={`lang-${lang}`}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected }}
-                  accessibilityLanguage={lang}
-                  onPress={() => setLanguage(lang)}
-                  style={[
-                    styles.segmentItem,
-                    {
-                      minHeight: theme.size.buttonHeight,
-                      borderRadius: theme.radius.md,
-                      borderWidth: 2,
-                      borderColor: selected ? theme.colors.brand : theme.colors.iconSecondary,
-                      backgroundColor: selected ? theme.colors.surface : 'transparent',
-                    },
-                  ]}
-                >
-                  <AppText variant={selected ? 'bodyStrong' : 'body'} color={selected ? 'brand' : 'ink'}>
-                    {selected ? '● ' : ''}
-                    {t(`lang.${lang}`)}
-                  </AppText>
-                </Pressable>
-              );
-            })}
-          </View>
-          {/* TODO: «Настраиваю для другого человека» flow (helper mode) — later week. */}
-          <Button
-            variant="text"
-            label={t('tour.for_other')}
-            minHeight={theme.size.minTouch}
-            onPress={() => setFrame(1)}
+            segments={LANGUAGES.map((l) => ({ key: l, label: t(`lang.${l}`), testID: `lang-${l}` }))}
+            value={language}
+            onChange={setLanguage}
           />
         </View>
-      )}
-
-      {frame === 1 && (
-        <View style={{ gap: theme.space[3] }}>
-          <AppText variant="largeTitle" accessibilityRole="header">
-            {t('tour.ask')}
-          </AppText>
-          {TOUR_INTERESTS.map((key) => {
-            const Icon = INTEREST_ICON[key];
-            const checked = interests.includes(key);
-            return (
-              <Pressable
-                key={key}
-                testID={`interest-${key}`}
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked }}
-                accessibilityLabel={t(INTEREST_KEY[key])}
-                onPress={() => toggleInterest(key)}
-                style={[
-                  styles.interest,
-                  {
-                    minHeight: theme.size.buttonHeight,
-                    gap: theme.space[3],
-                    borderRadius: theme.radius.lg,
-                    borderWidth: 1,
-                    borderColor: checked ? theme.colors.brand : theme.colors.separator,
-                    backgroundColor: theme.colors.surface,
-                    padding: theme.space[3],
-                  },
-                ]}
-              >
-                <Icon size={theme.size.icon} color={theme.colors.ink} strokeWidth={2} />
-                <AppText style={styles.flex}>{t(INTEREST_KEY[key])}</AppText>
-                <AppText variant="bodyStrong" color="brand">
-                  {checked ? '☑' : '☐'}
-                </AppText>
-              </Pressable>
-            );
-          })}
-        </View>
-      )}
-
-      {frame === 2 && (
-        <View style={{ gap: theme.space[4] }}>
-          <AppText variant="largeTitle" accessibilityRole="header">
-            {t('tour.pages_title')}
-          </AppText>
-          <View style={[styles.row, { gap: theme.space[2], flexWrap: 'wrap' }]}>
-            {(['notes', 'tasks', 'expenses'] as const).map((k) => (
-              <View
-                key={k}
-                style={[
-                  styles.miniCard,
-                  {
-                    backgroundColor: theme.colors.surface,
-                    borderColor: theme.colors.separator,
-                    borderRadius: theme.radius.lg,
-                    padding: theme.space[3],
-                  },
-                ]}
-              >
-                <MiniSchema kind={k} />
-                <AppText variant="callout" color="ink">
-                  {t(`tpl.short.${k}`)}
-                </AppText>
-              </View>
-            ))}
-          </View>
-          <AppText>{t('tour.pages')}</AppText>
-          <View
-            accessible
-            accessibilityLabel={t('tour.demo_result_a11y')}
-            style={{
-              backgroundColor: theme.colors.surface,
-              borderColor: theme.colors.separator,
-              borderWidth: 1,
-              borderRadius: theme.radius.lg,
-              padding: theme.space[4],
-            }}
-          >
-            <AppText>{t('tour.demo_result')}</AppText>
-            <AppText variant="callout" style={styles.right}>
-              {t('tour.example')}
-            </AppText>
-          </View>
-        </View>
-      )}
+      </View>
     </Screen>
   );
 }
 
+/** One picture in the brand colour: the mic on an emerald square with the sun, three things it keeps. */
+function Illustration() {
+  const theme = useTheme();
+  const { t } = useTranslation();
+  const chip = (icon: LucideIcon, text: string, sun: boolean, tilt: string) => (
+    <Card style={[styles.chip, { transform: [{ rotate: tilt }], paddingVertical: theme.space[2], paddingHorizontal: theme.space[3], gap: theme.space[2] }]}>
+      <View style={[styles.dot, { backgroundColor: sun ? theme.colors.highlight : theme.colors.brand }]}>
+        <Icon icon={icon} size="sm" color={sun ? 'onHighlight' : 'onBrand'} />
+      </View>
+      <AppText variant="callout" color="ink" style={{ fontFamily: theme.type.sectionLabel.fontFamily, flexShrink: 1 }}>
+        {text}
+      </AppText>
+    </Card>
+  );
+  return (
+    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ alignItems: 'center', gap: theme.space[3] }}>
+      <View style={[styles.mark, { backgroundColor: theme.colors.brand, borderRadius: 38 }, theme.elevation.floating]}>
+        <View style={[styles.sun, { backgroundColor: theme.colors.highlight }]} />
+        <Mic size={56} color={theme.colors.onBrand} strokeWidth={theme.icon.strokeWidth} />
+      </View>
+      {theme.largeFont ? null : (
+        <View style={[styles.chips, { gap: theme.space[2] }]}>
+          {chip(BellRing, t('welcome.ex_pill'), false, '-3deg')}
+          {chip(KeyRound, t('welcome.ex_code'), true, '3deg')}
+          {chip(ReceiptText, t('welcome.ex_receipt'), true, '-2deg')}
+        </View>
+      )}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  skipRow: { alignItems: 'flex-end' },
-  sheets: { flexDirection: 'row', height: 100 },
-  segment: { flexDirection: 'row', flexWrap: 'wrap' },
-  segmentItem: { flexGrow: 1, flexBasis: 140, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
-  interest: { flexDirection: 'row', alignItems: 'center' },
-  flex: { flex: 1 },
-  row: { flexDirection: 'row' },
-  miniCard: { borderWidth: 1, flexGrow: 1, flexBasis: 90 },
-  dotsRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  dot: { width: 10, height: 10, borderRadius: 5 },
-  right: { textAlign: 'right' },
+  center: { textAlign: 'center' },
+  lang: { alignSelf: 'center', width: '100%' },
+  mark: { width: 124, height: 124, alignItems: 'center', justifyContent: 'center' },
+  sun: { position: 'absolute', right: 16, top: 16, width: 22, height: 22, borderRadius: 11 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' },
+  chip: { flexDirection: 'row', alignItems: 'center' },
+  dot: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
 });

@@ -1,9 +1,8 @@
 import { router } from 'expo-router';
-import { Bell, Check, Ellipsis } from 'lucide-react-native';
+import { AlarmClock, Bell, CalendarDays, CircleCheck, Clock, Ellipsis, PencilLine, Trash2 } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 
 import { dayOffset, dayText } from '@/alarms/format';
@@ -21,14 +20,15 @@ import { listRows, localDate, type ListRow, type Segment } from '@/tasks/rows';
 import { doneAt, isDone, listsForPage, setDone } from '@/tasks/service';
 import { nowIndex, sheetSlots, timedItemIds, type Slot } from '@/tasks/sheet';
 import { useTasks } from '@/tasks/store';
-import { useTheme } from '@/theme';
+import { useTheme, withAlpha } from '@/theme';
 
 import { AppText } from '../AppText';
-import { Button } from '../ui/Button';
+import { ActionList, Button, CheckMark, Icon, Sheet, type SheetAction } from '../ui';
 import type { MenuExtra } from '../RecordMenuSheet';
 import { MissedList, removeReminder, Segments, useMinuteClock, useMissed } from '../ReminderLists';
 import { TaskRow } from '../TaskRow';
 import { EntryList, type EntryCtx } from './EntryList';
+import { PageEmpty } from './PageEmpty';
 import { dueText, fromList, type EntryRow, type Row } from './rows';
 import type { ViewProps } from './registry';
 
@@ -165,7 +165,6 @@ export function PlannerView({ page, entries, frameTop, ordering }: ViewProps) {
           task={task}
           done={row.done}
           showReturn
-          box={40}
           meta={task.due_date && !row.done ? dueText(task.due_date, today, t) : null}
           metaColor={overdue ? 'danger' : undefined}
           highlighted={ctx.highlighted}
@@ -231,7 +230,7 @@ export function PlannerView({ page, entries, frameTop, ordering }: ViewProps) {
         {segment === 'today'
           ? ackedToday.map((s) => <SlotRow key={s.key} slot={s} late={false} task={null} onMenu={() => undefined} onMissed={() => undefined} />)
           : null}
-        <Button testID="tasks-new-reminder" label={t('today.new_reminder')} variant="secondary" onPress={() => router.push('/reminder-new')} />
+        <Button testID="tasks-new-reminder" label={t('today.new_reminder')} variant="text" onPress={() => router.push('/reminder-new')} />
       </View>
     );
 
@@ -262,7 +261,7 @@ function NowLine({ now }: { now: number }) {
       <AppText variant="bodyStrong" color="brand">
         {t('planner.now', { time: hhmm(now) })}
       </AppText>
-      {theme.largeFont ? null : <View style={{ flex: 1, height: 3, backgroundColor: theme.colors.brand, borderRadius: 2 }} />}
+      {theme.largeFont ? null : <View style={{ flex: 1, height: 2, backgroundColor: theme.colors.brand, borderRadius: 1 }} />}
     </View>
   );
 }
@@ -276,7 +275,7 @@ function SlotRow({
 }: {
   slot: Slot;
   late: boolean;
-  /** The page row with this time: its box is ticked here. */
+  /** The page row with this time: its circle is ticked here. */
   task: TaskOut | null;
   onMenu: () => void;
   onMissed: () => void;
@@ -294,18 +293,11 @@ function SlotRow({
     router.push({ pathname: '/reminder-new', params: { text: slot.title, ...(slot.reminderId ? { editId: slot.reminderId } : {}) } });
   };
   const grey = slot.acked || done;
-  const color = grey ? 'ink2' : slot.missed ? 'danger' : 'ink';
+  const canMenu = !(slot.missed || slot.acked);
+  const actions = canMenu ? [{ name: 'menu', label: t('planner.move_time') }] : undefined;
+  // design-system §3 Checkbox: overdue colours the time and the word, never the circle.
   return (
-    <View
-      style={[
-        styles.row,
-        {
-          borderBottomWidth: 1,
-          borderBottomColor: theme.colors.separator,
-          ...(slot.missed ? { borderLeftWidth: 4, borderLeftColor: theme.colors.danger, paddingLeft: theme.space[2] } : {}),
-        },
-      ]}
-    >
+    <View style={styles.row}>
       {task ? (
         <Pressable
           testID={`task-${task.id}`}
@@ -313,69 +305,68 @@ function SlotRow({
           accessibilityState={{ checked: done }}
           accessibilityLabel={`${time}. ${task.title}. ${done ? t('tasks.done') : t('tasks.not_done')}`}
           onPress={() => void setDone(task.id, !done)}
-          style={{ width: theme.size.buttonHeight, height: theme.size.buttonHeight, alignItems: 'center', justifyContent: 'center' }}
+          style={[styles.center, { width: theme.size.minTouch, minHeight: theme.size.minTouch }]}
         >
-          <View style={{ width: 40, height: 40, borderWidth: 2, borderRadius: 6, borderColor: done ? theme.colors.ink2 : theme.colors.iconSecondary, backgroundColor: done ? theme.colors.ink2 : theme.colors.surface, alignItems: 'center', justifyContent: 'center' }}>
-            {done ? <Check size={28} color={theme.colors.surface} strokeWidth={3} /> : null}
-          </View>
+          <CheckMark checked={done} />
         </Pressable>
-      ) : null}
+      ) : (
+        <View style={[styles.center, { width: theme.size.minTouch }]}>
+          <Icon icon={slot.level === 'alarm' ? AlarmClock : Bell} size="sm" color={grey ? 'iconSecondary' : 'brand'} />
+        </View>
+      )}
       <Pressable
         testID={`rem-${slot.key}`}
         accessibilityRole="button"
         accessibilityLabel={label}
+        accessibilityActions={actions}
+        onAccessibilityAction={(e) => {
+          if (e.nativeEvent.actionName === 'menu') onMenu();
+        }}
         onPress={open}
-        style={[styles.flex, { minHeight: theme.size.buttonHeight, paddingVertical: theme.space[2] }, theme.largeFont ? null : styles.row]}
+        onLongPress={canMenu ? onMenu : undefined}
+        delayLongPress={400}
+        style={({ pressed }) => [
+          styles.flex,
+          {
+            minHeight: theme.size.rowHeightMeta,
+            justifyContent: 'center',
+            paddingVertical: theme.space[2],
+            paddingRight: theme.space[2],
+            gap: 2,
+            backgroundColor: pressed ? withAlpha(theme.colors.surfaceSunken, 0.5) : 'transparent',
+          },
+        ]}
       >
-        {theme.largeFont ? (
-          <AppText variant="bodyStrong" color={color}>
-            {`${time} · ${level}`}
+        <AppText color={grey ? 'ink2' : 'ink'} style={grey ? { textDecorationLine: 'line-through' } : undefined}>
+          {slot.title}
+        </AppText>
+        <AppText variant="footnote" color={slot.missed && !grey ? 'danger' : 'ink2'}>
+          {[`${time} · ${level}`, state].filter(Boolean).join(' · ')}
+        </AppText>
+        {late && !slot.missed ? (
+          <AppText variant="footnote" color="warning">
+            {t('rem.late_risk')}
           </AppText>
-        ) : (
-          <AppText variant="number" color={color} style={{ width: 64 }}>
-            {time}
-          </AppText>
-        )}
-        <View style={[styles.flex, { gap: 2 }]}>
-          <AppText color={color} variant={slot.missed ? 'bodyStrong' : 'body'} style={grey ? { textDecorationLine: 'line-through' } : undefined}>
-            {slot.title}
-          </AppText>
-          {theme.largeFont ? null : (
-            <View style={[styles.row, { gap: theme.space[1] }]}>
-              {slot.level === 'alarm' ? <Bell size={16} color={theme.colors.ink2} /> : null}
-              <AppText variant="callout">{level}</AppText>
-            </View>
-          )}
-          {state ? (
-            <AppText variant="callout" color={slot.missed && !grey ? 'danger' : 'ink2'}>
-              {state}
-            </AppText>
-          ) : null}
-          {late && !slot.missed ? (
-            <AppText variant="callout" color="warning">
-              {t('rem.late_risk')}
-            </AppText>
-          ) : null}
-        </View>
+        ) : null}
       </Pressable>
-      {slot.missed || slot.acked ? null : (
+      {canMenu ? (
         <Pressable
           testID={`rem-menu-${slot.key}`}
           accessibilityRole="button"
           accessibilityLabel={t('planner.menu_a11y', { title: slot.title })}
           onPress={onMenu}
-          style={{ width: theme.size.minTouch, height: theme.size.minTouch, alignItems: 'center', justifyContent: 'center' }}
+          style={[styles.center, { width: theme.size.minTouch, height: theme.size.minTouch }]}
         >
-          <Ellipsis size={24} color={theme.colors.brand} />
+          <Icon icon={Ellipsis} size="sm" color="iconSecondary" />
         </Pressable>
-      )}
+      ) : null}
+      <View style={[styles.divider, { left: theme.size.minTouch, backgroundColor: theme.colors.separator }]} />
     </View>
   );
 }
 
-/** «⋯» of a reminder: «Перенести время» (+15 мин / +1 час / Завтра / Выбрать), «Удалить». */
+/** «⋯» of a reminder (the one Sheet + ActionList): «Перенести время» (+15 мин / +1 час / Завтра / Выбрать), «Удалить». */
 function SlotMenu({ slot, onClose }: { slot: Slot; onClose: () => void }) {
-  const theme = useTheme();
   const { t } = useTranslation();
   const reminder = useAlarms((s) => (slot.reminderId ? s.reminders[slot.reminderId] : undefined));
   const server = !!slot.reminderId && !slot.reminderId.startsWith('local:');
@@ -398,63 +389,44 @@ function SlotMenu({ slot, onClose }: { slot: Slot; onClose: () => void }) {
     const id = slot.reminderId;
     useUndo.getState().showCustom(t('planner.moved', { title: reminder.title, time: hhmm(was.dueAt + ms) }), () => void moveReminder(id, was));
   };
-  const row = (testID: string, label: string, onPress: () => void) => (
-    <Button key={testID} testID={testID} label={label} variant="secondary" onPress={onPress} />
-  );
+  const actions: SheetAction[] = [
+    { key: 'p15', testID: 'slot-plus15', label: t('planner.plus15'), icon: Clock, onPress: () => void shift(15 * 60_000) },
+    { key: 'p60', testID: 'slot-plus60', label: t('planner.plus60'), icon: Clock, onPress: () => void shift(60 * 60_000) },
+    { key: 'tom', testID: 'slot-tomorrow', label: t('planner.tomorrow'), icon: CalendarDays, onPress: () => void shift(DAY) },
+    { key: 'pick', testID: 'slot-pick', label: t('planner.pick'), icon: PencilLine, onPress: pick },
+    ...(server
+      ? [
+          {
+            key: 'del',
+            testID: `rem-delete-${slot.key}`,
+            label: t('rem.delete'),
+            hint: t('rem.delete_a11y', { title: slot.title }),
+            icon: Trash2,
+            danger: true,
+            onPress: () => {
+              onClose();
+              void removeReminder(slot.reminderId!, slot.title, t);
+            },
+          },
+        ]
+      : []),
+  ];
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <View style={[styles.scrim, { backgroundColor: theme.colors.scrim }]}>
-        <SafeAreaView
-          edges={['bottom']}
-          testID="slot-menu"
-          style={{ backgroundColor: theme.colors.surface, borderTopLeftRadius: theme.radius.sheet, borderTopRightRadius: theme.radius.sheet, maxHeight: '90%' }}
-        >
-          <ScrollView contentContainerStyle={{ padding: theme.space[5], gap: theme.space[2] }}>
-            <AppText variant="title2" accessibilityRole="header" numberOfLines={3}>
-              {`${hhmm(slot.at)} ${slot.title}`}
-            </AppText>
-            <AppText variant="sectionLabel" accessibilityRole="header">
-              {t('planner.move_time')}
-            </AppText>
-            {row('slot-plus15', t('planner.plus15'), () => void shift(15 * 60_000))}
-            {row('slot-plus60', t('planner.plus60'), () => void shift(60 * 60_000))}
-            {row('slot-tomorrow', t('planner.tomorrow'), () => void shift(DAY))}
-            {row('slot-pick', t('planner.pick'), pick)}
-            {server ? (
-              <Button
-                testID={`rem-delete-${slot.key}`}
-                label={t('rem.delete')}
-                accessibilityLabel={t('rem.delete_a11y', { title: slot.title })}
-                variant="text"
-                labelColor="danger"
-                onPress={() => {
-                  onClose();
-                  void removeReminder(slot.reminderId!, slot.title, t);
-                }}
-              />
-            ) : null}
-            <Button testID="slot-close" label={t('common.close')} variant="text" onPress={onClose} />
-          </ScrollView>
-        </SafeAreaView>
-      </View>
-    </Modal>
+    <Sheet visible testID="slot-menu" title={`${hhmm(slot.at)} ${slot.title}`} onClose={onClose}>
+      <AppText variant="sectionLabel" accessibilityRole="header">
+        {t('planner.move_time')}
+      </AppText>
+      <ActionList actions={actions} />
+    </Sheet>
   );
 }
 
-/** Empty: a blank sheet with pale hours and what to say. */
+/** Empty: the icon and what to say (design-system §3 EmptyState — no pale fake hours). */
 function EmptyDay() {
-  const theme = useTheme();
   const { t } = useTranslation();
   return (
-    <View testID="planner-empty" style={{ gap: theme.space[2], paddingVertical: theme.space[2] }}>
-      {['09:00', '12:00', '18:00'].map((h) => (
-        <View key={h} importantForAccessibility="no-hide-descendants" style={[styles.row, { borderBottomWidth: 1, borderBottomColor: theme.colors.separator, minHeight: 40, opacity: 0.5 }]}>
-          <AppText variant="number" color="ink2">
-            {h}
-          </AppText>
-        </View>
-      ))}
-      <AppText>{t('planner.empty')}</AppText>
+    <View testID="planner-empty">
+      <PageEmpty icon={CircleCheck} lines={[t('planner.empty')]} />
     </View>
   );
 }
@@ -462,5 +434,6 @@ function EmptyDay() {
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
   flex: { flex: 1 },
-  scrim: { flex: 1, justifyContent: 'flex-end' },
+  center: { alignItems: 'center', justifyContent: 'center' },
+  divider: { position: 'absolute', right: 0, bottom: 0, height: StyleSheet.hairlineWidth },
 });

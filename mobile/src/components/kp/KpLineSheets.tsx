@@ -67,9 +67,7 @@ export function AddLineSheet({ defaultKind, onSave, onClose }: { defaultKind: 'q
               justifyContent: 'center',
               paddingHorizontal: theme.space[3],
               borderRadius: theme.radius.md,
-              borderWidth: 2,
-              borderColor: kind === k ? theme.colors.brand : theme.colors.iconSecondary,
-              backgroundColor: kind === k ? theme.colors.brand : theme.colors.surface,
+              backgroundColor: kind === k ? theme.colors.brand : theme.colors.surfaceSunken,
             }}
           >
             <AppText color={kind === k ? 'onBrand' : 'ink'} style={{ textAlign: 'center' }}>{`${kind === k ? '● ' : '○ '}${t(`kp.add_kind_${k}`)}`}</AppText>

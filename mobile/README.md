@@ -58,14 +58,17 @@ To restart the first-launch flow on a device: clear the app's data (or reinstall
 src/
   app/                       expo-router routes
     _layout.tsx              root Stack, fonts (Onest), theme
-    (onboarding)/            first launch: welcome (S01–S02) → consent (S05) → start (S41)
-                             → phrase (S03, path 3) / gallery (S35, paths 1 and 3)
+    (onboarding)/            first launch (Ф-34): welcome «Начать» + policy line → consents (`screen: welcome`)
+                             → `pages/batch skipped` → «Сегодня». consent (S05), start (S41), phrase, gallery stay
+                             reachable by address (Ф-33), off the first-launch path
+    settings.tsx             «Настройки» (Ф-41): account, data, assistant, language, theme, policy, consents, delete
+    legal.tsx                the policy / terms texts «Начать» accepts, and «Согласия» (what was recorded)
     (main)/_layout.tsx       Tabs navigator with custom footer: answer banner + assistant line + tabs
     (main)/index.tsx         «Сегодня» (S06, empty state)
     (main)/page/[id].tsx     universal page (S37)
     (main)/record/[id].tsx   record card (S09), `from` = the page it was opened from
     (main)/records.tsx       «Все записи»
-    (main)/more.tsx          «Ещё» (S42)
+    (main)/more.tsx          «Ещё» (S42): profile, «Ваши страницы», 5 rows (Ф-41)
     (main)/search.tsx        search from the assistant line and «Искать по всем страницам»
     (main)/trash.tsx         «Удалённые записи» (S31)
     phone.tsx                number, SMS code, name (S04b); `reason=expired`: sign in again

@@ -1,13 +1,12 @@
 import { router } from 'expo-router';
-import { ArrowDown, ArrowUp, ChevronLeft, Ellipsis } from 'lucide-react-native';
+import { ArrowDown, ArrowUp, Ellipsis, FolderOpen, PencilLine, Trash2 } from 'lucide-react-native';
 import { Fragment, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/ui/Button';
+import { ActionList, Button, Header, Icon as UiIcon, Sheet } from '@/components/ui';
 import { PageIcon } from '@/components/Icon';
 import { PageNameSheet } from '@/components/PageNameSheet';
 import { Screen } from '@/components/Screen';
@@ -54,44 +53,33 @@ export default function MyPagesScreen() {
         onPress={() => void stepPage(p.id, step)}
         style={[styles.square, { width: theme.size.minTouch, height: theme.size.minTouch, opacity: can ? 1 : 0.35 }]}
       >
-        <Icon size={24} color={theme.colors.brand} />
+        <Icon size={20} color={theme.colors.brand} strokeWidth={theme.icon.strokeWidth} />
       </Pressable>
     );
   };
 
   const card = {
     backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.separator,
     borderRadius: theme.radius.lg,
     paddingHorizontal: theme.space[3],
-    minHeight: theme.size.buttonHeight,
+    minHeight: theme.size.rowHeight,
     marginBottom: theme.space[2],
-    gap: theme.space[2],
+    gap: theme.space[1],
+    ...theme.elevation.card,
   };
 
   return (
     <Screen testID="my-pages-screen" edges={['top']} scroll={false}>
       <View style={{ flex: 1 }} {...drag.handlers}>
-        <ScrollView scrollEnabled={!drag.active} contentContainerStyle={{ paddingVertical: theme.space[4] }}>
-          <Button
-            testID="my-pages-back"
-            label={t('common.back')}
-            variant="text"
-            minHeight={theme.size.minTouch}
-            icon={<ChevronLeft size={22} color={theme.colors.brand} />}
-            onPress={() => router.navigate('/more')}
-            style={styles.back}
-          />
-          <AppText variant="largeTitle" accessibilityRole="header">
-            {t('pages.my')}
-          </AppText>
-          <AppText variant="callout" style={{ marginBottom: theme.space[4] }}>
-            {t('pages.in_tabs', { n: inTabs })}
-          </AppText>
-          <View testID="my-pages-today" style={[styles.row, styles.border, card]}>
-            <PageIcon name="today" size={24} color={theme.colors.ink} />
+        <ScrollView scrollEnabled={!drag.active} contentContainerStyle={{ paddingTop: theme.space[2], paddingBottom: theme.space[4] }}>
+          <Header title={t('pages.my')} back={{ onPress: () => router.navigate('/more'), testID: 'my-pages-back' }}>
+            <AppText variant="callout">{t('pages.in_tabs', { n: inTabs })}</AppText>
+          </Header>
+          <View style={{ height: theme.space[2] }} />
+          <View testID="my-pages-today" style={[styles.row, card]}>
+            <PageIcon name="today" size={24} color={theme.colors.ink2} />
             <AppText style={styles.flex}>{t('tpl.today')}</AppText>
-            <AppText variant="callout">{t('pages.today_fixed')}</AppText>
+            <AppText variant="footnote">{t('pages.today_fixed')}</AppText>
           </View>
           {pages.map((p, i) => {
             const shift = drag.shift(i);
@@ -111,10 +99,9 @@ export default function MyPagesScreen() {
                   onLayout={(e) => drag.measure(i, e.nativeEvent.layout.height + theme.space[2])}
                   style={[
                     styles.row,
-                    styles.border,
                     card,
                     shift ? { transform: [{ translateY: shift }], zIndex: drag.isDragged(i) ? 10 : 0 } : null,
-                    drag.isDragged(i) ? [{ borderColor: theme.colors.brand }, theme.elevation.floating] : null,
+                    drag.isDragged(i) ? theme.elevation.floating : null,
                   ]}
                 >
                   <Pressable
@@ -130,9 +117,9 @@ export default function MyPagesScreen() {
                     onPress={() => router.navigate({ pathname: '/page/[id]', params: { id: p.id } })}
                     onLongPress={() => drag.start(i, (to) => void movePage(p.id, to))}
                     delayLongPress={400}
-                    style={[styles.row, styles.flex, { minHeight: theme.size.buttonHeight, gap: theme.space[3] }]}
+                    style={[styles.row, styles.flex, { minHeight: theme.size.rowHeight, gap: theme.space[3] }]}
                   >
-                    <PageIcon name={p.icon} size={24} color={theme.colors.ink} />
+                    <PageIcon name={p.icon} size={24} color={theme.colors.ink2} />
                     <AppText style={styles.flex}>{title(p)}</AppText>
                   </Pressable>
                   {arrow(p, i, -1)}
@@ -144,7 +131,7 @@ export default function MyPagesScreen() {
                     onPress={() => setMenuFor(p)}
                     style={[styles.square, { width: theme.size.minTouch, height: theme.size.minTouch }]}
                   >
-                    <Ellipsis size={24} color={theme.colors.brand} />
+                    <UiIcon icon={Ellipsis} size="sm" color="iconSecondary" />
                   </Pressable>
                 </View>
               </Fragment>
@@ -227,51 +214,31 @@ function PageMenu({
   onRemove: () => void;
   onClose: () => void;
 }) {
-  const theme = useTheme();
   const { t } = useTranslation();
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <View style={[styles.scrim, { backgroundColor: theme.colors.scrim }]}>
-        <SafeAreaView
-          edges={['bottom']}
-          testID="my-pages-sheet"
-          style={[
-            {
-              backgroundColor: theme.colors.surface,
-              borderTopLeftRadius: theme.radius.sheet,
-              borderTopRightRadius: theme.radius.sheet,
-              padding: theme.space[5],
-              gap: theme.space[2],
-            },
-            theme.elevation.floating,
-          ]}
-        >
-          <AppText variant="title2" accessibilityRole="header">
-            {name}
-          </AppText>
-          <Button testID="my-pages-sheet-open" label={t('pages.open')} variant="secondary" onPress={onOpen} />
-          <Button testID="my-pages-sheet-rename" label={t('pages.rename')} variant="secondary" onPress={onRename} />
-          <Button
-            testID="my-pages-sheet-remove"
-            label={t('pages.remove')}
-            accessibilityHint={t('pages.remove_hint')}
-            variant="text"
-            labelColor="danger"
-            onPress={onRemove}
-          />
-          <AppText variant="callout">{t('pages.remove_hint')}</AppText>
-          <Button testID="my-pages-sheet-close" label={t('common.close')} variant="text" onPress={onClose} />
-        </SafeAreaView>
-      </View>
-    </Modal>
+    <Sheet visible testID="my-pages-sheet" title={name} onClose={onClose}>
+      <ActionList
+        actions={[
+          { key: 'open', testID: 'my-pages-sheet-open', label: t('pages.open'), icon: FolderOpen, onPress: onOpen },
+          { key: 'rename', testID: 'my-pages-sheet-rename', label: t('pages.rename'), icon: PencilLine, onPress: onRename },
+          {
+            key: 'remove',
+            testID: 'my-pages-sheet-remove',
+            label: t('pages.remove'),
+            hint: t('pages.remove_hint'),
+            icon: Trash2,
+            danger: true,
+            onPress: onRemove,
+          },
+        ]}
+      />
+      <AppText variant="footnote">{t('pages.remove_hint')}</AppText>
+    </Sheet>
   );
 }
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
-  border: { borderWidth: 1 },
   flex: { flex: 1 },
   square: { alignItems: 'center', justifyContent: 'center' },
-  back: { alignSelf: 'flex-start', paddingHorizontal: 0 },
-  scrim: { flex: 1, justifyContent: 'flex-end' },
 });

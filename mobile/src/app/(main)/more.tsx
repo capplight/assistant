@@ -1,142 +1,107 @@
 import { router } from 'expo-router';
+import { FolderInput, LayoutGrid, ListChecks, Phone, Plus, Settings, ShieldAlert, UserRound } from 'lucide-react-native';
 import { useState } from 'react';
-import { ChevronRight } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 
-import { AppText } from '@/components/AppText';
-import { PageIcon } from '@/components/Icon';
 import { PageNameSheet } from '@/components/PageNameSheet';
 import { Screen } from '@/components/Screen';
-import { LANGUAGES } from '@/i18n';
+import { ListGroup, ListRow } from '@/components/ui/Card';
+import { Header } from '@/components/ui/Header';
+import { Icon, PageIcon } from '@/components/ui/Icon';
 import { addCustomPage } from '@/pages/service';
 import { MAX_TAB_PAGES, MAX_TAB_PAGES_LARGE_FONT } from '@/pages/templates';
 import { usePageLabels } from '@/pages/usePageLabels';
-import { allDone } from '@/alarms/setup';
-import { useAlarms } from '@/alarms/store';
 import { useOnboarding } from '@/store/onboarding';
+import { selectSortedPages, usePages } from '@/store/pages';
 import { useSession } from '@/store/session';
 import { useToast } from '@/store/toast';
-import { selectSortedPages, usePages } from '@/store/pages';
 import { useTheme } from '@/theme';
-import { repeatsCount, visibleGroups } from '@/dedup/service';
-import { useDedup } from '@/dedup/store';
 
-/** S42 «Ещё»: pages that do not fit in tabs + service entries (2-design §4.2). Most entries are stubs in week 1. */
+/**
+ * S42 «Ещё» (Ф-41, design-system §4 mock): the profile, «Ваши страницы» (pages that do not fit in the tabs) and
+ * six rows in one card — Новая страница, Мои страницы, Что я сделал, Принести заметки, Настройки (the profile is
+ * the sixth: it opens «Настройки» too). Everything service-like lives in «Настройки»; no «Появится позже» stubs.
+ * A sign-in that expired or a consent another account needs comes first, as a row of its own.
+ */
 export default function MoreScreen() {
   const theme = useTheme();
   const { t } = useTranslation();
   const { title } = usePageLabels();
   const pages = usePages(useShallow(selectSortedPages));
-  const language = useOnboarding((s) => s.language);
-  const setLanguage = useOnboarding((s) => s.setLanguage);
+  const name = useOnboarding((s) => s.displayName);
   const phoneLinked = useOnboarding((s) => s.phoneLinkedAt !== null);
   const needsConsent = useOnboarding((s) => s.accountConsent !== null);
   const needsSignIn = useSession((s) => s.needsSignIn);
   const showToast = useToast((s) => s.show);
   const [naming, setNaming] = useState(false);
-  const alarmsOk = useAlarms((s) => (s.caps ? allDone(s.caps, s) && s.test.state === 'ok' : false));
-  const repeats = useDedup((s) => repeatsCount(visibleGroups(s.groups, s.decided)));
   const overflow = pages.slice(theme.largeFont ? MAX_TAB_PAGES_LARGE_FONT : MAX_TAB_PAGES);
-
-  const row = (key: string, label: string, onPress?: () => void, meta?: string) => (
-    <Pressable
-      key={key}
-      testID={`more-${key}`}
-      accessibilityRole="button"
-      accessibilityState={{ disabled: !onPress }}
-      accessibilityHint={onPress ? undefined : t('more.later')}
-      onPress={onPress}
-      style={[
-        styles.row,
-        {
-          minHeight: theme.size.buttonHeight,
-          borderBottomColor: theme.colors.separator,
-          gap: theme.space[3],
-          paddingVertical: theme.space[2],
-        },
-      ]}
-    >
-      <View style={styles.flex}>
-        <AppText color={onPress ? 'ink' : 'ink2'}>{label}</AppText>
-        {meta ? <AppText variant="callout">{meta}</AppText> : null}
-      </View>
-      {onPress ? <ChevronRight size={22} color={theme.colors.ink2} /> : null}
-    </Pressable>
+  const avatar = (
+    <View style={[styles.avatar, { backgroundColor: theme.colors.brand }]}>
+      <Icon icon={UserRound} color="onBrand" />
+    </View>
   );
-
-  const nextLang = LANGUAGES.find((l) => l !== language) ?? 'ru';
 
   return (
     <Screen testID="page-more" edges={['top']}>
-      <AppText variant="largeTitle" accessibilityRole="header" style={{ marginBottom: theme.space[4] }}>
-        {t('more.title')}
-      </AppText>
-      {overflow.length > 0 ? (
-        <View style={{ marginBottom: theme.space[6] }}>
-          <AppText variant="sectionLabel" accessibilityRole="header">
-            {t('more.other_pages')}
-          </AppText>
-          {overflow.map((p) => (
-            <Pressable
-              key={p.id}
-              testID={`more-page-${p.id}`}
-              accessibilityRole="button"
-              onPress={() => router.navigate({ pathname: '/page/[id]', params: { id: p.id } })}
-              style={[
-                styles.row,
-                { minHeight: theme.size.buttonHeight, borderBottomColor: theme.colors.separator, gap: theme.space[3] },
-              ]}
-            >
-              <PageIcon name={p.icon} color={theme.colors.ink} size={24} />
-              <AppText style={styles.flex}>{title(p)}</AppText>
-              <ChevronRight size={22} color={theme.colors.ink2} />
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
-      {needsSignIn
-        ? row('sign_in', t('phone.sign_in_row'), () => router.push('/phone?reason=expired'), t('phone.sign_in_hint'))
-        : null}
-      {needsConsent
-        ? row('consent', t('account_consent.row'), () => router.push('/account-consent'), t('account_consent.row_hint'))
-        : null}
-      {row('add_page', t('more.add_page'), () => setNaming(true), t('tpl.hint.custom'))}
-      {row('my_pages', t('more.my_pages'), () => router.navigate('/my-pages'))}
-      {row('all_records', t('more.all_records'), () => router.navigate('/records'))}
-      {row('trash', t('trash.title'), () => router.navigate('/trash'), t('trash.hint'))}
-      {row('did', t('more.did'), () => router.push('/did'))}
-      {row('habits', t('habits.title'), () => router.push('/habits'))}
-      {row('chat', t('more.chat'), () => router.push('/chat'))}
-      {row('alarms', t('more.alarms'), () => router.push('/alarm-setup'), alarmsOk ? t('more.alarms_ok') : t('more.alarms_fix'))}
-      {row('duplicates', t('more.duplicates'), () => router.push('/duplicates'), repeats > 0 ? t('more.duplicates_meta', { count: repeats }) : undefined)}
-      {row('import', t('more.import'), () => router.push('/import'))}
-      {row('lang', `${t('lang.choose')}: ${t(`lang.${language}`)}`, () => setLanguage(nextLang), t(`lang.${nextLang}`))}
-      {needsSignIn
-        ? null
-        : phoneLinked
-        ? row('phone', t('phone.linked'))
-        : row('phone', t('phone.more_row'), () => router.push('/phone'), t('phone.more_hint'))}
-      {row('my_data', t('account.my_data'), () => router.push('/my-data'), t('account.my_data_hint'))}
-      {row('settings', t('more.settings'), undefined, t('more.later'))}
-      {row('help', t('more.help'), undefined, t('more.later'))}
-      <Pressable
-        testID="more-delete_account"
-        accessibilityRole="button"
-        onPress={() => router.push('/delete-account')}
-        style={[styles.row, { minHeight: theme.size.buttonHeight, borderBottomColor: theme.colors.separator, paddingVertical: theme.space[2] }]}
-      >
-        <AppText color="danger" style={styles.flex}>
-          {t('account.delete')}
-        </AppText>
-      </Pressable>
+      <Header title={t('more.title')} />
+      <View style={{ gap: theme.space[5] }}>
+        {needsSignIn || needsConsent ? (
+          <ListGroup>
+            {needsSignIn ? (
+              <ListRow testID="more-sign_in" icon={Phone} title={t('phone.sign_in_row')} meta={t('phone.sign_in_hint')} chevron onPress={() => router.push('/phone?reason=expired')} />
+            ) : null}
+            {needsConsent ? (
+              <ListRow testID="more-consent" icon={ShieldAlert} title={t('account_consent.row')} meta={t('account_consent.row_hint')} chevron onPress={() => router.push('/account-consent')} />
+            ) : null}
+          </ListGroup>
+        ) : null}
+
+        <ListGroup>
+          <ListRow
+            testID="more-profile"
+            left={avatar}
+            title={name ?? t('more.profile')}
+            meta={phoneLinked ? t('phone.linked') : t('more.profile_hint')}
+            chevron
+            onPress={() => router.push('/settings')}
+          />
+        </ListGroup>
+
+        {overflow.length > 0 ? (
+          <ListGroup title={t('more.your_pages')}>
+            {overflow.map((p) => (
+              <ListRow
+                key={p.id}
+                testID={`more-page-${p.id}`}
+                left={
+                  <View style={[styles.square, { backgroundColor: theme.colors.brandTint, borderRadius: theme.radius.sm }]}>
+                    <PageIcon name={p.icon} color={theme.colors.brand} size={20} />
+                  </View>
+                }
+                title={title(p)}
+                chevron
+                onPress={() => router.navigate({ pathname: '/page/[id]', params: { id: p.id } })}
+              />
+            ))}
+          </ListGroup>
+        ) : null}
+
+        <ListGroup>
+          <ListRow testID="more-add_page" icon={Plus} title={t('more.add_page')} chevron onPress={() => setNaming(true)} />
+          <ListRow testID="more-my_pages" icon={LayoutGrid} title={t('more.my_pages')} chevron onPress={() => router.navigate('/my-pages')} />
+          <ListRow testID="more-did" icon={ListChecks} title={t('more.did')} chevron onPress={() => router.push('/did')} />
+          <ListRow testID="more-import" icon={FolderInput} title={t('more.import')} chevron onPress={() => router.push('/import')} />
+          <ListRow testID="more-settings" icon={Settings} title={t('more.settings')} chevron onPress={() => router.push('/settings')} />
+        </ListGroup>
+      </View>
       {naming ? (
         <PageNameSheet
           onClose={() => setNaming(false)}
-          onSave={(name) => {
+          onSave={(pageName) => {
             setNaming(false);
-            void addCustomPage(name).then((page) => {
+            void addCustomPage(pageName).then((page) => {
               if (page) router.navigate({ pathname: '/page/[id]', params: { id: page.id } });
               else showToast(t('gallery.limit'), 4000);
             });
@@ -148,6 +113,6 @@ export default function MoreScreen() {
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1 },
-  flex: { flex: 1 },
+  avatar: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
+  square: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
 });

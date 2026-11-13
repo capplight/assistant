@@ -80,7 +80,7 @@ export function SourceChips({
     {
       minHeight: theme.size.minTouch,
       borderRadius: theme.radius.round,
-      borderColor: theme.colors.iconSecondary,
+      backgroundColor: theme.colors.surfaceSunken,
       paddingHorizontal: theme.space[3],
       gap: theme.space[1],
     },
@@ -99,7 +99,7 @@ export function SourceChips({
             onPress={() => void open(s)}
             style={chipStyle}
           >
-            <FileText size={18} color={theme.colors.ink2} />
+            <FileText size={18} color={theme.colors.iconSecondary} strokeWidth={1.75} />
             <AppText variant="callout" color="ink" numberOfLines={1} style={styles.shrink}>
               {label}
             </AppText>
@@ -142,13 +142,13 @@ export function LocalHitChips({ messageId, recordIds, titles }: { messageId: str
             {
               minHeight: theme.size.minTouch,
               borderRadius: theme.radius.round,
-              borderColor: theme.colors.iconSecondary,
+              backgroundColor: theme.colors.surfaceSunken,
               paddingHorizontal: theme.space[3],
               gap: theme.space[1],
             },
           ]}
         >
-          <FileText size={18} color={theme.colors.ink2} />
+          <FileText size={18} color={theme.colors.iconSecondary} strokeWidth={1.75} />
           <AppText variant="callout" color="ink" numberOfLines={1} style={styles.shrink}>
             {titles[id] ?? ''}
           </AppText>
@@ -158,8 +158,57 @@ export function LocalHitChips({ messageId, recordIds, titles }: { messageId: str
   );
 }
 
+/**
+ * The sources of an answer as numbered rows («1  Заметки · 3 ноя ›»), for the search screen: the answer's
+ * «[1]» marks point here. A row opens the record with «‹ Назад к ответу».
+ */
+export function NumberedSources({ messageId, sources }: { messageId: string; sources: ChatSource[] }) {
+  const theme = useTheme();
+  const { t } = useTranslation();
+  const ret = useReturnHref(messageId);
+  const labelOf = useSourceLabel();
+  const showToast = useToast((s) => s.show);
+  if (sources.length === 0) return null;
+  const open = async (s: ChatSource) => {
+    const target = await resolveSource(s);
+    if (!target) return showToast(t('search.open_failed'), 3000);
+    router.navigate({ pathname: '/record/[id]', params: { id: target.recordId, ret, ...(target.pageId ? { from: target.pageId } : {}) } });
+  };
+  return (
+    <View testID="answer-sources">
+      {sources.map((s, i) => {
+        const { label, a11y } = labelOf(s);
+        return (
+          <Pressable
+            key={s.ref}
+            testID={`answer-source-${i + 1}`}
+            accessibilityRole="button"
+            accessibilityLabel={`${i + 1}. ${a11y}`}
+            onPress={() => void open(s)}
+            style={({ pressed }) => [
+              { flexDirection: 'row', alignItems: 'center', gap: theme.space[3], minHeight: theme.size.minTouch, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.separator },
+              pressed ? { backgroundColor: theme.colors.surfaceSunken } : null,
+            ]}
+          >
+            <View style={{ minWidth: 24, minHeight: 24, borderRadius: 12, backgroundColor: theme.colors.brandTint, alignItems: 'center', justifyContent: 'center' }}>
+              <AppText variant="footnote" color="brand" style={{ fontFamily: theme.type.sectionLabel.fontFamily }}>
+                {String(i + 1)}
+              </AppText>
+            </View>
+            <View style={styles.shrinkRow}>
+              {s.title ? <AppText>{s.title}</AppText> : null}
+              <AppText variant="callout">{label}</AppText>
+            </View>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', flexWrap: 'wrap' },
-  chip: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, maxWidth: '100%' },
+  shrinkRow: { flex: 1, paddingVertical: 6 },
+  chip: { flexDirection: 'row', alignItems: 'center', maxWidth: '100%' },
   shrink: { flexShrink: 1 },
 });

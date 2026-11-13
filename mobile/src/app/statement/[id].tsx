@@ -116,7 +116,7 @@ export default function StatementScreen() {
         </AppText>
         {st.bank && BANKS[st.bank] ? <AppText variant="callout">{BANKS[st.bank]}</AppText> : null}
         {a ? (
-          <View testID="plan-numbers" style={{ gap: theme.space[2], borderWidth: 2, borderColor: theme.colors.iconSecondary, borderRadius: theme.radius.lg, padding: theme.space[4], backgroundColor: theme.colors.surface }}>
+          <View testID="plan-numbers" style={[{ gap: theme.space[2], borderRadius: theme.radius.lg, padding: theme.space[4], backgroundColor: theme.colors.surface }, theme.elevation.card]}>
             <AppText variant="callout">{t('exp.plan_spent')}</AppText>
             <AmountText testID="plan-spent" variant="amount" maxScale={1.6} inset={theme.screenPadding * 2 + theme.space[4] * 2 + 4}>
               {formatMinor(n!.spent ?? 0n, cur)}

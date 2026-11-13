@@ -174,7 +174,7 @@ describe('US-26: banner → «Открыть ответ» → «Переписк
     await fireEvent.press(screen.getByTestId('answer-open'));
     await settle(() => r.getPathname() === '/chat');
     expect(screen.getByText(/^— на странице Покупки, /)).toBeTruthy();
-    expect(screen.getByText('Вы: сколько я должна Ерлану?')).toBeTruthy();
+    expect(screen.getByLabelText('Вы: сколько я должна Ерлану?')).toBeTruthy();
     expect(screen.getByText(long.join(''))).toBeTruthy();
     expect(screen.getByText('Подготовил помощник (ИИ) по вашим записям — проверьте')).toBeTruthy();
     expect(screen.getByTestId('source-srv-erlan')).toBeTruthy();

@@ -34,12 +34,10 @@ export function KpTextField({ label, testID, style, multiline, ...rest }: TextIn
           {
             color: theme.colors.ink,
             minHeight: multiline ? theme.size.buttonHeight * 2 : theme.size.buttonHeight,
-            borderWidth: 1,
-            borderColor: theme.colors.iconSecondary,
             borderRadius: theme.radius.sm,
             paddingHorizontal: theme.space[3],
             paddingVertical: multiline ? theme.space[2] : 0,
-            backgroundColor: theme.colors.surface,
+            backgroundColor: theme.colors.surfaceSunken,
             textAlignVertical: multiline ? 'top' : 'center',
           },
           style,

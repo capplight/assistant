@@ -10,7 +10,6 @@ import { MAX_FONT_SCALE, useTheme } from '@/theme';
 import { useAssistant } from '@/store/assistant';
 import { selectNoAi, useOnboarding } from '@/store/onboarding';
 import { useToast } from '@/store/toast';
-import { useUndo } from '@/store/undo';
 import { useView } from '@/store/view';
 import type { Fragment } from '@/voice/session';
 import { useVoiceRecorder } from '@/voice/useVoiceRecorder';
@@ -62,27 +61,14 @@ export function AssistantLine({
   }
   const inputRef = useRef<React.ComponentRef<typeof TextInput>>(null);
 
-  // S04b follows the first result, once (R-60); later it is in «Ещё».
-  const askPhoneOnce = () => {
-    const s = useOnboarding.getState();
-    if (!s.phoneAskedAt && !s.phoneLinkedAt) router.push('/phone');
-  };
-
-  // A change made by the assistant (a note it saved, «Разложил…») is a first result too.
-  useEffect(
-    () =>
-      useUndo.subscribe((st, prev) => {
-        if (scope !== 'all' && st.strip?.kind === 'action' && st.strip.id !== prev.strip?.id) askPhoneOnce();
-      }),
-    [scope],
-  );
+  // Ф-34: S04b (the phone number) no longer opens by itself after the first result; it is in «Настройки →
+  // Аккаунт» and comes when it is needed (sign-in expired, account deletion).
 
   const onVoiceFinished = async (fragments: Fragment[]) => {
     setListening(false);
     const capture = await getCapture();
     await capture.saveVoice({ fragments, pageId: current.id });
     showToast(t('saved'));
-    askPhoneOnce();
   };
   const voice = useVoiceRecorder(onVoiceFinished);
   const listening = voice.status === 'listening';
@@ -139,7 +125,6 @@ export function AssistantLine({
       router.navigate({ pathname: '/search', params: { q: value, from: 'line' } });
       return;
     }
-    if (result === 'saved') askPhoneOnce();
   };
 
   const chip = (

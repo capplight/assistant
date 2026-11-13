@@ -1,8 +1,8 @@
 import { router } from 'expo-router';
-import { ChevronDown, Ellipsis } from 'lucide-react-native';
+import { Building2, ChevronDown, Ellipsis, FileText, ListOrdered, MessageSquareText } from 'lucide-react-native';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, View, type AccessibilityActionEvent } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View, type AccessibilityActionEvent } from 'react-native';
 
 import type { DocumentOut } from '@/api/types';
 import type { LocalRecord } from '@/db/records';
@@ -19,7 +19,12 @@ import { useTheme } from '@/theme';
 
 import { AppText } from '../AppText';
 import { Button } from '../ui/Button';
-import { MiniSheet, StatusBar } from '../kp/KpParts';
+import { ListGroup, ListRow } from '../ui/Card';
+import { Chip } from '../ui/Chip';
+import { EmptyState } from '../ui/EmptyState';
+import { Icon } from '../ui/Icon';
+import { ActionList } from '../ui/Sheet';
+import { MiniSheet, StatusBadge } from '../kp/KpParts';
 import { ChoiceSheet } from './FieldSheets';
 import { EntryList, type EntryCtx } from './EntryList';
 import { Sheet } from './ExpenseParts';
@@ -132,32 +137,41 @@ export function DocumentsView({ page, entries, frameTop, ordering }: ViewProps) 
     router.push('/kp/new');
   };
 
+  // Rows of one folder look like one grouped list (research pattern 8): the first and the last are rounded.
+  const placeOf = new Map<string, Place>();
+  rows.forEach((r, i) => {
+    if (r.type !== 'entry') return;
+    const prev = rows[i - 1];
+    const next = rows[i + 1];
+    placeOf.set(r.entry.record.id, { first: !prev || prev.type !== 'entry', last: !next || next.type !== 'entry' });
+  });
+  const place = (row: EntryRow): Place => (ordering ? { first: true, last: true } : (placeOf.get(row.entry.record.id) ?? { first: true, last: true }));
+
+  const filters = FILTERS.filter((f) => f === 'all' || counts[f] > 0);
   const header = (
-    <View style={{ gap: theme.space[4], marginBottom: theme.space[4] }}>
+    <View style={{ gap: theme.space[4], marginBottom: theme.space[2] }}>
       {frameTop}
       <Button testID="docs-new-kp" label={ai ? t('kp.new') : t('kp.new_no_ai')} onPress={newKp} />
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.space[2] }}>
-        <Button testID="docs-company" label={t('kp.my_company')} variant="secondary" minHeight={theme.size.minTouch} style={{ flexGrow: 1 }} onPress={() => router.push('/company')} />
-        <Button testID="docs-prices" label={t('kp.my_prices')} variant="secondary" minHeight={theme.size.minTouch} style={{ flexGrow: 1 }} onPress={() => router.push('/price-list')} />
+        <Chip testID="docs-company" icon={Building2} label={t('kp.my_company')} onPress={() => router.push('/company')} />
+        <Chip testID="docs-prices" icon={ListOrdered} label={t('kp.my_prices')} onPress={() => router.push('/price-list')} />
       </View>
       {openDrafts.length > 0 ? (
-        <View testID="docs-drafts" style={{ gap: theme.space[2] }}>
-          <AppText variant="callout" accessibilityRole="header">
-            {t('draft.list_title', { count: openDrafts.length })}
-          </AppText>
+        <ListGroup testID="docs-drafts" title={t('draft.list_title', { count: openDrafts.length })}>
           {openDrafts.map((d) => (
-            <Button
+            <ListRow
               key={d.id}
               testID={`docs-draft-${d.id}`}
-              label={`${d.recipient_name ?? t('send.no_client')}: ${d.text.length > 60 ? `${d.text.slice(0, 60)}…` : d.text}`}
-              variant="secondary"
-              minHeight={theme.size.minTouch}
+              icon={MessageSquareText}
+              title={d.recipient_name ?? t('send.no_client')}
+              meta={d.text.length > 60 ? `${d.text.slice(0, 60)}…` : d.text}
+              chevron
               onPress={() => router.push({ pathname: '/draft/[id]', params: { id: d.id } })}
             />
           ))}
-        </View>
+        </ListGroup>
       ) : null}
-      {all.length > 0 ? (
+      {all.length > 0 && filters.length > 1 ? (
         theme.largeFont ? (
           <Pressable
             testID="docs-filter"
@@ -166,52 +180,43 @@ export function DocumentsView({ page, entries, frameTop, ordering }: ViewProps) 
             style={{ minHeight: theme.size.minTouch, flexDirection: 'row', alignItems: 'center', gap: theme.space[2] }}
           >
             <AppText color="brand">{t('kp.show', { label: label(filter) })}</AppText>
-            <ChevronDown size={22} color={theme.colors.brand} />
+            <Icon icon={ChevronDown} size="sm" color="brand" />
           </Pressable>
         ) : (
-          <View testID="docs-dividers" accessibilityRole="tablist" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.space[2] }}>
-            {FILTERS.filter((f) => f === 'all' || counts[f] > 0).map((f) => (
-              <Pressable
-                key={f}
-                testID={`docs-divider-${f}`}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: filter === f }}
-                accessibilityLabel={t('kp.filter_a11y', { label: label(f), count: counts[f] })}
-                onPress={() => setFilter(f)}
-                style={{
-                  minHeight: theme.size.minTouch,
-                  paddingHorizontal: theme.space[3],
-                  justifyContent: 'center',
-                  borderTopLeftRadius: theme.radius.round,
-                  borderTopRightRadius: theme.radius.round,
-                  borderWidth: filter === f ? 2 : 1,
-                  borderBottomWidth: filter === f ? 0 : 1,
-                  borderColor: filter === f ? theme.colors.brand : theme.colors.iconSecondary,
-                  backgroundColor: filter === f ? theme.colors.surface : theme.colors.bg,
-                }}
-              >
-                <AppText color={filter === f ? 'brand' : 'ink'} variant={filter === f ? 'bodyStrong' : 'body'}>
-                  {f === 'all' ? label(f) : t('kp.filter_count', { label: label(f), count: counts[f] })}
-                </AppText>
-              </Pressable>
-            ))}
-          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View testID="docs-dividers" accessibilityRole="tablist" style={{ flexDirection: 'row', gap: theme.space[2], paddingVertical: theme.space[1] }}>
+              {filters.map((f) => (
+                <Chip
+                  key={f}
+                  testID={`docs-divider-${f}`}
+                  variant={filter === f ? 'selected' : 'neutral'}
+                  selected={filter === f}
+                  accessibilityLabel={t('kp.filter_a11y', { label: label(f), count: counts[f] })}
+                  label={f === 'all' ? label(f) : t('kp.filter_count', { label: label(f), count: counts[f] })}
+                  onPress={() => setFilter(f)}
+                />
+              ))}
+            </View>
+          </ScrollView>
         )
       ) : null}
       {working.map((j) => (
         <JobCard key={j.id} job={j} />
       ))}
-      {(filter === 'all' || filter === 'kp') && loose.length > 0
-        ? loose.map((d) => (
+      {(filter === 'all' || filter === 'kp') && loose.length > 0 ? (
+        <View>
+          {loose.map((d, i) => (
             <KpCard
               key={d.id}
               doc={d}
               testID={`docs-kp-${d.id}`}
+              place={{ first: i === 0, last: i === loose.length - 1 }}
               onOpen={() => router.push({ pathname: '/kp/[id]', params: { id: d.id } })}
               onStatus={() => setStatusFor(d.id)}
             />
-          ))
-        : null}
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 
@@ -223,6 +228,7 @@ export function DocumentsView({ page, entries, frameTop, ordering }: ViewProps) 
         <KpCard
           doc={d}
           testID={`docs-kp-${d.id}`}
+          place={place(row)}
           highlighted={ctx.highlighted}
           moves={ctx.moves}
           onOpen={() => router.push({ pathname: '/kp/[id]', params: { id: d.id } })}
@@ -230,7 +236,7 @@ export function DocumentsView({ page, entries, frameTop, ordering }: ViewProps) 
         />
       );
     }
-    return <DocCard record={row.entry.record} type={i.type} client={i.client} ctx={ctx} />;
+    return <DocCard record={row.entry.record} type={i.type} client={i.client} ctx={ctx} place={place(row)} />;
   };
 
   const renderGroup = (g: Extract<Row, { type: 'group' }>) => {
@@ -250,12 +256,12 @@ export function DocumentsView({ page, entries, frameTop, ordering }: ViewProps) 
             return next;
           })
         }
-        style={{ minHeight: theme.size.minTouch, flexDirection: 'row', alignItems: 'center', gap: theme.space[2], marginTop: theme.space[2], marginBottom: theme.space[2] }}
+        style={{ minHeight: theme.size.minTouch, flexDirection: 'row', alignItems: 'center', gap: theme.space[2], marginTop: theme.space[3], paddingHorizontal: theme.space[1] }}
       >
         <AppText variant="sectionLabel" accessibilityRole="header" style={{ flex: 1 }}>
           {t('kp.folder', { name: g.title })}
         </AppText>
-        <AppText variant="number">{`${n} ${isClosed ? '›' : '⌄'}`}</AppText>
+        <AppText variant="callout">{`${n} ${isClosed ? '›' : '⌄'}`}</AppText>
       </Pressable>
     );
   };
@@ -271,9 +277,8 @@ export function DocumentsView({ page, entries, frameTop, ordering }: ViewProps) 
 
   const empty =
     entries && working.length === 0 && loose.length === 0 ? (
-      <View testID="docs-empty" style={{ gap: theme.space[3], padding: theme.space[4], borderWidth: 1, borderStyle: 'dashed', borderColor: theme.colors.iconSecondary, borderRadius: theme.radius.lg }}>
-        <AppText variant="title2">{t('kp.empty_title')}</AppText>
-        <AppText>{t('kp.empty_body')}</AppText>
+      <View testID="docs-empty" style={{ gap: theme.space[2], paddingTop: theme.space[4] }}>
+        <EmptyState icon={FileText} text={`${t('kp.empty_title')}. ${t('kp.empty_body')}`} />
       </View>
     ) : null;
 
@@ -307,62 +312,56 @@ export function DocumentsView({ page, entries, frameTop, ordering }: ViewProps) 
       {statusDoc ? (
         <Sheet testID="kp-status-sheet" title={t('kp.status_title')} onClose={() => setStatusFor(null)}>
           <AppText variant="callout">{kpTitle(statusDoc, t)}</AppText>
-          <Button
-            testID="kp-status-seen"
-            label={t('kp.status_seen')}
-            variant="secondary"
-            onPress={() => {
-              setStatusFor(null);
-              void setKpStatus(statusDoc.id, 'seen');
-            }}
+          <ActionList
+            actions={[
+              { key: 'yes', testID: 'kp-status-yes', label: t('kp.status_yes'), onPress: () => (setStatusFor(null), void setKpStatus(statusDoc.id, 'accepted')) },
+              { key: 'no', testID: 'kp-status-no', label: t('kp.status_no'), onPress: () => (setStatusFor(null), void setKpStatus(statusDoc.id, 'declined')) },
+              { key: 'seen', testID: 'kp-status-seen', label: t('kp.status_seen'), onPress: () => (setStatusFor(null), void setKpStatus(statusDoc.id, 'seen')) },
+              ...(shownStatus(statusDoc, statusEdits) !== 'draft'
+                ? [{ key: 'back', testID: 'kp-status-back', label: t('kp.status_back'), onPress: () => (setStatusFor(null), void setKpStatus(statusDoc.id, 'draft')) }]
+                : []),
+            ]}
           />
-          <Button
-            testID="kp-status-yes"
-            label={t('kp.status_yes')}
-            onPress={() => {
-              setStatusFor(null);
-              void setKpStatus(statusDoc.id, 'accepted');
-            }}
-          />
-          <Button
-            testID="kp-status-no"
-            label={t('kp.status_no')}
-            variant="secondary"
-            onPress={() => {
-              setStatusFor(null);
-              void setKpStatus(statusDoc.id, 'declined');
-            }}
-          />
-          {shownStatus(statusDoc, statusEdits) !== 'draft' ? (
-            <Button
-              testID="kp-status-back"
-              label={t('kp.status_back')}
-              variant="text"
-              onPress={() => {
-                setStatusFor(null);
-                void setKpStatus(statusDoc.id, 'draft');
-              }}
-            />
-          ) : null}
         </Sheet>
       ) : null}
       {noAi ? (
         <Sheet testID="kp-no-ai" title={t('kp.no_ai_title')} onClose={() => setNoAi(false)}>
           <AppText>{t('kp.no_ai_body')}</AppText>
-          <Button testID="kp-no-ai-company" label={t('kp.my_company')} variant="secondary" onPress={() => { setNoAi(false); router.push('/company'); }} />
-          <Button testID="kp-no-ai-prices" label={t('kp.my_prices')} variant="secondary" onPress={() => { setNoAi(false); router.push('/price-list'); }} />
+          <ActionList
+            actions={[
+              { key: 'company', testID: 'kp-no-ai-company', icon: Building2, label: t('kp.my_company'), onPress: () => (setNoAi(false), router.push('/company')) },
+              { key: 'prices', testID: 'kp-no-ai-prices', icon: ListOrdered, label: t('kp.my_prices'), onPress: () => (setNoAi(false), router.push('/price-list')) },
+            ]}
+          />
         </Sheet>
       ) : null}
     </>
   );
 }
 
-/** A КП in the card file: the mini-sheet, «КП № 17», the sum and the day, the status bar, «⋯». */
+/** Where a row sits in its folder's grouped list. */
+type Place = { first: boolean; last: boolean };
+
+/** One row of the grouped list: `surface`, the folder's first and last rows rounded 16, an inset divider. */
+function rowShell(theme: ReturnType<typeof useTheme>, place: Place, highlighted: boolean, lifted = false) {
+  return {
+    backgroundColor: highlighted ? theme.colors.highlightTint : theme.colors.surface,
+    borderTopLeftRadius: place.first ? theme.radius.lg : 0,
+    borderTopRightRadius: place.first ? theme.radius.lg : 0,
+    borderBottomLeftRadius: place.last ? theme.radius.lg : 0,
+    borderBottomRightRadius: place.last ? theme.radius.lg : 0,
+    marginBottom: place.last ? theme.space[3] : 0,
+    ...(lifted ? theme.elevation.floating : null),
+  };
+}
+
+/** A КП: the mini-sheet, «КП № 17», «415 000 ₸ · 10 нояб», the coloured status badge (pattern 8, 64 pt). */
 function KpCard({
   doc,
   onOpen,
   onStatus,
   testID,
+  place,
   highlighted = false,
   moves,
 }: {
@@ -370,6 +369,7 @@ function KpCard({
   onOpen: () => void;
   onStatus: () => void;
   testID: string;
+  place: Place;
   highlighted?: boolean;
   moves?: EntryCtx['moves'];
 }) {
@@ -395,11 +395,8 @@ function KpCard({
     else if (n === 'menu') moves?.onMenu();
   };
   return (
-    <View
-      testID={testID}
-      style={{ borderWidth: 1, borderColor: theme.colors.separator, borderRadius: theme.radius.lg, backgroundColor: highlighted ? theme.colors.highlightTint : theme.colors.surface, padding: theme.space[3], marginBottom: theme.space[3], gap: theme.space[2] }}
-    >
-      <View style={{ flexDirection: 'row', gap: theme.space[3] }}>
+    <View testID={testID} style={rowShell(theme, place, highlighted)}>
+      <View style={[styles.row, { paddingLeft: theme.space[3] + 2, gap: theme.space[3] }]}>
         <Pressable
           testID={`${testID}-open`}
           accessibilityRole="button"
@@ -409,39 +406,34 @@ function KpCard({
           onPress={onOpen}
           onLongPress={moves?.onDragStart}
           delayLongPress={400}
-          style={{ flex: 1, flexDirection: 'row', gap: theme.space[3], minHeight: theme.size.buttonHeight }}
+          style={[styles.row, styles.flex, { gap: theme.space[3], minHeight: theme.size.rowHeightMeta, paddingVertical: theme.space[2] }]}
         >
           {theme.largeFont ? null : <MiniSheet type={t('kp.type_kp')} />}
-          <View style={{ flex: 1, gap: theme.space[1] }}>
-            <AppText variant="bodyStrong">{theme.largeFont ? `${t('kp.type_kp')} · ${title}` : title}</AppText>
-            <AppText variant="number">{[amount, date].filter(Boolean).join(' · ')}</AppText>
+          <View style={styles.flex}>
+            <AppText>{theme.largeFont ? `${t('kp.type_kp')} · ${title}` : title}</AppText>
+            <AppText variant="callout" style={styles.tabular}>
+              {[amount, date].filter(Boolean).join(' · ')}
+            </AppText>
           </View>
         </Pressable>
-        {moves ? (
-          <Pressable
-            testID={`${testID}-menu`}
-            accessibilityRole="button"
-            accessibilityLabel={t('move.menu_a11y', { what: title })}
-            onPress={moves.onMenu}
-            style={{ width: theme.size.minTouch, height: theme.size.minTouch, alignItems: 'center', justifyContent: 'center' }}
-          >
-            <Ellipsis size={24} color={theme.colors.brand} />
-          </Pressable>
-        ) : null}
+        <View style={[styles.row, { paddingRight: moves ? 0 : theme.space[3], flexWrap: theme.largeFont ? 'wrap' : 'nowrap' }]}>
+          <StatusBadge testID={`${testID}-status`} status={status} word={word} onPress={onStatus} />
+          {moves ? <RowMenu testID={`${testID}-menu`} title={title} onPress={moves.onMenu} /> : null}
+        </View>
       </View>
-      <StatusBar testID={`${testID}-status`} status={status} word={word} onPress={onStatus} />
+      {place.last ? null : <Divider />}
     </View>
   );
 }
 
-/** A document: the type in a word on its sheet, the title, «Арман · 1 окт»; opens S09. */
-function DocCard({ record, type, client, ctx }: { record: LocalRecord; type: DocType; client: string | null; ctx: EntryCtx }) {
+/** A document: the type in a word, the title, «Арман · 1 окт»; opens S09. */
+function DocCard({ record, type, client, ctx, place }: { record: LocalRecord; type: DocType; client: string | null; ctx: EntryCtx; place: Place }) {
   const theme = useTheme();
   const { t, i18n } = useTranslation();
   const typeWord =
     type === 'receipt' ? t('kp.type_receipt') : type === 'contract' ? t('kp.type_contract') : record.kind === 'pdf' ? t('kp.type_pdf') : record.kind === 'image' || record.kind === 'screenshot' ? t('kp.type_photo') : t('kp.type_doc');
   const title = recordTitle(record, t);
-  const meta = [client, shortDate(record.occurredAt, i18n.language)].filter(Boolean).join(' · ');
+  const meta = [typeWord, client, shortDate(record.occurredAt, i18n.language)].filter(Boolean).join(' · ');
   const moves = ctx.moves;
   const actions = moves
     ? [...(moves.onUp ? [{ name: 'up', label: t('move.up') }] : []), ...(moves.onDown ? [{ name: 'down', label: t('move.down') }] : []), ...(moves.onMoveTo ? [{ name: 'moveTo', label: t('move.to') }] : []), { name: 'menu', label: t('move.menu') }]
@@ -454,41 +446,51 @@ function DocCard({ record, type, client, ctx }: { record: LocalRecord; type: Doc
     else if (n === 'menu') moves?.onMenu();
   };
   return (
-    <View
-      testID={`docs-doc-${record.id}`}
-      onLayout={ctx.onLayout}
-      style={{ flexDirection: 'row', borderWidth: 1, borderColor: ctx.lifted ? theme.colors.brand : theme.colors.separator, borderRadius: theme.radius.lg, backgroundColor: ctx.highlighted ? theme.colors.highlightTint : theme.colors.surface, padding: theme.space[3], marginBottom: theme.space[3], gap: theme.space[3] }}
-    >
-      <Pressable
-        testID={`record-${record.id}`}
-        accessibilityRole="button"
-        accessibilityLabel={t('kp.doc_a11y', { type: typeWord, title, meta })}
-        accessibilityActions={actions}
-        onAccessibilityAction={actions ? onAction : undefined}
-        onPress={ctx.onPress}
-        onLongPress={moves?.onDragStart}
-        delayLongPress={400}
-        style={{ flex: 1, flexDirection: 'row', gap: theme.space[3], minHeight: theme.size.buttonHeight }}
-      >
-        {theme.largeFont ? null : <MiniSheet type={typeWord} />}
-        <View style={{ flex: 1, gap: theme.space[1] }}>
-          <AppText numberOfLines={3}>{theme.largeFont ? `${typeWord} · ${title}` : title}</AppText>
-          {meta ? <AppText variant="callout">{meta}</AppText> : null}
-        </View>
-      </Pressable>
-      {moves ? (
+    <View testID={`docs-doc-${record.id}`} onLayout={ctx.onLayout} style={rowShell(theme, place, ctx.highlighted, ctx.lifted)}>
+      <View style={[styles.row, { paddingLeft: theme.space[3] + 2, gap: theme.space[3] }]}>
         <Pressable
-          testID={`record-menu-${record.id}`}
+          testID={`record-${record.id}`}
           accessibilityRole="button"
-          accessibilityLabel={t('move.menu_a11y', { what: title })}
-          onPress={moves.onMenu}
-          style={{ width: theme.size.minTouch, height: theme.size.minTouch, alignItems: 'center', justifyContent: 'center' }}
+          accessibilityLabel={t('kp.doc_a11y', { type: typeWord, title, meta })}
+          accessibilityActions={actions}
+          onAccessibilityAction={actions ? onAction : undefined}
+          onPress={ctx.onPress}
+          onLongPress={moves?.onDragStart}
+          delayLongPress={400}
+          style={[styles.row, styles.flex, { gap: theme.space[3], minHeight: theme.size.rowHeightMeta, paddingVertical: theme.space[2], paddingRight: moves ? 0 : theme.space[3] }]}
         >
-          <Ellipsis size={24} color={theme.colors.brand} />
+          {theme.largeFont ? null : <MiniSheet type={typeWord} />}
+          <View style={styles.flex}>
+            <AppText numberOfLines={3}>{title}</AppText>
+            {meta ? <AppText variant="callout">{meta}</AppText> : null}
+          </View>
         </Pressable>
-      ) : null}
+        {moves ? <RowMenu testID={`record-menu-${record.id}`} title={title} onPress={moves.onMenu} /> : null}
+      </View>
+      {place.last ? null : <Divider />}
     </View>
   );
+}
+
+function RowMenu({ testID, title, onPress }: { testID: string; title: string; onPress: () => void }) {
+  const theme = useTheme();
+  const { t } = useTranslation();
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={t('move.menu_a11y', { what: title })}
+      onPress={onPress}
+      style={{ width: theme.size.minTouch, height: theme.size.minTouch, alignItems: 'center', justifyContent: 'center' }}
+    >
+      <Icon icon={Ellipsis} size="sm" color="iconSecondary" />
+    </Pressable>
+  );
+}
+
+function Divider() {
+  const theme = useTheme();
+  return <View style={{ marginLeft: theme.space[3] + 2 + 36 + theme.space[3], height: StyleSheet.hairlineWidth, backgroundColor: theme.colors.separator }} />;
 }
 
 /** A spec being read: «Читаю ТЗ…» / «ТЗ сохранено. Прочитаю, когда появится интернет» / failed. */
@@ -510,7 +512,7 @@ export function JobCard({ job }: { job: KpJob }) {
       testID={`kp-job-${job.id}`}
       accessibilityRole="button"
       onPress={() => router.push({ pathname: '/kp/new', params: { job: job.id } })}
-      style={{ minHeight: theme.size.buttonHeight, padding: theme.space[3], borderWidth: 1, borderStyle: 'dashed', borderColor: theme.colors.iconSecondary, borderRadius: theme.radius.lg, justifyContent: 'center' }}
+      style={{ minHeight: theme.size.rowHeight, padding: theme.space[3], backgroundColor: job.state === 'failed' ? theme.colors.warningTint : theme.colors.surfaceSunken, borderRadius: theme.radius.lg, justifyContent: 'center' }}
     >
       <AppText testID={`kp-job-${job.id}-text`} accessibilityLiveRegion="polite" color={job.state === 'failed' ? 'warning' : 'ink'}>
         {text}
@@ -518,3 +520,9 @@ export function JobCard({ job }: { job: KpJob }) {
     </Pressable>
   );
 }
+
+const styles = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center' },
+  flex: { flex: 1 },
+  tabular: { fontVariant: ['tabular-nums'] },
+});

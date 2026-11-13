@@ -1,7 +1,7 @@
 import { act, fireEvent, renderRouter, screen, within } from 'expo-router/testing-library';
 import { Dimensions } from 'react-native';
 
-import { actionOut, customFieldsOf, fieldPrefsOf, itemFacetsOf, pagePatchOut, pageViewOut } from '@/api/endpoints';
+import { actionOut, customFieldsOf, FEATURE_DEFAULTS, fieldPrefsOf, itemFacetsOf, pagePatchOut, pageViewOut } from '@/api/endpoints';
 import { effectiveLayout, resolveView } from '@/components/page/registry';
 import type { InMemoryOutboxRepository } from '@/db';
 import { useDedup } from '@/dedup/store';
@@ -12,7 +12,8 @@ import { applyChange, EMPTY_VIEW, fieldsOf, sortFromServer, viewBody, type Look 
 import { getSyncEngine } from '@/services';
 import { usePages, type Page } from '@/store/pages';
 import { useUndo } from '@/store/undo';
-import { happyServer, itemOut, linkOut, pageOut, type FakeServer, type SseEvent } from '@/testing/fakeServer';
+import { useFeatureStore } from '@/store/features';
+import { FEATURES_BODY, happyServer, itemOut, linkOut, pageOut, type FakeServer, type SseEvent } from '@/testing/fakeServer';
 import { APP_DIR, finishOnboarding, resetApp, settle, testPages, testRecords } from '@/testing/helpers';
 
 /**
@@ -58,8 +59,12 @@ const undoBody = (id: string) => ({
   page_patches: [],
 });
 
+/** S38 in full (fields, sort, reset) is behind `page_settings_full` (Ф-40); the S38 tests turn it on. */
+let fullSettings = false;
+
 function server(): FakeServer {
   const s = happyServer();
+  if (fullSettings) s.on('GET /features', () => ({ status: 200, body: { ...FEATURES_BODY, page_settings_full: true } }));
   s.on('POST /actions/*/undo', (c) => ({ status: 200, body: undoBody(c.path.split('/')[2]!) }))
     .on('GET /actions', () => ({ status: 200, body: { actions: [], has_more: false } }))
     .on('GET /page-templates', () => ({ status: 200, body: { templates: [] } }))
@@ -71,6 +76,7 @@ function server(): FakeServer {
 
 async function online(s: FakeServer): Promise<InMemoryOutboxRepository> {
   const outbox = resetApp({ fetch: s.fetch });
+  if (fullSettings) useFeatureStore.getState().set({ ...FEATURE_DEFAULTS, page_settings_full: true });
   finishOnboarding('full');
   await (await getSyncEngine()).run();
   return outbox;
@@ -183,7 +189,15 @@ describe('PageFrame and the registry', () => {
     await testRecords.applyRemote(itemOut('n1', 70, { text: 'Код домофона 4512', status: 'ready' }));
     await renderRouter(APP_DIR, { initialUrl: `/page/${notes.id}` });
     await settle(() => screen.queryByTestId('record-n1') !== null);
-    for (const id of ['page-title', 'page-order', 'page-settings', 'page-find']) expect(screen.getByTestId(id)).toBeTruthy();
+    // One header line (ux-audit P0-2): the title, 🔍 and ⋯; «Порядок» and «Настроить» are in ⋯; the field opens on 🔍.
+    for (const id of ['page-title', 'page-search', 'page-menu']) expect(screen.getByTestId(id)).toBeTruthy();
+    for (const id of ['page-order', 'page-settings', 'page-find']) expect(screen.queryByTestId(id)).toBeNull();
+    await fireEvent.press(screen.getByTestId('page-menu'));
+    expect(screen.getByTestId('page-order')).toBeTruthy();
+    expect(screen.getByTestId('page-settings')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('page-menu-sheet-close'));
+    await fireEvent.press(screen.getByTestId('page-search'));
+    expect(screen.getByTestId('page-find')).toBeTruthy();
     // Week 11а: the sticker wall is the default of «Заметки».
     expect(screen.getByTestId('page-view-notes:builtin:notes_board')).toBeTruthy();
     expect(screen.getByTestId('sticker-n1')).toBeTruthy();
@@ -195,6 +209,25 @@ describe('PageFrame and the registry', () => {
 });
 
 describe('S38 «Настроить страницу»', () => {
+  beforeEach(() => {
+    fullSettings = true;
+  });
+  afterEach(() => {
+    fullSettings = false;
+  });
+
+  it('Ф-40: with `page_settings_full` off only the name, the icon and the view', async () => {
+    fullSettings = false;
+    await online(server());
+    const page = await customPage('table');
+    await renderRouter(APP_DIR, { initialUrl: `/page-settings/${page.id}` });
+    await settle(() => screen.queryByTestId('settings-name') !== null);
+    expect(screen.getByTestId('settings-icon-home')).toBeTruthy();
+    expect(screen.getByTestId('settings-layout-list')).toBeTruthy();
+    for (const id of ['settings-example', 'settings-field-title', 'settings-add-field', 'settings-sort', 'settings-group', 'settings-reset'])
+      expect(screen.queryByTestId(id)).toBeNull();
+  });
+
   it('★ has a lock; hiding a field is at once, offline, with «Отменить» that drops it from the outbox', async () => {
     const s = server();
     const outbox = await online(s);

@@ -5,7 +5,7 @@ import { KeyboardAvoidingView } from 'react-native';
 import { useAccount } from '@/account/data';
 import { MainFooter } from '@/components/MainFooter';
 import { KEYBOARD_BEHAVIOR } from '@/components/useKeyboard';
-import { finishWithDefaults, startNotChosenBefore } from '@/onboarding/service';
+import { finishWithDefaults } from '@/onboarding/service';
 import { useOnboarding } from '@/store/onboarding';
 import { useSession } from '@/store/session';
 import { useOnboardingResumeHref } from '@/store/useOnboardingResume';
@@ -15,9 +15,11 @@ import { useOnboardingResumeHref } from '@/store/useOnboardingResume';
  * Uses the Tabs navigator only for state; the bar itself is custom (dynamic user pages, R-57).
  */
 export default function MainLayout() {
-  // US-33: closed on S41 (or later) without a choice → «Сегодня» with the default set this time.
+  // US-33 / Ф-34: consents recorded but the first launch not finished (closed right after «Начать», or on the old
+  // S41 / S35 path) → «Сегодня» with the default set this time.
   useState(() => {
-    if (startNotChosenBefore()) void finishWithDefaults();
+    const s = useOnboarding.getState();
+    if (s.consent && !s.doneAt) void finishWithDefaults();
     return true;
   });
   const resume = useOnboardingResumeHref();

@@ -1,5 +1,6 @@
 import { lineRouting } from '@/chat/service';
-import { fireEvent, renderRouter, screen, within } from 'expo-router/testing-library';
+import { router } from 'expo-router';
+import { act, fireEvent, renderRouter, screen, within } from 'expo-router/testing-library';
 
 import { useOnboarding } from '@/store/onboarding';
 import { usePages } from '@/store/pages';
@@ -58,7 +59,8 @@ describe('S37 page', () => {
     usePages.setState({ pages: usePages.getState().pages.filter((p) => p.templateKey === 'tasks') });
     await testRecords.insertLocal({ id: 'r1', kind: 'note', source: 'typed', text: 'Нигде', pageId: 'today' });
     const r = await renderRouter(APP_DIR, { initialUrl: '/more' });
-    await fireEvent.press(screen.getByTestId('more-all_records'));
+    await fireEvent.press(screen.getByTestId('more-settings'));
+    await fireEvent.press(screen.getByTestId('settings-all_records'));
     await settle(() => screen.queryByText('Нигде') !== null);
     expect(r.getPathname()).toBe('/records');
     expect(screen.getByTestId('assistant-line')).toBeTruthy();
@@ -77,6 +79,7 @@ describe('S37 page', () => {
     await settle(() => outbox.all().some((e) => e.kind === 'pages.create'));
     expect(await testPages.get(page.id)).toMatchObject({ title: 'Ремонт' });
 
+    await fireEvent.press(screen.getByTestId('page-menu'));
     await fireEvent.press(screen.getByTestId('page-rename'));
     expect(screen.getByTestId('page-name-input').props.value).toBe('Ремонт');
     await fireEvent.changeText(screen.getByTestId('page-name-input'), 'Дача');
@@ -273,23 +276,22 @@ describe('S04b', () => {
     return s;
   };
 
-  it('opens once after the first saved record; «Позже» with the honest line; not asked again', async () => {
+  it('Ф-34: never opens by itself after a saved record; the honest line when opened from «Настройки»', async () => {
     setup();
     const r = await renderRouter(APP_DIR, { initialUrl: `/page/${notes().id}` });
     await fireEvent.changeText(screen.getByTestId('assistant-input'), 'Первая запись');
     await fireEvent.press(screen.getByTestId('assistant-send'));
-    await settle(() => r.getPathname() === '/phone');
-    expect(screen.getByText('Сохранить записи, чтобы не потерять при смене телефона')).toBeTruthy();
-    expect(screen.getByText('Без номера записи пропадут при удалении приложения')).toBeTruthy();
-    await fireEvent.press(screen.getByTestId('phone-later'));
-    // Week 8: Android 14+ (the fake phone) → S15 first (R-12); «Позже» → back to the page.
-    expect(r.getPathname()).toBe('/alarm-setup');
-    await fireEvent.press(screen.getByTestId('setup-later'));
+    await settle(() => screen.queryByText('Первая запись') !== null);
     expect(r.getPathname()).toBe(`/page/${notes().id}`);
     await fireEvent.changeText(screen.getByTestId('assistant-input'), 'Вторая запись');
     await fireEvent.press(screen.getByTestId('assistant-send'));
     await settle(() => screen.queryByText('Вторая запись') !== null);
     expect(r.getPathname()).toBe(`/page/${notes().id}`);
+    await act(async () => router.push('/settings'));
+    await fireEvent.press(screen.getByTestId('settings-phone'));
+    expect(r.getPathname()).toBe('/phone');
+    expect(screen.getByText('Сохранить записи, чтобы не потерять при смене телефона')).toBeTruthy();
+    expect(screen.getByText('Без номера записи пропадут при удалении приложения')).toBeTruthy();
   });
 
   it('number → SMS code → name; the session becomes the linked one; greeting by name', async () => {
@@ -321,7 +323,7 @@ describe('S04b', () => {
     expect(r.getPathname()).toBe('/alarm-setup'); // Android 14+: S15 (week 8)
     await fireEvent.press(screen.getByTestId('setup-later'));
     expect(r.getPathname()).toBe('/');
-    expect(screen.getByText('Добрый день, Али')).toBeTruthy();
+    expect(useOnboarding.getState().displayName).toBe('Али');
   });
 
   it('+996 has 9 digits; a wrong code shows the server text and lets you try again', async () => {
@@ -355,11 +357,12 @@ describe('S04b', () => {
     expect(r.getPathname()).toBe('/');
   });
 
-  it('«Ещё» offers the number until it is linked', async () => {
+  it('«Ещё → Настройки» offers the number until it is linked', async () => {
     resetApp();
     finishOnboarding();
     const r = await renderRouter(APP_DIR, { initialUrl: '/more' });
-    await fireEvent.press(screen.getByTestId('more-phone'));
+    await fireEvent.press(screen.getByTestId('more-settings'));
+    await fireEvent.press(screen.getByTestId('settings-phone'));
     expect(r.getPathname()).toBe('/phone');
   });
 });

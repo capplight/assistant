@@ -1,6 +1,6 @@
 import { Pin } from 'lucide-react-native';
 import { Children, useState, type ReactNode } from 'react';
-import { Pressable, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import { Pressable, StyleSheet, View, type AccessibilityActionEvent, type AccessibilityActionInfo, type LayoutChangeEvent } from 'react-native';
 
 import { gridItemWidth, useLayout, useTheme, type NoteColorKey } from '@/theme';
 
@@ -19,6 +19,13 @@ type NoteProps = {
   /** The menu opens on long press — no «⋯» on the card (design-system §3 StickyNote). */
   onLongPress?: () => void;
   accessibilityLabel?: string;
+  /** Screen-reader actions (Выше / Ниже / Ещё) — the doubles of the gestures. */
+  accessibilityActions?: AccessibilityActionInfo[];
+  onAccessibilityAction?: (e: AccessibilityActionEvent) => void;
+  /** Just changed by the assistant: `highlightTint` for 600 ms. */
+  highlighted?: boolean;
+  /** Small extra lines under the text (status, the AI label, «Проверить»). */
+  children?: ReactNode;
   testID?: string;
 };
 
@@ -26,7 +33,21 @@ type NoteProps = {
  * A sticker: the note colour as fill (`white` = surface + card shadow), radius 14, padding 12, title `headline`,
  * text `callout` up to 8 lines (a preview of the person's own note; the full text opens on tap), date `footnote`.
  */
-export function StickyNote({ text, title, date, color = 'yellow', pinned, onPress, onLongPress, accessibilityLabel, testID }: NoteProps) {
+export function StickyNote({
+  text,
+  title,
+  date,
+  color = 'yellow',
+  pinned,
+  onPress,
+  onLongPress,
+  accessibilityLabel,
+  accessibilityActions,
+  onAccessibilityAction,
+  highlighted,
+  children,
+  testID,
+}: NoteProps) {
   const theme = useTheme();
   const white = color === 'white';
   return (
@@ -36,9 +57,11 @@ export function StickyNote({ text, title, date, color = 'yellow', pinned, onPres
       accessibilityLabel={accessibilityLabel ?? [title, text, date].filter(Boolean).join('. ')}
       onPress={onPress}
       onLongPress={onLongPress}
+      accessibilityActions={accessibilityActions}
+      onAccessibilityAction={onAccessibilityAction}
       delayLongPress={400}
       style={({ pressed }) => [
-        { backgroundColor: theme.notes[color], borderRadius: theme.radius.md, padding: theme.space[3], gap: theme.space[1] },
+        { backgroundColor: highlighted ? theme.colors.highlightTint : theme.notes[color], borderRadius: theme.radius.md, padding: theme.space[3], gap: theme.space[1] },
         white ? theme.elevation.card : null,
         pressedStyle(pressed),
       ]}
@@ -52,12 +75,13 @@ export function StickyNote({ text, title, date, color = 'yellow', pinned, onPres
           ) : (
             <View style={styles.flex} />
           )}
-          {pinned ? <Icon icon={Pin} size="sm" color="brand" /> : null}
+          {pinned ? <Icon testID={testID ? `${testID}-pin` : undefined} icon={Pin} size="sm" color="brand" /> : null}
         </View>
       ) : null}
       <AppText variant="callout" color="ink" numberOfLines={8}>
         {text}
       </AppText>
+      {children}
       {date ? (
         <AppText variant="footnote" color={white ? 'ink3' : 'ink2'}>
           {date}
