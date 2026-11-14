@@ -294,14 +294,14 @@ afterEach(() => {
 });
 
 describe('«Расходы» — the calculator', () => {
-  it('offline: «1200+350» → Продукты → Записать: total by code at once, the line, «Отменить» drops it', async () => {
+  it('offline: «1200» + quick «+500» → Продукты → Записать: total by code at once, the line, «Отменить» drops it', async () => {
     const outbox: InMemoryOutboxRepository = resetApp();
     finishOnboarding('full');
     await renderRouter(APP_DIR, { initialUrl: `/page/${expensesPage().id}` });
     await settle(() => screen.queryByTestId('exp-board') !== null);
     expect(screen.getByTestId('page-view-expenses:builtin:expenses')).toBeTruthy();
-    // The frame's one header line: title, 🔍, ⋯ («Настроить» and «Порядок» live in ⋯, ux-audit P0-2).
-    for (const id of ['page-title', 'page-search', 'page-menu']) expect(screen.getByTestId(id)).toBeTruthy();
+    // v2 mock: the title, «+ Трата» and ⋯ (the one search lives on the other pages and in the line).
+    for (const id of ['page-title', 'exp-enter', 'page-menu']) expect(screen.getByTestId(id)).toBeTruthy();
     expect(text('exp-total')).toBe('0 ₸');
     expect(screen.getByTestId('exp-empty-total')).toBeTruthy();
     // Empty: the keys are open, with the hint.
@@ -310,18 +310,19 @@ describe('«Расходы» — the calculator', () => {
     expect(screen.queryByTestId('exp-keypad')).toBeNull();
     await fireEvent.press(screen.getByTestId('exp-enter'));
     await settle(() => screen.queryByTestId('exp-entry-sheet') !== null);
-    await typeSum(['1', '2', '0', '0', 'plus', '3', '5', '0']);
-    expect(text('exp-sum-text')).toBe('1 200 + 350 ₸');
-    expect(text('exp-sum-total')).toBe('= 1 550 ₸');
-    expect(screen.getByTestId('exp-sum').props.accessibilityLabel).toBe('Сумма: 1200 плюс 350, всего 1 550 ₸');
-    expect(screen.getByTestId('exp-keypad-plus').props.accessibilityLabel).toBe('плюс');
+    // v2 KeypadSheet: 3×4 keys and the quick sums «+500 · +1 000 · +2 000 · +5 000» (a quick sum is a «+» term).
+    await typeSum(['1', '2', '0', '0']);
+    await fireEvent.press(screen.getByTestId('exp-quick-500'));
+    expect(text('exp-sum-text')).toBe('1 200 + 500 ₸');
+    expect(text('exp-sum-total')).toBe('= 1 700 ₸');
+    expect(screen.getByTestId('exp-sum').props.accessibilityLabel).toBe('Сумма: 1200 плюс 500, всего 1 700 ₸');
     await fireEvent.press(screen.getByTestId('exp-cat-groceries'));
     await fireEvent.press(screen.getByTestId('exp-keypad-save'));
-    await settle(() => text('exp-total') === '1 550 ₸');
+    await settle(() => text('exp-total') === '1 700 ₸');
     expect(screen.queryByTestId('exp-entry-sheet')).toBeNull(); // the sheet closes on «Записать»
-    expect(stripText()).toBe('Записал 1 550 ₸ · Продукты');
+    expect(stripText()).toBe('Записал 1 700 ₸ · Продукты');
     const row = outbox.all().find((r) => r.kind === 'expense.create')!;
-    expect(row.payload).toMatchObject({ body: { expression: '1200+350', category_id: null, source: 'form' }, categoryKey: 'groceries' });
+    expect(row.payload).toMatchObject({ body: { expression: '1200+500', category_id: null, source: 'form' }, categoryKey: 'groceries' });
     expect(text('exp-count')).toBe('1 трата');
     expect(screen.getByTestId(`exp-day-total-${today()}`)).toBeTruthy();
     expect(screen.getByTestId('exp-bar-groceries')).toBeTruthy();

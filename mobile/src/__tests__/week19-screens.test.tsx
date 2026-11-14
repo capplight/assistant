@@ -20,9 +20,9 @@ beforeEach(() => {
 });
 
 describe('«Ещё» (Ф-41)', () => {
-  it('the profile + five rows in one card, no «Появится позже» stubs, nothing service-like', async () => {
+  it('v2: the profile, the «Документы» / «История» tiles, four rows, «Ваши страницы»; no stubs', async () => {
     await renderRouter(APP_DIR, { initialUrl: '/more' });
-    const rows = ['more-profile', 'more-add_page', 'more-my_pages', 'more-did', 'more-import', 'more-settings'];
+    const rows = ['more-profile', 'more-documents', 'more-history', 'more-records', 'more-import', 'more-settings', 'more-add_page', 'more-my_pages'];
     for (const id of rows) expect(screen.getByTestId(id)).toBeTruthy();
     const ids = new Set<string>();
     const walk = (n: unknown): void => {
@@ -36,35 +36,34 @@ describe('«Ещё» (Ф-41)', () => {
     walk(screen.toJSON());
     expect([...ids].sort()).toEqual([...rows].sort());
     expect(screen.queryByText('Появится позже')).toBeNull();
-    for (const gone of ['more-trash', 'more-help', 'more-lang', 'more-delete_account', 'more-my_data', 'more-alarms', 'more-chat']) {
+    for (const gone of ['more-trash', 'more-did', 'more-lang', 'more-delete_account', 'more-my_data', 'more-alarms', 'more-chat']) {
       expect(screen.queryByTestId(gone)).toBeNull();
     }
   });
 
-  it('the profile and «Настройки» open the one settings screen; «Что я сделал» opens S20', async () => {
+  it('the profile and «Настройки» open the one settings screen; «История» opens the merged history', async () => {
     const r = await renderRouter(APP_DIR, { initialUrl: '/more' });
     await fireEvent.press(screen.getByTestId('more-profile'));
     expect(r.getPathname()).toBe('/settings');
     await fireEvent.press(screen.getByTestId('header-back'));
     expect(r.getPathname()).toBe('/more');
-    await fireEvent.press(screen.getByTestId('more-did'));
-    expect(r.getPathname()).toBe('/did');
+    await fireEvent.press(screen.getByTestId('more-history'));
+    expect(r.getPathname()).toBe('/history');
   });
 
   it('pages that do not fit in the tabs are «Ваши страницы»', async () => {
-    usePages.getState().addPage('shopping');
-    usePages.getState().addPage('expenses');
+    usePages.getState().addPage('custom', 'Дача');
     await renderRouter(APP_DIR, { initialUrl: '/more' });
     expect(screen.getByText('Ваши страницы')).toBeTruthy();
-    const extra = usePages.getState().pages.filter((p) => p.templateKey === 'expenses')[0]!;
+    const extra = usePages.getState().pages.filter((p) => p.templateKey === 'custom')[0]!;
     expect(screen.getByTestId(`more-page-${extra.id}`)).toBeTruthy();
   });
 });
 
 describe('«Настройки»', () => {
-  it('account, data, assistant, look, about and «Удалить аккаунт» in one screen', async () => {
+  it('theme, language, alarms, budget, data, the assistant, account, about and «Удалить аккаунт» in one screen', async () => {
     const r = await renderRouter(APP_DIR, { initialUrl: '/settings' });
-    for (const id of ['phone', 'my_data', 'all_records', 'duplicates', 'trash', 'chat', 'habits', 'alarms', 'lang', 'theme', 'policy', 'terms', 'consents', 'version', 'delete_account']) {
+    for (const id of ['phone', 'my_data', 'duplicates', 'trash', 'habits', 'alarms', 'lang', 'budget', 'policy', 'terms', 'consents', 'version', 'delete_account']) {
       expect(screen.getByTestId(`settings-${id}`)).toBeTruthy();
     }
     await fireEvent.press(screen.getByTestId('settings-consents'));
@@ -81,15 +80,15 @@ describe('«Настройки»', () => {
     expect(screen.getByTestId('settings-mail')).toBeTruthy();
   });
 
-  it('language switches; the theme sheet sets «Тёмная» and keeps it', async () => {
+  it('language switches after the confirmation; the theme card «Глубина» sets dark and keeps it', async () => {
     await renderRouter(APP_DIR, { initialUrl: '/settings' });
     await fireEvent.press(screen.getByTestId('settings-lang'));
+    await fireEvent.press(screen.getByTestId('lang-kk'));
+    await fireEvent.press(screen.getByTestId('lang-confirm-yes'));
     expect(useOnboarding.getState().language).toBe('kk');
-    await fireEvent.press(screen.getByTestId('settings-lang'));
-    await fireEvent.press(screen.getByTestId('settings-theme'));
     await fireEvent.press(screen.getByTestId('theme-dark'));
     expect(useSchemePreference.getState().preference).toBe('dark');
-    expect(screen.getByTestId('settings-theme')).toHaveTextContent(/Тёмная/);
+    expect(screen.getByTestId('theme-dark').props.accessibilityState.checked).toBe(true);
   });
 });
 
@@ -120,15 +119,16 @@ describe('«Сегодня» and the beta switches (Ф-42)', () => {
     expect(screen.getByTestId('tile-pin')).toBeTruthy();
   });
 
-  it('«Дальше» is the first to-do; the others are one flat list with circles', async () => {
+  it('v2: today’s to-dos are «Без времени» rows with circles; the tile counts them', async () => {
     const d = new Date();
     const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const iso = new Date().toISOString();
     const task = (id: string, title: string) => ({ id, client_id: id, item_id: `i-${id}`, list_key: 'todo', title, qty: null, where: null, due_date: day, done: false, done_at: null, version: 1, seq: 1, created_at: iso, updated_at: iso, deleted_at: null });
     useTasks.setState({ tasks: { a: task('a', 'Позвонить в банк'), b: task('b', 'Оплатить интернет') } as never });
     await renderRouter(APP_DIR, { initialUrl: '/' });
-    expect(screen.getByTestId('today-next')).toHaveTextContent(/Позвонить в банк/);
+    expect(screen.getByTestId('task-a')).toHaveTextContent(/Позвонить в банк/);
     expect(screen.getByTestId('task-b')).toHaveTextContent(/Оплатить интернет/);
+    expect(screen.getByTestId('tile-tasks')).toHaveTextContent(/из 2/);
     await fireEvent.press(screen.getByTestId('task-check-b'));
     await settle(() => screen.getByTestId('task-check-b').props.accessibilityState.checked === true);
   });

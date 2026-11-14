@@ -483,31 +483,32 @@ describe('copy', () => {
     await renderRouter(APP_DIR, { initialUrl: `/page/${notes().id}` });
     await fireEvent.changeText(screen.getByTestId('assistant-input'), 'Запись');
     await fireEvent.press(screen.getByTestId('assistant-send'));
-    await settle(() => screen.queryByTestId('answer-banner') !== null);
+    // Ф-50: the SaveToast says where it went.
+    await settle(() => screen.queryByTestId('undo-strip-text') !== null);
   }
+  const toast = () => String(screen.getByTestId('undo-strip-text').props.children);
 
-  it('online: «Сохранил.», never «Сделаю, когда появится связь»', async () => {
+  it('online: «Сохранил в «Заметки»», never «Сделаю, когда появится связь»', async () => {
     const s = happyServer();
     await saveOnPage({ fetch: s.fetch });
     await settle(() => s.callsTo('POST /items').length === 1);
-    expect(screen.getByText('Сохранил.')).toBeTruthy();
-    expect(screen.queryByText(/появится связь/)).toBeNull();
+    expect(toast()).toBe('Сохранил в «Заметки»: Запись');
   });
 
   it('offline: the honest line shows once the attempt fails', async () => {
     await saveOnPage({ fetch: offlineFetch });
     await settle(() => !useConnectivity.getState().online);
-    await settle(() => screen.queryByText('Сохранил. Сделаю, когда появится связь.') !== null);
+    await settle(() => toast() === 'Сохранил в «Заметки»: Запись Сделаю, когда появится связь.');
   });
 
   it('the connection comes back: the line follows', async () => {
     const s = happyServer();
     s.offline = true;
     await saveOnPage({ fetch: s.fetch });
-    await settle(() => screen.queryByText(/появится связь/) !== null);
+    await settle(() => /появится связь/.test(toast()));
     s.offline = false;
     await (await getSyncEngine()).run();
-    await settle(() => screen.queryByText('Сохранил.') !== null);
+    await settle(() => toast() === 'Сохранил в «Заметки»: Запись');
   });
 
   it('hints promise only what v0 does', async () => {
@@ -605,69 +606,16 @@ describe('re-adding a removed page', () => {
   });
 });
 
-describe('«Найти на странице»', () => {
-  /** The field opens on 🔍 in the header (ux-audit P0-2: no permanent field). */
-  const findField = async () => {
-    if (!screen.queryByTestId('page-find')) await fireEvent.press(screen.getByTestId('page-search'));
-    return screen.getByTestId('page-find');
-  };
-  beforeEach(() => {
+describe('«Найти на странице» → the one search (Ф-50)', () => {
+  it('the page 🔍 opens the search screen with the page, and it finds by letters offline', async () => {
     resetApp();
     finishOnboarding();
-  });
-
-  const fill = async () => {
-    await testRecords.insertLocal({ id: 'a', kind: 'note', source: 'typed', text: 'Купить ёлку' });
-    await testRecords.insertLocal({ id: 'b', kind: 'note', source: 'typed', text: 'Қала туралы жазба' });
-    await testRecords.insertLocal({ id: 'c', kind: 'note', source: 'typed', text: 'Телефон +7 701 123 45 67' });
-  };
-
-  it('offline, at once by letters; ё = е, Kazakh letters as Russian ones, digits without spaces', async () => {
-    await fill();
-    await renderRouter(APP_DIR, { initialUrl: `/page/${notes().id}` });
-    await settle(() => screen.queryByText('Купить ёлку') !== null);
-    await fireEvent.changeText(await findField(), 'елк');
-    await settle(() => screen.queryByText('Қала туралы жазба') === null);
-    expect(screen.getByText('Купить ёлку')).toBeTruthy();
-    await fireEvent.changeText(await findField(), 'кала');
-    await settle(() => screen.queryByText('Қала туралы жазба') !== null);
-    await fireEvent.changeText(await findField(), '7011234567');
-    await settle(() => screen.queryByText('Телефон +7 701 123 45 67') !== null);
-  });
-
-  it('only this page; nothing is made up; «Искать по всем страницам» carries the words over', async () => {
-    usePages.getState().addPage('custom', 'Дача');
-    const custom = usePages.getState().pages.find((p) => p.templateKey === 'custom')!;
-    await testRecords.insertLocal({ id: 'a', kind: 'note', source: 'typed', text: 'Плитка в ванную', pageId: 'today' });
-    const r = await renderRouter(APP_DIR, { initialUrl: `/page/${custom.id}` });
-    await fireEvent.changeText(await findField(), 'плитка');
-    await settle(() => screen.queryByTestId('page-find-none') !== null);
-    expect(screen.getByText('На этой странице такого нет')).toBeTruthy();
-    await fireEvent.press(screen.getByTestId('page-find-all'));
-    await settle(() => r.getPathname() === '/search');
-    await settle(() => screen.queryByText('Плитка в ванную') !== null);
-    expect(screen.getByText('Нашёл сразу: 1')).toBeTruthy();
-  });
-
-  it('what was typed stays with its page when switching tabs', async () => {
-    await renderRouter(APP_DIR, { initialUrl: `/page/${notes().id}` });
-    await fireEvent.changeText(await findField(), 'что-то');
-    const tasks = usePages.getState().pages.find((p) => p.templateKey === 'tasks')!;
-    await fireEvent.press(screen.getByTestId(`tab-${tasks.id}`));
-    await settle(() => screen.getByTestId('page-find').props.value === '');
-  });
-
-  it('online: asks the server for this page only', async () => {
-    const s = happyServer();
-    resetApp({ fetch: s.fetch });
-    finishOnboarding();
-    await testPages.insertLocal(notes());
-    await testPages.markSynced(notes().id, pageOut(notes().id, 3, { id: 'srv-notes', template_key: 'notes', title: 'Заметки' }));
-    usePages.setState({ pages: usePages.getState().pages.map((p) => (p.id === notes().id ? { ...p, serverId: 'srv-notes' } : p)) });
-    await renderRouter(APP_DIR, { initialUrl: `/page/${notes().id}` });
-    await fireEvent.changeText(await findField(), 'молоком');
-    await settle(() => s.callsTo('GET /search').length > 0);
-    expect(s.callsTo('GET /search')[0]?.query).toEqual({ q: 'молоком', page_id: 'srv-notes' });
+    await testRecords.insertLocal({ id: 'r1', kind: 'note', source: 'typed', text: 'Ёлка на дачу' });
+    const r = await renderRouter(APP_DIR, { initialUrl: `/page/${notes().id}` });
+    await fireEvent.press(screen.getByTestId('page-search'));
+    expect(r.getPathname()).toBe('/search');
+    await fireEvent.changeText(screen.getByTestId('search-field'), 'елка');
+    await settle(() => screen.queryByTestId('search-found') !== null);
   });
 });
 

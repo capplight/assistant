@@ -39,7 +39,7 @@ function batchServer(): FakeServer {
   let n = 0;
   s.on('POST /pages/batch', (c) => {
     const body = c.body as { path: string; template_keys: string[] };
-    const keys = body.path === 'blank' ? ['custom'] : body.path === 'skipped' ? ['notes', 'tasks'] : body.template_keys;
+    const keys = body.path === 'blank' ? ['custom'] : body.path === 'skipped' ? ['notes', 'expenses', 'tasks'] : body.template_keys;
     return {
       status: 201,
       body: {
@@ -92,15 +92,15 @@ describe('first launch: S35 and the three paths', () => {
     expect((await testPages.listAll()).find((p) => p.templateKey === 'notes')?.serverId).toBe('srv-page-notes');
   });
 
-  it('«Пропустить» on path 1 gives the default set (Заметки + Дела)', async () => {
+  it('«Пропустить» on path 1 gives the default set (Заметки + Расходы + Дела)', async () => {
     const r = await renderRouter(APP_DIR, { initialUrl: '/start' });
     await fireEvent.press(screen.getByTestId('start-all'));
     expect(screen.getByTestId('gallery-ok')).toBeDisabled(); // «Все шаблоны»: nothing ticked
     await fireEvent.press(screen.getByTestId('gallery-skip'));
-    expect(usePages.getState().pages.map((p) => p.templateKey)).toEqual(['notes', 'tasks']);
+    expect(usePages.getState().pages.map((p) => p.templateKey)).toEqual(['notes', 'tasks', 'expenses']);
     expect(r.getPathname()).toBe(`/page/${usePages.getState().pages[0]?.id}`);
     await settle(() => s.callsTo('POST /pages/batch').length === 1);
-    expect(s.callsTo('POST /pages/batch')[0]?.body).toMatchObject({ path: 'gallery', template_keys: ['notes', 'tasks'] });
+    expect(s.callsTo('POST /pages/batch')[0]?.body).toMatchObject({ path: 'gallery', template_keys: ['notes', 'tasks', 'expenses'] });
   });
 
   it('the team flag: «Все шаблоны» is the big card on top; a path switched off is not shown', async () => {
@@ -117,7 +117,7 @@ describe('first launch: S35 and the three paths', () => {
     const r = await renderRouter(APP_DIR, { initialUrl: '/' });
     expect(r.getPathname()).toBe('/');
     expect(useOnboarding.getState().doneAt).not.toBeNull();
-    expect(usePages.getState().pages.map((p) => p.templateKey)).toEqual(['notes', 'tasks']);
+    expect(usePages.getState().pages.map((p) => p.templateKey)).toEqual(['notes', 'tasks', 'expenses']);
     await settle(() => s.callsTo('POST /pages/batch').length === 1);
     expect(s.callsTo('POST /pages/batch')[0]?.body).toMatchObject({ path: 'skipped' });
   });
@@ -169,7 +169,7 @@ describe('«Сегодня» — the tear-off sheet', () => {
     expect(screen.queryByTestId('today-next')).toBeNull();
   });
 
-  it('«Дальше» is the first open to-do of today with [Сделано]', async () => {
+  it('v2: an open to-do of today is a «Без времени» row with its circle (no «Дальше» card)', async () => {
     const today = new Date();
     const d = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     useTasks.setState({
@@ -178,9 +178,9 @@ describe('«Сегодня» — the tear-off sheet', () => {
       },
     });
     await renderRouter(APP_DIR, { initialUrl: '/' });
-    expect(screen.getByTestId('today-next')).toHaveTextContent(/Позвонить маме/);
-    expect(screen.queryByTestId('today-next-snooze')).toBeNull();
-    expect(screen.getByTestId('today-rest-empty')).toBeTruthy();
+    expect(screen.getByTestId('task-t1')).toHaveTextContent(/Позвонить маме/);
+    expect(screen.getByTestId('task-check-t1')).toBeTruthy();
+    expect(screen.getByTestId('today-brief')).toBeTruthy();
   });
 });
 

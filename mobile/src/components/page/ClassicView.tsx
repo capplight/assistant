@@ -1,3 +1,4 @@
+import { useFeatures } from '@/store/features';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -31,7 +32,8 @@ import type { ViewProps } from './registry';
 export function ClassicView({ page, entries, frameTop, ordering, simple = false }: ViewProps & { simple?: boolean }) {
   const theme = useTheme();
   const { t } = useTranslation();
-  const hasShoppingPage = usePages((st) => st.pages.some((p) => p.templateKey === 'shopping'));
+  const shoppingOn = useFeatures((f) => f.shopping);
+  const hasShoppingPage = usePages((st) => shoppingOn && st.pages.some((p) => p.templateKey === 'shopping'));
   // eslint-disable-next-line react-hooks/exhaustive-deps -- the lists follow the template and «Покупки» existing
   const lists = useMemo(() => listsForPage(page), [page.templateKey, hasShoppingPage]);
   const listMode = lists.length > 0;

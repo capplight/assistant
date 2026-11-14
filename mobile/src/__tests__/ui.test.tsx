@@ -46,6 +46,16 @@ afterEach(() => {
   useSchemePreference.getState().set('system');
 });
 
+/** `rgba(…)` (the dark glass surface) is composited over the page background first. */
+function solid(color: string, over = '#000000'): string {
+  const m = /^rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)$/.exec(color);
+  if (!m) return color;
+  const a = Number(m[4]);
+  const b = parseInt(over.slice(1), 16);
+  const ch = [Number(m[1]), Number(m[2]), Number(m[3])].map((v, i) => Math.round(v * a + ((b >> (16 - 8 * i)) & 255) * (1 - a)));
+  return `#${ch.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
 function luminance(hex: string): number {
   const n = parseInt(hex.slice(1), 16);
   const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => {
@@ -63,7 +73,8 @@ describe('colour roles: WCAG contrast in both themes', () => {
   it.each([
     ['light', lightColors, lightNoteColors],
     ['dark', darkColors, darkNoteColors],
-  ] as const)('%s', async (_n, c: ColorTokens, notes) => {
+  ] as const)('%s', async (_n, c0: ColorTokens, notes) => {
+    const c = { ...c0, surface: solid(c0.surface, c0.bg) };
     for (const bg of [c.bg, c.surface]) {
       expect(contrast(c.ink, bg)).toBeGreaterThanOrEqual(4.5);
       expect(contrast(c.ink2, bg)).toBeGreaterThanOrEqual(4.5);
@@ -89,7 +100,7 @@ describe('colour roles: WCAG contrast in both themes', () => {
     expect(result.current.colors.bg).toBe(darkColors.bg);
     // Dark: no card shadows, floating ones stay.
     expect(result.current.elevation.card).toBeNull();
-    expect(result.current.elevation.floating.shadowOpacity).toBe(0.35);
+    expect(result.current.elevation.floating.shadowOpacity).toBe(0.45);
   });
 });
 
@@ -303,7 +314,7 @@ describe('components', () => {
     await fireEvent.press(screen.getByTestId('sh-close'));
     await fireEvent.press(screen.getByTestId('sh-scrim', { includeHiddenElements: true }));
     expect(onClose).toHaveBeenCalledTimes(2);
-    expect(StyleSheet.flatten(screen.getByTestId('sh').props.style)).toMatchObject({ maxWidth: 600, borderTopLeftRadius: 24 });
+    expect(StyleSheet.flatten(screen.getByTestId('sh').props.style)).toMatchObject({ maxWidth: 600, borderTopLeftRadius: 28 });
   });
 
   it('Header: «‹ Назад», largeTitle, ≤2 round buttons', async () => {
@@ -311,7 +322,7 @@ describe('components', () => {
     await render(<Header title="Поиск" back={{ onPress: back }} actions={[{ key: 's', icon: Search, label: 'Искать', onPress: () => undefined, testID: 'h-s' }]} />);
     await fireEvent.press(screen.getByTestId('header-back'));
     expect(back).toHaveBeenCalled();
-    expect(screen.getByText('Назад')).toHaveStyle({ color: lightColors.brand });
+    expect(screen.getByText('Назад')).toHaveStyle({ color: lightColors.linkOnBg });
     expect(screen.getByRole('header', { name: 'Поиск' })).toHaveStyle({ fontSize: 30 });
     expect(screen.getByLabelText('Искать')).toBeTruthy();
   });
@@ -334,7 +345,7 @@ describe('components', () => {
   it('StickyNote: note fill, long press opens the menu, 8-line preview', async () => {
     const onLong = jest.fn();
     await render(<StickyNote testID="n" text="Купить молоко" color="green" onLongPress={onLong} pinned />);
-    expect(StyleSheet.flatten(screen.getByTestId('n').props.style)).toMatchObject({ backgroundColor: lightNoteColors.green, borderRadius: 14 });
+    expect(StyleSheet.flatten(screen.getByTestId('n').props.style)).toMatchObject({ backgroundColor: lightNoteColors.green, borderRadius: 18 });
     await fireEvent(screen.getByTestId('n'), 'longPress');
     expect(onLong).toHaveBeenCalled();
     expect(screen.getByText('Купить молоко').props.numberOfLines).toBe(8);
@@ -354,7 +365,7 @@ describe('components', () => {
     await fireEvent.press(screen.getByTestId('t-undo'));
     await fireEvent.press(screen.getByLabelText('Закрыть'));
     expect([ex, undo, close].map((f) => f.mock.calls.length)).toEqual([1, 1, 1]);
-    expect(StyleSheet.flatten(screen.getByTestId('t').props.style)).toMatchObject({ borderRadius: 20, minHeight: 48 });
+    expect(StyleSheet.flatten(screen.getByTestId('t').props.style)).toMatchObject({ borderRadius: 22, minHeight: 72 });
   });
 
   it('TabBar: tablist, selected tab, brand pill', async () => {

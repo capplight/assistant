@@ -1,4 +1,5 @@
-import { fireEvent, renderRouter, screen, within } from 'expo-router/testing-library';
+import { act, fireEvent, renderRouter, screen, within } from 'expo-router/testing-library';
+import { router } from 'expo-router';
 import { Dimensions } from 'react-native';
 
 import { usePages } from '@/store/pages';
@@ -12,14 +13,15 @@ describe('main navigation', () => {
     finishOnboarding();
   });
 
-  it('renders tabs: Сегодня + up to 2 pages + Ещё with labels — never more than 4 (design-system TabBar)', async () => {
-    usePages.getState().addPage('shopping'); // 3rd and 4th pages → go to «Ещё»
+  it('renders tabs (Ф-48): Сегодня · Заметки · Расходы · Дела · Ещё; other pages go to «Ещё»', async () => {
+    usePages.getState().addPage('custom', 'Дача'); // not a tab → «Ещё»
     await renderRouter(APP_DIR, { initialUrl: '/' });
     const tabs = within(screen.getByTestId('bottom-tabs'));
     const labels = tabs.getAllByRole('tab').map((el) => el.props.accessibilityLabel as string);
     expect(labels).toEqual([
       'Сегодня, вкладка',
       'Заметки, вкладка',
+      'Расходы, вкладка',
       'Дела, вкладка',
       'Ещё, вкладка',
     ]);
@@ -71,7 +73,7 @@ describe('main navigation', () => {
     await settle(() => screen.queryByText('Плитка для ванной 3 метра') !== null);
   });
 
-  it('typing a message writes to the outbox and shows the answer banner → «Открыть ответ» → Переписка', async () => {
+  it('typing a note offline writes to the outbox and says where it went (SaveToast, Ф-50); «История» has the turn', async () => {
     const r = await renderRouter(APP_DIR, { initialUrl: '/' });
     await fireEvent.changeText(screen.getByTestId('assistant-input'), 'Купить хлеб');
     await fireEvent.press(screen.getByTestId('assistant-send'));
@@ -83,18 +85,18 @@ describe('main navigation', () => {
     expect(pending[0]?.payload).not.toHaveProperty('pageId');
     expect((await testRecords.list())[0]).toMatchObject({ text: 'Купить хлеб', status: 'queued' });
 
-    expect(screen.getByTestId('answer-banner')).toBeTruthy();
-    expect(screen.getByText('Открыть ответ')).toBeTruthy();
-    await fireEvent.press(screen.getByTestId('answer-open'));
-    expect(r.getPathname()).toBe('/chat');
-    expect(screen.getByText('Переписка')).toBeTruthy();
-    expect(screen.getByLabelText('Вы: Купить хлеб')).toBeTruthy();
-    // Same assistant line in Переписка, no scope label (Ф-47).
+    expect(screen.getByTestId('undo-strip-text')).toHaveTextContent(/^Сохранил в «Заметки»: Купить хлеб/);
+    expect(screen.getByTestId('undo-strip-replace')).toBeTruthy();
+    await act(async () => router.push('/chat'));
+    expect(r.getPathname()).toBe('/history');
+    expect(screen.getByText('История')).toBeTruthy();
+    expect(screen.getByText('Вы: «Купить хлеб»')).toBeTruthy();
+    // Same assistant line in «История», no scope label (Ф-47).
     expect(screen.getByTestId('assistant-input')).toBeTruthy();
     expect(screen.queryByTestId('context-chip')).toBeNull();
   });
 
-  it('mic → «Слушаю…» with timer and level ring → «Готово» → voice record queued + «Сохранено»', async () => {
+  it('mic → «Слушаю…» with timer and level ring → «Готово» → voice record queued + «Сохранил в «Заметки»»', async () => {
     await renderRouter(APP_DIR, { initialUrl: '/' });
     await fireEvent.press(screen.getByTestId('assistant-mic'));
     await settle(() => screen.queryByTestId('assistant-listening') !== null);
@@ -102,10 +104,10 @@ describe('main navigation', () => {
     expect(screen.getByTestId('voice-timer')).toHaveTextContent('0:00');
     expect(screen.getByTestId('voice-level-ring')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('assistant-listening-done'));
-    await settle(() => outbox.all().length === 1 && screen.queryByText('Сохранено') !== null);
+    await settle(() => outbox.all().length === 1 && screen.queryByTestId('undo-strip-text') !== null);
     const [entry] = await outbox.listPending();
     expect(entry?.payload).toMatchObject({ kind: 'voice', source: 'mic', file: { mime: 'audio/mp4' } });
-    expect(screen.getByText('Сохранено')).toBeTruthy();
+    expect(screen.getByTestId('undo-strip-text')).toHaveTextContent(/Сохранил в «Заметки»/);
     expect(screen.queryByTestId('assistant-listening')).toBeNull();
   });
 
@@ -117,14 +119,14 @@ describe('main navigation', () => {
     expect(screen.getByTestId('assistant-write')).toBeTruthy();
   });
 
-  it('large font (≥150%): one page in tabs, the rest move to «Ещё»', async () => {
+  it('large font (≥150%): «Сегодня · Расходы · Дела · Ещё», «Заметки» move to «Ещё» (Ф-48)', async () => {
     const spy = jest
       .spyOn(Dimensions, 'get')
       .mockImplementation(() => ({ width: 360, height: 640, scale: 2, fontScale: 1.6 }));
     try {
       await renderRouter(APP_DIR, { initialUrl: '/' });
       const tabs = within(screen.getByTestId('bottom-tabs')).getAllByRole('tab');
-      expect(tabs).toHaveLength(3);
+      expect(tabs).toHaveLength(4);
     } finally {
       spy.mockRestore();
     }

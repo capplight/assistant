@@ -12,7 +12,10 @@ import { PhraseChangeBox, PhraseLine } from '@/components/kp/KpEdits';
 import { AddLineSheet, VolumeSheet } from '@/components/kp/KpLineSheets';
 import { CheckBadge } from '@/components/kp/KpParts';
 import { KpPreview } from '@/components/kp/KpPreview';
+import { KpPricesPanel } from '@/components/kp/KpPricesPanel';
 import { KpSendPanel } from '@/components/kp/KpSendPanel';
+import { KpVersionPanel } from '@/components/kp/KpVersionPanel';
+import { KpVersionsPanel } from '@/components/kp/KpVersionsPanel';
 import { NumberSheet } from '@/components/kp/NumberSheet';
 import { Sheet } from '@/components/page/ExpenseParts';
 import { ChoiceSheet } from '@/components/page/FieldSheets';
@@ -32,6 +35,14 @@ import { useLayout, useTheme } from '@/theme';
 
 type Editing = { item: string; field: 'unit_price' | 'qty' } | null;
 type Mode = 'edit' | 'preview';
+type Panel = { kind: 'send' } | { kind: 'versions' } | { kind: 'version'; n: number } | { kind: 'prices' } | null;
+
+/** `?sheet=` from an old link (`/kp/send`, `/kp/versions`, `/kp/version`, `/kp/prices`). */
+function panelOf(sheet: string | undefined, n: string | undefined): Panel {
+  if (sheet === 'send' || sheet === 'versions' || sheet === 'prices') return { kind: sheet };
+  if (sheet === 'version' && Number(n) > 0) return { kind: 'version', n: Number(n) };
+  return null;
+}
 
 /** 2-design `motion`: a changed line is lit for 600 ms (R-30). */
 const HIGHLIGHT_MS = 600;
@@ -55,7 +66,7 @@ export default function KpScreen() {
   const theme = useTheme();
   const layout = useLayout();
   const { t, i18n } = useTranslation();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, sheet, n: nParam } = useLocalSearchParams<{ id: string; sheet?: string; n?: string }>();
   const doc = useKp((s) => s.docs[id]);
   const edits = useKp((s) => s.docEdits);
   const versions = useKp((s) => s.versions);
@@ -66,7 +77,10 @@ export default function KpScreen() {
   const [vatOpen, setVatOpen] = useState(false);
   const [pdf, setPdf] = useState<{ result: PdfResult; fields?: string[]; format: 'pdf' | 'docx' } | 'busy' | null>(null);
   const [more, setMore] = useState(false);
-  const [sending, setSending] = useState(false);
+  // Ф-50 «КП 6 → 3»: sending, versions, one version and «Ввести цены подряд» are sheets of this screen.
+  const [panel, setPanel] = useState<Panel>(() => panelOf(sheet, nParam));
+  const sending = panel?.kind === 'send';
+  const setSending = (on: boolean) => setPanel(on ? { kind: 'send' } : null);
   const [mode, setMode] = useState<Mode>('edit');
   const [volumeFor, setVolumeFor] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -157,7 +171,7 @@ export default function KpScreen() {
             <AppText testID="kp-missing-count" color="warning">
               {t('kp.total_missing', { count: missing })}
             </AppText>
-            <Button testID="kp-fast" label={t('kp.fast_input')} variant="secondary" onPress={() => router.push({ pathname: '/kp/prices', params: { doc: doc.id } })} />
+            <Button testID="kp-fast" label={t('kp.fast_input')} variant="secondary" onPress={() => setPanel({ kind: 'prices' })} />
           </View>
         </Card>
       ) : null}
@@ -368,7 +382,7 @@ export default function KpScreen() {
                 testID: 'kp-versions',
                 icon: History,
                 label: t('kp.versions', { count: versionCount }),
-                onPress: () => (setMore(false), router.push({ pathname: '/kp/versions', params: { doc: doc.id } })),
+                onPress: () => (setMore(false), setPanel({ kind: 'versions' })),
               },
               {
                 key: 'write',
@@ -384,6 +398,21 @@ export default function KpScreen() {
       {sending ? (
         <Sheet testID="kp-send-sheet" title={t('send.title')} onClose={() => setSending(false)}>
           <KpSendPanel docId={doc.id} onDone={() => setSending(false)} />
+        </Sheet>
+      ) : null}
+      {panel?.kind === 'versions' ? (
+        <Sheet testID="kp-versions-sheet" title={t('kp.versions_title')} onClose={() => setPanel(null)}>
+          <KpVersionsPanel docId={doc.id} onOpen={(n) => setPanel({ kind: 'version', n })} onClose={() => setPanel(null)} />
+        </Sheet>
+      ) : null}
+      {panel?.kind === 'version' ? (
+        <Sheet testID="kp-version-sheet" title={t('kp.version_n', { n: panel.n })} onClose={() => setPanel(null)}>
+          <KpVersionPanel docId={doc.id} n={panel.n} onBack={() => setPanel({ kind: 'versions' })} onDone={() => setPanel(null)} />
+        </Sheet>
+      ) : null}
+      {panel?.kind === 'prices' ? (
+        <Sheet testID="kp-prices-sheet" title={t('kp.fast_input')} onClose={() => setPanel(null)}>
+          <KpPricesPanel docId={doc.id} onDone={() => setPanel(null)} />
         </Sheet>
       ) : null}
       {vatOpen ? (

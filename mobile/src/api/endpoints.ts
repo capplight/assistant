@@ -43,6 +43,9 @@ import type {
   StatementStatus,
   StatementWithRowsOut,
   ActionOut,
+  BriefOut,
+  HistoryEntryOut,
+  BudgetOut,
   ActionUndoIn,
   ActionUndoOut,
   AnswerReadyPushData,
@@ -330,6 +333,42 @@ export function actionOut(v: unknown): ActionOut | null {
     created_at: str(o.created_at),
     seq: typeof o.seq === 'number' ? o.seq : 0,
     ...(str(o.event_client_id) ? { event_client_id: str(o.event_client_id) } : {}),
+    saved_to: arr(o.saved_to).flatMap((x) => {
+      const s = obj(x);
+      const pid = s && str(s.page_id);
+      return s && pid ? [{ page_id: pid, title: str(s.title) ?? '', icon: str(s.icon), template_key: str(s.template_key), item_ids: strs(s.item_ids) }] : [];
+    }),
+  };
+}
+
+export function budgetOut(v: unknown): BudgetOut | null {
+  const o = obj(v);
+  const amount = o && str(o.amount);
+  if (!o || !amount) return null;
+  const month = obj(o.month) ?? {};
+  return {
+    amount,
+    currency: str(o.currency) ?? 'KZT',
+    month: { from: str(month.from), to: str(month.to) },
+    spent: str(o.spent) ?? '0',
+    left: str(o.left) ?? amount,
+    over: o.over === true,
+    percent: num(o.percent),
+    days_left: num(o.days_left),
+  };
+}
+
+function briefOut(v: unknown): BriefOut | null {
+  const o = obj(v);
+  const head = o && obj(o.headline);
+  const lines = o && obj(o.lines);
+  const ru = head && str(head.ru);
+  if (!o || !head || !ru) return null;
+  const part = o.part === 'day' || o.part === 'evening' ? o.part : 'morning';
+  return {
+    part,
+    headline: { ru, kk: str(head.kk) },
+    lines: { ru: lines ? strs(lines.ru).slice(0, 3) : [], kk: lines && Array.isArray(lines.kk) ? strs(lines.kk).slice(0, 3) : null },
   };
 }
 
@@ -365,7 +404,7 @@ function linkOut(v: unknown): PageItemOut | null {
 
 const numOrNull = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
-const NOTE_COLOR_SET = new Set<string>(['yellow', 'pink', 'green', 'blue', 'peach', 'white']);
+const NOTE_COLOR_SET = new Set<string>(['yellow', 'pink', 'green', 'blue', 'peach', 'white', 'lilac']);
 const setByOf = (v: unknown) => (v === 'user' || v === 'agent' || v === 'template' ? v : null);
 
 /** `link.appearance` (views.md): an unknown colour reads as none. */
@@ -657,6 +696,7 @@ export function decodeChatEvent(m: SseMessage): ChatEvent | null {
           short: d.short === true,
           aiLabel: str(d.ai_label),
           citations: citations(d.citations),
+          value: str(obj(d.value)?.text),
         };
       case 'done': {
         const kind = str(d.answer_kind);
@@ -682,6 +722,10 @@ export function decodeChatEvent(m: SseMessage): ChatEvent | null {
         // Week 9 (reminders.md «From the assistant line»): S13, nothing is saved.
         const via = d.created_via === 'voice' ? 'voice' : 'typed';
         return { type: 'reminder_draft', replyId: str(d.reply_id), draft: parseOut(d), createdVia: via };
+      }
+      case 'kp_started': {
+        const id = str(d.document_id);
+        return id ? { type: 'kp_started', replyId: str(d.reply_id), documentId: id, fromThis: d.from_this === true } : null;
       }
       case 'page_patch': {
         const patch = pagePatchOut(d);
@@ -923,6 +967,7 @@ export function todayOut(v: unknown): TodayOut {
   const shop = obj(today.shopping);
   const done = obj(o.done_for_you) ?? {};
   return {
+    brief: briefOut(o.brief),
     date: str(o.date),
     tz: str(o.tz),
     greeting: str(o.greeting),
@@ -973,9 +1018,10 @@ export const FEATURE_DEFAULTS: FeaturesOut = {
   telegram_login: false,
   personal_mail: false,
   setup_for_other: false,
+  shopping: false,
   consent_screen: 'welcome',
   today: { tips_days: 7, tips_per_day: 1, proposals: false, tiles: false },
-  pages: { default: ['today', 'notes', 'tasks'], first_use: ['shopping', 'expenses', 'documents'] },
+  pages: { default: ['today', 'notes', 'expenses', 'tasks'], first_use: ['documents'] },
 };
 
 /** `GET /v1/features` (features.md): a missing or odd field keeps its default; unknown fields are ignored. */
@@ -995,6 +1041,7 @@ export function featuresOut(v: unknown): FeaturesOut {
     telegram_login: flag(o.telegram_login, d.telegram_login),
     personal_mail: flag(o.personal_mail, d.personal_mail),
     setup_for_other: flag(o.setup_for_other, d.setup_for_other),
+    shopping: flag(o.shopping, d.shopping),
     consent_screen: str(o.consent_screen) ?? d.consent_screen,
     today: {
       tips_days: count(today.tips_days, d.today.tips_days),
@@ -2175,6 +2222,28 @@ export class Api {
   }
 
   /** Переписка (S36): oldest first; `before` pages back, `around` opens on one answer. */
+  /** Week 20 (chat.md «История»): what was said → what was done, newest first. */
+  async history(q: { only?: 'all' | 'changes' | 'questions' | 'waiting'; before?: string; limit?: number } = {}): Promise<{ entries: HistoryEntryOut[]; has_more: boolean }> {
+    const o = obj(await this.client.request<unknown>('GET', '/history', { query: { limit: 50, ...q } })) ?? {};
+    const entries = arr(o.entries).flatMap((v) => {
+      const e = obj(v);
+      const id = e && str(e.id);
+      if (!e || !id) return [];
+      return [
+        {
+          id,
+          kind: e.kind === 'action' ? ('action' as const) : ('turn' as const),
+          status: str(e.status) ?? 'done',
+          at: str(e.at),
+          said: chatMessageOut(e.said),
+          answer: chatMessageOut(e.answer),
+          action: actionOut(e.action),
+        },
+      ];
+    });
+    return { entries, has_more: o.has_more === true };
+  }
+
   async chatHistory(q: { before?: string; around?: string; limit?: number } = {}): Promise<ChatHistoryOut> {
     const out = obj(await this.client.request<unknown>('GET', '/chat/messages', { query: { limit: 50, ...q } })) ?? {};
     return {
@@ -2282,6 +2351,19 @@ export class Api {
   // week 9 — «Сегодня», tasks, suggestions, actions, habits (today.md, actions.md, pages.md)
 
   /** S06. Also runs the suggestion engine: call it when «Сегодня» is shown, not in the background. */
+  /** Week 20 (expenses.md «The monthly budget»). */
+  async budget(): Promise<BudgetOut | null> {
+    return budgetOut(obj(await this.client.request<unknown>('GET', '/expenses/budget'))?.budget);
+  }
+
+  async setBudget(amount: string, currency = 'KZT'): Promise<BudgetOut | null> {
+    return budgetOut(obj(await this.client.request<unknown>('PUT', '/expenses/budget', { body: { amount, currency } }))?.budget);
+  }
+
+  async clearBudget(): Promise<void> {
+    await this.client.request<unknown>('DELETE', '/expenses/budget');
+  }
+
   async today(): Promise<TodayOut> {
     return todayOut(await this.client.request<unknown>('GET', '/today'));
   }

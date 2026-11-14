@@ -4,6 +4,8 @@ import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 
 import { useTheme } from '@/theme';
 
+import { ScreenBackground } from './ui/ScreenBackground';
+
 type Props = {
   children: ReactNode;
   /** Pinned at the bottom (outside the scroll), e.g. «Подходит». */
@@ -14,7 +16,7 @@ type Props = {
   testID?: string;
 };
 
-/** Paper background, 20/16 pt side padding, ≤600 pt centred on tablets. */
+/** The v2 background (gradient + top glow), 12/16/20 side padding, ≤600 centred on tablets. */
 export function Screen({
   children,
   footer,
@@ -31,6 +33,7 @@ export function Screen({
   );
   return (
     <SafeAreaView testID={testID} edges={edges} style={[styles.root, { backgroundColor: theme.colors.bg }]}>
+      <ScreenBackground />
       {scroll ? (
         <ScrollView
           contentContainerStyle={[pad, { paddingVertical: theme.space[4] }, styles.center, contentContainerStyle]}

@@ -187,17 +187,15 @@ describe('PageFrame and the registry', () => {
     await online(s);
     const notes = usePages.getState().pages.find((p) => p.templateKey === 'notes')!;
     await testRecords.applyRemote(itemOut('n1', 70, { text: 'Код домофона 4512', status: 'ready' }));
-    await renderRouter(APP_DIR, { initialUrl: `/page/${notes.id}` });
+    const r = await renderRouter(APP_DIR, { initialUrl: `/page/${notes.id}` });
     await settle(() => screen.queryByTestId('record-n1') !== null);
-    // One header line (ux-audit P0-2): the title, 🔍 and ⋯; «Порядок» and «Настроить» are in ⋯; the field opens on 🔍.
+    // One header line (ux-audit P0-2): the title, 🔍 and ⋯; «Порядок» and «Настроить» are in ⋯; 🔍 opens the one search (Ф-50).
     for (const id of ['page-title', 'page-search', 'page-menu']) expect(screen.getByTestId(id)).toBeTruthy();
     for (const id of ['page-order', 'page-settings', 'page-find']) expect(screen.queryByTestId(id)).toBeNull();
     await fireEvent.press(screen.getByTestId('page-menu'));
     expect(screen.getByTestId('page-order')).toBeTruthy();
     expect(screen.getByTestId('page-settings')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('page-menu-sheet-close'));
-    await fireEvent.press(screen.getByTestId('page-search'));
-    expect(screen.getByTestId('page-find')).toBeTruthy();
     // Week 11а: the sticker wall is the default of «Заметки».
     expect(screen.getByTestId('page-view-notes:builtin:notes_board')).toBeTruthy();
     expect(screen.getByTestId('sticker-n1')).toBeTruthy();
@@ -205,6 +203,8 @@ describe('PageFrame and the registry', () => {
     await settle(() => screen.queryByTestId('page-view-notes:list') !== null);
     expect(screen.queryByTestId('sticker-n1')).toBeNull();
     expect(screen.getByTestId('record-n1')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('page-search'));
+    expect(r.getPathname()).toBe('/search');
   });
 });
 

@@ -2,7 +2,9 @@ import { Pin } from 'lucide-react-native';
 import { Children, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View, type AccessibilityActionEvent, type AccessibilityActionInfo, type LayoutChangeEvent } from 'react-native';
 
-import { gridItemWidth, useLayout, useTheme, type NoteColorKey } from '@/theme';
+import { gridItemWidth, NOTE_COLOR_KEYS, noteInk, useLayout, useTheme, type NoteColorKey } from '@/theme';
+
+import { cardEdge } from './Card';
 
 import { AppText } from '../AppText';
 import { Icon } from './Icon';
@@ -26,12 +28,26 @@ type NoteProps = {
   highlighted?: boolean;
   /** Small extra lines under the text (status, the AI label, «Проверить»). */
   children?: ReactNode;
+  /** v2: `grid` (masonry cell) or `list` (full width: title 17, text 15, the date on the right — easier for elders). */
+  look?: 'grid' | 'list';
   testID?: string;
 };
 
 /**
- * A sticker: the note colour as fill (`white` = surface + card shadow), radius 14, padding 12, title `headline`,
- * text `callout` up to 8 lines (a preview of the person's own note; the full text opens on tap), date `footnote`.
+ * A note nobody coloured still shows in one of the 7 colours (Ф-52 «разноцветные, как в макете»): picked from its id,
+ * so it keeps its colour; the person's own choice always wins. Display only — nothing is saved.
+ */
+export function autoNoteColor(seed: string): NoteColorKey {
+  const fills = NOTE_COLOR_KEYS.filter((k) => k !== 'white');
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return fills[h % fills.length]!;
+}
+
+/**
+ * A sticker v2 (design-system §5 StickyNote v2): the note colour as fill (`white` = surface + card shadow and ring),
+ * radius 18, padding 12; grid: title 15/700, text 14 up to 8 lines, date 12; list: title 17, text 15, the date top
+ * right. Text is `noteInk` on every fill (a preview of the person's own note; the full text opens on tap).
  */
 export function StickyNote({
   text,
@@ -46,10 +62,22 @@ export function StickyNote({
   onAccessibilityAction,
   highlighted,
   children,
+  look = 'grid',
   testID,
 }: NoteProps) {
   const theme = useTheme();
   const white = color === 'white';
+  const ink = noteInk[theme.scheme];
+  const list = look === 'list';
+  const titleStyle = list
+    ? { fontFamily: theme.type.headline.fontFamily, fontSize: 17, lineHeight: 22, color: ink.ink }
+    : { fontFamily: theme.type.sectionLabel.fontFamily, fontSize: 15, lineHeight: 20, color: ink.ink };
+  const textStyle = list ? { fontSize: 15, lineHeight: 20, color: ink.ink } : { fontSize: 14, lineHeight: 19, color: ink.ink };
+  const dateText = date ? (
+    <AppText variant="caption" style={{ color: ink.ink2, fontFamily: theme.type.footnote.fontFamily }}>
+      {date}
+    </AppText>
+  ) : null;
   return (
     <Pressable
       testID={testID}
@@ -61,32 +89,39 @@ export function StickyNote({
       onAccessibilityAction={onAccessibilityAction}
       delayLongPress={400}
       style={({ pressed }) => [
-        { backgroundColor: highlighted ? theme.colors.highlightTint : theme.notes[color], borderRadius: theme.radius.md, padding: theme.space[3], gap: theme.space[1] },
+        {
+          backgroundColor: highlighted ? theme.colors.highlightTint : theme.notes[color],
+          borderRadius: theme.radius.lg,
+          padding: theme.space[3],
+          paddingHorizontal: list ? theme.space[4] : theme.space[3],
+          gap: theme.space[1],
+        },
         white ? theme.elevation.card : null,
+        white ? cardEdge(theme) : null,
         pressedStyle(pressed),
       ]}
     >
-      {title || pinned ? (
+      {title || pinned || (list && date) ? (
         <View style={styles.head}>
           {title ? (
-            <AppText variant="headline" style={styles.flex}>
+            <AppText variant="headline" style={[styles.flex, titleStyle]}>
               {title}
             </AppText>
           ) : (
             <View style={styles.flex} />
           )}
-          {pinned ? <Icon testID={testID ? `${testID}-pin` : undefined} icon={Pin} size="sm" color="brand" /> : null}
+          {list && date ? dateText : null}
+          {pinned && !list ? <Icon testID={testID ? `${testID}-pin` : undefined} icon={Pin} size="sm" color={ink.ink2} /> : null}
         </View>
       ) : null}
-      <AppText variant="callout" color="ink" numberOfLines={8}>
-        {text}
-      </AppText>
-      {children}
-      {date ? (
-        <AppText variant="footnote" color={white ? 'ink3' : 'ink2'}>
-          {date}
+      <View style={list ? styles.listBody : undefined}>
+        <AppText variant="callout" numberOfLines={list ? 3 : 8} style={[textStyle, list ? styles.flex : null]}>
+          {text}
         </AppText>
-      ) : null}
+        {pinned && list ? <Icon testID={testID ? `${testID}-pin` : undefined} icon={Pin} size="sm" color={ink.ink2} /> : null}
+      </View>
+      {children}
+      {!list ? dateText : null}
     </Pressable>
   );
 }
@@ -128,6 +163,7 @@ export function ResponsiveGrid({ children, columns, gap = 8, testID }: GridProps
 
 const styles = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  listBody: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   flex: { flex: 1 },
   // wrap: widths already add up; it only tells the 200% audit this is a grid, not a row of buttons.
   grid: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start' },

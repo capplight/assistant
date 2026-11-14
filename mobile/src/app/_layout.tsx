@@ -73,7 +73,9 @@ function RootStack() {
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.colors.bg, ...side } }}>
         <Stack.Screen name="(main)" />
         <Stack.Screen name="(onboarding)" options={{ gestureEnabled: false }} />
-        <Stack.Screen name="chat" options={{ presentation: 'fullScreenModal' }} />
+        <Stack.Screen name="chat" />
+        {/* Ф-50 «КП: 3 экрана»: a new КП starts in a sheet over «Документы» (list · editor · send sheet). */}
+        <Stack.Screen name="kp/new" options={{ presentation: 'formSheet', sheetAllowedDetents: [0.92], sheetGrabberVisible: true, sheetCornerRadius: 28 }} />
         <Stack.Screen name="phone" options={{ gestureEnabled: false }} />
         <Stack.Screen name="account-consent" options={{ gestureEnabled: false }} />
         <Stack.Screen name="alarm" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />

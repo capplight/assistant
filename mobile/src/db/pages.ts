@@ -1,6 +1,6 @@
 import { groupTitles } from '@/api/endpoints';
 import type { NoteColor, PageItemOut, PageOut } from '@/api/types';
-import { TEMPLATE_DEFAULT_TITLE, type IconKey, type Layout, type TemplateKey } from '@/pages/templates';
+import { isDefaultTitle, type IconKey, type Layout, type TemplateKey } from '@/pages/templates';
 import { parseView, viewFromServer, type PageView } from '@/pages/viewModel';
 import type { Page, PageCreatedBy } from '@/store/pages';
 
@@ -149,7 +149,7 @@ const parseTs = (iso: string | null | undefined, now: number): number | null => 
  */
 function fromServer(out: PageOut, now: number, base: LocalPage | null): LocalPage {
   const key = out.template_key as TemplateKey;
-  const isDefault = out.title === TEMPLATE_DEFAULT_TITLE[key];
+  const isDefault = isDefaultTitle(key, out.title);
   const dirty = base?.titleDirty ?? false;
   const posDirty = (base?.positionDirty ?? 0) > 0;
   const remDirty = (base?.removedDirty ?? 0) > 0;

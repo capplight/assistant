@@ -28,6 +28,9 @@ type ViewState = {
   lineRequest: { id: number; kind: 'text'; text: string } | { id: number; kind: 'mic' } | null;
   /** Week 11а «Я в магазине»: the page in that mode (the footer folds the line to chip + mic, no tabs). */
   shopMode: string | null;
+  /** v2: a second tap on the «Расходы» tab while it is open asks the page for the expense keypad (a counter). */
+  keypadRequest: number;
+  requestKeypad: () => void;
   setShopMode: (pageId: string | null) => void;
   requestLine: (r: { kind: 'text'; text: string } | { kind: 'mic' } | null) => void;
   setVisible: (pageId: string, ids: string[]) => void;
@@ -39,7 +42,7 @@ type ViewState = {
   reset: () => void;
 };
 
-const empty = { visible: {}, selected: null, touching: false, highlight: null, picking: null, lineRequest: null, shopMode: null };
+const empty = { visible: {}, selected: null, touching: false, highlight: null, picking: null, lineRequest: null, shopMode: null, keypadRequest: 0 };
 let lineSeq = 0;
 
 export const useView = create<ViewState>()((set) => ({
@@ -57,6 +60,7 @@ export const useView = create<ViewState>()((set) => ({
   clearHighlight: () => set({ highlight: null }),
   setPicking: (picking) => set({ picking }),
   setShopMode: (shopMode) => set({ shopMode }),
+  requestKeypad: () => set((s) => ({ keypadRequest: s.keypadRequest + 1 })),
   requestLine: (r) => set({ lineRequest: r ? { ...r, id: ++lineSeq } : null }),
   reset: () => set(empty),
 }));

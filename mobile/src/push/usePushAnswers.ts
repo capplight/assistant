@@ -18,7 +18,7 @@ async function openFrom(data: unknown): Promise<void> {
     return;
   }
   const id = await answerFromPush(data);
-  if (id) router.push({ pathname: '/chat', params: { focus: id } });
+  if (id) router.push({ pathname: '/history', params: { focus: id } });
 }
 
 /**

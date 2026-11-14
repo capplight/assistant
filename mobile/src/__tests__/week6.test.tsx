@@ -200,8 +200,9 @@ describe('US-24: «Разложи» → the result on the page, highlight 600 ms
     expect(screen.queryByTestId('answer-banner')).toBeNull();
     expect(r.getPathname()).toBe(`/page/${notes().id}`);
     expect(notes().viewVersion).toBe(4);
-    expect(bg('record-n1')).not.toBe(bg('record-n3'));
-    await settle(() => bg('record-n1') === bg('record-n3'));
+    // The changed stickers are lit (`highlightTint`) for 600 ms, then show their own colours again.
+    const lit = bg('record-n1');
+    await settle(() => bg('record-n1') !== lit);
     // Then the records themselves come by /v1/sync (docs/api/chat.md «Notes for the phone»).
     await settle(() => s.callsTo('GET /sync').length > 0);
   });
@@ -418,7 +419,7 @@ describe('6.11: the answer waits on «Сегодня»; push «Ответ гот
     await settle(() => s.callsTo('POST /chat/messages/r9/delivery').length > 0);
     expect(s.callsTo('POST /chat/messages/r9/delivery')[0]?.body).toEqual({ delivery: 'banner_shown' });
     await fireEvent.press(screen.getByTestId('pending-open'));
-    await settle(() => r.getPathname() === '/chat');
+    await settle(() => r.getPathname() === '/history');
     await settle(() => s.callsTo('POST /chat/messages/r9/delivery').some((c) => (c.body as { delivery: string }).delivery === 'opened'));
   });
 
@@ -449,7 +450,7 @@ describe('6.11: the answer waits on «Сегодня»; push «Ответ гот
     expect(s.callsTo('POST /devices').at(-1)?.body).toMatchObject({ push_provider: 'fcm' });
     expect(testPush.quiet).toBe(true);
     testPush.open({ type: 'chat_reply', reply_id: 'r9' });
-    await settle(() => r.getPathname() === '/chat');
+    await settle(() => r.getPathname() === '/history');
     expect(screen.getByText('120 000 ₸ до 20 ноября.')).toBeTruthy();
   });
 });

@@ -1,3 +1,4 @@
+import { getFeatures } from '@/store/features';
 import type { ActionOut, TaskCreateIn, TaskListKey, TaskOut, TaskWriteOut } from '@/api/types';
 import { getOutbox } from '@/db';
 import i18n from '@/i18n';
@@ -63,14 +64,19 @@ export function pageForList(list: TaskListKey): Page | undefined {
   const pages = usePages.getState().pages;
   const tasks = pages.find((p) => p.templateKey === 'tasks');
   if (list === 'todo') return tasks;
-  return pages.find((p) => p.templateKey === 'shopping') ?? tasks;
+  return shoppingPageOn(pages) ?? tasks;
+}
+
+/** Ф-49: «Покупки» counts only while the shopping list is on; otherwise things to buy are to-dos in «Дела». */
+export function shoppingPageOn(pages: readonly Page[]): Page | undefined {
+  return getFeatures().shopping ? pages.find((p) => p.templateKey === 'shopping') : undefined;
 }
 
 /** The lists a page shows (empty: not a list page). */
 export function listsForPage(p: Pick<Page, 'templateKey'> | undefined): TaskListKey[] {
   if (p?.templateKey === 'shopping') return ['shopping'];
   if (p?.templateKey !== 'tasks') return [];
-  const hasShopping = usePages.getState().pages.some((x) => x.templateKey === 'shopping');
+  const hasShopping = !!shoppingPageOn(usePages.getState().pages);
   return hasShopping ? ['todo'] : ['todo', 'shopping'];
 }
 

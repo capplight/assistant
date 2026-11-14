@@ -184,7 +184,7 @@ export default function NewKpScreen() {
             ) : null}
           </View>
           {v.counts.missing > 0 ? (
-            <Button testID="kp-new-fast" label={t('kp.fast_input')} variant="secondary" onPress={() => router.push({ pathname: '/kp/prices', params: { doc: doc.id } })} />
+            <Button testID="kp-new-fast" label={t('kp.fast_input')} variant="secondary" onPress={() => router.push({ pathname: '/kp/[id]', params: { id: doc.id, sheet: 'prices' } })} />
           ) : null}
           <AppText>{t('kp.vat_line', { mode: vatText(data.vat.mode, v.vatRate, t) })}</AppText>
           {needsProfile ? (

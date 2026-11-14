@@ -6,6 +6,7 @@
     "@expo-google-fonts/onest": "^0.4.2",
     "expo": "~58.0.23",
     "expo-audio": "~58.0.11",
+    "expo-blur": "~58.0.6",
     "expo-camera": "~58.0.14",
     "expo-constants": "~58.0.15",
     "expo-contacts": "~58.0.10",
@@ -76,6 +77,7 @@
     "moduleNameMapper": {
       "^lucide-react-native$": "<rootDir>/node_modules/lucide-react-native/dist/cjs/lucide-react-native.js"
     },
-    "testTimeout": 300000
+    "testTimeout": 300000,
+    "maxWorkers": "50%"
   }
 }

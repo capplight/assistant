@@ -36,7 +36,7 @@ export default function MainLayout() {
   return (
     // Keep the assistant line above the keyboard on both platforms: Android is edge-to-edge and no longer resizes (week 17).
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={KEYBOARD_BEHAVIOR}>
-      <Tabs screenOptions={{ headerShown: false, animation: 'none' }} tabBar={() => <MainFooter />}>
+      <Tabs backBehavior="history" screenOptions={{ headerShown: false, animation: 'none' }} tabBar={() => <MainFooter />}>
         <Tabs.Screen name="index" />
         <Tabs.Screen name="page/[id]" />
         <Tabs.Screen name="more" />
@@ -48,6 +48,7 @@ export default function MainLayout() {
         <Tabs.Screen name="stack/[id]" />
         <Tabs.Screen name="duplicates" />
         <Tabs.Screen name="import" />
+        <Tabs.Screen name="history" />
       </Tabs>
     </KeyboardAvoidingView>
   );

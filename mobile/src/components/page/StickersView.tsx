@@ -15,13 +15,14 @@ import { changeView } from '@/pages/viewService';
 import { recordTitle, sourceLine, statusLine } from '@/records/format';
 import { unverifiedCount } from '@/records/review';
 import { useFeatures } from '@/store/features';
+import { useNotesLook } from '@/store/notesLook';
 import { NOTE_COLOR_KEYS, useLayout, useTheme } from '@/theme';
 
 import { AppText } from '../AppText';
 import type { MenuExtra } from '../RecordMenuSheet';
 import type { RowMoves } from '../RecordRow';
 import { StackCards } from '../StackCards';
-import { Icon, pressedStyle, SegmentedControl, Sheet, StickyNote } from '../ui';
+import { autoNoteColor, Icon, pressedStyle, SegmentedControl, Sheet, StickyNote } from '../ui';
 import { useScreenReader } from '../useScreenReader';
 import { BoardView } from './BoardView';
 import { EntryList, type EntryCtx } from './EntryList';
@@ -62,6 +63,7 @@ export function StickersView({ page, entries, frameTop, ordering }: ViewProps) {
   }, [dedup.collections, dedup.gone, page.serverId, page.groups]);
 
   const screenReader = useScreenReader();
+  const look = useNotesLook((st) => st.look);
   // Ф-38: the board is hidden while the switch is off (its code and the saved places stay).
   const boardOn = useFeatures((f) => f.board);
   const board = boardOn && page.view?.mode === 'board';
@@ -97,9 +99,15 @@ export function StickersView({ page, entries, frameTop, ordering }: ViewProps) {
     }
     const pinned = inRows.filter((e) => e.link?.pinned);
     const rest = inRows.filter((e) => !e.link?.pinned);
-    // «Разложи» groups that are not piles keep their headings (week 6).
-    return [...pinned.map(entryRow), ...withGroups(rest, page.groups ?? [])];
-  }, [boardAsRows, inRows, laid, page.groups]);
+    // v2: «Закреплено» above «Остальные» (design-system §5 StickyNote v2); «Разложи» groups keep their headings.
+    const heads = pinned.length > 0;
+    return [
+      ...(heads ? [{ type: 'group' as const, key: '__pinned', title: t('notes.pinned_section') }] : []),
+      ...pinned.map(entryRow),
+      ...(heads && rest.length > 0 && !(page.groups ?? []).length ? [{ type: 'group' as const, key: '__rest', title: t('notes.rest_section') }] : []),
+      ...withGroups(rest, page.groups ?? []),
+    ];
+  }, [boardAsRows, inRows, laid, page.groups, t]);
 
   /** The board as rows: «Выше / Ниже» swap the places of two neighbours (the board is counted again). */
   const swap = (recordId: string, step: -1 | 1) => {
@@ -163,7 +171,7 @@ export function StickersView({ page, entries, frameTop, ordering }: ViewProps) {
   );
 
   const renderEntry = (row: EntryRow, ctx: EntryCtx) => (
-    <Sticker entry={row.entry} ctx={ctx} index={order.indexOf(row.entry.record.id)} total={order.length} />
+    <Sticker entry={row.entry} ctx={ctx} index={order.indexOf(row.entry.record.id)} total={order.length} look={look} />
   );
 
   return (
@@ -177,8 +185,15 @@ export function StickersView({ page, entries, frameTop, ordering }: ViewProps) {
           header={header}
           ordering={ordering}
           renderEntry={renderEntry}
+          renderGroup={(g) =>
+            g.key === '__pinned' || g.key === '__rest' ? (
+              <AppText testID={`group-${g.key}`} variant="eyebrow" color="ink2" accessibilityRole="header" style={{ paddingTop: theme.space[3], paddingBottom: theme.space[2] }}>
+                {g.title}
+              </AppText>
+            ) : null
+          }
           menuExtra={menuExtra}
-          columns={layout.noteColumns}
+          columns={look === 'list' ? 1 : layout.noteColumns}
           gap={theme.space[2]}
           empty={entries ? <EmptyWall /> : null}
           {...(boardAsRows ? { onStep: swap } : {})}
@@ -202,7 +217,7 @@ export function StickersView({ page, entries, frameTop, ordering }: ViewProps) {
   );
 }
 
-function Sticker({ entry, ctx, index, total }: { entry: PageEntry; ctx: EntryCtx; index: number; total: number }) {
+function Sticker({ entry, ctx, index, total, look }: { entry: PageEntry; ctx: EntryCtx; index: number; total: number; look: 'grid' | 'list' }) {
   const theme = useTheme();
   const { t, i18n } = useTranslation();
   const rec = entry.record;
@@ -239,7 +254,8 @@ function Sticker({ entry, ctx, index, total }: { entry: PageEntry; ctx: EntryCtx
         title={body ? first : undefined}
         text={body || first}
         date={sourceLine(rec, i18n.language, t)}
-        color={color ?? 'white'}
+        color={color ?? autoNoteColor(rec.serverId ?? rec.id)}
+        look={look}
         pinned={pinned}
         highlighted={ctx.highlighted}
         accessibilityLabel={stickerLabel(rec, { color, pinned, index, total }, t, i18n.language)}
@@ -318,7 +334,7 @@ function ModeSwitch({ board, onPick }: { board: boolean; onPick: (board: boolean
   );
 }
 
-/** «Цвет»: six round swatches in the one sheet, each with its name (colour never carries meaning alone). */
+/** «Цвет»: the seven round swatches of v2 (incl. `lilac`) in the one sheet, each with its name (colour never carries meaning alone). */
 function ColorSheet({ title, current, onPick, onClose }: { title: string; current: NoteColor | null; onPick: (c: NoteColor) => void; onClose: () => void }) {
   const theme = useTheme();
   const { t } = useTranslation();

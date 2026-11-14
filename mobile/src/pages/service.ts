@@ -102,3 +102,15 @@ async function undoRename(outboxId: string): Promise<void> {
     kickSync();
   }
 }
+
+/**
+ * Ф-48: «Расходы» is always a tab. The first tap on a phone that has no such page makes it here (offline too) and the
+ * server takes it like any new page (`409 singleton_exists` → this page is that one, sync engine). Null at 20 pages.
+ */
+export async function ensureTemplatePage(key: 'expenses' | 'notes' | 'tasks' | 'documents'): Promise<Page | null> {
+  const have = usePages.getState().pages.find((p) => p.templateKey === key);
+  if (have) return have;
+  const page = usePages.getState().addPage(key);
+  if (page) await saveNewPages([page]);
+  return page;
+}

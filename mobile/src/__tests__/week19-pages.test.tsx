@@ -92,7 +92,7 @@ describe('«Заметки»: the sticker grid (design-system §3 StickyNote)', 
     else expect(StyleSheet.flatten(screen.getByTestId('sticker-notes0').parent!.parent!.props.style)?.flexDirection).not.toBe('row');
     const style = StyleSheet.flatten(screen.getByTestId('record-notes0').props.style);
     expect(style.borderWidth ?? 0).toBe(0);
-    expect(style.borderRadius).toBe(14);
+    expect(style.borderRadius).toBe(18); // v2 StickyNote
     expect(screen.queryByTestId('record-menu-notes0')).toBeNull();
     // Ф-38: no «Ряды | Доска» while the board is off.
     expect(screen.queryByTestId('notes-mode-board')).toBeNull();
@@ -117,15 +117,13 @@ describe('the page header: one line (ux-audit P0-2)', () => {
     await settle(() => r.getPathname() === `/page-settings/${tasks.id}`);
   });
 
-  it('🔍 opens the field; ✕ clears and hides it', async () => {
+  it('🔍 opens the one search (Ф-50), from this page', async () => {
     const { notes } = await seed();
-    await renderRouter(APP_DIR, { initialUrl: `/page/${notes.id}` });
+    const r = await renderRouter(APP_DIR, { initialUrl: `/page/${notes.id}` });
     await settle(() => screen.queryByTestId('page-search') !== null);
     await fireEvent.press(screen.getByTestId('page-search'));
-    await fireEvent.changeText(screen.getByTestId('page-find'), 'шины');
-    await settle(() => screen.queryByText('Wi-Fi на даче') === null);
-    await fireEvent.press(screen.getByTestId('page-search'));
-    await settle(() => screen.queryByTestId('page-find') === null && screen.queryByText('Wi-Fi на даче') !== null);
+    expect(r.getPathname()).toBe('/search');
+    expect(screen.queryByTestId('page-find')).toBeNull();
   });
 });
 

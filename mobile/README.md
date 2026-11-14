@@ -97,6 +97,29 @@ src/
 modules/alarms/              native Expo module: Android (Kotlin) AlarmManager + S14 + battery-guide, iOS (Swift) AlarmKit
 ```
 
+## Structure v2 + mocks v2 (Ф-48…Ф-51, Ф-54, Ф-55)
+
+- **Tabs** (`pages/tabs.ts`, `BottomTabs`): «Сегодня · Заметки · Расходы · Дела · Ещё», «Расходы» the raised centre
+  circle, always there (made on the first tap, `ensureTemplatePage`); a second tap on open «Расходы» opens the keypad.
+  At ≥150 %: «Сегодня · Расходы · Дела · Ещё». Other pages are «Ещё → Ваши страницы».
+- **No shopping list** (Ф-49): feature `shopping` (default off, `GET /v1/features`): «Покупки», «Я в магазине» and
+  «Купить: …» are hidden; things to buy are to-dos in «Дела». Code kept.
+- **«Сегодня»** = the briefing: BriefCard (status, headline, ≤3-line summary by part of the day — `today/brief.ts`),
+  2×2 MetricTiles, «План дня» (`Timeline`, the next ring within the hour is the sun card), «Ждёт вас».
+- **«История»** (`(main)/history.tsx`, `chat/history.ts`): «Переписка» + «Что я сделал»; `/chat`, `/did` redirect.
+- **SaveToast**: every save from the line says «Сохранил в «…»: … · Переложить · Отменить»; «Переложить» =
+  `ReplaceSheet` (moves the record with the existing move API).
+- **ConfirmCard**: a reminder read from the line / voice is a card above the line (one reading is set at once,
+  several ask with time chips); the manual «Новое напоминание» keeps the form.
+- **One search**: every 🔍 opens `/search`; a short answer of the line is shown as a value (`SearchAnswer`).
+- **«+»**: no stubs; «Выписка» only with `statements_pdf` (also not via «Поделиться» or a stale `/receipt?kind=statement`).
+- **Language** switches only after a confirmation in both languages; **theme** = two preview cards; **«Бюджет на
+  месяц»** (this phone, `store/budget.ts`) feeds «осталось» on «Сегодня» and «Расходы».
+- **«Документы»** (was «Документы и КП»; the old server title still counts as default). A КП starts from «сделай КП
+  для …» in the line and from «Сделать документ из этого» (share sheet, record menu) — `kp/start.ts`. КП screens:
+  list (the page) · editor (Правка | Просмотр) with sheets for sending, versions and fast prices; the old routes redirect.
+- Tests: `__tests__/v2.test.tsx`.
+
 ## Design system «Мята / Глубина» — phase 1 (foundation)
 
 Ф-45 / Ф-46, `../docs/design/system/design-system.md`. Tokens by role in `src/theme` (old names removed, mechanical

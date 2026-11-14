@@ -3,6 +3,7 @@ import { Dimensions, Pressable } from 'react-native';
 
 import {
   expenseCategoryOut,
+  FEATURE_DEFAULTS,
   expenseDuplicateOut,
   expenseOut,
   receiptOut,
@@ -25,8 +26,16 @@ import { usePages } from '@/store/pages';
 import { useToast } from '@/store/toast';
 import { useUndo } from '@/store/undo';
 import { localDate } from '@/tasks/rows';
-import { happyServer, type FakeServer } from '@/testing/fakeServer';
+import { FEATURES_BODY, happyServer, type FakeServer } from '@/testing/fakeServer';
 import { APP_DIR, finishOnboarding, resetApp, settle } from '@/testing/helpers';
+import { useFeatureStore } from '@/store/features';
+
+/** Week 13 tests the statements and the QR: both behind their switches since Ф-37 — on here. */
+function resetWithFlags(o?: Parameters<typeof resetApp>[0]) {
+  const out = resetApp(o);
+  useFeatureStore.getState().set({ ...FEATURE_DEFAULTS, statements_pdf: true, receipt_qr: true });
+  return out;
+}
 
 /**
  * Week 13 «Расходы 2» (docs/api/expenses.md «Week 13» and routes/expense_docs.py as of 2026-11-09
@@ -304,6 +313,7 @@ describe('week 13 contract and code', () => {
 
 function server(): FakeServer {
   const s = happyServer();
+  s.on('GET /features', () => ({ status: 200, body: { ...FEATURES_BODY, statements_pdf: true, receipt_qr: true } }));
   s.on('GET /expense-categories', () => ({ status: 200, body: { order: 'frequency', categories: serverCategories() } }))
     .on('GET /expenses/duplicates', () => ({ status: 200, body: { duplicates: [] } }))
     .on('GET /expenses/statements', () => ({ status: 200, body: { statements: [] } }))
@@ -339,7 +349,7 @@ describe('the founder\'s month: a shared statement → plan → one «Да» →
         status: 200,
         body: { items: [], tombstones: [], expenses: confirmed && !undone ? createdExpenses() : [], next_since: confirmed ? 500 : 1, has_more: false },
       }));
-    const outbox: InMemoryOutboxRepository = resetApp({ fetch: s.fetch });
+    const outbox: InMemoryOutboxRepository = resetWithFlags({ fetch: s.fetch });
     finishOnboarding('full');
     applyServer(handTyped(), serverCategories());
     await (await getSyncEngine()).run();
@@ -391,7 +401,7 @@ describe('the founder\'s month: a shared statement → plan → one «Да» →
     s.on('POST /expenses/statements', () => ({ status: 201, body: { statement: statementJson('proposed'), pending_action: null, repeated: false } }))
       .on('GET /expenses/statements/st-1', () => ({ status: 200, body: { statement: statementJson('proposed'), rows: rowsJson(OPS) } }))
       .on('POST /expenses/statements/st-1/reject', () => ({ status: 200, body: { statement: statementJson('rejected'), pending_action: null } }));
-    resetApp({ fetch: s.fetch });
+    resetWithFlags({ fetch: s.fetch });
     finishOnboarding('full');
     await (await getSyncEngine()).run();
     const rec = await (await getCapture()).saveFile({ uri: 'file:///share/v.pdf', mime: 'application/pdf', name: 'v.pdf', source: 'share' });
@@ -417,7 +427,7 @@ describe('the founder\'s month: a shared statement → plan → one «Да» →
       status: 422,
       body: { code: 'statement_unknown_format', message_ru: 'Не знаю такую выписку. Пришлите PDF из приложения банка.', message_kk: '' },
     }));
-    resetApp({ fetch: s.fetch });
+    resetWithFlags({ fetch: s.fetch });
     finishOnboarding('no_ai');
     await (await getSyncEngine()).run();
     const rec = await (await getCapture()).saveFile({ uri: 'file:///share/v.pdf', mime: 'application/pdf', name: 'v.pdf', source: 'share' });
@@ -447,7 +457,7 @@ describe('receipt photo, QR, «Проверьте сумму», «Объедин
         },
       };
     }).on('PATCH /expenses/r1', () => ({ status: 200, body: { expense: expense('r1', { amount: '12400.00', payee: 'Магнум', source: 'receipt_ocr', seq: 31 }), action: action('a-v', 'edit_expense', 'x'), repeated: false } }));
-    const outbox = resetApp({ fetch: s.fetch });
+    const outbox = resetWithFlags({ fetch: s.fetch });
     finishOnboarding('full');
     applyServer([], serverCategories());
     // The engine is made after renderRouter turned on fake timers (its clock is then the fake one).
@@ -485,7 +495,7 @@ describe('receipt photo, QR, «Проверьте сумму», «Объедин
   });
 
   it('the camera off in settings: said in plain words, «Открыть настройки», the gallery instead', async () => {
-    resetApp();
+    resetWithFlags();
     finishOnboarding('full');
     const { m, calls } = fakeMedia('blocked');
     setMediaForTests(m);
@@ -512,7 +522,7 @@ describe('receipt photo, QR, «Проверьте сумму», «Объедин
         repeated: false,
       },
     }));
-    const outbox = resetApp({ fetch: s.fetch });
+    const outbox = resetWithFlags({ fetch: s.fetch });
     finishOnboarding('full');
     applyServer([], serverCategories());
     // The engine is made after renderRouter turned on fake timers (its clock is then the fake one).
@@ -543,7 +553,7 @@ describe('receipt photo, QR, «Проверьте сумму», «Объедин
   });
 
   it('a QR that is not a link: «Это не кассовый чек», scan again', async () => {
-    resetApp();
+    resetWithFlags();
     finishOnboarding('full');
     const { m } = fakeMedia('granted');
     setMediaForTests(m);
@@ -559,7 +569,7 @@ describe('receipt photo, QR, «Проверьте сумму», «Объедин
   it('«Изменить» on «Проверьте сумму» opens the keys of that spending; the new amount goes without `confirm`', async () => {
     const s = server();
     s.on('PATCH /expenses/v1', () => ({ status: 200, body: { expense: expense('v1', { amount: '4500.00', source: 'voice', seq: 9 }), action: action('a-e', 'edit_expense', 'x'), repeated: false } }));
-    resetApp({ fetch: s.fetch });
+    resetWithFlags({ fetch: s.fetch });
     finishOnboarding('full');
     applyServer([expense('v1', { amount: '5400.00', source: 'voice', review_fields: ['amount'] })], serverCategories());
     await (await getSyncEngine()).run();
@@ -587,7 +597,7 @@ describe('receipt photo, QR, «Проверьте сумму», «Объедин
         status: 200,
         body: { duplicate: { ...dup, status: 'merged' }, expense: { ...keep, seq: 7 }, action: action('a-m', 'merge_expenses', 'Объединил траты: 2 500 ₸ · Магнум'), repeated: false },
       }));
-    resetApp({ fetch: s.fetch });
+    resetWithFlags({ fetch: s.fetch });
     finishOnboarding('full');
     applyServer([keep, other], serverCategories());
     await (await getSyncEngine()).run();
@@ -616,7 +626,7 @@ describe('receipt photo, QR, «Проверьте сумму», «Объедин
 
   it('200%: the «Проверьте сумму» buttons stack, the amount keeps its 1.6× cap, the bring sheet rows are ≥48 pt', async () => {
     Dimensions.set({ window: { width: 390, height: 844, scale: 3, fontScale: 2 }, screen: { width: 390, height: 844, scale: 3, fontScale: 2 } });
-    resetApp();
+    resetWithFlags();
     finishOnboarding('full');
     applyServer([expense('v2', { amount: '700.00', source: 'voice', review_fields: ['amount', 'spent_on'] })], serverCategories());
     await renderRouter(APP_DIR, { initialUrl: `/page/${expensesPage().id}` });

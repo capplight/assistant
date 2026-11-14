@@ -37,6 +37,8 @@ import {
 } from '@/store/assistant';
 import { selectNoAi, useOnboarding } from '@/store/onboarding';
 import { usePages } from '@/store/pages';
+import { openServerKp } from '@/kp/start';
+import { useReminderCard } from '@/store/reminderCard';
 import { useToast } from '@/store/toast';
 import { useUndo } from '@/store/undo';
 import { useView } from '@/store/view';
@@ -120,6 +122,7 @@ export function fromAction(a: ActionOut): ChatAction {
     changedItemIds: a.changed_item_ids,
     changes: a.changes.map((c) => ({ itemId: c.item_id, title: c.title, text: c.text, reverted: c.reverted, key: c.key ?? null })),
     createdPageId: a.created_page_id,
+    savedTo: (a.saved_to ?? []).map((s) => ({ pageServerId: s.page_id, title: s.title, itemIds: s.item_ids })),
     undoable: a.undoable,
     undone: !!a.undone_at,
   };
@@ -185,6 +188,7 @@ function apply(answerId: string, e: ChatEvent): void {
     case 'banner':
       updateMessage(answerId, (m) => ({
         text: e.text || m.text,
+        ...(e.value ? { value: e.value } : {}),
         aiGenerated: e.aiLabel !== null,
         ...(e.citations.length > 0 ? { sources: e.citations.map(fromCitation) } : {}),
       }));
@@ -224,6 +228,11 @@ function apply(answerId: string, e: ChatEvent): void {
     }
     case 'page_patch':
       queuePatch(answerId, e.patch);
+      return;
+    case 'kp_started':
+      // Ф-51: the server read «сделай КП …» and started it; S16 follows the document like a job of its own.
+      openServerKp(e.documentId);
+      if (store().banner?.messageId === answerId) store().closeBanner();
       return;
     case 'proposal':
       // «Какую?», «Переставить 212 записей?», «Вы сами расставили…»: nothing was changed.
@@ -522,12 +531,24 @@ export async function ask(
  */
 async function saveNote(text: string): Promise<void> {
   const capture = await getCapture();
-  await capture.saveText({ text, source: 'typed' });
+  const rec = await capture.saveText({ text, source: 'typed' });
+  showSavedToast(rec.id, text);
+}
+
+/**
+ * Ф-50: after every save from the line, «Сохранил в «Заметки»: … · Переложить · Отменить». A note saved on this
+ * phone shows on «Заметки» until the server places it, so that is the page it names.
+ */
+export function showSavedToast(recordId: string, what: string): void {
+  const notes = usePages.getState().pages.find((p) => p.templateKey === 'notes') ?? null;
+  const short = (what.trim().split(/\r?\n/)[0] ?? '').slice(0, 60);
+  useUndo.getState().showSaved(recordId, notes?.id ?? null, short);
 }
 
 /** Never reached the server, and the phrase looked like a note: it is saved here instead. */
 async function saveInstead(answerId: string, question: ChatMessage): Promise<void> {
   await saveNote(question.text);
+  if (store().banner?.messageId === answerId) store().closeBanner();
   store().updateMessage(answerId, {
     status: 'done',
     activity: null,
@@ -562,6 +583,20 @@ function addLocalTurn(text: string, page: AskPage, reply: Partial<ChatMessage>):
  * Nothing is saved until [Сохранить]; `messageId` links the saved reminder to the line's answer.
  */
 function openDraft(out: ReminderParseOut, messageId: string | null, text?: string, via?: 'voice' | 'typed'): void {
+  // Ф-50: the card above the line, not the form, whenever there is a time to show (one reading or a choice).
+  const first = out.draft ?? out.options[0] ?? null;
+  if (first?.due_at || out.options.length > 1) {
+    useReminderCard.getState().show({
+      text: text ?? first?.title ?? '',
+      draft: out.draft ?? null,
+      options: out.options,
+      message: out.message ?? null,
+      messageId,
+      via: via === 'voice' ? 'voice' : 'typed',
+    });
+    if (messageId && store().banner?.messageId === messageId) store().closeBanner();
+    return;
+  }
   const params: Record<string, string> = {};
   if (via === 'voice') params.via = via;
   if (text) params.text = text;
@@ -634,6 +669,8 @@ export async function sendFromLine(text: string, page: AskPage): Promise<LineRes
   if (guess === 'note' && (noAi || !lineRouting.serverDecides || !chatAllowed())) {
     await saveNote(text);
     addLocalTurn(text, page, { status: 'done', saved: true, text: i18n.t('line.saved') });
+    // The toast says where it went; the turn stays in «История».
+    store().closeBanner();
     return 'saved';
   }
   if (guess === 'action' && !chatAllowed()) return local('offline_action');
@@ -868,6 +905,25 @@ export async function loadHistory(): Promise<void> {
     store().mergeMessages(fromHistory(out.messages, store().messages));
   } catch {
     // offline: the phone's own history is on screen
+  }
+}
+
+/**
+ * «История» from the server (`GET /v1/history`, chat.md week 20): its turns join the one conversation (the phone
+ * keeps what it has, offline too) and its changes join «Что я сделал»; the screen then builds the same feed.
+ * An older server without the route: the turns and `/actions` as before.
+ */
+export async function loadServerHistory(): Promise<boolean> {
+  if (!chatAllowed()) return false;
+  try {
+    const out = await getApi().history({ limit: 50 });
+    const msgs = out.entries.flatMap((e) => [e.said, e.answer].filter((m): m is NonNullable<typeof m> => m !== null));
+    if (msgs.length > 0) store().mergeMessages(fromHistory(msgs, store().messages));
+    const acts = out.entries.flatMap((e) => (e.action ? [e.action] : []));
+    if (acts.length > 0) rememberActions(acts);
+    return true;
+  } catch {
+    return false;
   }
 }
 

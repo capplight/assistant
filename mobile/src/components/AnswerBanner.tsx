@@ -47,7 +47,7 @@ export function AnswerBanner() {
 
   const openAnswer = () => {
     markDelivery(message, 'opened');
-    router.push({ pathname: '/chat', params: { focus: message.id } });
+    router.push({ pathname: '/history', params: { focus: message.id } });
   };
   const close = () => {
     markDelivery(message, 'dismissed');
@@ -114,6 +114,12 @@ export function AnswerBanner() {
           </Pressable>
         </View>
       ) : null}
+      {!message.saved && message.value ? (
+        // Ф-50 «ответ сразу значением»: a short checked answer is one big value («4512»), the text under it.
+        <AppText testID="answer-value" variant="answerValue">
+          {message.value}
+        </AppText>
+      ) : null}
       {message.saved ? (
         <AppText numberOfLines={2}>{savedLine}</AppText>
       ) : message.text ? (
@@ -141,7 +147,7 @@ export function AnswerBanner() {
         </AppText>
       ) : null}
       {message.notice === 'maybe_done' ? (
-        <Button testID="answer-did" label={t('more.did')} variant="text" onPress={() => router.push('/did')} style={styles.start} />
+        <Button testID="answer-did" label={t('more.did')} variant="text" onPress={() => router.push({ pathname: '/history', params: { tab: 'changes' } })} style={styles.start} />
       ) : message.status === 'interrupted' ? (
         <Button testID="answer-retry" label={t('answer.retry')} variant="text" onPress={() => void retry(message.id)} style={styles.start} />
       ) : null}

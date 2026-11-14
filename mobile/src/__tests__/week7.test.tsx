@@ -804,7 +804,9 @@ describe('on screen', () => {
     const exp = page('expenses').id;
     expect(screen.getByTestId(`my-pages-up-${exp}`).props.accessibilityLabel).toBe('Выше: Расходы');
     await fireEvent.press(screen.getByTestId(`my-pages-up-${exp}`));
-    await settle(() => tabs()[2] === `tab-${exp}`);
+    // Ф-48: the tabs are fixed (Сегодня · Заметки · Расходы · Дела · Ещё); the order is the pages' order.
+    await settle(() => tabOrder().indexOf('expenses') < tabOrder().indexOf('tasks'));
+    expect(tabs()).toContain('tab-expenses');
     const tasks = page('tasks').id;
     await fireEvent.press(screen.getByTestId(`my-pages-menu-${tasks}`));
     await fireEvent.press(screen.getByTestId('my-pages-sheet-remove'));
@@ -813,9 +815,8 @@ describe('on screen', () => {
       'Страница «Дела и напоминания» убрана. Записи остались.',
     );
     await fireEvent.press(screen.getByTestId('undo-strip-undo'));
-    // Back as the third page: past the two tabs (design-system TabBar: ≤4 tabs), so it lives in «Ещё».
+    // Back where it was; «Дела» is a fixed tab again (Ф-48).
     await settle(() => tabOrder().includes('tasks'));
-    expect(tabOrder()).toEqual(['notes', 'expenses', 'tasks']);
-    expect(tabs()).not.toContain(`tab-${tasks}`);
+    expect(tabs()).toContain(`tab-${tasks}`);
   });
 });

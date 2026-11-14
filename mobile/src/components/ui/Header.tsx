@@ -6,6 +6,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { useTheme } from '@/theme';
 
 import { AppText } from '../AppText';
+import { cardEdge } from './Card';
 import { Icon, type LucideIcon } from './Icon';
 import { pressedStyle } from './motion';
 
@@ -26,15 +27,15 @@ export function BackButton({ onPress, label, testID = 'header-back' }: BackProps
       onPress={onPress}
       style={({ pressed }) => [styles.back, { minHeight: theme.size.minTouch, paddingRight: theme.space[2] }, pressedStyle(pressed)]}
     >
-      <Icon icon={ChevronLeft} size="sm" color="brand" />
-      <AppText variant="callout" color="brand" style={{ fontFamily: theme.type.sectionLabel.fontFamily }}>
+      <Icon icon={ChevronLeft} size="sm" color="linkOnBg" />
+      <AppText variant="callout" color="linkOnBg" style={{ fontFamily: theme.type.sectionLabel.fontFamily }}>
         {text}
       </AppText>
     </Pressable>
   );
 }
 
-/** A round 36 button (`surface` + shadow), 48 target: search and ⋯ in the header. */
+/** A round 40 button (`surface` + shadow), 48 target: search and ⋯ in the header. */
 export function HeaderButton({ icon, label, onPress, testID }: Omit<HeaderAction, 'key'>) {
   const theme = useTheme();
   const s = theme.size.headerButton;
@@ -46,7 +47,7 @@ export function HeaderButton({ icon, label, onPress, testID }: Omit<HeaderAction
       onPress={onPress}
       style={({ pressed }) => [styles.target, { width: theme.size.minTouch, height: theme.size.minTouch }, pressedStyle(pressed)]}
     >
-      <View style={[styles.round, { width: s, height: s, borderRadius: s / 2, backgroundColor: theme.colors.surface }, theme.elevation.card]}>
+      <View style={[styles.round, { width: s, height: s, borderRadius: s / 2, backgroundColor: theme.colors.surface }, theme.elevation.card, cardEdge(theme)]}>
         <Icon icon={icon} size="sm" color="ink" />
       </View>
     </Pressable>
@@ -65,13 +66,15 @@ type HeaderProps = {
   testID?: string;
   /** testID of the title text (screens whose tests look for their title). */
   titleTestID?: string;
+  /** v2: a small control between the title and the buttons (the «сетка / список» toggle of «Заметки»). */
+  accessory?: ReactNode;
 };
 
 /**
  * Screen header (design-system §3 Header): «‹ Назад» row on stack screens, meta, `largeTitle`, ≤2 round buttons.
  * One line: «Порядок» and «Настроить» live in ⋯. The title wraps (KK at 200 %), the buttons keep their place.
  */
-export function Header({ title, meta, back, actions = [], children, testID, titleTestID }: HeaderProps) {
+export function Header({ title, meta, back, actions = [], children, testID, titleTestID, accessory }: HeaderProps) {
   const theme = useTheme();
   if (__DEV__ && actions.length > 2) console.warn('Header: at most 2 actions; put the rest into ⋯');
   return (
@@ -84,6 +87,7 @@ export function Header({ title, meta, back, actions = [], children, testID, titl
             {title}
           </AppText>
         </View>
+        {accessory}
         {actions.slice(0, 2).map((a) => (
           <HeaderButton key={a.key} icon={a.icon} label={a.label} onPress={a.onPress} testID={a.testID} />
         ))}

@@ -1,12 +1,14 @@
 import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useAssistant } from '@/store/assistant';
 import { useView } from '@/store/view';
 import { useLayout, useTheme } from '@/theme';
 
 import { AnswerBanner } from './AnswerBanner';
 import { AssistantLine } from './AssistantLine';
 import { BottomTabs } from './BottomTabs';
+import { ConfirmCard } from './ConfirmCard';
 import { ReminderDraftStrip } from './ReminderCards';
 import { ToastLine, useToastAnchor } from './Toast';
 import { BottomFade } from './ui/BottomFade';
@@ -31,11 +33,22 @@ export function MainFooter() {
   // «Я в магазине» (template-screens 3): the line folds to its chip and the mic but stays; no tabs.
   const shop = useView((s) => s.shopMode !== null);
   const tabs = !(shop || typing);
+  // v2 «голос»: the rest of the screen is dimmed while the line listens (the capsule glows above it).
+  const listening = useAssistant((s) => s.listening);
   useToastAnchor();
   return (
     // The keyboard covers the home indicator / navigation bar: no safe-area gap under the line then.
     // Landscape side insets come from the root stack (app/_layout.tsx).
     <View style={{ backgroundColor: theme.colors.fade }}>
+      {listening ? (
+        <View
+          testID="voice-dim"
+          pointerEvents="none"
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          style={{ position: 'absolute', left: 0, right: 0, bottom: '100%', height: height, backgroundColor: theme.colors.scrim }}
+        />
+      ) : null}
       <BottomFade />
       <View
         testID="main-footer"
@@ -50,6 +63,7 @@ export function MainFooter() {
           keyboardShouldPersistTaps="handled"
         >
           <AnswerBanner />
+          <ConfirmCard />
           <ReminderDraftStrip />
           <UndoStrip />
           <ToastLine />

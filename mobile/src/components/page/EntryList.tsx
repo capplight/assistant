@@ -17,6 +17,8 @@ import { setDone } from '@/tasks/service';
 import { useTheme } from '@/theme';
 
 import { AppText } from '../AppText';
+import { makeDocumentFrom } from '@/kp/start';
+
 import { MovePageSheet, type MoveMode } from '../MovePageSheet';
 import { RecordMenuSheet, type MenuExtra } from '../RecordMenuSheet';
 import { RecordRow, type RowMoves } from '../RecordRow';
@@ -317,6 +319,15 @@ export function EntryList({
       {menuEntry ? (
         <RecordMenuSheet
           title={recordTitle(menuEntry.record, t)}
+          onDocument={
+            menuEntry.record.files.length > 0
+              ? () => {
+                  const id = menuEntry.record.id;
+                  setMenuFor(null);
+                  makeDocumentFrom(id);
+                }
+              : undefined
+          }
           mine={!!menuEntry.link?.manualOrder}
           canUp={menuIndex > 0}
           canDown={menuIndex < shown.length - 1}

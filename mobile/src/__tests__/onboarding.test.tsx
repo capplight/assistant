@@ -33,7 +33,7 @@ describe('first launch flow (Ф-34)', () => {
     expect(useOnboarding.getState().language).toBe('kk');
   });
 
-  it('«Начать» records the consents (screen «welcome», versions, hashes), makes Заметки + Дела, opens «Сегодня»', async () => {
+  it('«Начать» records the consents (screen «welcome», versions, hashes), makes Заметки + Дела + Расходы, opens «Сегодня»', async () => {
     const r = await renderRouter(APP_DIR, { initialUrl: '/welcome' });
     await fireEvent.press(screen.getByTestId('welcome-start'));
     await settle(() => r.getPathname() === '/');
@@ -44,7 +44,7 @@ describe('first launch flow (Ф-34)', () => {
     expect(st.consent?.texts.map((x) => x.version)).toEqual(['pd-2026-11-v1', 'ai-2026-11-v1', 'terms-2026-11-v1', 'push-2026-11-v1']);
     expect(st.doneAt).not.toBeNull();
     expect(st.path).toBe('skipped');
-    expect(usePages.getState().pages.map((p) => p.templateKey)).toEqual(['notes', 'tasks']);
+    expect(usePages.getState().pages.map((p) => p.templateKey)).toEqual(['notes', 'tasks', 'expenses']);
 
     const rows = await outbox.listPending();
     expect(rows.map((e) => e.kind)).toEqual(['consent.accept', 'device.register', 'onboarding.welcome_seen', 'pages.batch']);
@@ -87,7 +87,7 @@ describe('first launch flow (Ф-34)', () => {
     useOnboarding.getState().acceptConsent('full');
     const r = await renderRouter(APP_DIR, { initialUrl: '/' });
     expect(r.getPathname()).toBe('/');
-    await settle(() => usePages.getState().pages.length === 2);
+    await settle(() => usePages.getState().pages.length === 3);
     expect(useOnboarding.getState().doneAt).not.toBeNull();
   });
 

@@ -8,14 +8,18 @@ import { actionText, undoAction } from '@/chat/service';
 import { undoManual } from '@/pages/manual';
 import { usePageLabels } from '@/pages/usePageLabels';
 import { formatShortDate } from '@/records/format';
-import { getRecordActions } from '@/services';
+import { getRecords, type LocalRecord } from '@/db';
+import { placesLocally } from '@/pages/contents';
+import { getRecordActions, kickSync } from '@/services';
 import { useAssistant } from '@/store/assistant';
-import { usePages } from '@/store/pages';
+import { usePages, type Page } from '@/store/pages';
+import { useConnectivity } from '@/store/connectivity';
 import { useToast } from '@/store/toast';
-import { undoStripMs, useUndo, type ManualStripText } from '@/store/undo';
+import { SAVE_TOAST_MS, undoStripMs, useUndo, type ManualStripText } from '@/store/undo';
 import { useTheme } from '@/theme';
 
 import { ChangesSheet } from './ChangesSheet';
+import { ReplaceSheet } from './ReplaceSheet';
 import { ToastBar, type ToastAction } from './ui/ToastBar';
 import { useCurrentPage } from './useCurrentPage';
 
@@ -48,7 +52,12 @@ export function UndoStrip() {
       : undefined,
   );
   const [screenReader, setScreenReader] = useState(false);
+  const online = useConnectivity((s) => s.online);
   const [changesOpen, setChangesOpen] = useState(false);
+  const [replace, setReplace] = useState<{ record: LocalRecord; what: string; from: Page | null } | null>(null);
+  const savePage = usePages((s) =>
+    strip?.kind === 'saved' ? (strip.pageId ? s.pages.find((p) => p.id === strip.pageId) : undefined) : undefined,
+  );
 
   useEffect(() => {
     let alive = true;
@@ -64,15 +73,23 @@ export function UndoStrip() {
     };
   }, []);
 
-  const durationMs = undoStripMs({ largeFont: theme.largeFont, screenReader });
+  const isSave = strip?.kind === 'saved' || (strip?.kind === 'action' && ((action?.savedTo?.length ?? 0) > 0 || action?.kind === 'save_item'));
+  const savedToPage = usePages((s) => {
+    const to = action?.savedTo?.[0];
+    return to ? s.pages.find((p) => p.serverId === to.pageServerId) : undefined;
+  });
+  const durationMs = isSave && !theme.largeFont && !screenReader ? SAVE_TOAST_MS : undoStripMs({ largeFont: theme.largeFont, screenReader });
 
   useEffect(() => {
-    if (!strip || changesOpen) return;
+    if (!strip || changesOpen || replace) return;
     const timer = setTimeout(() => hide(strip.id), durationMs);
     return () => clearTimeout(timer);
-  }, [strip, hide, durationMs, changesOpen]);
+  }, [strip, hide, durationMs, changesOpen, replace]);
 
-  if (!strip) return null;
+  const replaceSheet = replace ? (
+    <ReplaceSheet record={replace.record} what={replace.what} from={replace.from} onClose={() => setReplace(null)} />
+  ) : null;
+  if (!strip) return replaceSheet;
   if (strip.kind === 'action' && !action) return null;
 
   const undo = () => {
@@ -91,6 +108,10 @@ export function UndoStrip() {
       strip.onUndo();
       return;
     }
+    if (strip.kind === 'saved') {
+      void getRecordActions().then((a) => a.remove(strip.recordId));
+      return;
+    }
     void getRecordActions().then((a) =>
       strip.kind === 'merged' ? a.unmerge(strip.recordId) : a.restore(strip.recordId),
     );
@@ -104,8 +125,22 @@ export function UndoStrip() {
         : t(m.key, { page: names[0] ?? '' });
     return m.extra ? `${base} ${m.extra}` : base;
   };
-  const text =
-    strip.kind === 'merged'
+  // «Сохранил в «Заметки»: код домофона» (Ф-50): the page the record went to, from the server's action or this phone.
+  const saveFrom = strip.kind === 'saved' ? (savePage ?? null) : strip.kind === 'action' ? (savedToPage ?? otherPage ?? null) : null;
+  const savedToTitle = strip.kind === 'action' ? (action?.savedTo?.[0]?.title ?? null) : null;
+  const saveWhat = strip.kind === 'saved' ? strip.what : (action?.changes[0]?.title ?? '');
+  const savePageName = saveFrom ? title(saveFrom) : savedToTitle;
+  const savedText = savePageName
+    ? saveWhat
+      ? t('save.saved_in', { page: savePageName, what: saveWhat })
+      : t('save.saved_in_plain', { page: savePageName })
+    : t('save.saved_plain', { what: saveWhat });
+  // Honest about the connection (week 4): a note kept on this phone says it goes when there is a connection.
+  const text = isSave
+    ? strip.kind === 'saved' && !online
+      ? `${savedText} ${t('save.offline_tail')}`
+      : savedText
+    : strip.kind === 'merged'
       ? t('dedup.exact', { date: formatShortDate(strip.canonicalDate, i18n.language) })
       : strip.kind === 'deleted'
         ? t('record.deleted')
@@ -117,11 +152,38 @@ export function UndoStrip() {
             ? actionText(action, i18n.language)
             : '';
   const target = strip.kind === 'manual' || strip.kind === 'custom' ? openTarget : otherPage;
-  const showOpen = strip.kind !== 'merged' && strip.kind !== 'deleted' && !!target && target.id !== current.id;
+  const showOpen = !isSave && strip.kind !== 'merged' && strip.kind !== 'deleted' && !!target && target.id !== current.id;
   const canUndo = strip.kind !== 'action' || (!!action?.undoable && !action.undone);
-  const hasChanges = strip.kind === 'action' && (action?.changes.length ?? 0) > 0;
+  const hasChanges = !isSave && strip.kind === 'action' && (action?.changes.length ?? 0) > 0;
+
+  const openReplace = async () => {
+    const repo = await getRecords();
+    let record: LocalRecord | null = null;
+    if (strip.kind === 'saved') record = await repo.get(strip.recordId);
+    else if (action) {
+      const serverId = action.savedTo?.[0]?.itemIds[0] ?? action.changedItemIds[0] ?? action.changes[0]?.itemId ?? null;
+      if (serverId) {
+        record = await repo.findByServerId(serverId);
+        if (!record) {
+          // The record comes with /sync: ask for it once and look again.
+          kickSync();
+          await new Promise((r) => setTimeout(r, 1500));
+          record = await repo.findByServerId(serverId);
+        }
+      }
+    }
+    if (!record) {
+      showToast(t('save.replace_later'), 4000);
+      return;
+    }
+    const pages = usePages.getState().pages;
+    const from = saveFrom ?? pages.find((p) => placesLocally(p, record)) ?? null;
+    hide(strip.id);
+    setReplace({ record, what: saveWhat || title(from ?? pages[0]!), from });
+  };
 
   const actions: ToastAction[] = [];
+  if (isSave) actions.push({ key: 'replace', testID: 'undo-strip-replace', label: t('save.replace'), onPress: () => void openReplace() });
   if (showOpen && target)
     actions.push({
       key: 'open',
@@ -143,6 +205,7 @@ export function UndoStrip() {
         actions={actions}
         onClose={() => hide(strip.id)}
       />
+      {replaceSheet}
       {strip.kind === 'action' && message ? (
         <ChangesSheet message={changesOpen ? message : null} onClose={() => setChangesOpen(false)} onUndoAll={undo} />
       ) : null}

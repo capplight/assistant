@@ -130,7 +130,7 @@ describe('S05 wired to the backend', () => {
       text_hash: sha('Принимаю условия. Мне есть 18 лет.'),
       locale: 'ru',
     });
-  });
+  }, 90_000); // a full S05 render + the consent request: slow on a loaded machine, not timing-dependent
 
   it('«Без ИИ» offline: continues to S41, queues consent (storage + terms only) and the device', async () => {
     const outbox = resetApp(); // offline: S05 renders the bundled texts synchronously

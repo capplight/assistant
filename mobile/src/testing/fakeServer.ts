@@ -205,9 +205,10 @@ export const FEATURES_BODY = {
   telegram_login: false,
   personal_mail: false,
   setup_for_other: false,
+  shopping: false,
   consent_screen: 'welcome',
   today: { tips_days: 7, tips_per_day: 1, proposals: false, tiles: false },
-  pages: { default: ['today', 'notes', 'tasks'], first_use: ['shopping', 'expenses', 'documents'] },
+  pages: { default: ['today', 'notes', 'expenses', 'tasks'], first_use: ['documents'] },
 };
 
 export function happyServer(): FakeServer {
@@ -220,6 +221,7 @@ export function happyServer(): FakeServer {
     return { ...(items.get(clientId) ?? itemOut(clientId, s)), seq: s, ...extra };
   };
   s.on('GET /features', () => ({ status: 200, body: FEATURES_BODY }))
+    .on('GET /expenses/budget', () => ({ status: 200, body: { budget: null } }))
     .on('POST /auth/anonymous', () => ({ status: 200, body: { ...tokenPair(), created: true } }))
     .on('POST /auth/refresh', () => ({ status: 200, body: tokenPair() }))
     .on('POST /consents', () => ({

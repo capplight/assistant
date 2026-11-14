@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Plus } from 'lucide-react-native';
+import { ArrowDown, ArrowUp } from 'lucide-react-native';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -12,17 +12,22 @@ import { bars, board, dayLabel, feed, lineTitle, liveEntries, periodTitle, spoke
 import { proposedStatements, refreshDuplicates, refreshStatements, visibleDuplicates, visibleJobs } from '@/expenses/receipts';
 import { addExpense, changeExpense, deleteExpense, reorderCategories } from '@/expenses/service';
 import { useExpenses } from '@/expenses/store';
+import { pullBudget } from '@/expenses/budget';
+import { budgetMinor, useBudget } from '@/store/budget';
+import { useView } from '@/store/view';
 import { kickSync, syncBlocked } from '@/services';
 import { localDate } from '@/tasks/rows';
-import { readableColumn, useLayout, useTheme } from '@/theme';
+import { categoryText, readableColumn, useLayout, useTheme } from '@/theme';
 
 import { AmountText } from '../AmountText';
 import { AppText } from '../AppText';
+import { BudgetSheet } from '../BudgetSheet';
 import { RecordRow } from '../RecordRow';
 import { useMinuteClock } from '../ReminderLists';
 import { Button } from '../ui/Button';
 import { ActionList } from '../ui/Sheet';
-import { Card } from '../ui/Card';
+import { MetricTile, ProgressBar, StatusDot, TileGrid } from '../ui/Brief';
+import { Card, cardEdge } from '../ui/Card';
 import { Icon } from '../ui/Icon';
 import { pressedStyle } from '../ui/motion';
 import { SegmentedControl } from '../ui/SegmentedControl';
@@ -70,6 +75,7 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
   const [editFirst, setEditFirst] = useState(false);
   const [attention, setAttention] = useState(false);
   const [allBars, setAllBars] = useState(false);
+  const [periodOpen, setPeriodOpen] = useState(false);
   const jobs = useExpenses((s) => s.jobs);
   const statements = useExpenses((s) => s.statements);
   const duplicates = useExpenses((s) => s.duplicates);
@@ -79,6 +85,7 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
   useEffect(() => {
     void refreshDuplicates();
     void refreshStatements();
+    void pullBudget();
   }, [page.id]);
 
   // An expense shows only while its record is live: a record trashed on the page hides it.
@@ -132,6 +139,17 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
     setEntry({ category });
   };
 
+  // design-system v2 TabBar: a second tap on «Расходы» while this page is open opens the keypad.
+  const keypadRequest = useView((s) => s.keypadRequest);
+  const [seenRequest, setSeenRequest] = useState(keypadRequest);
+  if (seenRequest !== keypadRequest) {
+    setSeenRequest(keypadRequest);
+    if (!entry) setEntry({ category: null });
+  }
+  const budget = useBudget(budgetMinor);
+  const [budgetOpen, setBudgetOpen] = useState(false);
+  const thisMonth = kind === 'month' && period.from === periodOf('month', today).from;
+
   const pick = (k: Kind) => {
     setKind(k);
     setPeriod(periodOf(k, today));
@@ -149,22 +167,19 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
   const shownBars = allBars ? catBars : catBars.slice(0, TOP_CATEGORIES);
   const overview = (
     <View style={{ gap: theme.space[4] }}>
-      <SegmentedControl
-        testID="exp-periods"
-        accessibilityLabel={t('exp.periods_a11y')}
-        segments={(['week', 'month', 'year'] as const).map((k) => ({ key: k, label: t(`exp.period_${k}`), testID: `exp-period-${k}` }))}
-        value={kind}
-        onChange={pick}
-      />
       <Overview
+        onPeriod={() => setPeriodOpen(true)}
         title={periodTitle(period, lang)}
         board={b}
-        onShift={(step) => setPeriod((p) => shiftPeriod(p, step))}
-        canNext={(period.to ?? today) < today}
+        budget={thisMonth ? budget : null}
+        today={today}
+        period={period}
         onlyToCheck={onlyToCheck}
         onToCheck={() => setOnlyToCheck((v) => !v)}
       />
       <AttentionCard items={queue} onOpen={() => setAttention(true)} />
+      {/* Receipts: also «+» in the line on this page; here as a quiet link (the mock has no button bar). */}
+      <BringButton pageId={page.id} style={styles.start} />
       {ordering ? <CategoryOrder chips={chips} pending={orderEdit?.keys ?? null} /> : null}
       {empty ? (
         <View style={{ gap: theme.space[2] }}>
@@ -178,61 +193,36 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
       ) : null}
       {catBars.length > 0 ? (
         <View testID="exp-bars" style={{ gap: theme.space[2] }}>
-          <AppText variant="sectionLabel" accessibilityRole="header">
-            {t('exp.by_category')}
-          </AppText>
-          <View
-            testID="exp-stack"
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
-            style={{ flexDirection: 'row', minHeight: 12, borderRadius: 6, overflow: 'hidden', gap: 2, backgroundColor: theme.colors.surfaceSunken }}
-          >
-            {catBars.map((bar) => (
-              <View key={bar.key || 'none'} style={{ flexGrow: Math.max(1, bar.share), flexBasis: 0, backgroundColor: categoryLook(theme, bar.key || null).color }} />
-            ))}
+          <View style={[styles.rowCenter, { gap: theme.space[2] }]}>
+            <AppText variant="sectionLabel" accessibilityRole="header" style={styles.flex}>
+              {t('exp.by_category')}
+            </AppText>
+            <Button testID="exp-budget" label={t('budget.link')} variant="text" onPress={() => setBudgetOpen(true)} />
           </View>
-          <Card padded={false}>
-            {shownBars.map((bar, i) => {
+          <TileGrid testID="exp-tiles">
+            {shownBars.map((bar) => {
               const cat = categoryByKey(server, bar.key || null);
               const chip = cat ? (chips.find((c) => c.key === cat.key) ?? null) : null;
               const look = categoryLook(theme, bar.key || null);
+              const key = (bar.key || 'other') as keyof typeof categoryText;
+              const color = theme.scheme === 'light' ? (categoryText[key] ?? look.color) : look.color;
               return (
-                <Pressable
+                <MetricTile
                   key={bar.key || 'none'}
                   testID={`exp-bar-${bar.key || 'none'}`}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('exp.by_category_a11y', { title: bar.title, amount: formatMinor(bar.minor), share: Math.round(bar.share) })}
-                  accessibilityHint={t('exp.bar_hint')}
+                  icon={look.icon}
+                  iconTint={look.tint}
+                  title={bar.title}
+                  value={formatMinor(bar.minor).replace(/\s?₸$/, '')}
+                  unit="₸"
+                  caption={t('exp.share', { n: Math.round(bar.share) })}
+                  color={color}
+                  progress={bar.share / 100}
                   onPress={() => openEntry(chip)}
-                  style={({ pressed }) => [
-                    styles.rowCenter,
-                    { gap: theme.space[3], paddingLeft: theme.space[3] + 2, minHeight: theme.size.rowHeight },
-                    pressed ? { backgroundColor: theme.colors.surfaceSunken } : null,
-                  ]}
-                >
-                  <CategoryDot categoryKey={bar.key || null} size={32} />
-                  <View
-                    style={[
-                      styles.rowCenter,
-                      styles.flex,
-                      { gap: theme.space[2], paddingRight: theme.space[3], paddingVertical: theme.space[2], flexWrap: theme.largeFont ? 'wrap' : 'nowrap' },
-                      i < shownBars.length - 1 ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.separator } : null,
-                    ]}
-                  >
-                    <View style={[styles.flex, { gap: 4, minWidth: theme.largeFont ? '60%' : undefined }]}>
-                      <AppText>{bar.title}</AppText>
-                      <View style={{ height: 4, borderRadius: 2, backgroundColor: look.tint, overflow: 'hidden' }}>
-                        <View style={{ width: `${Math.max(2, bar.share)}%`, height: 4, backgroundColor: look.color }} />
-                      </View>
-                    </View>
-                    <AppText testID={`exp-bar-amount-${bar.key || 'none'}`} variant="number">
-                      {formatMinor(bar.minor)}
-                    </AppText>
-                  </View>
-                </Pressable>
+                />
               );
             })}
-          </Card>
+          </TileGrid>
           {catBars.length > TOP_CATEGORIES ? (
             <Button
               testID="exp-bars-all"
@@ -343,19 +333,30 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
       ) : (
         list
       )}
-      <View
-        testID="exp-actions"
-        style={[styles.row, readableColumn(), { gap: theme.space[2], paddingHorizontal: layout.gutter, paddingVertical: theme.space[2], flexWrap: theme.largeFont ? 'wrap' : 'nowrap' }]}
-      >
-        <Button
-          testID="exp-enter"
-          label={t('exp.enter')}
-          icon={<Icon icon={Plus} size="sm" color="onBrand" />}
-          style={theme.largeFont ? { flexBasis: '100%' } : styles.flex}
-          onPress={() => openEntry()}
-        />
-        <BringButton pageId={page.id} style={theme.largeFont ? { flexBasis: '100%' } : undefined} />
-      </View>
+      {periodOpen ? (
+        <Sheet testID="exp-period-sheet" title={t('exp.period_title')} onClose={() => setPeriodOpen(false)}>
+          <SegmentedControl
+            testID="exp-periods"
+            accessibilityLabel={t('exp.periods_a11y')}
+            segments={(['week', 'month', 'year'] as const).map((k) => ({ key: k, label: t(`exp.period_${k}`), testID: `exp-period-${k}` }))}
+            value={kind}
+            onChange={pick}
+          />
+          <View style={[styles.rowCenter, { justifyContent: 'space-between' }]}>
+            <Button testID="exp-prev" label={`‹ ${t('exp.prev')}`} variant="text" onPress={() => setPeriod((p) => shiftPeriod(p, -1))} />
+            <AppText testID="exp-period-title" variant="headline" accessibilityRole="header">
+              {periodTitle(period, lang)}
+            </AppText>
+            <Button
+              testID="exp-next"
+              label={`${t('exp.next')} ›`}
+              variant="text"
+              disabled={!((period.to ?? today) < today)}
+              onPress={() => setPeriod((p) => shiftPeriod(p, 1))}
+            />
+          </View>
+        </Sheet>
+      ) : null}
       {entry ? (
         <EntrySheet
           today={today}
@@ -406,6 +407,7 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
           }}
         />
       ) : null}
+      {budgetOpen ? <BudgetSheet visible onClose={() => setBudgetOpen(false)} /> : null}
       {kaspi ? (
         <Sheet testID="exp-kaspi-sheet" title={t('exp.kaspi_title')} onClose={() => setKaspi(false)}>
           <AppText>{t('exp.kaspi_1')}</AppText>
@@ -419,17 +421,21 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
 
 /** Pattern 1: «‹ Ноябрь ›», the total 40 with no box, one context line «23 траты · ⚠ проверить 2». */
 function Overview({
+  onPeriod,
   title,
   board: b,
-  onShift,
-  canNext,
   onlyToCheck,
   onToCheck,
+  budget,
+  today,
+  period,
 }: {
+  onPeriod: () => void;
   title: string;
   board: ReturnType<typeof board>;
-  onShift: (step: -1 | 1) => void;
-  canNext: boolean;
+  budget: bigint | null;
+  today: string;
+  period: Period;
   onlyToCheck: boolean;
   onToCheck: () => void;
 }) {
@@ -439,31 +445,32 @@ function Overview({
   const spent = main?.total ?? 0n;
   const currency = main?.currency ?? 'KZT';
   const amount = formatMinor(spent, currency);
-  const arrow = (step: -1 | 1) => {
-    const off = step > 0 && !canNext;
-    return (
-      <Pressable
-        testID={step < 0 ? 'exp-prev' : 'exp-next'}
-        accessibilityRole="button"
-        accessibilityLabel={t(step < 0 ? 'exp.prev_a11y' : 'exp.next_a11y')}
-        accessibilityState={{ disabled: off }}
-        disabled={off}
-        onPress={() => onShift(step)}
-        style={({ pressed }) => [{ width: theme.size.minTouch, height: theme.size.minTouch, alignItems: 'center', justifyContent: 'center', opacity: off ? 0.35 : 1 }, pressedStyle(pressed)]}
-      >
-        <Icon icon={step < 0 ? ChevronLeft : ChevronRight} color="brand" />
-      </Pressable>
-    );
-  };
+  // v2 brief (design-system «Расходы»): «НОЯБРЬ · В ПРЕДЕЛАХ БЮДЖЕТА», the sum, «Осталось … из …», the budget bar.
+  const left = budget !== null ? budget - spent : null;
+  const share = budget !== null && budget > 0n ? Number((spent * 1000n) / budget) / 1000 : null;
+  const daysLeft = period.to ? Math.max(0, Math.round((Date.parse(`${period.to}T12:00:00`) - Date.parse(`${today}T12:00:00`)) / 86_400_000)) : null;
+  const status = budget === null ? title : left !== null && left >= 0n ? t('exp.status_in_budget', { period: title }) : t('exp.status_over', { period: title });
   return (
-    <View testID="exp-board" style={{ gap: theme.space[1] }}>
-      <View style={styles.rowCenter}>
-        {arrow(-1)}
-        <AppText testID="exp-period-title" variant="headline" accessibilityRole="header" style={[styles.flex, styles.center]}>
-          {title}
+    <View
+      testID="exp-board"
+      style={[
+        { gap: theme.space[1], backgroundColor: theme.colors.surface, borderRadius: theme.radius.xxl, padding: theme.space[4] },
+        theme.elevation.card,
+        cardEdge(theme),
+      ]}
+    >
+      <Pressable
+        testID="exp-period-open"
+        accessibilityRole="button"
+        accessibilityLabel={`${status}. ${t('exp.period_title')}`}
+        onPress={onPeriod}
+        style={({ pressed }) => [styles.rowCenter, { gap: theme.space[2], minHeight: theme.size.minTouch - 12 }, pressedStyle(pressed)]}
+      >
+        <StatusDot color={left !== null && left < 0n ? theme.colors.danger : undefined} />
+        <AppText testID="exp-status" variant="eyebrow" color={left !== null && left < 0n ? 'danger' : 'brand'} style={styles.flex}>
+          {status}
         </AppText>
-        {arrow(1)}
-      </View>
+      </Pressable>
       <AmountText
         testID="exp-total"
         variant="amount"
@@ -471,7 +478,6 @@ function Overview({
         inset={theme.screenPadding * 2}
         accessibilityLabel={t('exp.total_a11y', { period: title, amount: spokenAmount(minorToDecimal(spent), currency) })}
         accessibilityLiveRegion="polite"
-        style={styles.center}
       >
         {amount}
       </AmountText>
@@ -500,6 +506,18 @@ function Overview({
           ) : null}
         </View>
       )}
+      {budget !== null && left !== null ? (
+        <View testID="exp-budget-box" style={{ gap: theme.space[2], marginTop: theme.space[2] }}>
+          <AppText testID="exp-budget-left" color="ink2" style={styles.center}>
+            {left >= 0n ? t('exp.budget_left', { left: formatMinor(left), budget: formatMinor(budget) }) : t('exp.budget_over', { over: formatMinor(-left) })}
+          </AppText>
+          <ProgressBar testID="exp-budget-bar" value={share ?? 0} color={left >= 0n ? theme.colors.brand : theme.colors.danger} />
+          <View style={[styles.rowCenter, { justifyContent: 'space-between', flexWrap: 'wrap' }]}>
+            <AppText variant="footnote">{t('exp.spent_share', { n: Math.round((share ?? 0) * 100) })}</AppText>
+            {daysLeft !== null ? <AppText variant="footnote">{t('exp.days_left', { count: daysLeft })}</AppText> : null}
+          </View>
+        </View>
+      ) : null}
       {main && main.income > 0n ? (
         <AppText testID="exp-income" variant="callout" style={styles.center}>
           {t('exp.income', { amount: formatMinor(main.income, main.currency) })}
@@ -535,7 +553,7 @@ function EntrySheet({
   const [category, setCategory] = useState<Category | null>(initial);
   const [day, setDay] = useState(today);
   return (
-    <Sheet testID="exp-entry-sheet" title={t('exp.entry_title')} onClose={onClose}>
+    <Sheet testID="exp-entry-sheet" title={t('exp.new_expense')} onClose={onClose}>
       <EntryPanel
         sum={sum}
         day={day}
@@ -544,7 +562,8 @@ function EntrySheet({
         categories={chips}
         category={category?.key ?? null}
         onCategory={(c) => setCategory((prev) => (prev?.key === c.key ? null : c))}
-        saveLabel={t('exp.save')}
+        saveLabel={sum.minor !== null ? t('exp.save_sum', { amount: formatMinor(sum.minor) }) : t('exp.save')}
+        look="v2"
         onSave={() => {
           if (sum.minor === null) return;
           void onSave({ minor: sum.minor, expression: storedExpression(sum.text), category, day });

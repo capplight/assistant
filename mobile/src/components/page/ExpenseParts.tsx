@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import { addDays, formatMinor } from '@/expenses/calc';
+import { addDays, formatMinor, groupDigits } from '@/expenses/calc';
 import { categoryTitle, MAX_CHIPS, type Category } from '@/expenses/categories';
 import { display, evaluate, press, type Key } from '@/expenses/expression';
 import { dayLabel } from '@/expenses/feed';
@@ -12,12 +12,16 @@ import { useTheme } from '@/theme';
 import { AmountText } from '../AmountText';
 import { AppText } from '../AppText';
 import { Button } from '../ui/Button';
+import { Chip } from '../ui/Chip';
 import { ListGroup, ListRow } from '../ui/Card';
 import { Icon } from '../ui/Icon';
 import { pressedStyle } from '../ui/motion';
 import { Sheet as KitSheet } from '../ui/Sheet';
 import { categoryLook } from './expenseColors';
 import { ExpenseKeypad } from './ExpenseKeypad';
+
+/** v2 KeypadSheet quick sums. */
+const QUICK_SUMS = [500, 1000, 2000, 5000] as const;
 
 /** The sum as typed and what code made of it, for the board of the keys and the live region. */
 export function useSum(initial = '') {
@@ -45,7 +49,7 @@ export function SumDisplay({ text, testID = 'exp-sum' }: { text: string; testID?
     <View testID={testID} accessible accessibilityLabel={label} accessibilityLiveRegion="polite" style={{ alignItems: 'center', paddingVertical: theme.space[2] }}>
       <AmountText
         testID={`${testID}-text`}
-        variant="amount"
+        variant="keypadAmount"
         maxScale={1.4}
         inset={theme.screenPadding * 2 + theme.space[5] * 2}
         color={text === '' ? 'ink2' : 'ink'}
@@ -272,6 +276,7 @@ export function EntryPanel({
   onSave,
   saveLabel,
   showCategories = true,
+  look = 'calculator',
 }: {
   sum: ReturnType<typeof useSum>;
   day?: string;
@@ -283,8 +288,31 @@ export function EntryPanel({
   onSave: () => void;
   saveLabel: string;
   showCategories?: boolean;
+  /** `v2`: the KeypadSheet of the mocks — quick sums «+500 · +1 000 · +2 000 · +5 000», 3×4 keys, a full-width save. */
+  look?: 'calculator' | 'v2';
 }) {
   const theme = useTheme();
+  if (look === 'v2') {
+    // A quick sum adds to what is typed as a term («1200 + 500»): the calculator of week 12 stays, code counts it.
+    const add = (n: number) => {
+      const keys = [...(sum.text === '' ? [] : (['+'] as Key[])), ...(String(n).split('') as Key[])];
+      for (const k of keys) sum.onKey(k);
+    };
+    return (
+      <View testID="exp-entry" style={{ gap: theme.space[3] }}>
+        <SumDisplay text={sum.text} />
+        {showCategories ? <CategoryChips categories={categories} value={category} onPick={onCategory} /> : null}
+        <View testID="exp-quick" style={[styles.row, { gap: theme.space[2], flexWrap: 'wrap' }]}>
+          {QUICK_SUMS.map((n) => (
+            <Chip key={n} testID={`exp-quick-${n}`} label={`+${groupDigits(String(n))}`} onPress={() => add(n)} />
+          ))}
+        </View>
+        <ExpenseKeypad look="v2" onKey={sum.onKey} onSave={onSave} saveLabel={saveLabel} canSave={sum.ok} />
+        <Button testID="exp-keypad-save" label={saveLabel} disabled={!sum.ok} onPress={onSave} />
+        {day && onDay ? <DayChip value={day} today={today} onChange={onDay} /> : null}
+      </View>
+    );
+  }
   return (
     <View testID="exp-entry" style={{ gap: theme.space[3] }}>
       <SumDisplay text={sum.text} />

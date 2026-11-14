@@ -21,11 +21,18 @@ export type UndoStripState =
   | { id: number; kind: 'action'; messageId: string }
   /** «Переставил · Отменить», «Перенёс в Расходы… [Открыть] [Отменить]»: the outbox rows of it. */
   | { id: number; kind: 'manual'; text: ManualStripText; outboxIds: string[]; openPageId: string | null }
+  /**
+   * Ф-50 SaveToast for a record saved on this phone (offline, voice): «Сохранил в «Заметки»: …» · Переложить ·
+   * Отменить (the record goes to the trash).
+   */
+  | { id: number; kind: 'saved'; recordId: string; pageId: string | null; what: string }
   /** Week 9: a change of the phone's own (a box ticked, a row added, a rule taken off) with its undo. */
   | { id: number; kind: 'custom'; text: string; onUndo: () => void; openPageId: string | null };
 
 /** 2-design 4.3 fixes these: 10 s; 15 s with a font of 150% and more; 30 s with a screen reader. */
 export const UNDO_STRIP_MS = 10_000;
+/** v2 SaveToast: 6 s (design-system v2 §4 «Тост держится 6 с»); a large font / screen reader keep the longer times. */
+export const SAVE_TOAST_MS = 6_000;
 export const UNDO_STRIP_LARGE_FONT_MS = 15_000;
 export const UNDO_STRIP_SCREEN_READER_MS = 30_000;
 
@@ -43,6 +50,7 @@ type UndoState = {
   showAction: (messageId: string) => void;
   showManual: (text: ManualStripText, outboxIds: string[], openPageId?: string | null) => void;
   showCustom: (text: string, onUndo: () => void, openPageId?: string | null) => void;
+  showSaved: (recordId: string, pageId: string | null, what: string) => void;
   /** The strip of this outbox row, if still shown, gets the server's line; false when it is gone. */
   noteLearned: (outboxId: string, text: string) => boolean;
   hide: (id?: number) => void;
@@ -56,6 +64,7 @@ export const useUndo = create<UndoState>()((set, get) => ({
   showManual: (text, outboxIds, openPageId = null) =>
     set({ strip: { id: ++seq, kind: 'manual', text, outboxIds, openPageId } }),
   showCustom: (text, onUndo, openPageId = null) => set({ strip: { id: ++seq, kind: 'custom', text, onUndo, openPageId } }),
+  showSaved: (recordId, pageId, what) => set({ strip: { id: ++seq, kind: 'saved', recordId, pageId, what } }),
   noteLearned: (outboxId, extra) => {
     const s = get().strip;
     if (s?.kind !== 'manual' || !s.outboxIds.includes(outboxId)) return false;

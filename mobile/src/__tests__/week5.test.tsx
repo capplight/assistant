@@ -171,12 +171,11 @@ describe('US-26: banner → «Открыть ответ» → «Переписк
     const r = await askOnShopping();
     await settle(() => lastAnswer()?.status === 'done');
     await fireEvent.press(screen.getByTestId('answer-open'));
-    await settle(() => r.getPathname() === '/chat');
-    expect(screen.getByText(/^— на странице Покупки, /)).toBeTruthy();
-    expect(screen.getByLabelText('Вы: сколько я должна Ерлану?')).toBeTruthy();
-    expect(screen.getByText(long.join(''))).toBeTruthy();
+    await settle(() => r.getPathname() === '/history');
+    expect(screen.getByText('Вы: «сколько я должна Ерлану?»')).toBeTruthy();
+    expect(screen.getAllByText(long.join('')).length).toBeGreaterThan(0);
     expect(screen.getByText('Подготовил помощник (ИИ) по вашим записям — проверьте')).toBeTruthy();
-    expect(screen.getByTestId('source-srv-erlan')).toBeTruthy();
+    expect(screen.getAllByTestId('source-srv-erlan').length).toBeGreaterThan(0);
     await settle(() => s.callsTo('POST /chat/messages/r1/delivery').some((c) => (c.body as { delivery: string }).delivery === 'opened'));
 
     await fireEvent.press(screen.getByTestId('chat-collapse'));
@@ -229,8 +228,8 @@ describe('US-26: banner → «Открыть ответ» → «Переписк
       },
     }));
     await fireEvent.press(screen.getByTestId('answer-open'));
-    await settle(() => r.getPathname() === '/chat');
-    await settle(() => screen.queryByText('Половина. Целиком.') !== null);
+    await settle(() => r.getPathname() === '/history');
+    await settle(() => screen.queryAllByText('Половина. Целиком.').length > 0);
     expect(screen.getByText('С другого телефона.')).toBeTruthy();
     expect(useAssistant.getState().messages.filter((m) => m.role === 'assistant' && m.serverId === 'r1')).toHaveLength(1);
   });
@@ -387,7 +386,7 @@ describe('«Сообщить о проблеме»', () => {
     const r = await askOnShopping();
     await settle(() => lastAnswer()?.status === 'done');
     await fireEvent.press(screen.getByTestId('answer-open'));
-    await settle(() => r.getPathname() === '/chat');
+    await settle(() => r.getPathname() === '/history');
     await fireEvent.press(screen.getByTestId(`chat-more-${lastAnswer()!.id}`));
     await fireEvent.press(screen.getByTestId('answer-report'));
     await settle(() => screen.queryByTestId('feedback-sheet') !== null);

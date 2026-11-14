@@ -14,7 +14,7 @@ import { StandaloneUndoStrip } from '@/components/UndoStrip';
 import { catalogTemplate, fieldTitle, MAX_CUSTOM_FIELDS, useCatalog } from '@/pages/catalog';
 import { facetKey, useFacets } from '@/pages/facets';
 import { renamePage } from '@/pages/service';
-import { TEMPLATE_DEFAULT_TITLE, type IconKey, type Layout } from '@/pages/templates';
+import { isDefaultTitle, type IconKey, type Layout } from '@/pages/templates';
 import { usePageLabels } from '@/pages/usePageLabels';
 import { fieldsOf, newFieldId, groupable, liveCustom, type ShownField } from '@/pages/viewModel';
 import { changeView, layoutLabel } from '@/pages/viewService';
@@ -85,7 +85,7 @@ export default function PageSettingsScreen() {
   const saveName = () => {
     if (name === null) return;
     const clean = name.trim();
-    if (clean !== title(page)) void renamePage(page.id, clean === TEMPLATE_DEFAULT_TITLE[page.templateKey] ? '' : clean);
+    if (clean !== title(page)) void renamePage(page.id, isDefaultTitle(page.templateKey, clean) ? '' : clean);
     setName(null);
   };
   const exampleValue = (f: ShownField) => {

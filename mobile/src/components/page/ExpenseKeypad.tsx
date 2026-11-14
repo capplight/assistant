@@ -18,6 +18,14 @@ const ROWS: (Key | 'save')[][] = [
   ['000', '0', ',', 'save'],
 ];
 
+/** v2 KeypadSheet (design-system v2 §5): 3×4 — 1–9, 000, 0, ⌫; «Сохранить …» is a full-width button below. */
+const ROWS_V2: Key[][] = [
+  ['1', '2', '3'],
+  ['4', '5', '6'],
+  ['7', '8', '9'],
+  ['000', '0', '⌫'],
+];
+
 const KEY_ID: Record<string, string> = { '⌫': 'erase', '+': 'plus', '−': 'minus', ',': 'comma', '000': '000' };
 
 /**
@@ -30,17 +38,58 @@ export function ExpenseKeypad({
   saveLabel,
   canSave,
   testID = 'exp-keypad',
+  look = 'calculator',
 }: {
   onKey: (k: Key) => void;
   onSave: () => void;
   saveLabel: string;
   canSave: boolean;
   testID?: string;
+  /** `v2`: the KeypadSheet of the mocks (no + − , keys; the caller draws the save button). */
+  look?: 'calculator' | 'v2';
 }) {
   const theme = useTheme();
   const { t } = useTranslation();
   const name = (k: Key) =>
     k === '+' ? t('exp.key_plus') : k === '−' ? t('exp.key_minus') : k === '⌫' ? t('exp.key_erase') : k === ',' ? t('exp.key_comma') : k === '000' ? t('exp.key_000') : k;
+  if (look === 'v2') {
+    return (
+      <View testID={testID} style={{ gap: theme.space[2] }}>
+        {ROWS_V2.map((row, i) => (
+          <View key={i} style={[styles.row, { gap: theme.space[2] }]}>
+            {row.map((k) => (
+              <Pressable
+                key={k}
+                testID={`${testID}-${KEY_ID[k] ?? k}`}
+                accessibilityRole="button"
+                accessibilityLabel={name(k)}
+                onPress={() => onKey(k)}
+                style={({ pressed }) => [
+                  styles.key,
+                  {
+                    minHeight: theme.size.keypadKey,
+                    borderRadius: theme.radius.md,
+                    backgroundColor: pressed ? theme.colors.surfaceSunken : theme.colors.surfaceRaised,
+                    transform: pressed ? [{ scale: pressScale }] : undefined,
+                  },
+                  theme.elevation.card,
+                  theme.elevation.ring,
+                ]}
+              >
+                {k === '⌫' ? (
+                  <Delete size={24} color={theme.colors.ink} strokeWidth={1.75} />
+                ) : (
+                  <AppText variant="keypadKey" maxFontSizeMultiplier={KEY_LABEL_SCALE} style={[styles.center, { fontVariant: ['tabular-nums'] }]}>
+                    {k}
+                  </AppText>
+                )}
+              </Pressable>
+            ))}
+          </View>
+        ))}
+      </View>
+    );
+  }
   return (
     <View testID={testID} style={{ gap: theme.space[2] }}>
       {ROWS.map((row, i) => (

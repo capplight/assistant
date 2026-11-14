@@ -1,3 +1,6 @@
+import { useBudget } from '@/store/budget';
+import { useNotesLook } from '@/store/notesLook';
+import { useReminderCard } from '@/store/reminderCard';
 import path from 'path';
 
 import type { FetchLike } from '@/api/client';
@@ -88,6 +91,9 @@ export function resetApp(o: { fetch?: FetchLike; push?: FakePush; alarms?: FakeA
   useToast.setState({ toast: null });
   useUndo.setState({ strip: null });
   useView.getState().reset();
+  useBudget.getState().set(null);
+  useReminderCard.getState().close();
+  useNotesLook.getState().set('grid');
   void i18n.changeLanguage('ru');
   const outbox = new InMemoryOutboxRepository();
   testRecords = new InMemoryRecordsRepository();

@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'rea
 import { useTheme, withAlpha, type Theme } from '@/theme';
 
 import { AppText } from '../AppText';
+import { Glass } from './Glass';
 import { Icon, type LucideIcon } from './Icon';
 import { pressedStyle } from './motion';
 
@@ -13,6 +14,12 @@ export type CardTone = 'surface' | 'raised' | 'sunken' | 'brandTint' | 'highligh
 function toneBg(theme: Theme, tone: CardTone): string {
   const c = theme.colors;
   return { surface: c.surface, raised: c.surfaceRaised, sunken: c.surfaceSunken, brandTint: c.brandTint, highlight: c.highlight }[tone];
+}
+
+/** v2.1: the light card's 1 px green ring, the dark glass card's hairline (design-system v2 §4). */
+export function cardEdge(theme: Theme): ViewStyle | null {
+  if (theme.elevation.ring) return theme.elevation.ring;
+  return theme.colors.glassBorder ? { borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.glassBorder } : null;
 }
 
 type CardProps = {
@@ -26,7 +33,7 @@ type CardProps = {
   testID?: string;
 };
 
-/** `surface`, radius 16, the `card` shadow (none in the dark theme), no borders (design-system §3 Card). */
+/** `surface`, radius 18, the `card` shadow + green ring (light) or glass hairline (dark) (design-system v2 §4). */
 export function Card({ children, tone = 'surface', padded = true, onPress, accessibilityLabel, style, testID }: CardProps) {
   const theme = useTheme();
   const base: StyleProp<ViewStyle> = [
@@ -36,9 +43,16 @@ export function Card({ children, tone = 'surface', padded = true, onPress, acces
       padding: padded ? theme.space[4] : 0,
     },
     tone === 'surface' ? theme.elevation.card : null,
+    tone === 'surface' ? cardEdge(theme) : null,
   ];
+  // «Глубина»: a surface card is glass (blur + 80 % fill + hairline), design-system v2 §2.
+  const glass = tone === 'surface' && theme.scheme === 'dark';
   if (!onPress)
-    return (
+    return glass ? (
+      <Glass testID={testID} style={[base, style]}>
+        {children}
+      </Glass>
+    ) : (
       <View testID={testID} style={[base, style]}>
         {children}
       </View>
@@ -49,9 +63,9 @@ export function Card({ children, tone = 'surface', padded = true, onPress, acces
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       onPress={onPress}
-      style={({ pressed }) => [base, pressedStyle(pressed), style]}
+      style={({ pressed }) => [glass ? null : base, pressedStyle(pressed), glass ? null : style]}
     >
-      {children}
+      {glass ? <Glass style={[base, style]}>{children}</Glass> : children}
     </Pressable>
   );
 }

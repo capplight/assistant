@@ -1,4 +1,4 @@
-import { fireEvent, renderRouter, screen } from 'expo-router/testing-library';
+import { fireEvent, renderRouter, screen, within } from 'expo-router/testing-library';
 import { StyleSheet } from 'react-native';
 import { lightColors } from '@/theme';
 
@@ -355,7 +355,8 @@ describe('S18: confirmation, «Открыть WhatsApp», «Отправили?�
     expect(text('kp-send-client')).toBe('ТОО «Тест»');
     expect(screen.getByTestId('kp-send-text').props.value).toBe('Добрый день, Ерлан!\nНаправляю коммерческое предложение № 14 на сумму 341 000 ₸.');
     expect(screen.getByText('Откроется WhatsApp — выберите чат «Ерлан» и нажмите ➤')).toBeTruthy();
-    expect(screen.queryByText(/ИИ/)).toBeNull();
+    // Ф-50: sending is a sheet over the editor; the sheet itself has no «ИИ» (the label stays on the КП).
+    expect(within(screen.getByTestId('kp-send-sheet')).queryByText(/ИИ/)).toBeNull();
     await fireEvent.press(screen.getByTestId('kp-send-open'));
     await settle(() => log.shared.length === 1);
     expect(s.callsTo('POST /documents/doc-1/send')[0]!.body).toMatchObject({ n: 1, channel: 'whatsapp', format: 'pdf', recipient_name: 'Ерлан' });

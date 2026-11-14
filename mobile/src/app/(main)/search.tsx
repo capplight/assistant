@@ -5,10 +5,10 @@ import { View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { Screen } from '@/components/Screen';
+import { SearchAnswer } from '@/components/SearchAnswer';
 import { FindField, LocalHitRow, SearchMore, SourceGroup } from '@/components/SearchResults';
 import { NumberedSources } from '@/components/SourceChips';
 import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
 import { Header } from '@/components/ui/Header';
 import { getRecords, type LocalRecord } from '@/db';
 import { placesLocally, taskItemIds } from '@/pages/contents';
@@ -95,24 +95,14 @@ export default function SearchScreen() {
         />
         <FindField testID="search-field" label={t('search.field')} value={q} onChange={setQ} />
         {answer ? (
-          <Card testID="search-answer">
-            <View style={{ gap: theme.space[2] }}>
-              <AppText variant="sectionLabel" color="ink2">
-                {t('search.answer')}
-              </AppText>
-              <AppText testID="search-answer-text">{answer.text}</AppText>
-              {answer.aiGenerated ? (
-                <AppText testID="search-answer-ai" variant="footnote">
-                  {t('ai.label_short')}
-                </AppText>
-              ) : null}
-              <NumberedSources messageId={answer.id} sources={answer.sources ?? []} />
-            </View>
-          </Card>
+          <View style={{ gap: theme.space[2] }}>
+            <SearchAnswer answer={answer} onOpen={() => router.push({ pathname: '/history', params: { focus: answer.id } })} />
+            {(answer.sources ?? []).length > 1 ? <NumberedSources messageId={answer.id} sources={answer.sources ?? []} /> : null}
+          </View>
         ) : null}
         {found.length > 0 ? (
           <AppText testID="search-found" variant="sectionLabel" accessibilityRole="header" accessibilityLiveRegion="polite">
-            {t('search.found', { n: found.length })}
+            {answer ? t('search.more_found', { n: found.length }) : t('search.found', { n: found.length })}
           </AppText>
         ) : null}
         {groups.map(([key, g]) => (

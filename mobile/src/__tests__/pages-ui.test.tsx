@@ -59,14 +59,14 @@ describe('S37 page', () => {
     usePages.setState({ pages: usePages.getState().pages.filter((p) => p.templateKey === 'tasks') });
     await testRecords.insertLocal({ id: 'r1', kind: 'note', source: 'typed', text: 'Нигде', pageId: 'today' });
     const r = await renderRouter(APP_DIR, { initialUrl: '/more' });
-    await fireEvent.press(screen.getByTestId('more-settings'));
-    await fireEvent.press(screen.getByTestId('settings-all_records'));
+    // v2: «Все записи» is a row of «Ещё» (one search: all records by words).
+    await fireEvent.press(screen.getByTestId('more-records'));
     await settle(() => screen.queryByText('Нигде') !== null);
     expect(r.getPathname()).toBe('/records');
     expect(screen.getByTestId('assistant-line')).toBeTruthy();
   });
 
-  it('«Своя страница»: «Ещё» → name → the page opens; a new tab; goes to the outbox; rename works', async () => {
+  it('«Своя страница»: «Ещё» → name → the page opens; listed in «Ещё» (Ф-48 tabs are fixed); goes to the outbox; rename works', async () => {
     usePages.setState({ pages: usePages.getState().pages.slice(0, 1) });
     const r = await renderRouter(APP_DIR, { initialUrl: '/more' });
     await fireEvent.press(screen.getByTestId('more-add_page'));
@@ -75,7 +75,8 @@ describe('S37 page', () => {
     await settle(() => usePages.getState().pages.length === 2 && r.getPathname().startsWith('/page/'));
     const page = usePages.getState().pages.find((p) => p.templateKey === 'custom')!;
     expect(r.getPathname()).toBe(`/page/${page.id}`);
-    expect(within(screen.getByTestId('bottom-tabs')).getByText('Ремонт')).toBeTruthy();
+    expect(within(screen.getByTestId('bottom-tabs')).queryByText('Ремонт')).toBeNull();
+    expect(screen.getByTestId('page-title')).toHaveTextContent('Ремонт');
     await settle(() => outbox.all().some((e) => e.kind === 'pages.create'));
     expect(await testPages.get(page.id)).toMatchObject({ title: 'Ремонт' });
 

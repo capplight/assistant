@@ -1,42 +1,42 @@
 import { router } from 'expo-router';
-import { AlarmClock, Camera, FileText, Image as ImageIcon, PencilLine } from 'lucide-react-native';
+import { AlarmClock, Camera, FileText, Image as ImageIcon } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 
-import { ActionList, Sheet } from './ui/Sheet';
+import { useFeatures } from '@/store/features';
+
+import { ActionList, Sheet, type SheetAction } from './ui/Sheet';
 
 /**
- * «+» sheet: Фото / Камера / Файл / Вручную (2-design §4.3). Week 8: «Напоминание» opens the manual
- * form S13 (works offline and in «Без ИИ»). Week 13: on «Расходы» Фото / Камера / Файл bring a
- * receipt photo or a statement PDF (the receipt screen); elsewhere they are still stubs.
- * The shared `Sheet` + `ActionList`; closes with a visible «Закрыть», the scrim or back.
+ * «+» sheet (Ф-50, ux-review-2 §3): only what works — no «Появится позже». Everywhere: «Напоминание» (the manual form
+ * S13, offline and in «Без ИИ» too). On «Расходы»: «Фото чека» and «Камера» (the receipt screen); «Выписка PDF» only
+ * while `statements_pdf` is on (Ф-37: the flag is off for the beta, the screen must not be reachable).
  */
 export function AddSheet({ visible, onClose, expensesPageId = null }: { visible: boolean; onClose: () => void; expensesPageId?: string | null }) {
   const { t } = useTranslation();
-  const receipt: Record<string, string> = { photo: 'photo', camera: 'camera', file: 'statement' };
-  const works = (key: string) => key === 'reminder' || (expensesPageId !== null && key in receipt);
-  const items = [
-    { key: 'photo', label: t('add.photo'), Icon: ImageIcon },
-    { key: 'camera', label: t('add.camera'), Icon: Camera },
-    { key: 'file', label: expensesPageId ? t('exp.bring_statement') : t('add.file'), Icon: FileText },
-    { key: 'manual', label: t('add.manual'), Icon: PencilLine },
-    { key: 'reminder', label: t('add.reminder'), Icon: AlarmClock },
-  ];
+  const statements = useFeatures((f) => f.statements_pdf);
+  const receipt = (kind: 'photo' | 'camera' | 'statement') => () => {
+    onClose();
+    if (expensesPageId) router.push({ pathname: '/receipt', params: { kind, page: expensesPageId } });
+  };
+  const actions: SheetAction[] = [];
+  if (expensesPageId) {
+    actions.push({ key: 'photo', testID: 'add-photo', label: t('add.receipt_photo'), icon: ImageIcon, onPress: receipt('photo') });
+    actions.push({ key: 'camera', testID: 'add-camera', label: t('add.camera'), icon: Camera, onPress: receipt('camera') });
+    if (statements) actions.push({ key: 'file', testID: 'add-file', label: t('exp.bring_statement'), icon: FileText, onPress: receipt('statement') });
+  }
+  actions.push({
+    key: 'reminder',
+    testID: 'add-reminder',
+    label: t('add.reminder'),
+    icon: AlarmClock,
+    onPress: () => {
+      onClose();
+      router.push('/reminder-new');
+    },
+  });
   return (
     <Sheet visible={visible} onClose={onClose} title={t('add.title')} testID="add-sheet">
-      <ActionList
-        actions={items.map(({ key, label, Icon }) => ({
-          key,
-          label,
-          icon: Icon,
-          testID: `add-${key}`,
-          hint: works(key) ? undefined : t('more.later'),
-          onPress: () => {
-            onClose();
-            if (key === 'reminder') router.push('/reminder-new');
-            else if (expensesPageId && receipt[key]) router.push({ pathname: '/receipt', params: { kind: receipt[key]!, page: expensesPageId } });
-          },
-        }))}
-      />
+      <ActionList actions={actions} />
     </Sheet>
   );
 }

@@ -50,10 +50,19 @@ export const TEMPLATE_DEFAULT_TITLE: Record<TemplateKey, string> = {
   notes: 'Заметки',
   tasks: 'Дела и напоминания',
   shopping: 'Покупки',
-  documents: 'Документы и КП',
+  documents: 'Документы',
   expenses: 'Расходы',
   custom: 'Моя страница',
 };
+
+/** Ф-51: titles the server gave a page before the rename; such a page still follows the app language. */
+export const LEGACY_DEFAULT_TITLES: Partial<Record<TemplateKey, readonly string[]>> = { documents: ['Документы и КП'] };
+
+/** The template's own name (now or before), not a person's rename. */
+export function isDefaultTitle(key: TemplateKey, title: string | null | undefined): boolean {
+  if (!title) return false;
+  return title === TEMPLATE_DEFAULT_TITLE[key] || (LEGACY_DEFAULT_TITLES[key] ?? []).includes(title);
+}
 
 export const TEMPLATES: readonly PageTemplate[] = [
   // Week 11а (views.md «Tool layouts», catalogue notes v4 / tasks v3 / shopping v3): the tools are the defaults.

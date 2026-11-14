@@ -74,14 +74,14 @@ describe('«Расходы»: one total, the keys in a sheet, one «Требуе
     applyServer([expense('a', { amount: '3000.00', category_key: 'transport', category_id: 'cat-transport' })], categories());
     await renderRouter(APP_DIR, { initialUrl: `/page/${expensesPage().id}` });
     await settle(() => screen.queryByTestId('exp-board') !== null);
-    // The total has no box (pattern 1).
-    expect(flat('exp-board').borderWidth).toBeUndefined();
+    // v2: the month is a brief card (radius 26), the total inside it.
+    expect(flat('exp-board').borderRadius).toBe(26);
     expect(screen.queryByTestId('exp-keypad')).toBeNull();
     await fireEvent.press(screen.getByTestId('exp-enter'));
     await settle(() => screen.queryByTestId('exp-entry-sheet') !== null);
     const key = flat('exp-keypad-7');
     expect(key.minHeight).toBe(56);
-    expect(key.borderWidth).toBeUndefined();
+    expect(key.backgroundColor).toBe('#FFFFFF'); // v2 KeypadSheet: raised white keys with the green ring
     for (const k of ['4', '0', '0']) await fireEvent.press(screen.getByTestId(`exp-keypad-${k}`));
     await fireEvent.press(screen.getByTestId('exp-cat-cafe_gifts'));
     await fireEvent.press(screen.getByTestId('exp-keypad-save'));

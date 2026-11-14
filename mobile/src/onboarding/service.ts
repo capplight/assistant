@@ -15,9 +15,9 @@ import { TEMPLATES, type TemplateKey } from '@/pages/templates';
  * Pages are made on the phone at once (offline and «Без ИИ» too); the server gets the whole
  * choice in one `POST /pages/batch` (one action → one «Отменить»).
  */
-
+/** US-33 / Ф-48: nothing chosen = Заметки + Расходы + Дела (as the server's `pages/batch skipped`). */
 /** US-33: nothing chosen = Заметки + Дела и напоминания. */
-export const DEFAULT_SET: readonly TemplateKey[] = ['notes', 'tasks'];
+export const DEFAULT_SET: readonly TemplateKey[] = ['notes', 'expenses', 'tasks'];
 
 const CREATED_BY: Record<StartPath | 'skipped', PageCreatedBy> = {
   gallery: 'onboarding_gallery',

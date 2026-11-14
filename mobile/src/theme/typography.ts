@@ -40,7 +40,15 @@ export type TypeToken =
   | 'button'
   | 'number'
   | 'amount'
-  | 'time';
+  | 'time'
+  | 'briefHeadline'
+  | 'briefBody'
+  | 'eyebrow'
+  | 'metric'
+  | 'metricUnit'
+  | 'keypadAmount'
+  | 'keypadKey'
+  | 'answerValue';
 
 /** iOS pt; on Android body / bodyStrong / button are 16/24 (Material bodyLarge). */
 const android = Platform.OS === 'android';
@@ -59,8 +67,10 @@ export const type: Record<TypeToken, TextStyle> = {
   bodyStrong: { fontFamily: fontFamily.semibold, ...bodySize },
   /** Row meta, note body. */
   callout: { fontFamily: fontFamily.regular, fontSize: 15, lineHeight: 20 },
-  /** Section labels — never uppercase. */
-  sectionLabel: { fontFamily: fontFamily.semibold, fontSize: 15, lineHeight: 20 },
+  /** Block titles «План дня», «Ждёт вас» — never uppercase (v2: 700). */
+  sectionLabel: { fontFamily: fontFamily.bold, fontSize: 15, lineHeight: 20 },
+  /** v2: tile labels and the brief's status line ONLY (≤3 words), caps. */
+  eyebrow: { fontFamily: fontFamily.bold, fontSize: 12, lineHeight: 16, letterSpacing: 0.8, textTransform: 'uppercase' },
   /** Dates, the privacy line. */
   footnote: { fontFamily: fontFamily.regular, fontSize: 13, lineHeight: 18 },
   /** Chips. */
@@ -73,4 +83,18 @@ export const type: Record<TypeToken, TextStyle> = {
   amount: { fontFamily: fontFamily.bold, fontSize: 40, lineHeight: 46, letterSpacing: -1.2, fontVariant: ['tabular-nums'] },
   /** «Дальше 14:30»; scales ≤ HERO_MAX_SCALE. */
   time: { fontFamily: fontFamily.bold, fontSize: 36, lineHeight: 40, letterSpacing: -1, fontVariant: ['tabular-nums'] },
+  /** «Спокойный день.»; scales ≤ HERO_MAX_SCALE. */
+  briefHeadline: { fontFamily: fontFamily.bold, fontSize: 28, lineHeight: 33, letterSpacing: -0.7 },
+  /** The day summary: ≤3 lines + «Подробнее». */
+  briefBody: { fontFamily: fontFamily.regular, fontSize: 16, lineHeight: 23 },
+  /** The number of a tile; scales ≤ HERO_MAX_SCALE. */
+  metric: { fontFamily: fontFamily.bold, fontSize: 32, lineHeight: 34, letterSpacing: -1, fontVariant: ['tabular-nums'] },
+  metricUnit: { fontFamily: fontFamily.semibold, fontSize: 14, lineHeight: 18 },
+  keypadAmount: { fontFamily: fontFamily.bold, fontSize: 52, lineHeight: 58, letterSpacing: -1.6, fontVariant: ['tabular-nums'] },
+  keypadKey: { fontFamily: fontFamily.semibold, fontSize: 24, lineHeight: 28 },
+  /** The search answer as a value («4512»); scales ≤ HERO_MAX_SCALE. */
+  answerValue: { fontFamily: fontFamily.bold, fontSize: 48, lineHeight: 52, letterSpacing: -1.4 },
 };
+
+/** Big numbers grow with the system font at most ×1.4 (design-system v2 §3). */
+export const HERO_TOKENS: readonly TypeToken[] = ['amount', 'time', 'briefHeadline', 'metric', 'keypadAmount', 'answerValue'];

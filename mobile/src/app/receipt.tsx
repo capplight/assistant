@@ -9,6 +9,7 @@ import { Screen } from '@/components/Screen';
 import { QrCamera } from '@/components/page/QrCamera';
 import { getMedia, type Permission } from '@/expenses/media';
 import { saveReceipt, saveReceiptQr, saveStatement } from '@/expenses/receipts';
+import { getFeatures } from '@/store/features';
 import { useToast } from '@/store/toast';
 import { useTheme } from '@/theme';
 
@@ -26,7 +27,10 @@ export default function ReceiptScreen() {
   const theme = useTheme();
   const { t } = useTranslation();
   const params = useLocalSearchParams<{ kind?: string; page?: string }>();
-  const kind: Kind = KINDS.has(params.kind as Kind) ? (params.kind as Kind) : 'camera';
+  // Ф-37: statements and the QR are hidden while their switches are off (a stale link falls back to the photo).
+  const flags = getFeatures();
+  const asked: Kind = KINDS.has(params.kind as Kind) ? (params.kind as Kind) : 'camera';
+  const kind: Kind = (asked === 'statement' && !flags.statements_pdf) || (asked === 'qr' && !flags.receipt_qr) ? 'photo' : asked;
   const page = params.page ?? null;
   const needsCamera = kind === 'camera' || kind === 'qr';
   const [perm, setPerm] = useState<Permission | null>(needsCamera ? null : 'granted');

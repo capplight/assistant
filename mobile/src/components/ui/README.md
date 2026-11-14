@@ -98,3 +98,24 @@ S38 shows name / icon / view only unless `page_settings_full` (Ф-40). Kit addit
 - `brandTint` tuned from `tokens.ts` (#CDEBDB → #D2EEDF light, #1E5248 → #1C4D44 dark) so brand text on it is ≥4.5:1; update `docs/design/system/tokens.ts` when the designer agrees.
 - The floating bottom is drawn in flow (content ends above it) with a 24 dp fade, not over the content as in the mocks:
   screens do not reserve bottom space yet. Making it overlay needs every scroll view to pad by the bar height.
+
+## v2 (Ф-54, Ф-55 — the approved mocks `docs/design/system/screens-v2.html`)
+
+- Tokens v2 in `src/theme`: light `bg #D3ECDE`, white cards with `elevation.ring` (1 px green) + two green shadows;
+  dark = the `deepScale` (#051F20 → #DAF1DE), glass `surface` + `glassBorder`, brand `#5FD6A8`. New: `bgGlow`,
+  `surfaceSolid`, `brandGlow`, `tabBar`, `tabPill`, `track`, `paper`, `linkOnBg`, `metricColors`, `categoryText`,
+  `noteInk`, sticker key `lilac` (7 colours). Type: `briefHeadline`, `briefBody`, `eyebrow`, `metric`, `metricUnit`,
+  `keypadAmount`, `keypadKey`, `answerValue`; `sectionLabel` 700. Sizes: tab bar 72, capsule 56, mic 44, «+» 40,
+  check 26, header button 40, segment 40; radii `lg 18 · xl 22 · xxl 26 · sheet 28`.
+- `ScreenBackground` (gradient + top glow, drawn by `Screen`), `cardEdge(theme)` (ring / glass hairline).
+- New: `BriefCard`, `MetricTile` (+ CategoryTile via `icon`), `TileGrid` (2×2, 4 from 600, 1 under 360 / at ≥150 %),
+  `ProgressBar`, `StatusDot`, `Timeline` («План дня»), `ViewToggle`, `ThemePicker`; outside the kit: `ConfirmCard`,
+  `ReplaceSheet` («Переложить»), `SearchAnswer`, `LineChips`, `LanguageSheet`, `BudgetSheet`, the v2 `KeypadSheet`
+  (`ExpenseKeypad look="v2"`, `EntryPanel look="v2"`).
+- `TabBar` v2: up to 5 cells, the active one a 68×56 `tabPill` with icon + label, the centre tab («Расходы») a raised
+  60 brand circle with glow; labels one line, shrinking (×0.7) and capped at ×1.5 — `tabBarMetrics()` keeps 5 cells
+  ≥48 at 320 dp. `ToastBar` with actions = the two-line SaveToast (6 s).
+- Closed after the first pass: glass (`Glass`, `expo-blur`; Android < 12 gets `surfaceSolid`), «Поймал так» while typing
+  (`chat/caught.ts` + `CaughtCard`, the understood parts lit in the field), the dimmed screen in voice mode, lilac
+  in the colour picker, «Расходы» with «+ Трата» in the header and the period in a sheet, `kp/new` as a sheet.
+- Still open: the 4 document-type tiles (Ф-53 waits for the founder).

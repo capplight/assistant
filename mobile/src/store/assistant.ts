@@ -62,6 +62,8 @@ export type ChatAction = {
   /** `key`: a view setting's row (views.md); «Вернуть» returns every row with that key. */
   changes: { itemId: string | null; title: string | null; text: string; reverted: boolean; key?: string | null }[];
   createdPageId: string | null;
+  /** Week 20: where its new records are now (`saved_to`): the SaveToast names the first page. */
+  savedTo?: { pageServerId: string; title: string; itemIds: string[] }[];
   undoable: boolean;
   undone?: boolean;
 };
@@ -125,6 +127,8 @@ export type ChatMessage = {
   answerKind?: string | null;
   action?: ChatAction;
   proposal?: ChatProposal;
+  /** Week 20: a short checked answer as one value («4512»), from the server (`banner.value`). */
+  value?: string | null;
 };
 
 /** The banner shows one message; it stays until «Закрыть» or the next request (R-52). */

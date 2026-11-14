@@ -1,3 +1,4 @@
+import { useFeatures } from '@/store/features';
 import { router } from 'expo-router';
 import { AlarmClock, Bell, CalendarDays, CircleCheck, Clock, Ellipsis, PencilLine, Trash2 } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
@@ -69,7 +70,8 @@ function longDay(ms: number, lang: string): string {
 export function PlannerView({ page, entries, frameTop, ordering }: ViewProps) {
   const theme = useTheme();
   const { t, i18n } = useTranslation();
-  const hasShoppingPage = usePages((st) => st.pages.some((p) => p.templateKey === 'shopping'));
+  const shoppingOn = useFeatures((f) => f.shopping);
+  const hasShoppingPage = usePages((st) => shoppingOn && st.pages.some((p) => p.templateKey === 'shopping'));
   // eslint-disable-next-line react-hooks/exhaustive-deps -- the lists follow «Покупки» existing
   const lists = useMemo(() => listsForPage(page), [page.templateKey, hasShoppingPage]);
   const tasksMap = useTasks((st) => st.tasks);

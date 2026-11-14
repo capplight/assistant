@@ -420,7 +420,7 @@ export type PageItemFieldsIn = {
 export type PageItemFieldsOut = { values: Record<string, unknown>; action: ActionOut | null; link: PageItemOut | null };
 
 /** Week 11а: the six sticker colours (`color.note.*`, template-screens 3; views.md `link.appearance.color`). */
-export type NoteColor = 'yellow' | 'pink' | 'green' | 'blue' | 'peach' | 'white';
+export type NoteColor = 'yellow' | 'pink' | 'green' | 'blue' | 'peach' | 'white' | 'lilac';
 
 /** `link.appearance` (views.md «Rows and contents»): who set it decides when the assistant asks «Да». */
 export type AppearanceOut = { color: NoteColor | null; color_set_by?: SetBy | null; pinned_set_by?: SetBy | null };
@@ -709,6 +709,40 @@ export type ActionOut = {
   seq?: number;
   /** Week 9 follow-up (reminders.md events): the `client_id` of the `acked` event that made it. */
   event_client_id?: string | null;
+  /** Week 20 (Ф-50): the pages the action's new records are on now — «Сохранил в «…» · Переложить · Отменить». */
+  saved_to?: SavedToOut[];
+};
+
+/** Week 20 (chat.md «История»): one entry of `GET /v1/history`. */
+export type HistoryEntryOut = {
+  id: string;
+  kind: 'turn' | 'action';
+  status: string;
+  at: string | null;
+  said: ChatMessageOut | null;
+  answer: ChatMessageOut | null;
+  action: ActionOut | null;
+};
+
+export type SavedToOut = { page_id: string; title: string; icon: string | null; template_key: string | null; item_ids: string[] };
+
+/** Week 20 (expenses.md «The monthly budget»). */
+export type BudgetOut = {
+  amount: string;
+  currency: string;
+  month: { from: string | null; to: string | null };
+  spent: string;
+  left: string;
+  over: boolean;
+  percent: number;
+  days_left: number;
+};
+
+/** Week 20 (today.md «The briefing»): ready texts; the phone counts its own numbers for the tiles. */
+export type BriefOut = {
+  part: 'morning' | 'day' | 'evening';
+  headline: { ru: string; kk: string | null };
+  lines: { ru: string[]; kk: string[] | null };
 };
 
 /** `page_patch`, and `page_patches` of an undo. `group_key` = the group's title. */
@@ -773,7 +807,7 @@ export type ChatEvent = (
   | { type: 'citations'; citations: ChatCitationOut[] }
   | { type: 'checked'; ok: boolean; removed: number }
   /** The full checked answer; `aiLabel` set when the assistant wrote it (R-06). */
-  | { type: 'banner'; replyId: string | null; text: string; preview: string; short: boolean; aiLabel: string | null; citations: ChatCitationOut[] }
+  | { type: 'banner'; replyId: string | null; text: string; preview: string; short: boolean; aiLabel: string | null; citations: ChatCitationOut[]; value?: string | null }
   /** `limited`: monthly limit reached, the answer is search results without a written answer. */
   | { type: 'done'; replyId: string | null; limited: boolean; answerKind: ChatAnswerKind | null; actionId: string | null }
   | { type: 'deferred'; replyId: string | null; text: string | null }
@@ -786,6 +820,8 @@ export type ChatEvent = (
   /** Week 9: a reminder phrase read as `/reminders/parse` would (S13; nothing saved). */
   | { type: 'reminder_draft'; replyId: string | null; draft: ReminderParseOut; createdVia: 'voice' | 'typed' }
   | { type: 'page_patch'; patch: PagePatchOut }
+  /** Week 20 (chat.md «A КП from the line»): «сделай КП для …» started a КП on the server. */
+  | { type: 'kp_started'; replyId: string | null; documentId: string; fromThis: boolean }
   /** `needs_choice`, `confirm`, `confirm_manual`. */
   | { type: 'proposal'; proposal: ProposalOut }
 ) & { eventId?: string | null };
@@ -1067,6 +1103,8 @@ export type TodaySection = 'banner' | 'missed' | 'today' | 'done_for_you' | 'pro
 
 /** GET /today (S06). */
 export type TodayOut = {
+  /** Week 20: the briefing (null from an older server). */
+  brief?: BriefOut | null;
   date: string | null;
   tz: string | null;
   greeting: string | null;
@@ -1983,6 +2021,8 @@ export type FeaturesOut = {
   telegram_login: boolean;
   personal_mail: boolean;
   setup_for_other: boolean;
+  /** Ф-49: the shopping list («Покупки», «Я в магазине», «Купить: …» on «Сегодня»). Off: things to buy are to-dos in «Дела». */
+  shopping: boolean;
   /** The `screen` value of `POST /v1/consents` sent by «Начать». */
   consent_screen: string;
   today: { tips_days: number; tips_per_day: number; proposals: boolean; tiles: boolean };

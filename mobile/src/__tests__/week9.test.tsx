@@ -16,7 +16,7 @@ import { listRows } from '@/tasks/rows';
 import { addTask, isDone, setDone } from '@/tasks/service';
 import { useTasks } from '@/tasks/store';
 import { useToday } from '@/today/service';
-import { happyServer, type FakeServer, type SseEvent } from '@/testing/fakeServer';
+import { FEATURES_BODY, happyServer, type FakeServer, type SseEvent } from '@/testing/fakeServer';
 import { APP_DIR, finishOnboarding, resetApp, settle, testPages } from '@/testing/helpers';
 
 /**
@@ -77,6 +77,8 @@ type Srv = FakeServer & { tasks: Map<string, TaskOut>; seq: number };
 /** happyServer + tasks, today, actions, habits, suggestions as the contract says. */
 function server(): Srv {
   const s = happyServer() as Srv;
+  // Week 9 is the shopping list: it is behind `shopping` since Ф-49 (hidden, not deleted) — these tests turn it on.
+  s.on('GET /features', () => ({ status: 200, body: { ...FEATURES_BODY, shopping: true } }));
   s.tasks = new Map();
   s.seq = 1000;
   s.on('POST /tasks', (c) => {
@@ -103,6 +105,7 @@ function server(): Srv {
 
 async function online(s: Srv, mode: 'full' | 'no_ai' = 'full'): Promise<InMemoryOutboxRepository> {
   const outbox = resetApp({ fetch: s.fetch });
+  useFeatureStore.getState().set({ ...FEATURE_DEFAULTS, shopping: true });
   finishOnboarding(mode);
   usePages.getState().addPage('shopping');
   await (await getSyncEngine()).run();
@@ -291,10 +294,10 @@ describe('screens', () => {
     const r = await renderRouter(APP_DIR, { initialUrl: '/' });
     await fireEvent.changeText(screen.getByTestId('assistant-input'), 'купить молоко');
     await fireEvent.press(screen.getByTestId('assistant-send'));
-    await settle(() => screen.queryByTestId('undo-strip-open') !== null);
-    expect(screen.getByTestId('undo-strip-text')).toHaveTextContent('Добавил в Покупки: молоко.');
+    await settle(() => screen.queryByTestId('undo-strip-replace') !== null);
+    expect(screen.getByTestId('undo-strip-text')).toHaveTextContent('Сохранил в «Покупки»');
     expect(useTasks.getState().tasks['srv-t9']?.title).toBe('Молоко');
-    await fireEvent.press(screen.getByTestId('undo-strip-open'));
+    await act(async () => router.navigate(`/page/${page('shopping').id}`));
     await settle(() => r.getPathname() === `/page/${page('shopping').id}`);
     await settle(() => screen.queryByTestId('task-srv-t9') !== null);
   });
@@ -323,14 +326,14 @@ describe('screens', () => {
     expect(screen.queryByText(/^Про:/)).toBeNull();
     await fireEvent.changeText(screen.getByTestId('assistant-input'), 'купить молоко');
     await fireEvent.press(screen.getByTestId('assistant-send'));
-    await settle(() => screen.queryByTestId('undo-strip-open') !== null);
+    await settle(() => screen.queryByTestId('undo-strip-replace') !== null);
     // The open page goes along only so that «это / здесь» resolve; the server decides the place.
     expect(s.callsTo('POST /chat/messages')[0]?.body).toMatchObject({ text: 'купить молоко', page_id: 'srv-notes' });
-    expect(screen.getByTestId('undo-strip-text')).toHaveTextContent('Добавил в Покупки: молоко.');
+    expect(screen.getByTestId('undo-strip-text')).toHaveTextContent('Сохранил в «Покупки»');
     expect(useTasks.getState().tasks['srv-t10']?.title).toBe('Молоко');
   });
 
-  it('a reminder phrase online goes to chat (not /reminders/parse): `reminder_draft` opens S13, [Сохранить] sends its `message_id`', async () => {
+  it('a reminder phrase online goes to chat (not /reminders/parse): `reminder_draft` is the ConfirmCard (Ф-50), set with its `message_id`', async () => {
     const s = server();
     await online(s);
     s.on('POST /reminders/active', () => ({ status: 200, body: { device_id: 'd-1', retargeted: 0 } }))
@@ -351,10 +354,10 @@ describe('screens', () => {
     const r = await renderRouter(APP_DIR, { initialUrl: '/' });
     await fireEvent.changeText(screen.getByTestId('assistant-input'), 'Напомни завтра в 7 выпить таблетку');
     await fireEvent.press(screen.getByTestId('assistant-send'));
-    await settle(() => r.getPathname() === '/reminder-new');
+    await settle(() => screen.queryByTestId('confirm-card') !== null);
+    expect(r.getPathname()).not.toBe('/reminder-new');
     expect(s.callsTo('POST /reminders/parse')).toHaveLength(0);
-    expect(screen.getByTestId('rem-title').props.value).toBe('Выпить таблетку');
-    await fireEvent.press(screen.getByTestId('rem-save'));
+    expect(screen.getByTestId('confirm-card-title')).toHaveTextContent('Выпить таблетку');
     await settle(() => s.callsTo('POST /reminders').length > 0);
     expect(s.callsTo('POST /reminders')[0]?.body).toMatchObject({ message_id: 'r5', created_via: 'typed' });
     await settle(() => !!useTasks.getState().actions.ar); // «Что я сделал» has it, with «Отменить»
@@ -381,7 +384,7 @@ describe('screens', () => {
   it('«Сегодня»: shopping in one line; a proposal from /today only with `today.proposals`, [Не сейчас]; «Я сделал за вас» moved to «Что я сделал»', async () => {
     const s = server();
     await online(s);
-    const on = { ...FEATURE_DEFAULTS, today: { ...FEATURE_DEFAULTS.today, proposals: true } };
+    const on = { ...FEATURE_DEFAULTS, shopping: true, today: { ...FEATURE_DEFAULTS.today, proposals: true } };
     s.on('GET /features', () => ({ status: 200, body: on }));
     useFeatureStore.getState().set(on);
     useTasks.setState({ tasks: { a: task('a', { title: 'Хлеб' }), b: task('b', { title: 'Молоко' }) } });
@@ -408,7 +411,7 @@ describe('screens', () => {
     await settle(() => screen.queryByTestId('suggestion-s1') === null);
     expect(s.callsTo('POST /suggestions/s1/dismiss')).toHaveLength(1);
     await act(async () => router.push('/did'));
-    await settle(() => r.getPathname() === '/did');
+    await settle(() => r.getPathname() === '/history');
     await settle(() => screen.queryByTestId('did-a1') !== null);
   });
 

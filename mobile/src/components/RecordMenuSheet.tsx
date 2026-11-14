@@ -31,6 +31,7 @@ export function RecordMenuSheet({
   onClose,
   extra,
   move,
+  onDocument,
 }: {
   title: string;
   /** «Вы поставили эту запись сюда сами». */
@@ -51,6 +52,8 @@ export function RecordMenuSheet({
    * sticker moves in four directions, in its own sheet).
    */
   move?: MenuExtra;
+  /** Ф-51: «Сделать документ из этого» on a file the client sent (a КП from the ТЗ). */
+  onDocument?: () => void;
 }) {
   const theme = useTheme();
   const { t } = useTranslation();
@@ -123,6 +126,7 @@ export function RecordMenuSheet({
               />
             </View>
             )}
+            {onDocument ? row('record-menu-document', t('kp.make_from_file'), onDocument, t('kp.make_from_file_hint')) : null}
             {row('record-menu-move', t('move.to'), onMoveTo)}
             {row('record-menu-also', t('move.also'), onAlso)}
             {row('record-menu-remove', t('move.remove'), onRemove, t('move.remove_hint'))}

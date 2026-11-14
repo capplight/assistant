@@ -1,3 +1,4 @@
+import { autoNoteColor } from '@/components/ui/StickyNote';
 import { act, fireEvent, renderRouter, screen, within } from 'expo-router/testing-library';
 import { Dimensions } from 'react-native';
 
@@ -154,8 +155,8 @@ describe('contract (views.md, pages.md, today.md week 11а)', () => {
     expect(list.map((x) => x.record.id)).toEqual(['b', 'a', 'c']);
   });
 
-  it('note colours: six, no violet; ink on each is ≥4.5:1', () => {
-    expect(NOTE_COLOR_KEYS).toEqual(['yellow', 'pink', 'green', 'blue', 'peach', 'white']);
+  it('note colours v2: seven (lilac added, Ф-55), in the picker order; ink on each is ≥4.5:1', () => {
+    expect(NOTE_COLOR_KEYS).toEqual(['white', 'yellow', 'peach', 'pink', 'lilac', 'blue', 'green']);
     const lum = (hex: string) => {
       const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
       return 0.2126 * c[0]! + 0.7152 * c[1]! + 0.0722 * c[2]!;
@@ -249,7 +250,8 @@ describe('«Заметки» — the sticker wall «Ряды»', () => {
     expect(row.payload).toMatchObject({ color: 'yellow' });
     // «Отменить» while it waits: it never goes, the colour is back.
     await fireEvent.press(screen.getByTestId('undo-strip-undo'));
-    await settle(() => bg('record-n1') === lightNoteColors.white);
+    // Nothing chosen = the automatic colour of the note (v2: «разноцветные», Ф-52), not white.
+    await settle(() => bg('record-n1') === lightNoteColors[autoNoteColor('srv-n1')]);
     expect((await outbox.get(row.id))?.status).toBe('failed');
 
     s.on('PATCH /pages/*/items/*', (c) => ({

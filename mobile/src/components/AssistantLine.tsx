@@ -1,13 +1,16 @@
 import { router } from 'expo-router';
-import { Mic, PencilLine, Plus, SendHorizontal } from 'lucide-react-native';
+import { ArrowUp, Mic, PencilLine, Plus } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, TextInput, View, useWindowDimensions } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 
-import { sendFromLine } from '@/chat/service';
+import { caught } from '@/chat/caught';
+import { chatAllowed, sendFromLine, showSavedToast } from '@/chat/service';
+import { kpFromPhrase, looksLikeKp } from '@/kp/start';
 import { getCapture } from '@/services';
 import { MAX_FONT_SCALE, useTheme } from '@/theme';
 import { useAssistant } from '@/store/assistant';
+import { useConnectivity } from '@/store/connectivity';
 import { selectNoAi, useOnboarding } from '@/store/onboarding';
 import { useToast } from '@/store/toast';
 import { useView } from '@/store/view';
@@ -15,6 +18,8 @@ import type { Fragment } from '@/voice/session';
 import { useVoiceRecorder } from '@/voice/useVoiceRecorder';
 
 import { AddSheet } from './AddSheet';
+import { CaughtCard, litSegments } from './CaughtCard';
+import { LineChips } from './LineChips';
 import { AppText } from './AppText';
 import { Button } from './ui/Button';
 import { useCurrentPage } from './useCurrentPage';
@@ -49,6 +54,8 @@ export function AssistantLine({
   const showToast = useToast((s) => s.show);
   const [text, setText] = useState('');
   const [addOpen, setAddOpen] = useState(false);
+  // v2 «ввод»: a brand ring while the field has the focus; the chips show while it is empty.
+  const [focused, setFocused] = useState(false);
   // «Я в магазине»: only a «Написать» strip and the mic until the person starts writing.
   const [opened, setOpened] = useState(false);
   const folded = compact && !opened && text.trim().length === 0;
@@ -67,8 +74,9 @@ export function AssistantLine({
     setListening(false);
     const capture = await getCapture();
     // Ф-47: no page — the server places it by its rules (shows on «Заметки» until then).
-    await capture.saveVoice({ fragments });
-    showToast(t('saved'));
+    const rec = await capture.saveVoice({ fragments });
+    if (rec) showSavedToast(rec.id, t('save.voice'));
+    else showToast(t('saved'));
   };
   const voice = useVoiceRecorder(onVoiceFinished);
   const listening = voice.status === 'listening';
@@ -113,6 +121,12 @@ export function AssistantLine({
     // Consent gate (3-engineering §6.14): nothing is sent before S05.
     if (!value || !consentGiven) return;
     setText('');
+    // Ф-51: «сделай КП для …» starts a КП at once without hunting for screens: online the server reads it
+    // (`kp_started`), offline the phone saves the ТЗ and the job starts when there is a connection.
+    if (looksLikeKp(value) && !noAi && (!chatAllowed() || !useConnectivity.getState().online)) {
+      await kpFromPhrase(value);
+      return;
+    }
     // R-53: online the server decides what the phrase is (a question, a change, a note); offline
     // and in «Без ИИ» the phone guesses (src/chat/service.ts `sendFromLine`).
     const result = await sendFromLine(value, {
@@ -153,6 +167,10 @@ export function AssistantLine({
     padding: 16,
   });
 
+  // v2 «ввод»: what the phone understood of a reminder phrase, shown above the line, its parts lit in the field.
+  const seen = focused && !listening ? caught(text) : null;
+  const segments = seen && seen.parts.length > 0 ? litSegments(text, seen.parts) : null;
+
   const field = (
     <TextInput
       ref={inputRef}
@@ -161,9 +179,11 @@ export function AssistantLine({
       accessibilityHint={t(current.hintKey)}
       placeholder={placeholder}
       placeholderTextColor={theme.colors.ink3}
-      value={text}
+      {...(segments ? {} : { value: text })}
       onChangeText={setText}
       onSubmitEditing={send}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
       returnKeyType="send"
       multiline
       submitBehavior="submit"
@@ -181,7 +201,15 @@ export function AssistantLine({
           paddingHorizontal: theme.space[2],
         },
       ]}
-    />
+    >
+      {segments
+        ? segments.map((sg, i) => (
+            <Text key={i} style={sg.lit ? { backgroundColor: theme.colors.brandTint, color: theme.colors.brand } : undefined}>
+              {sg.text}
+            </Text>
+          ))
+        : null}
+    </TextInput>
   );
 
   // The Pressable is the 48 target; the visible circle inside is 40 (mic / send) or 36 («+»).
@@ -191,6 +219,7 @@ export function AssistantLine({
   const iconPx = theme.size.iconSm;
   const stroke = theme.icon.strokeWidth;
 
+  const glow = { shadowColor: theme.colors.brand, shadowOffset: { width: 0, height: 3 }, shadowRadius: 10, shadowOpacity: 0.5, elevation: 4 };
   // Right button: «Отправить» when typed; mic otherwise; «Написать» in «Без ИИ» (no voice, R-05).
   const right =
     text.trim().length > 0 ? (
@@ -201,8 +230,8 @@ export function AssistantLine({
         onPress={send}
         style={[styles.round, target]}
       >
-        <View style={circle(mic, theme.colors.brand)}>
-          <SendHorizontal size={iconPx} color={theme.colors.onBrand} strokeWidth={stroke} />
+        <View style={[circle(mic, theme.colors.brand), glow]}>
+          <ArrowUp size={iconPx} color={theme.colors.onBrand} strokeWidth={2.25} />
         </View>
       </Pressable>
     ) : noAi ? (
@@ -229,11 +258,19 @@ export function AssistantLine({
         onPress={startVoice}
         style={[styles.round, target]}
       >
-        <View style={circle(mic, theme.colors.brand)}>
+        <View style={[circle(mic, theme.colors.brand), glow]}>
           <Mic size={iconPx} color={theme.colors.onBrand} strokeWidth={stroke} />
         </View>
       </Pressable>
     );
+
+  // design-system v2 §4: the mic (and send) carry the `brandGlow`; the capsule edge glows while listening.
+  const ring = listening
+    ? { borderWidth: 2, borderColor: theme.colors.brand, shadowColor: theme.colors.brand, shadowRadius: 26, shadowOpacity: 0.6, shadowOffset: { width: 0, height: 0 } }
+    : focused
+      ? { borderWidth: 2, borderColor: theme.colors.brand }
+      : { borderWidth: 2, borderColor: 'transparent' };
+  const showChips = scope !== 'all' && focused && text.trim().length === 0 && !listening && consentGiven;
 
   const plus = (
     <Pressable
@@ -250,11 +287,22 @@ export function AssistantLine({
   );
 
   return (
+    <>
+    {seen && (seen.day || seen.time) ? <CaughtCard c={seen} /> : null}
+    {showChips ? (
+      <LineChips
+        kind={current.kind === 'page' ? current.page.templateKey : 'today'}
+        onPick={(phrase) => {
+          setText(phrase);
+          inputRef.current?.focus();
+        }}
+      />
+    ) : null}
     <View
       testID="assistant-line"
       style={[
         {
-          backgroundColor: theme.colors.surface,
+          backgroundColor: theme.colors.surfaceSolid,
           // Round while one line high; a grown capsule (listening, 200 %, a long phrase) keeps soft corners.
           borderRadius: theme.size.assistantCapsule / 2,
           marginHorizontal: theme.size.tabBarInset,
@@ -263,6 +311,7 @@ export function AssistantLine({
           minHeight: theme.size.assistantCapsule,
         },
         theme.elevation.floating,
+        ring,
       ]}
     >
       {voice.status === 'denied' ? (
@@ -313,6 +362,7 @@ export function AssistantLine({
         expensesPageId={current.kind === 'page' && current.page.templateKey === 'expenses' ? current.page.id : null}
       />
     </View>
+    </>
   );
 }
 

@@ -56,7 +56,7 @@ export function PendingAnswerCard() {
             size="small"
             onPress={() => {
               const id = openPending();
-              if (id) router.push({ pathname: '/chat', params: { focus: id } });
+              if (id) router.push({ pathname: '/history', params: { focus: id } });
             }}
           />
           <Button testID="pending-close" label={t('answer.close')} variant="text" onPress={closePending} />

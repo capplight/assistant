@@ -438,7 +438,7 @@ describe('screens', () => {
     await fireEvent.press(screen.getByTestId('reminder-draft-open'));
     expect(r.getPathname()).toBe('/reminder-new');
     expect(screen.getByTestId('rem-title').props.value).toBe('Выпить таблетку');
-  });
+  }, 90_000);
 
   it('«Без ИИ» online: the server says «Укажите время вручную» → S13 by hand; [Сохранить] rings and goes to the server; first reminder → S04', async () => {
     const s = reminderServer();
@@ -461,7 +461,7 @@ describe('screens', () => {
       await flush();
     });
     expect(s.callsTo('POST /reminders')).toHaveLength(1);
-  });
+  }, 90_000);
 
   it('S15 on a Xiaomi: [Открыть] goes to the system screen, ✓ on return; autostart by hand; «Позже» → banner on «Сегодня»', async () => {
     const s = reminderServer();

@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { ArrowUpDown, Ellipsis, PencilLine, Search, SlidersHorizontal, X } from 'lucide-react-native';
+import { ArrowUpDown, Ellipsis, LayoutGrid, List, PencilLine, Plus, Search, SlidersHorizontal, X } from 'lucide-react-native';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
@@ -10,11 +10,12 @@ import { searchRecords } from '@/records/search';
 import { usePageEntries } from '@/records/useRecords';
 import { useServerSearch } from '@/records/useServerSearch';
 import type { Page } from '@/store/pages';
+import { useNotesLook } from '@/store/notesLook';
 import { useView } from '@/store/view';
 import { useTheme } from '@/theme';
 
 import { AppText } from '../AppText';
-import { ActionList, Button, Header, Sheet, type SheetAction } from '../ui';
+import { ActionList, Button, Header, Icon, Sheet, ViewToggle, type SheetAction } from '../ui';
 import { PageNameSheet } from '../PageNameSheet';
 import { Screen } from '../Screen';
 import { FindField, SearchMore } from '../SearchResults';
@@ -50,6 +51,9 @@ export function PageFrame({ page }: { page: Page }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const view = resolveView(page);
+  const notesLook = useNotesLook((st) => st.look);
+  const setNotesLook = useNotesLook((st) => st.set);
+  const isNotes = page.templateKey === 'notes';
 
   // The marker goes after 600 ms (Reduce Motion: the same, it is a colour, not a move).
   useEffect(() => {
@@ -98,15 +102,35 @@ export function PageFrame({ page }: { page: Page }) {
       <Header
         testID="page-header"
         title={title(page)}
+        meta={isNotes && entries ? t(notesLook === 'list' ? 'notes.count_list' : 'notes.count', { count: entries.length }) : undefined}
+        accessory={
+          page.templateKey === 'expenses' ? (
+            <Button testID="exp-enter" label={t('exp.add_short')} size="small" icon={<Icon icon={Plus} size="sm" color="onBrand" />} onPress={() => useView.getState().requestKeypad()} />
+          ) : isNotes ? (
+            <ViewToggle
+              testID="notes-look"
+              value={notesLook}
+              onChange={setNotesLook}
+              options={[
+                { key: 'grid', icon: LayoutGrid, label: t('notes.look_grid'), testID: 'notes-look-grid' },
+                { key: 'list', icon: List, label: t('notes.look_list'), testID: 'notes-look-list' },
+              ]}
+            />
+          ) : undefined
+        }
         titleTestID="page-title"
         actions={[
-          {
-            key: 'search',
+          ...(page.templateKey === 'expenses'
+            ? []
+            : [
+                {
+                  key: 'search',
             testID: 'page-search',
             icon: searchShown ? X : Search,
             label: searchShown ? t('common.close') : t('page.find'),
-            onPress: () => (searchShown ? closeSearch() : setSearchOpen(true)),
+            onPress: () => (searchShown ? closeSearch() : router.navigate({ pathname: '/search', params: { page: page.id } })),
           },
+              ]),
           { key: 'menu', testID: 'page-menu', icon: Ellipsis, label: t('move.menu_a11y', { what: title(page) }), onPress: () => setMenuOpen(true) },
         ]}
       />

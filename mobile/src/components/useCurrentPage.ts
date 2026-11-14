@@ -45,6 +45,9 @@ export function useCurrentPage(): CurrentPage {
   if (pathname === '/chat') {
     return { kind: 'other', id: 'today', title: t('chat.title'), hintKey: 'tpl.line_hint_now.today' };
   }
+  if (pathname === '/history') {
+    return { kind: 'more', id: 'more', title: t('history.title'), hintKey: 'tpl.line_hint_now.today' };
+  }
   if (pathname.startsWith('/more') || pathname === '/my-pages' || pathname === '/duplicates' || pathname === '/import') {
     return { kind: 'more', id: 'more', title: t('more.title'), hintKey: 'tpl.line_hint_now.today' };
   }

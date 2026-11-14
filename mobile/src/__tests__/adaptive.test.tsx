@@ -8,7 +8,7 @@ import { auditLayout, AUDIT_MATRIX, resetWindow, setWindow } from '@/testing/lay
 /**
  * The adaptive foundation in the real app (founder requirement): «Сегодня» and «Заметки» with the floating
  * bottom (capsule + tab bar) at 320 / 360 / 412 / 600 / 840 × font 1.0 / 1.3 / 2.0 — structural audit, the
- * bottom column ≤600, tabs ≤4 (≤3 at ≥150 %), every target of the capsule ≥48.
+ * bottom column ≤600, 5 tabs (4 at ≥150 %, Ф-48), every target of the capsule ≥48.
  */
 
 afterEach(() => resetWindow());
@@ -28,7 +28,8 @@ describe.each(['/', 'notes'] as const)('%s', (route) => {
     expect(flat('main-footer').maxWidth).toBe(600);
     expect(flat('bottom-tabs').maxWidth).toBe(600);
     const tabs = screen.getAllByRole('tab').filter((t) => typeof t.props.testID === 'string' && t.props.testID.startsWith('tab-'));
-    expect(tabs.length).toBeLessThanOrEqual(w.fontScale >= 1.5 ? 3 : 4);
+    // Ф-48: Сегодня · Заметки · Расходы · Дела · Ещё; at ≥150 % «Заметки» go to «Ещё».
+    expect(tabs.length).toBe(w.fontScale >= 1.5 ? 4 : 5);
     for (const id of ['assistant-plus', 'assistant-mic']) {
       expect(flat(id).width).toBeGreaterThanOrEqual(48);
       expect(flat(id).height).toBeGreaterThanOrEqual(48);
