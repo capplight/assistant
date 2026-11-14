@@ -90,6 +90,8 @@ just the text.
   ],
   "changed_item_ids": ["0193..."],
   "created_page_id": null,
+  "saved_to": [{"page_id": "0194...", "title": "Заметки", "icon": "documents",
+                "template_key": "notes", "item_ids": ["0193..."]}],
   "undoable": true,
   "undoable_until": "2026-12-07T10:00:00+00:00",
   "undone_at": null,
@@ -109,6 +111,7 @@ just the text.
 | `changes[].item_id` null | Only for `kind: "create_page"` (the row is the new page itself, `page_id` = that page). Show the row with its `text` («Новая страница «Ремонт»»), tap opens `page_id`; it has **no** «Вернуть» of its own: the page goes only with «Отменить» of the whole action. Every other row has an `item_id`. |
 | `changed_item_ids` | Highlight these for 600 ms. |
 | `created_page_id` | Set when the action made a page (open it). |
+| `saved_to` | Week 20 (Ф-50): the live pages the action's **new** records (`changes[].kind: "create"`) are on **now**, in tab order, each with those `item_ids`; `[]` for other actions, or when they were undone / moved off every page. The toast after a save: «Сохранил в «{saved_to[0].title}» · Переложить · Отменить». «Переложить» = `POST /v1/items/{item_id}/move-to-page` `{"mode": "move", "from_page_id": saved_to[0].page_id, "to_page_ids": [<chosen>]}` (`pages.md`, its own action and «Отменить»); afterwards the save's `saved_to` names the new page. |
 | `undoable` | Show «Отменить» only when true: not undone yet, within 30 days, and has something to undo. |
 | `undo_of` | On an undo: the action it undid. «Вернуть» right after «Отменено» = undo **this** action. |
 | `message_id` | The chat answer that made it (open «Переписка» on it). |

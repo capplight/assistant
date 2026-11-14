@@ -27,6 +27,7 @@ def test_defaults_are_the_founders_decisions() -> None:
     assert not any(getattr(s, name) for name in ALL_ON)
     assert (s.today_tips_days, s.today_tips_per_day) == (7, 1)
     assert s.pages_on_first_use and s.pages_first_use_keys == ["shopping", "expenses", "documents"]
+    assert s.pages_default_keys == ["notes", "expenses", "tasks"] and not s.feature_shopping
     assert s.chat_rate_per_minute["family_beta"] > s.chat_rate_per_minute["regular"] > 0
     assert s.chat_rate_per_day["family_beta"] > s.chat_rate_per_day["regular"] > 0
 
@@ -47,10 +48,10 @@ async def test_features_endpoint_without_sign_in(tmp_path: Path) -> None:
     assert body == {
         "statements_pdf": False, "receipt_qr": False, "board": False, "assistant_views": False,
         "page_settings_full": False, "telegram_login": False, "personal_mail": False,
-        "setup_for_other": False, "consent_screen": "welcome",
+        "setup_for_other": False, "shopping": False, "consent_screen": "welcome",
         "today": {"tips_days": 7, "tips_per_day": 1, "proposals": False, "tiles": False},
-        "pages": {"default": ["today", "notes", "tasks"],
-                  "first_use": ["shopping", "expenses", "documents"]},
+        "pages": {"default": ["today", "notes", "expenses", "tasks"],
+                  "first_use": ["documents"]},
     }  # fmt: skip
     assert "max-age" in r.headers["cache-control"]
 

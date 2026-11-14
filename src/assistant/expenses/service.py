@@ -466,3 +466,52 @@ async def totals(session: AsyncSession, user_id: int, *, period: str, day: date,
             method=e.method, review="amount" in (e.review_fields or [])))  # fmt: skip
     return Totals(bounds, calc.aggregate(calc_rows, group_by=group_by), titles, ids)
 
+
+
+BUDGET_MAX = Decimal("999999999999.99")
+
+
+@dataclass
+class Budget:
+    """The monthly budget of «Расходы» against this month's spent (code, R-59)."""
+
+    amount: Decimal
+    currency: str
+    bounds: tuple[date, date]
+    spent: Decimal
+    left: Decimal  # negative = over
+    days_left: int  # days after today until the month ends
+
+    @property
+    def over(self) -> bool:
+        return self.left < 0
+
+    @property
+    def percent(self) -> int:
+        return int((self.spent * 100 / self.amount).to_integral_value()) if self.amount else 0
+
+
+async def budget(session: AsyncSession, user_id: int, today: date) -> Budget | None:
+    """None when the person set no budget. `spent` = the month's total in the budget's currency
+    (expenses − refunds, as `GET /expenses/aggregate`)."""
+    from assistant.db.models import User
+
+    row = (await session.execute(select(User.expense_budget, User.expense_budget_currency)
+                                 .where(User.id == user_id))).first()
+    if row is None or row[0] is None:
+        return None
+    amount, currency = calc.money(row[0]), row[1] or "KZT"
+    t = await totals(session, user_id, period="month", day=today, currency=currency)
+    spent = next((x.total for x in t.result.totals if x.currency == currency), Decimal("0.00"))
+    lo, hi = t.bounds
+    assert lo is not None and hi is not None
+    return Budget(amount, currency, (lo, hi), spent, amount - spent, (hi - today).days)
+
+
+def budget_dict(b: Budget | None) -> dict[str, Any] | None:
+    if b is None:
+        return None
+    return {"amount": f"{b.amount:.2f}", "currency": b.currency,
+            "month": {"from": b.bounds[0].isoformat(), "to": b.bounds[1].isoformat()},
+            "spent": f"{b.spent:.2f}", "left": f"{b.left:.2f}", "over": b.over,
+            "percent": b.percent, "days_left": b.days_left}  # fmt: skip

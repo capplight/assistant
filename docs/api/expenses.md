@@ -533,3 +533,26 @@ generic shape `{pending_action, action, repeated}`). Errors: `404` · `409 pendi
 
 Every expense of that import goes to the trash with its record (30 days, as usual); the statement
 shows `status: "undone"`. Importing the same PDF again later makes a fresh plan.
+
+## The monthly budget (week 20, mocks v2: «Осталось 33 600 ₸ из 120 000»)
+
+One budget per person for the whole month (`users.expense_budget`, migration 0026). A setting:
+no action, no «Отменить» (set it again or clear it). Every number is code's.
+
+Budget:
+
+```json
+{"amount": "120000.00", "currency": "KZT", "month": {"from": "2026-11-01", "to": "2026-11-30"},
+ "spent": "86400.00", "left": "33600.00", "over": false, "percent": 72, "days_left": 17}
+```
+
+`spent` = this month's total in `currency` (expense − refund, as `aggregate`); `left = amount −
+spent` (negative = over, `over: true`); `percent` = spent / amount rounded; `days_left` = days
+after today until the month ends (the person's time zone).
+
+- `GET /v1/expenses/budget` → `{"budget": Budget | null}`.
+- `PUT /v1/expenses/budget` `{"amount": "120 000", "currency": "KZT"}` → `{"budget": Budget}`.
+  `amount` > 0 (spaces and a comma allowed); else `422 validation_error` (`details.field: "amount"`).
+- `DELETE /v1/expenses/budget` → `{"budget": null}`.
+- `GET /v1/expenses/aggregate?period=month` (no `category_id`) has `budget` too (null without one).
+- «Сегодня» shows it in `brief.metrics.spent.budget` (`today.md`).

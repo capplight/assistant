@@ -18,6 +18,7 @@ from assistant.actions import actions_dicts, record
 from assistant.api.consent_gate import AI_CONSENTS, missing_consents, require_base_consent
 from assistant.api.deps import Ctx, CurrentUser, Db, get_active_consent_kinds
 from assistant.api.errors import ApiError
+from assistant.api.routes import today_brief
 from assistant.api.schemas import (
     ActionOut,
     ChatMessageOut,
@@ -43,7 +44,7 @@ from assistant.db.models_chat import ConversationMessage, Delivery, MessageRole,
 from assistant.db.models_pages import Screen, ScreenKind
 from assistant.db.models_reminders import AppReminderKind, FireState, ReminderFire
 from assistant.db.models_tasks import ListKey, SuggestionKind, Task
-from assistant.pages import lock_user
+from assistant.pages import ensure_default_pages, lock_user
 from assistant.reminders import parse_phrase
 from assistant.reminders import service as reminder_service
 from assistant.reminders.parse import drafts_dicts
@@ -195,6 +196,7 @@ async def _suggestions_out(db: Db, rows: list[Any]) -> list[SuggestionOut]:
 async def today(user: GatedUser, db: Db, ctx: Ctx) -> TodayOut:
     now = _now()
     await lock_user(db, user.id)
+    await ensure_default_pages(db, user.id)  # Ф-48: «Расходы» for older accounts, once
     u = await db.get(User, user.id)
     assert u is not None
     tz = u.tz or "Asia/Almaty"
@@ -214,9 +216,10 @@ async def today(user: GatedUser, db: Db, ctx: Ctx) -> TodayOut:
         _live_tasks().where(Task.user_id == user.id, Task.list_key == ListKey.TODO,
                             Task.due_date.is_not(None), Task.due_date <= day)
         .order_by(Task.due_date, Task.id).limit(TODAY_TASKS)))  # fmt: skip
+    # Ф-49: with the shopping list hidden, no «Купить: …» on «Сегодня» (the things stay)
     shop = list(await db.scalars(
         _live_tasks().where(Task.user_id == user.id, Task.list_key == ListKey.SHOPPING)
-        .order_by(Task.id)))  # fmt: skip
+        .order_by(Task.id))) if tasks.shopping_on() else []  # fmt: skip
     shopping = None
     if shop:
         page = await tasks.list_page(db, user.id, ListKey.SHOPPING)
@@ -261,6 +264,12 @@ async def today(user: GatedUser, db: Db, ctx: Ctx) -> TodayOut:
         ("done_for_you", bool(recent)),
         ("proposals", bool(proposals)), ("tip", tip is not None)) if has]  # fmt: skip
     name = (u.display_name or "").strip()
+    # week 20 (mocks v2): the briefing, by code
+    today_occ = [(r, f) for r, f in occ if f.occurrence_at >= start]
+    brief = await today_brief.build(
+        db, u, now=now, zone=zone, start=start, end=end, today_occ=today_occ,
+        tomorrow_occ=await _occurrences(db, user.id, end, end + timedelta(days=1)),
+        missed=missed)  # fmt: skip
     await db.flush()
     return TodayOut(
         date=day.isoformat(), tz=tz, greeting=f"Добрый день, {name}" if name else "Добрый день",
@@ -275,7 +284,7 @@ async def today(user: GatedUser, db: Db, ctx: Ctx) -> TodayOut:
                                    count_today=count_today),
         banner=banner, proposals=await _suggestions_out(db, proposals),
         tip=(await _suggestions_out(db, [tip]))[0] if tip else None,
-        empty=empty, example=EXAMPLE if empty else None, page_tiles=tiles,
+        empty=empty, example=EXAMPLE if empty else None, page_tiles=tiles, brief=brief,
     )  # fmt: skip
 
 

@@ -143,6 +143,45 @@ async def undo(session: AsyncSession, user_id: int, action_id: uuid.UUID, *, now
     return UndoResult(action, undo_action, out.skipped > 0, False, out.pages, out.items)
 
 
+async def saved_to(session: AsyncSession,
+                   rows: list[Action]) -> dict[int, list[dict[str, Any]]]:  # fmt: skip
+    """Ф-50 «Сохранил в «…» · Переложить»: per action, the live pages its new records (rows with
+    `kind: "create"`) are on now, in tab order, with those records. Read live, so after
+    «Переложить» or «Отменить» it says where they are (or nothing)."""
+    from assistant.db.models import Item
+    from assistant.db.models_pages import ScreenItem, ScreenKind
+
+    want: dict[int, list[str]] = {}
+    for a in rows:
+        ids = [str(c["item_id"]) for c in (a.payload or {}).get("changes", [])
+               if c.get("kind") == "create" and c.get("item_id")]
+        if ids:
+            want[a.id] = list(dict.fromkeys(ids))
+    pids = {uuid.UUID(i) for ids in want.values() for i in ids}
+    if not pids:
+        return {}
+    found = (await session.execute(
+        select(Item.public_id, Screen.public_id, Screen.title, Screen.icon, Screen.template_key)
+        .join(ScreenItem, ScreenItem.item_id == Item.id)
+        .join(Screen, Screen.id == ScreenItem.screen_id)
+        .where(Item.public_id.in_(pids), Item.deleted_at.is_(None),
+               ScreenItem.removed_by_user_at.is_(None), Screen.deleted_at.is_(None),
+               Screen.kind == ScreenKind.PAGE)
+        .order_by(Screen.position, Screen.public_id))).all()  # fmt: skip
+    out: dict[int, list[dict[str, Any]]] = {}
+    for aid, ids in want.items():
+        pages: dict[str, dict[str, Any]] = {}
+        for item_pid, page_pid, title, icon, key in found:
+            if str(item_pid) not in ids:
+                continue
+            row = pages.setdefault(str(page_pid), {"page_id": str(page_pid), "title": title,
+                                                   "icon": icon, "template_key": key,
+                                                   "item_ids": []})  # fmt: skip
+            row["item_ids"].append(str(item_pid))
+        out[aid] = list(pages.values())
+    return out
+
+
 async def actions_dicts(session: AsyncSession, rows: list[Action],
                         now: datetime) -> list[dict[str, Any]]:  # fmt: skip
     screens = {s for a in rows for s in (a.screen_id,) if s}
@@ -163,6 +202,7 @@ async def actions_dicts(session: AsyncSession, rows: list[Action],
     if oids:
         undo_of = dict((await session.execute(
             select(Action.id, Action.public_id).where(Action.id.in_(oids)))).all())  # type: ignore[arg-type]  # fmt: skip
+    where = await saved_to(session, rows)
     out = []
     for a in rows:
         reverted = set(a.payload.get("reverted") or [])
@@ -178,6 +218,7 @@ async def actions_dicts(session: AsyncSession, rows: list[Action],
             "changed_item_ids": list(dict.fromkeys(c["item_id"] for c in changes
                                                    if c.get("item_id"))),
             "created_page_id": a.payload.get("created_page_id"),
+            "saved_to": where.get(a.id, []),
             "undoable": is_undoable(a, now),
             "undoable_until": a.undoable_until.isoformat() if a.undoable_until else None,
             "undone_at": a.undone_at.isoformat() if a.undone_at else None,

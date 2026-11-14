@@ -25,6 +25,7 @@ from tests.chat.test_week6_db import Script, last, router_with, say
 
 pytestmark = [
     pytest.mark.db,
+    pytest.mark.usefixtures("shopping_on"),  # «Покупки» itself (hidden by default, Ф-49)
     pytest.mark.skipif(not os.environ.get("DATABASE_URL"), reason="DATABASE_URL not set"),
 ]
 

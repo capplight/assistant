@@ -82,3 +82,4 @@ async def db_app(tmp_path: Path) -> AsyncIterator[tuple[FastAPI, FakeSmsSender, 
             await check.close()
             await trans.rollback()
     await engine.dispose()
+

@@ -7,6 +7,7 @@ the per-user sync lock first, so neighbours read here can't change before the in
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import func, or_, select, text, update
@@ -424,43 +425,97 @@ async def create_page(
     return page
 
 
+# Default pages added after accounts already existed (Ф-48): made lazily for those accounts.
+LAZY_DEFAULT_KEYS = frozenset({"expenses"})
+
+
+def default_keys(s: Any = None) -> list[str]:
+    """Template keys every account has after «Сегодня» (Ф-35, Ф-48), in tab order."""
+    from assistant.config import get_settings
+
+    s = s or get_settings()
+    return [k for k in s.pages_default_keys if k != "today"]
+
+
+def first_use_keys(s: Any = None) -> list[str]:
+    """Template keys made on their first record (Ф-35, Ф-36): not the default ones, and not
+    «Покупки» while the shopping list is hidden (Ф-49). Empty when `pages_on_first_use` is off."""
+    from assistant.config import get_settings
+
+    s = s or get_settings()
+    if not s.pages_on_first_use:
+        return []
+    default = set(default_keys(s))
+    return [k for k in s.pages_first_use_keys
+            if k not in default and (k != "shopping" or s.feature_shopping)]
+
+
+async def _make_once(session: AsyncSession, user_id: int, key: str) -> Screen | None:
+    """Make the page of `key` unless the person has, had (and removed) or was given one before,
+    or is at the page limit. The caller checked there is no live one."""
+    from assistant.db.models import User
+    from assistant.db.models_pages import MAX_PAGES
+
+    await lock_user(session, user_id)
+    user = await session.get(User, user_id)
+    if user is None or key in (user.pages_first_use or []):
+        return None
+    had = await session.scalar(select(Screen.id).where(Screen.user_id == user_id,
+                                                       Screen.template_key == key).limit(1))
+    if had is not None:
+        return None
+    count = await session.scalar(select(func.count()).select_from(Screen).where(
+        Screen.user_id == user_id, Screen.deleted_at.is_(None))) or 0  # fmt: skip
+    template = await latest_template(session, key)
+    if template is None or count >= MAX_PAGES:
+        return None
+    page = await create_page(session, user_id, template, client_id=uuid.uuid4(),
+                             created_by=ScreenCreatedBy.SYSTEM)  # fmt: skip
+    user.pages_first_use = [*(user.pages_first_use or []), key]
+    await fill_page(session, page)
+    return page
+
+
+async def ensure_default_pages(session: AsyncSession, user_id: int) -> list[Screen]:
+    """Ф-48: an account made before «Расходы» was a default page gets it once, lazily (on
+    `GET /v1/pages`, `/v1/sync`, `/v1/today`), at the end of the tabs. Only after the first launch
+    (`users.onboarding_done_at`); never when the person has or had one (removed stays removed)."""
+    from assistant.db.models import User
+
+    keys = [k for k in default_keys() if k in LAZY_DEFAULT_KEYS]
+    if not keys:
+        return []
+    done = await session.scalar(select(User.onboarding_done_at).where(User.id == user_id))
+    if done is None:
+        return []
+    known = set(await session.scalars(select(Screen.template_key).where(
+        Screen.user_id == user_id, Screen.template_key.in_(keys))))  # fmt: skip
+    made: list[Screen] = []
+    for key in keys:
+        if key in known:
+            continue
+        page = await _make_once(session, user_id, key)
+        if page is not None:
+            made.append(page)
+    return made
+
+
 async def first_use_page(session: AsyncSession, user_id: int,
                          key: str) -> tuple[Screen | None, bool]:  # fmt: skip
     """(the live page of `key` — «shopping», «expenses», «documents» —, made_now). The page is
-    made when this is its first record (Ф-35, Ф-36; settings `pages_on_first_use`,
-    `pages_first_use_keys`).
+    made when this is its first record (Ф-35, Ф-36; `first_use_keys`), and a default page
+    (`default_keys`, Ф-48) the account never had is made the same way.
 
     A page is made once per kind: never when the person has (or had, and removed) one, nor when
     the server made it before, nor over the page limit. Then (None, False), and the caller files
     the record as before. The new page is not part of the record's «Отменить»: it stays.
     """
-    from assistant.config import get_settings
-    from assistant.db.models import User
-    from assistant.db.models_pages import MAX_PAGES
-
     live = await session.scalar(
         select(Screen).where(Screen.user_id == user_id, Screen.template_key == key,
                              Screen.deleted_at.is_(None)).order_by(Screen.id).limit(1))
     if live is not None:
         return live, False
-    s = get_settings()
-    if not s.pages_on_first_use or key not in s.pages_first_use_keys:
+    if key not in default_keys() and key not in first_use_keys():
         return None, False
-    await lock_user(session, user_id)
-    user = await session.get(User, user_id)
-    if user is None or key in (user.pages_first_use or []):
-        return None, False
-    had = await session.scalar(select(Screen.id).where(Screen.user_id == user_id,
-                                                       Screen.template_key == key).limit(1))
-    if had is not None:
-        return None, False
-    count = await session.scalar(select(func.count()).select_from(Screen).where(
-        Screen.user_id == user_id, Screen.deleted_at.is_(None))) or 0  # fmt: skip
-    template = await latest_template(session, key)
-    if template is None or count >= MAX_PAGES:
-        return None, False
-    page = await create_page(session, user_id, template, client_id=uuid.uuid4(),
-                             created_by=ScreenCreatedBy.SYSTEM)  # fmt: skip
-    user.pages_first_use = [*(user.pages_first_use or []), key]
-    await fill_page(session, page)
-    return page, True
+    page = await _make_once(session, user_id, key)
+    return page, page is not None

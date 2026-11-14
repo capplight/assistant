@@ -296,10 +296,17 @@ class Settings(BaseSettings):
     feature_telegram_login: bool = False  # Ф-43: after the public release (not built yet)
     feature_personal_mail: bool = False  # Ф-43: personal forwarding address (not built yet)
     feature_setup_for_other: bool = False  # Ф-44: «Настраиваю для другого человека» until Full
-    # Ф-35, Ф-36: new accounts get «Сегодня», «Заметки», «Дела»; «Покупки», «Расходы»,
-    # «Документы и КП» are made by the server on their first record (once per page kind).
+    # Ф-35, Ф-36, Ф-48: new accounts get «Сегодня» + `pages_default_keys` («Заметки», «Расходы»,
+    # «Дела»; existing accounts get a missing default page once, lazily); «Документы» (and
+    # «Покупки» while `feature_shopping`) are made by the server on their first record (once per
+    # page kind). A key in both lists is a default page.
+    pages_default_keys: list[str] = ["notes", "expenses", "tasks"]
     pages_on_first_use: bool = True
     pages_first_use_keys: list[str] = ["shopping", "expenses", "documents"]
+    # Ф-49: the shopping list is hidden (code kept, Ф-33). Off: «купить молоко» is a to-do on
+    # «Дела» («Купить молоко»), «Покупки» is never made by the server, `today.shopping` is null;
+    # shopping tasks made before stay. A bought thing with a price is an expense as before.
+    feature_shopping: bool = False
 
     # Messages a person sends to the assistant line (week 18, founder 2026-11-12) [proposal:
     # numbers]. By users.profile; a profile without an entry uses `regular`. Only phrases the

@@ -22,7 +22,7 @@ from fastapi import APIRouter, Depends, Query, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from assistant.actions import actions_dicts, engine, record
 from assistant.ai import AIConsentRequired, AIError
@@ -31,9 +31,9 @@ from assistant.api.deps import Ctx, CurrentUser, Db, get_active_consent_kinds
 from assistant.api.errors import ApiError
 from assistant.db.models import Item
 from assistant.db.models_actions import Action, ActionKind, Initiator
-from assistant.db.models_kp import DealStatus, DocKind, DocStatus, Document, DocumentVersion
+from assistant.db.models_kp import DealStatus, DocStatus, Document, DocumentVersion
 from assistant.db.models_tasks import PendingAction, PendingStatus
-from assistant.db.models_v2 import File, FileRole, RecordKind, RecordStatus
+from assistant.db.models_v2 import File, FileRole
 from assistant.kp import docx_render, edit, jobs, patch, pricelist, profile, render, send, service
 from assistant.kp.calc import format_money, money
 from assistant.kp.render import RendererUnavailable
@@ -42,10 +42,8 @@ from assistant.pages import lock_user
 router = APIRouter(prefix="/documents", tags=["kp"])
 GatedUser = Annotated[CurrentUser, Depends(require_base_consent)]
 Kinds = Annotated[frozenset[str], Depends(get_active_consent_kinds)]
-WAITING = frozenset({RecordStatus.PENDING, RecordStatus.PROCESSING})
-SOURCE_KINDS = frozenset({RecordKind.PDF, RecordKind.DOCX, RecordKind.XLSX, RecordKind.IMAGE,
-                          RecordKind.SCREENSHOT, RecordKind.NOTE, RecordKind.VOICE,
-                          RecordKind.EMAIL, RecordKind.TG_MESSAGE})  # fmt: skip
+WAITING = service.WAITING
+SOURCE_KINDS = service.SOURCE_KINDS
 PROGRESS_POLL_S = 1.0
 PROGRESS_MAX_S = 180
 
@@ -106,7 +104,9 @@ async def _full(db: Db, ctx: Ctx, doc: Document, n: int | None = None) -> dict[s
 
 class NewKpIn(BaseModel):
     client_id: uuid.UUID
-    item_ids: list[uuid.UUID] = Field(min_length=1, max_length=10)  # the ТЗ (records)
+    # the ТЗ: records («Сделать КП из этого» on a card / a shared file) and/or `text`
+    item_ids: list[uuid.UUID] = Field(default_factory=list, max_length=10)
+    text: str | None = Field(default=None, max_length=service.REQUEST_MAX)  # the ТЗ said/typed
     wishes: str | None = Field(default=None, max_length=1000)  # the person's words, if any
 
 
@@ -120,6 +120,9 @@ async def new_kp(body: NewKpIn, user: GatedUser, db: Db, ctx: Ctx, kinds: Kinds,
     if first is not None:
         response.status_code = 200
         return {**await _full(db, ctx, first), "repeated": True}
+    text = (body.text or "").strip()
+    if not body.item_ids and not text:
+        raise ApiError(422, "validation_error", details={"field": "item_ids"})
     missing = missing_consents(kinds, AI_CONSENTS)
     if missing or ctx.ai_router is None:
         raise ApiError(403, "consent_required", details={"missing": missing or
@@ -128,23 +131,16 @@ async def new_kp(body: NewKpIn, user: GatedUser, db: Db, ctx: Ctx, kinds: Kinds,
         Item.user_id == user.id, Item.public_id.in_(body.item_ids), Item.deleted_at.is_(None))))
     if len(items) != len(set(body.item_ids)):
         raise ApiError(404, "not_found")
-    if any(i.kind not in SOURCE_KINDS for i in items):
-        raise ApiError(422, "item_kind")
-    if any(i.status in WAITING for i in items):
-        raise ApiError(409, "kp_source_not_ready", details={"retry_after": 2})
-    if not any((i.text or i.raw_text or "").strip() for i in items):
-        raise ApiError(422, "kp_source_empty")
-    tz = await service.user_tz(db, user.id)
-    day_start = now.astimezone(tz).replace(hour=0, minute=0, second=0, microsecond=0)
-    today = await db.scalar(select(func.count()).select_from(Document).where(
-        Document.user_id == user.id, Document.kind == DocKind.KP, Document.ai_generated,
-        Document.created_at >= day_start.astimezone(UTC))) or 0  # fmt: skip
-    if today >= ctx.settings.kp_per_day:
-        raise ApiError(429, "kp_daily_limit")
     order = {pid: i for i, pid in enumerate(body.item_ids)}
     items.sort(key=lambda i: order[i.public_id])
-    created = await service.create(db, user.id, sources=items, wishes=body.wishes,
-                                   client_id=body.client_id, now=now)  # fmt: skip
+    try:
+        if text:
+            items.append(await service.request_record(db, user.id, text))
+        created = await service.start(db, user.id, sources=items, wishes=body.wishes,
+                                      client_id=body.client_id, now=now,
+                                      per_day=ctx.settings.kp_per_day)  # fmt: skip
+    except service.KpError as exc:
+        raise _err(exc) from exc
     await jobs.enqueue(db, created.doc)
     await db.flush()
     return {**await _full(db, ctx, created.doc), "repeated": False}
@@ -165,7 +161,7 @@ async def list_documents(user: GatedUser, db: Db,
 @router.get("/summary")
 async def summary(user: GatedUser, db: Db) -> dict[str, Any]:
     """The card file's dividers and folders («КП 4 · Договоры 2 · Чеки 23»), counted by code over
-    the «Документы и КП» page."""
+    the «Документы» page."""
     from assistant.db.models_pages import Screen, ScreenItem
 
     page = await db.scalar(select(Screen).where(

@@ -529,6 +529,7 @@ async def test_notes_shows_every_note(db_app):
         assert set(await _ids_on(c, h, page["id"])) == {before, after, link}
 
 
+@pytest.mark.usefixtures("shopping_on")
 async def test_notes_leaves_out_receipts_and_tasks_another_page_takes(db_app):
     app, _, s = db_app
     async with client(app) as c:

@@ -70,6 +70,7 @@ from assistant.kp import pricelist as kp_pricelist
 from assistant.kp import profile as kp_profile
 from assistant.kp import send as kp_send
 from assistant.kp import service as kp_service
+from assistant.pages import ensure_default_pages
 from assistant.pages import habits as page_habits
 from assistant.reminders import service as reminder_service
 from assistant.suggestions import engine as suggestions
@@ -93,6 +94,8 @@ async def sync(
     limit: Annotated[int, Query(ge=1, le=500)] = 200,
     full: bool = False,
 ) -> SyncOut:  # fmt: skip
+    if await ensure_default_pages(db, user.id):  # Ф-48: «Расходы» for older accounts, once
+        await db.flush()
     floor = await db.scalar(select(User.sync_floor_seq).where(User.id == user.id)) or 0
     # Tombstones this phone never saw are gone (retention): unless it is paging through a sync
     # that started at 0 (`full=true`), it must start again from scratch.

@@ -31,7 +31,7 @@ from assistant.db.models import User
 from assistant.db.models_actions import Action, ActionKind, Initiator
 from assistant.db.models_pages import MAX_PAGES, Screen, ScreenCreatedBy, ScreenKind
 from assistant.onboarding import DEFAULT_TEMPLATES, MAX_MARKED, suggested_pages
-from assistant.pages import create_page, fill_page, latest_template, lock_user
+from assistant.pages import create_page, default_keys, fill_page, latest_template, lock_user
 
 router = APIRouter(prefix="/onboarding", tags=["onboarding"])
 pages_router = APIRouter(prefix="/pages", tags=["pages"])
@@ -143,8 +143,8 @@ def _keys(body: BatchIn, ctx: Ctx) -> list[str]:
         raise ApiError(422, "validation_error", details={"reason": "path_disabled"})
     if body.path == "blank":
         return ["custom"]
-    if body.path == "skipped":
-        return list(DEFAULT_TEMPLATES)
+    if body.path == "skipped":  # Ф-48: «Заметки», «Расходы», «Дела» (settings.pages_default_keys)
+        return default_keys(ctx.settings)
     keys = [k.strip() for k in body.template_keys]
     if not keys or len(set(keys)) != len(keys):
         raise ApiError(422, "validation_error", details={"reason": "template_keys"})

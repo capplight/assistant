@@ -373,7 +373,9 @@ async def test_sync_brings_expenses_categories_and_the_page_fills(env9, monkeypa
     import assistant.config as config
     from tests.api.conftest import make_settings
 
-    off = make_settings(pages_on_first_use=False)  # the page comes by hand here (week 19: Ф-36)
+    # week 20 (Ф-48): «Расходы» is a default page, so the first expense makes it even with
+    # first-use pages off
+    off = make_settings(pages_on_first_use=False)
     monkeypatch.setattr(config, "get_settings", lambda: off)
     async with client(env9.make_app()) as c:
         h = await signed_in(c)
@@ -384,7 +386,8 @@ async def test_sync_brings_expenses_categories_and_the_page_fills(env9, monkeypa
         assert len(body["expense_categories"]) == 9
         notes = [p for p in (await c.get("/v1/pages", headers=h)).json()["pages"]
                  if p["template_key"] == "notes"]  # fmt: skip
-        page = (await add_page(c, h, "expenses"))["page"]["id"]
+        page = next(p["id"] for p in (await c.get("/v1/pages", headers=h)).json()["pages"]
+                    if p["template_key"] == "expenses")
         rows = await entries(c, h, page)
         assert [e["expense"]["id"] for e in rows if e["expense"]] == [exp["id"]]
         for p in notes:  # «Расходы» takes it now: it leaves «Заметки»
@@ -401,6 +404,7 @@ async def test_sync_brings_expenses_categories_and_the_page_fills(env9, monkeypa
 # --- PATCH /tasks: idempotent by client_id (the phone's undo for «− 2 +») ---
 
 
+@pytest.mark.usefixtures("shopping_on")  # «Покупки» itself (hidden by default, Ф-49)
 async def test_patch_task_repeat_returns_the_first_action(env9):
     async with client(env9.make_app()) as c:
         h = await signed_in(c)

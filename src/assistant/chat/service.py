@@ -53,7 +53,7 @@ from assistant.ai.prompting import TaskInputs, ToolRound
 from assistant.ai.router import Router
 from assistant.ai.store import period_starts
 from assistant.ai.types import ToolResult
-from assistant.chat import jobs, limits, store
+from assistant.chat import jobs, kp_line, limits, store
 from assistant.chat.context import (
     PROMPT_VERSION,
     Assembled,
@@ -137,6 +137,24 @@ TEXT_NOT_CHANGED = {"ru": "Не понял, что изменить. Скажи�
                     "kk": "Не понял, что изменить. Скажите, пожалуйста, ещё раз."}  # fmt: skip
 TEXT_NOTHING_HERE = {"ru": "Здесь пока нет записей.", "kk": "Здесь пока нет записей."}
 TEXT_WHICH = {"ru": "Какую?", "kk": "Какую?"}  # kk: until reviewed (R-39)
+# Ф-50: a КП started from the line (kk: until reviewed, R-39)
+TEXT_KP_STARTED = {"ru": "Готовлю КП — открою, когда будет готово.",
+                   "kk": "КҰ дайындап жатырмын — дайын болғанда ашамын."}  # fmt: skip
+TEXT_KP_WHAT = {"ru": "Что войдёт в КП? Скажите, например: «КП для ТОО Ромашка: 20 светильников, "
+                      "монтаж» — или откройте заявку клиента и скажите «сделай КП из этого».",
+                "kk": "Что войдёт в КП? Скажите, например: «КП для ТОО Ромашка: 20 светильников, "
+                      "монтаж» — или откройте заявку клиента и скажите «сделай КП из этого»."}
+TEXT_KP_WHICH = {"ru": "Из какой записи? Откройте заявку клиента и скажите ещё раз.",
+                 "kk": "Из какой записи? Откройте заявку клиента и скажите ещё раз."}  # fmt: skip
+TEXT_KP_ERRORS = {
+    "kp_daily_limit": {"ru": "На сегодня КП достаточно — продолжу завтра.",
+                       "kk": "На сегодня КП достаточно — продолжу завтра."},
+    "kp_source_not_ready": {"ru": "Файл ещё читаю — скажите через минуту ещё раз.",
+                            "kk": "Файл ещё читаю — скажите через минуту ещё раз."},
+    "kp_source_empty": {"ru": "В этой записи нет текста для КП.",
+                        "kk": "В этой записи нет текста для КП."},
+    "item_kind": {"ru": "Из этой записи КП не сделать.", "kk": "Из этой записи КП не сделать."},
+}
 # Ф-39 (beta): the assistant does not change page views; context.VIEW_OFF_LINE says the same
 TEXT_VIEW_OFF = {"ru": "Так пока не умею — вид страницы меняется в «⋯».",
                  "kk": "Әзірге бұлай істей алмаймын — бет көрінісі «⋯» ішінде өзгереді."}
@@ -537,6 +555,9 @@ class ChatService:
                 else:
                     await self._reminder_draft(run, turn)
                 return
+            if turn.input_kind != "share" and (order := kp_line.read(turn.text)) is not None:
+                await self._start_kp(run, turn, order)  # «сделай КП для …» (Ф-50)
+                return
             if turn.input_kind != "share" and await self._save_expense(run, turn):
                 return  # «потратил 5000 на бензин» → «Расходы», one action (US-31)
             reading = rules_first(turn.text, input_kind=turn.input_kind)
@@ -790,6 +811,54 @@ class ChatService:
                                   [{"name": "expense", "arguments": {}, "error": False,
                                     "by": draft.source}])  # fmt: skip
         return True
+
+    async def _start_kp(self, run: ReplyRun, turn: TurnInput, order: kp_line.KpPhrase) -> None:
+        """«Сделай КП для ТОО Ромашка: 20 светильников, монтаж» / «сделать документ из этого»:
+        a new КП as from the screen (`kp.service.start`: kinds, the daily limit), its ТЗ the
+        rest of the phrase (saved as the person's record) or the record shown / selected. The
+        phone gets `kp_started` and opens the КП (progress as usual). Nothing is sent anywhere."""
+        from assistant.db.models import Item
+        from assistant.kp import jobs as kp_jobs
+        from assistant.kp import service as kp_service
+
+        book = await book_for(self.sessionmaker, turn.user_id, turn.page_pk)
+        m = self._mutation(run, turn, book, False, False)
+        run.emit("tool_activity", {"tool": "kp", "text": "Готовлю КП…", "page_id": None})
+        now = self.clock()
+        doc_id: str | None = None
+        async with self.sessionmaker() as s:
+            try:
+                sources: list[Item] = []
+                if order.from_this:
+                    pk = turn.selected_pk or (turn.visible_pks[0]
+                                              if len(turn.visible_pks) == 1 else None)
+                    row = await s.get(Item, pk) if pk else None
+                    if row is None or row.user_id != turn.user_id or row.deleted_at is not None:
+                        m.note = TEXT_KP_WHICH[turn.lang]
+                    else:
+                        sources = [row]
+                if order.request and m.note is None:
+                    sources.append(await kp_service.request_record(
+                        s, turn.user_id, order.request, voice=turn.input_kind == "voice"))
+                if not sources and m.note is None:
+                    m.note = TEXT_KP_WHAT[turn.lang]
+                if m.note is None:
+                    created = await kp_service.start(
+                        s, turn.user_id, sources=sources, wishes=order.phrase[:1000],
+                        client_id=None, now=now, per_day=self.s.kp_per_day)  # fmt: skip
+                    await kp_jobs.enqueue(s, created.doc)
+                    await s.commit()
+                    doc_id = str(created.doc.public_id)
+                    m.note = TEXT_KP_STARTED[turn.lang]
+            except kp_service.KpError as exc:
+                await s.rollback()
+                m.note = TEXT_KP_ERRORS.get(exc.code, TEXT_NOT_DONE)[turn.lang]
+        if doc_id is not None:
+            run.emit("kp_started", {"reply_id": str(run.reply_id), "document_id": doc_id,
+                                    "from_this": order.from_this})  # fmt: skip
+        await self._finish_change(run, turn, m, Decimal(0),
+                                  [{"name": "kp", "arguments": {"from_this": order.from_this},
+                                    "error": doc_id is None, "by": "code"}])  # fmt: skip
 
     async def _local_today(self, user_id: int) -> tuple[str, Any]:
         from zoneinfo import ZoneInfo
@@ -1152,7 +1221,8 @@ class ChatService:
         run.emit("banner", {"reply_id": str(run.reply_id), "text": text, "preview": preview,
                             "short": preview == " ".join(text.split()),
                             "ai_label": self.ai_label if ai else None,
-                            "citations": citations})  # fmt: skip
+                            "citations": citations,
+                            "value": store.answer_value(text, citations)})  # fmt: skip
 
     async def _limited(self, run: ReplyRun, turn: TurnInput, ctx: Assembled, cost: Decimal,
                        tool_log: list[dict[str, Any]]) -> None:  # fmt: skip

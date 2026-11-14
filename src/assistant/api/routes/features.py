@@ -1,4 +1,4 @@
-"""/v1/features: what the app shows for the beta (founder 2026-11-13, Ф-33...Ф-44). Contract:
+"""/v1/features: what the app shows for the beta (founder 2026-11-13, Ф-33...Ф-49). Contract:
 docs/api/features.md.
 
 Hidden, not deleted (Ф-33): every switch is a setting (`feature_*`, `today_*`, `pages_*` in
@@ -10,7 +10,7 @@ from fastapi import APIRouter, Response
 from pydantic import BaseModel
 
 from assistant.api.deps import Ctx
-from assistant.onboarding import DEFAULT_TEMPLATES
+from assistant.pages import default_keys, first_use_keys
 
 router = APIRouter(prefix="/features", tags=["features"])
 
@@ -36,6 +36,7 @@ class FeaturesOut(BaseModel):
     telegram_login: bool  # Ф-43
     personal_mail: bool  # Ф-43
     setup_for_other: bool  # Ф-44
+    shopping: bool  # Ф-49: off = no «Покупки» page, no «Я в магазине»; «купить …» is a to-do
     consent_screen: str  # Ф-34: the `screen` the app sends with the consents
     today: TodayFeaturesOut  # Ф-42
     pages: PagesFeaturesOut  # Ф-35, Ф-36
@@ -50,11 +51,10 @@ async def features(ctx: Ctx, response: Response) -> FeaturesOut:
         board=s.feature_board, assistant_views=s.feature_assistant_views,
         page_settings_full=s.feature_page_settings_full,
         telegram_login=s.feature_telegram_login, personal_mail=s.feature_personal_mail,
-        setup_for_other=s.feature_setup_for_other, consent_screen="welcome",
+        setup_for_other=s.feature_setup_for_other, shopping=s.feature_shopping,
+        consent_screen="welcome",
         today=TodayFeaturesOut(tips_days=s.today_tips_days, tips_per_day=s.today_tips_per_day,
                                proposals=s.feature_today_proposals,
                                tiles=s.feature_today_tiles),
-        pages=PagesFeaturesOut(default=["today", *DEFAULT_TEMPLATES],
-                               first_use=list(s.pages_first_use_keys)
-                               if s.pages_on_first_use else []),
+        pages=PagesFeaturesOut(default=["today", *default_keys(s)], first_use=first_use_keys(s)),
     )  # fmt: skip

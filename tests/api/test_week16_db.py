@@ -22,6 +22,7 @@ from tests.chat.test_chat_db import BASE, env, record, signed_in  # noqa: F401  
 
 pytestmark = [
     pytest.mark.db,
+    pytest.mark.usefixtures("shopping_on"),  # «Покупки» itself (hidden by default, Ф-49)
     pytest.mark.skipif(not os.environ.get("DATABASE_URL"), reason="DATABASE_URL not set"),
 ]
 # Week 19 (Ф-42): tiles, proposals and tips after the first week are off for the beta; these
@@ -156,7 +157,7 @@ async def test_gallery_blank_skipped_catalog_and_errors(env):  # noqa: F811
         r = await c.post("/v1/pages/batch", json={"client_id": str(uuid.uuid4()),
                                                    "path": "skipped"}, headers=h)  # fmt: skip
         assert r.json()["existing"][0]["template_key"] == "notes"
-        assert _titles(r) == ["tasks"] and r.json()["pages"][0]["created_by"] == \
+        assert _titles(r) == ["expenses", "tasks"] and r.json()["pages"][0]["created_by"] == \
             "onboarding_skipped"  # fmt: skip
         assert r.json()["onboarding"]["path"] == "blank"  # the first choice stays
         r = await c.post("/v1/pages/batch", json={"client_id": str(uuid.uuid4()),

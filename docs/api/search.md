@@ -35,7 +35,11 @@ The search makes no AI provider calls and sends nothing abroad, so it works in �
       "matched_by": ["words", "meaning"]
     }
   ],
-  "semantic": true
+  "semantic": true,
+  "answer": {"value": "4512", "item_id": "0190b1c2-...", "title": "Домофон",
+             "context": "Код домофона 4512, подъезд 3",
+             "pages": [{"id": "0190...", "title": "Заметки", "icon": "documents"}],
+             "occurred_at": "2026-03-02T08:15:00Z"}
 }
 ```
 
@@ -49,6 +53,13 @@ The search makes no AI provider calls and sends nothing abroad, so it works in �
 - `matched_by`, in any order: `words` (the words or their forms), `typo` (a close spelling),
   `meaning` (by meaning only). Use it to split «Нашёл» from «Нашёл ещё» (US-5): a hit whose only
   value is `meaning` belongs under «Нашёл ещё».
+- `answer` (week 20, Ф-50 «ответ значением»): when the question asks for a value («код от
+  домофона», «номер окулиста», «размер обуви сына», «пароль от вайфая», «день рождения мамы»)
+  and one of the first 3 hits matched by words has a value written next to the words asked about
+  (same line, ≤60 chars): `value` as written in the record, its source `item_id` (also in
+  `results`), `context` (the record's line). Show `value` big with «Скопировать» and «Источник:
+  {pages[0].title} · {date}», `results` under «Ещё нашлось». Code only, no model; `null` = show the
+  list as before.
 - `semantic`: `false` means the search by meaning did not run this time (service down or slow; the
   answer is words and typos only, spec 8.1). Not an error. Nothing to show the person.
 

@@ -77,6 +77,7 @@ from assistant.kp import service as kp_service
 from assistant.pages import (
     add_link,
     create_page,
+    ensure_default_pages,
     fill_page,
     habits,
     latest_template,
@@ -255,6 +256,8 @@ def _with_action(page: Screen, action: ActionOut | None) -> PageWithActionOut:
 
 @router.get("", response_model=PageListOut)
 async def list_pages(user: GatedUser, db: Db) -> PageListOut:
+    if await ensure_default_pages(db, user.id):  # Ф-48: «Расходы» for older accounts, once
+        await db.flush()
     rows = await db.scalars(
         select(Screen)
         .where(Screen.user_id == user.id, Screen.deleted_at.is_(None))

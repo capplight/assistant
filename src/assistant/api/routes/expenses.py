@@ -23,6 +23,9 @@ from assistant.api.errors import ApiError
 from assistant.api.schemas import (
     ActionOut,
     AggregateOut,
+    BudgetEnvelopeOut,
+    BudgetIn,
+    BudgetOut,
     CategoriesChangedOut,
     CategoriesOut,
     CategoryChangedOut,
@@ -237,7 +240,50 @@ async def aggregate(
                                  category=cat)  # fmt: skip
     except ValueError as exc:
         raise ApiError(422, "validation_error", details={"field": "period"}) from exc
-    return aggregate_out(t, period, group_by)
+    out = aggregate_out(t, period, group_by)
+    if period == "month" and category_id is None:
+        b = service.budget_dict(await service.budget(db, user.id, day or today))
+        out.budget = BudgetOut.model_validate(b) if b else None
+    return out
+
+
+# --- the monthly budget (week 20, mocks v2: «Осталось 33 600 ₸ из 120 000») ---
+
+
+async def _budget_out(db: Db, user_id: int) -> BudgetEnvelopeOut:
+    b = await service.budget(db, user_id, await local_today(db, user_id))
+    return BudgetEnvelopeOut.model_validate({"budget": service.budget_dict(b)})
+
+
+@router.get("/budget", response_model=BudgetEnvelopeOut, response_model_by_alias=True)
+async def get_budget(user: GatedUser, db: Db) -> BudgetEnvelopeOut:
+    return await _budget_out(db, user.id)
+
+
+@router.put("/budget", response_model=BudgetEnvelopeOut, response_model_by_alias=True)
+async def put_budget(body: BudgetIn, user: GatedUser, db: Db) -> BudgetEnvelopeOut:
+    """Set the month's budget (a setting: no «Отменить»; set it again or clear it)."""
+    raw = "".join(body.amount.replace(",", ".").split())
+    try:
+        amount = calc.money(raw)
+    except (ValueError, ArithmeticError) as exc:
+        raise ApiError(422, "validation_error", details={"field": "amount"}) from exc
+    if not (0 < amount <= service.BUDGET_MAX):
+        raise ApiError(422, "validation_error", details={"field": "amount"})
+    u = await db.get(User, user.id)
+    assert u is not None
+    u.expense_budget, u.expense_budget_currency = amount, body.currency
+    await db.flush()
+    return await _budget_out(db, user.id)
+
+
+@router.delete("/budget", response_model=BudgetEnvelopeOut, response_model_by_alias=True)
+async def delete_budget(user: GatedUser, db: Db) -> BudgetEnvelopeOut:
+    u = await db.get(User, user.id)
+    assert u is not None
+    u.expense_budget = None
+    await db.flush()
+    return BudgetEnvelopeOut(budget=None)
 
 
 def aggregate_out(t: service.Totals, period: str, group_by: str | None) -> AggregateOut:

@@ -82,7 +82,10 @@ async def test_welcome_consents_and_default_pages(env):  # noqa: F811
         assert {r["screen"] for r in rows} == {"welcome"}
         assert {r["kind"] for r in rows} == {str(k) for k in AI}
         assert all(r["text_hash"] and r["version"] for r in rows)
-        assert set(await _pages(c, h)) == {"today", "notes", "tasks"}
+        pages = await _pages(c, h)  # Ф-48: «Расходы» is a default page, between the two
+        assert set(pages) == {"today", "notes", "expenses", "tasks"}
+        assert [p["template_key"] for p in sorted(pages.values(), key=lambda p: p["position"])
+                if p["template_key"] != "today"] == ["notes", "expenses", "tasks"]
         # the gate is as before: «Без ИИ» from welcome too
         import secrets
 
@@ -109,6 +112,7 @@ async def _shop(c, h, title: str) -> dict:  # type: ignore[no-untyped-def]
     return r.json()
 
 
+@pytest.mark.usefixtures("shopping_on")
 async def test_shopping_page_on_the_first_thing_to_buy_once(env):  # noqa: F811
     async with client(env.make_app()) as c:
         h = await _first_launch(c)
@@ -148,20 +152,20 @@ async def test_shopping_page_on_the_first_thing_to_buy_once(env):  # noqa: F811
 async def test_expenses_and_documents_pages_on_first_use(env):  # noqa: F811
     async with client(env.make_app()) as c:
         h = await _first_launch(c)
+        expenses = (await _pages(c, h))["expenses"]  # Ф-48: there from the first launch
+        assert expenses["created_by"] == "onboarding_skipped"
         r = await c.post("/v1/expenses", json={"client_id": str(uuid.uuid4()), "amount": "5000",
                                                "note": "Бензин"}, headers=h)  # fmt: skip
         assert r.status_code == 201, r.text
         body = r.json()
         pages = await _pages(c, h)
-        assert "expenses" in pages
         assert body["expense"]["item_id"] in {
             e["item"]["id"] for e in await entries(c, h, pages["expenses"]["id"])}
-        made = [x for x in body["action"]["changes"] if x["kind"] == "create_page"]
-        assert made and made[0]["page_id"] == pages["expenses"]["id"]
-        # not on «Заметки»: «Расходы» took it before the record was placed
+        assert not [x for x in body["action"]["changes"] if x["kind"] == "create_page"]
+        assert [s["page_id"] for s in body["action"]["saved_to"]] == [expenses["id"]]
         notes = await entries(c, h, pages["notes"]["id"])
         assert body["expense"]["item_id"] not in {e["item"]["id"] for e in notes}
-        # the first КП makes «Документы и КП»
+        # the first КП makes «Документы» (Ф-51: the new name)
         from assistant.kp import service as kp
 
         uid = await _uid(c, env.maker, h)
@@ -169,13 +173,14 @@ async def test_expenses_and_documents_pages_on_first_use(env):  # noqa: F811
             await kp.create(s, uid, sources=[], wishes=None, client_id=uuid.uuid4(),
                             now=datetime.now(UTC))  # fmt: skip
             await s.commit()
-        assert "documents" in await _pages(c, h)
+        docs = (await _pages(c, h))["documents"]
+        assert docs["title"] == "Документы"
 
 
 async def test_first_use_switch_off(env, monkeypatch):  # noqa: F811
     import assistant.config as config
 
-    off = make_settings(pages_on_first_use=False)
+    off = make_settings(pages_on_first_use=False, feature_shopping=True)
     monkeypatch.setattr(config, "get_settings", lambda: off)
     async with client(env.make_app()) as c:
         h = await _first_launch(c)
@@ -387,6 +392,7 @@ async def _entry_ids(c, h, pid: str) -> set[str]:  # type: ignore[no-untyped-def
     return {e["item"]["id"] for e in await entries(c, h, pid)}
 
 
+@pytest.mark.usefixtures("shopping_on")
 async def test_milk_said_on_notes_goes_to_shopping(env):  # noqa: F811
     from assistant.tasks import TasksReply
     from assistant.tasks.parse import TaskLine

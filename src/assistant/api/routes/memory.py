@@ -15,6 +15,7 @@ from assistant.api.schemas import (
     ItemFileOut,
     PageRefOut,
     PageSummaryOut,
+    SearchAnswerOut,
     SearchHitOut,
     SearchOut,
 )
@@ -28,7 +29,9 @@ from assistant.memory import (
     OriginalFacts,
     OriginalFate,
     StorageFlags,
+    asks_value,
     embed_query,
+    find_value,
     original_fate,
     search_records,
 )
@@ -91,7 +94,43 @@ async def search(
         min_similarity=settings.search_vector_min_similarity, screen_id=screen_id,
         kind=str(kind) if kind else None, start=_aware(start), end=_aware(end), limit=limit,
     )  # fmt: skip
-    return SearchOut(results=[_hit_out(h) for h in result.hits], semantic=result.semantic)
+    return SearchOut(results=[_hit_out(h) for h in result.hits], semantic=result.semantic,
+                     answer=await _answer(db, user.id, q, result.hits))
+
+
+ANSWER_HITS = 3
+NL = chr(10)
+
+
+def _context(text: str, start: int) -> str:
+    line_start = text.rfind(NL, 0, start) + 1
+    line_end = text.find(NL, start)
+    line = text[line_start:line_end if line_end >= 0 else len(text)].strip()
+    return line if len(line) <= 160 else line[:159].rstrip() + "…"
+
+
+async def _answer(db: Db, user_id: int, q: str, hits: list[Hit]) -> SearchAnswerOut | None:
+    """«код от домофона» → «4512» from the best of the first hits matched by words (code only,
+    no model; Ф-50). None when the question does not ask for a value or no record has one."""
+    if not hits or not asks_value(q):
+        return None
+    top = [h for h in hits[:ANSWER_HITS] if set(h.matched_by) & {"words", "typo"}]
+    if not top:
+        return None
+    rows = {pid: (title, body) for pid, title, body in await db.execute(
+        select(Item.public_id, Item.title, Item.text).where(
+            Item.user_id == user_id, Item.public_id.in_([h.item_id for h in top])))}
+    for h in top:
+        title, body = rows.get(h.item_id, (None, None))
+        text = NL.join(x for x in (title, body) if x)
+        found = find_value(q, text)
+        if found is not None:
+            return SearchAnswerOut(
+                value=found.text, item_id=h.item_id, title=h.title,
+                context=_context(text, found.start),
+                pages=[PageRefOut(id=p.id, title=p.title, icon=p.icon) for p in h.pages],
+                occurred_at=h.occurred_at)  # fmt: skip
+    return None
 
 
 @pages_router.get("/{page_id}/summary", response_model=PageSummaryOut)

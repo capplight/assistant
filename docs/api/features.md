@@ -22,10 +22,11 @@ every feature as off.
   "telegram_login": false,
   "personal_mail": false,
   "setup_for_other": false,
+  "shopping": false,
   "consent_screen": "welcome",
   "today": {"tips_days": 7, "tips_per_day": 1, "proposals": false, "tiles": false},
-  "pages": {"default": ["today", "notes", "tasks"],
-            "first_use": ["shopping", "expenses", "documents"]}
+  "pages": {"default": ["today", "notes", "expenses", "tasks"],
+            "first_use": ["documents"]}
 }
 ```
 
@@ -39,17 +40,20 @@ every feature as off.
 | `telegram_login` | `FEATURE_TELEGRAM_LOGIN` | off | Ф-43 | Report only (not built yet). Telegram import from a file stays. |
 | `personal_mail` | `FEATURE_PERSONAL_MAIL` | off | Ф-43 | Report only (not built yet). |
 | `setup_for_other` | `FEATURE_SETUP_FOR_OTHER` | off | Ф-44 | Report only: no «Настраиваю для другого человека» on the first screen. |
+| `shopping` | `FEATURE_SHOPPING` | off | Ф-49 (week 20) | Off: no «Покупки» page and no «Я в магазине». Every new thing to buy (the line «купить молоко, хлеб», `POST /v1/tasks` with `list_key: "shopping"`) is a to-do on «Дела»: `list_key: "todo"`, title «Купить молоко» (qty / where appended: «Купить хлеб, 2 шт»). «Покупки» is never made by the server; `GET /v1/today` has `today.shopping: null`. Shopping tasks made before stay (no data is deleted). «купил молоко за 600» is an expense on «Расходы» as before. |
 | `consent_screen` | — | `welcome` | Ф-34 | The `screen` value for `POST /v1/consents` sent by «Начать» (`auth.md`). |
 | `today.tips_days` | `TODAY_TIPS_DAYS` | 7 | Ф-42 | No tip once the account is this many days old (0 = no age limit). |
 | `today.tips_per_day` | `TODAY_TIPS_PER_DAY` | 1 | Ф-42 | At most this many tips a day (caps the R-35 numbers). |
 | `today.proposals` | `FEATURE_TODAY_PROPOSALS` | off | Ф-42 | `GET /v1/today` / `GET /v1/suggestions`: `proposals: []`, none are made (data and page proposals). |
 | `today.tiles` | `FEATURE_TODAY_TILES` | off | Ф-42 | `GET /v1/today`: `page_tiles: []` (pinned ones too). `PUT …/today-tile` still saves. |
-| `pages.default` | — | today, notes, tasks | Ф-35 | «Сегодня» comes with the account; «Заметки» + «Дела» are made by `POST /v1/pages/batch` `{"path": "skipped"}` (`onboarding.md`). |
-| `pages.first_use` | `PAGES_ON_FIRST_USE`, `PAGES_FIRST_USE_KEYS` | shopping, expenses, documents | Ф-35, Ф-36 | See below. Empty when `PAGES_ON_FIRST_USE=false`. |
+| `pages.default` | `PAGES_DEFAULT_KEYS` | today, notes, expenses, tasks | Ф-35, Ф-48 | «Сегодня» comes with the account; «Заметки», «Расходы», «Дела» (in this tab order) are made by `POST /v1/pages/batch` `{"path": "skipped"}` (`onboarding.md`). An account made before Ф-48 gets «Расходы» once, lazily: the first `GET /v1/pages`, `/v1/sync` or `/v1/today` after its first launch adds it at the end of the tabs (`created_by: "system"`; it reaches the phone by sync). Never when the person has or had one (removed stays removed). |
+| `pages.first_use` | `PAGES_ON_FIRST_USE`, `PAGES_FIRST_USE_KEYS` | documents (+ shopping with `shopping` on) | Ф-35, Ф-36, Ф-49 | See below. A default page is never listed here. Empty when `PAGES_ON_FIRST_USE=false`. |
 
 ## Pages made on first use (Ф-35, Ф-36)
 
-«Покупки», «Расходы», «Документы и КП» are not made on the first launch. The server makes one when
+Week 20: «Расходы» is a default page (Ф-48) and «Покупки» is hidden (Ф-49), so only «Документы»
+(Ф-51: was «Документы и КП») is made this way by default. «Покупки» (with `shopping` on),
+«Документы» are not made on the first launch. The server makes one when
 its first record arrives, from any path (the line, `POST /v1/tasks`, `POST /v1/expenses`, a
 receipt, a КП):
 

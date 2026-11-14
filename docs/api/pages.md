@@ -295,11 +295,16 @@ rules.
 
 ### Pages made on first use (week 19, Ф-35, Ф-36)
 
-`pages.first_use_page(session, user_id, key)`: «Покупки» (first thing to buy), «Расходы» (first
-expense), «Документы и КП» (first КП) are made by the server when missing — once per kind, never
+`pages.first_use_page(session, user_id, key)`: «Покупки» (first thing to buy, only with
+`FEATURE_SHOPPING`, Ф-49), «Расходы» (first expense, if the account has none), «Документы» (first
+КП) are made by the server when missing — once per kind, never
 after the person removed one (`users.pages_first_use`, migration 0025), never over 20 pages;
 `created_by: "system"`, then `fill_page`. Switches `PAGES_ON_FIRST_USE`, `PAGES_FIRST_USE_KEYS`.
 Contract for the app: `features.md`.
+Week 20 (Ф-48): `pages.ensure_default_pages` adds «Расходы» once to an account made before it was
+a default page (on `GET /v1/pages`, `/v1/sync`, `/v1/today`, after the first launch only).
+Ф-51 (migration 0026): the template is «Документы» / «Құжаттар»; pages still called «Документы и
+КП» were renamed, a name the person chose stays.
 
 ## Ordering keys (LexoRank)
 
@@ -426,7 +431,7 @@ person can put it back: «Отменить», «Показать ещё на…�
 ```json
 {"removed": true, "repeated": false, "link": PageItemOut, "action": Action,
  "page_patch": PagePatch,
- "still_on": [{"id": "uuid", "title": "Документы и КП", "icon": "documents"}]}
+ "still_on": [{"id": "uuid", "title": "Документы", "icon": "documents"}]}
 ```
 `still_on`: live pages that still show it («Запись осталась в поиске и на странице …»).
 Errors: `404 not_found` · `403 page_system`.

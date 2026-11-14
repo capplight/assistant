@@ -102,7 +102,7 @@ def view(s: Suggestion, item_public_id: uuid.UUID | None = None) -> dict[str, An
                    f"Сделать страницу «{title}»?")  # fmt: skip
         yes, do = "Да, сделать", {"type": "accept"}
     elif s.key == "add_documents_page":
-        text_ru, yes = "Добавить страницу «Документы и КП»?", "Да, добавить"
+        text_ru, yes = "Добавить страницу «Документы»?", "Да, добавить"
         do = {"type": "accept"}
     else:
         text_ru, yes, do = "", "Да", {"type": "none"}

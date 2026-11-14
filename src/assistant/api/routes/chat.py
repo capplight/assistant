@@ -7,11 +7,12 @@ background; these handlers only start it, stream its events and read saved messa
 import json
 import uuid
 from collections.abc import AsyncIterator
-from typing import Annotated, Any
+from datetime import UTC, datetime
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Header, Query, Response
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 
 from assistant.ai import ai_consent_providers
@@ -19,12 +20,15 @@ from assistant.api.consent_gate import ConsentRequired, require_ai_consent, requ
 from assistant.api.deps import Ctx, CurrentUser, Db
 from assistant.api.errors import ApiError
 from assistant.api.schemas import (
+    ActionOut,
     ChatMessageIn,
     ChatMessageOut,
     ChatMessagesOut,
     DeliveryIn,
     FeedbackIn,
     FeedbackOut,
+    HistoryEntryOut,
+    HistoryOut,
     PendingBannerOut,
 )
 from assistant.chat import ChatRequest, ChatService, RateLimited, store
@@ -41,6 +45,7 @@ from assistant.db.models_chat import (
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 feedback_router = APIRouter(prefix="/feedback", tags=["chat"])
+history_router = APIRouter(prefix="/history", tags=["chat"])
 AiUser = Annotated[CurrentUser, Depends(require_ai_consent)]
 BaseUser = Annotated[CurrentUser, Depends(require_base_consent)]
 
@@ -224,3 +229,118 @@ async def post_feedback(body: FeedbackIn, user: BaseUser, db: Db,
         raise ApiError(409, "conflict") from exc
     await db.refresh(row)
     return FeedbackOut(id=row.public_id, created_at=row.created_at)
+
+
+# --- «История» (Ф-50): «Переписка» + «Что я сделал» in one feed ---
+
+# A turn = a phrase the person sent (its answer and the action it caused come along); an action
+# entry = a change made without a phrase (a tick, a move by hand, «Отменить», a form) or whose
+# phrase is gone («Очистить переписку»). One keyset over both, newest first.
+_HISTORY_SQL = """
+SELECT kind, id, at FROM (
+    SELECT 'turn' AS kind, m.id, m.created_at AS at FROM conversation_messages m
+    WHERE m.user_id = :u AND m.role = 'user' AND m.deleted_at IS NULL {turn_filter}
+    UNION ALL
+    SELECT 'action' AS kind, a.id, a.created_at AS at FROM actions a
+    WHERE a.user_id = :u {action_filter} AND NOT EXISTS (
+        SELECT 1 FROM conversation_messages r
+        WHERE r.id = a.message_id AND r.deleted_at IS NULL
+          AND (r.role = 'user' OR r.reply_to_id IS NOT NULL))
+) e
+{before}
+ORDER BY at DESC, kind DESC, id DESC
+LIMIT :n
+"""
+_REPLY = ("SELECT 1 FROM conversation_messages r WHERE r.reply_to_id = m.id "
+          "AND r.role = 'assistant' AND r.deleted_at IS NULL")
+_FILTERS = {
+    "all": ("", ""),
+    "changes": (f"AND EXISTS ({_REPLY} AND cardinality(r.action_ids) > 0)", ""),
+    "questions": (f"AND NOT EXISTS ({_REPLY} AND (cardinality(r.action_ids) > 0 "
+                  "OR jsonb_typeof(r.proposal) = 'object'))", "AND false"),
+    "waiting": (f"AND EXISTS ({_REPLY} AND r.proposal ->> 'state' = 'open' "
+                "AND CAST(r.proposal ->> 'expires_at' AS timestamptz) > now())", "AND false"),
+}
+
+
+def _status(action: dict | None, answer: dict | None) -> str:
+    if action is not None:
+        return "undone" if action.get("undone_at") else "done"
+    if answer is None:
+        return "pending"
+    if (answer.get("proposal") or {}).get("state") == "open":
+        return "waiting"
+    state = answer.get("state")
+    return {"pending": "pending", "deferred": "deferred", "failed": "failed"}.get(
+        state or "", "answered")
+
+
+@history_router.get("", response_model=HistoryOut)
+async def history(
+    user: BaseUser, db: Db, ctx: Ctx, before: uuid.UUID | None = None,
+    only: Literal["all", "changes", "questions", "waiting"] = "all",
+    limit: Annotated[int, Query(ge=1, le=50)] = 30,
+) -> HistoryOut:  # fmt: skip
+    """«Всё · Изменения · Вопросы · Ждут»: newest first; `before` = the `id` of the last entry
+    shown (a phrase or an action of this person, else 404)."""
+    from assistant.actions import actions_dicts
+    from assistant.db.models_actions import Action
+
+    params: dict[str, Any] = {"u": user.id, "n": limit + 1}
+    cursor = ""
+    if before is not None:
+        msg = await store.by_public_id(db, user.id, before)
+        if msg is not None and msg.role == MessageRole.USER:
+            params.update(bk="turn", bid=msg.id, bat=msg.created_at)
+        else:
+            act = await db.scalar(select(Action).where(Action.user_id == user.id,
+                                                       Action.public_id == before))
+            if act is None:
+                raise ApiError(404, "not_found")
+            params.update(bk="action", bid=act.id, bat=act.created_at)
+        cursor = "WHERE (at, kind, id) < (:bat, :bk, :bid)"
+    turn_filter, action_filter = _FILTERS[only]
+    rows = (await db.execute(text(_HISTORY_SQL.format(
+        turn_filter=turn_filter, action_filter=action_filter, before=cursor)), params)).all()
+    more, rows = len(rows) > limit, rows[:limit]
+    turn_pks = [r.id for r in rows if r.kind == "turn"]
+    said: dict[int, ConversationMessage] = {}
+    if turn_pks:
+        said = {m.id: m for m in await db.scalars(
+            select(ConversationMessage).where(ConversationMessage.id.in_(turn_pks)))}
+    replies: dict[int, ConversationMessage] = {}
+    if turn_pks:
+        for r in await db.scalars(
+                select(ConversationMessage)
+                .where(ConversationMessage.reply_to_id.in_(turn_pks),
+                       ConversationMessage.role == MessageRole.ASSISTANT,
+                       ConversationMessage.deleted_at.is_(None))
+                .order_by(ConversationMessage.id.desc())):  # fmt: skip
+            replies[r.reply_to_id] = r  # type: ignore[index]  # the first answer wins
+    msgs = [*said.values(), *replies.values()]
+    out_msgs = {m.id: d for m, d in zip(msgs, await store.messages_dicts(
+        db, msgs, ctx.settings.label_ai_generated), strict=True)}  # fmt: skip
+    action_pks = [r.id for r in rows if r.kind == "action"]
+    acts: list[Action] = []
+    if action_pks:
+        acts = list(await db.scalars(select(Action).where(Action.id.in_(action_pks))))
+    out_acts = {a.id: d for a, d in zip(acts, await actions_dicts(db, acts, datetime.now(UTC)),
+                                        strict=True)}  # fmt: skip
+    entries: list[HistoryEntryOut] = []
+    for r in rows:
+        if r.kind == "turn":
+            m = said[r.id]
+            reply = replies.get(m.id)
+            answer = out_msgs.get(reply.id) if reply is not None else None
+            action = (answer or {}).get("action")
+            entries.append(HistoryEntryOut(
+                id=m.public_id, kind="turn", status=_status(action, answer), at=m.created_at,
+                said=ChatMessageOut.model_validate(out_msgs[m.id]),
+                answer=ChatMessageOut.model_validate(answer) if answer else None,
+                action=ActionOut.model_validate(action) if action else None))  # fmt: skip
+        else:
+            d = out_acts[r.id]
+            entries.append(HistoryEntryOut(
+                id=uuid.UUID(d["id"]), kind="action", status=_status(d, None), at=r.at,
+                said=None, answer=None, action=ActionOut.model_validate(d)))  # fmt: skip
+    return HistoryOut(entries=entries, has_more=more)

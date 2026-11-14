@@ -215,7 +215,7 @@ runs the suggestion engine (below), so call it when the tab is shown, not in the
 | `sections` | Order to show them in (6.9): `missed` and `today` first when there is anything due or missed; empty sections are left out. Ignore names you don't know. |
 | `today.reminders` | Occurrences of live normal reminders on today's local date, by time. |
 | `today.tasks` | To-dos not done with `due_date` ≤ today (overdue first), at most 20. |
-| `today.shopping` | Not-bought shopping tasks: count and the first 5 titles («Покупки: хлеб, молоко (3)»); `page_id` of «Покупки» or null. Null when there are none. |
+| `today.shopping` | Null while the shopping list is hidden (`features.shopping`, Ф-49). Otherwise not-bought shopping tasks: count and the first 5 titles («Покупки: хлеб, молоко (3)»); `page_id` of «Покупки» or null. Null when there are none. |
 | `missed` | `missed` occurrences of the last 24 h not acked since: a red row «Пропущено 10:00 · Позвонить Ерлану» [Сделано] (= event `acked` on that fire, see `reminders.md`) [Перенести] (S13 → `PATCH /v1/reminders/{id}`). |
 | `done_for_you` | Up to 3 newest actions of the assistant (`initiated_by: "agent"`) of the last 24 h, not undone; `count_today` all of them today. «Что я сделал ›» opens the full list. |
 | `banner` | The answer waiting for the person (`GET /v1/chat/pending-banner`), or null. |
@@ -311,3 +311,45 @@ not_found` · `410 suggestion_expired` («Это предложение уже �
 `suggestions: [Suggestion]` (status changes too: hide `accepted`, `dismissed`, `expired`),
 `pending_actions: [PendingAction]` (`actions.md`; always empty in week 9), `habits: [Habit]`
 (`pages.md`).
+
+## The briefing: `brief` in `GET /v1/today` (week 20, mocks v2, Ф-55)
+
+«Сегодня» is a morning / day / evening briefing. Everything is counted and worded by code (no
+model call); texts in `ru` and `kk` (kk until reviewed).
+
+```json
+"brief": {
+  "part": "morning",
+  "headline": {"ru": "Доброе утро · 5 дел", "kk": "Қайырлы таң · 5 іс"},
+  "lines": {"ru": ["Спокойный день.", "Таблетка в 9:00, в 14:30 — забрать Алию.",
+                   "Потрачено 18 400 ₸, в бюджете ещё 41 600 ₸."], "kk": ["…"]},
+  "metrics": {
+    "tasks": {"done": 1, "total": 5, "next_time": "09:00", "next_title": "Таблетка"},
+    "spent": {"currency": "KZT", "today": "18400.00", "count_today": 3, "month": "86400.00",
+              "budget": Budget | null},
+    "reminders": {"today": 2, "next_time": "09:00"},
+    "tomorrow": {"count": 3, "first_time": "10:00", "first_title": "Позвонить папе"},
+    "new_records": {"count": 4, "since": "2026-11-11T19:00:00Z", "period": "yesterday"}
+  },
+  "plan": [{"kind": "reminder", "title": "Таблетка", "time": "09:00", "at": "…", "done": true,
+            "missed": false, "reminder_id": "0194…", "task_id": null, "item_id": null},
+           {"kind": "task", "title": "Купить молоко", "time": null, "at": null, "done": false,
+            "missed": false, "reminder_id": null, "task_id": "0194…", "item_id": "0193…"}],
+  "waiting": [{"kind": "missed", "title": "Позвонить в банк", "text_ru": "пропущено вчера в 12:00",
+               "at": "…", "reminder_id": "0194…", "task_id": null, "item_id": null,
+               "message_id": null}]
+}
+```
+
+| Field | Notes |
+|---|---|
+| `part` | `morning` (before 12:00 local), `day` (12–18), `evening` (from 18:00). |
+| `headline`, `lines` | Ready text: headline + ≤3 lines (mood; what is next / left / tomorrow; money). Only numbers code counted. |
+| `metrics.tasks` | The day's things = today's reminder occurrences + to-dos due today (done or not); `next_*` = the next open one. |
+| `metrics.spent` | Today and this month in the budget's currency (KZT without a budget); `budget` = Budget (`expenses.md`) or null. |
+| `metrics.reminders` / `tomorrow` | Today's occurrences and the next time; tomorrow's reminders + to-dos due tomorrow. |
+| `metrics.new_records` | Records added (not to-dos, expenses, КП) since yesterday's start in the morning, since midnight later (`period`). |
+| `plan` | The time-ordered day plan: reminders by time, then «без времени» to-dos. «Готово» on a reminder = event `acked`; on a to-do = `POST /v1/tasks/{id}/done`. |
+| `waiting` | «Ждёт вас», ≤5: `missed` reminders (24 h; «Перенести» as `missed`), `overdue` to-dos (due before today), `question` (an answer waits for a tap: open `message_id`). |
+
+The older sections (`today`, `missed`, `done_for_you`, …) stay as they were.

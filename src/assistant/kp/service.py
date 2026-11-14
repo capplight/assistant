@@ -1,6 +1,6 @@
 """КП documents and versions in the DB (spec 3.6, 6.7; contract docs/api/kp.md).
 
-A КП has its own record (`items.kind = kp`, `ai_generated = true`) on «Документы и КП», so it is
+A КП has its own record (`items.kind = kp`, `ai_generated = true`) on «Документы», so it is
 found by search, goes to the trash with «Отменить», and is a card in the card file. Each change is
 a new `document_versions` row: `data` (the model's data, never sums), `totals` (kp/calc.py),
 `calc_version`, `vat_rate`, `vat_mode`, `patch`, `changed_paths`. Writers take the per-user sync
@@ -136,8 +136,61 @@ async def create(session: AsyncSession, user_id: int, *, sources: list[Item], wi
     session.add(doc)
     await session.flush()
     await first_use_page(session, user_id, PAGE_TEMPLATE)  # made on the first КП (Ф-35)
-    await place_item(session, item)  # «Документы и КП» takes it (kind kp; `_owners`)
+    await place_item(session, item)  # «Документы» takes it (kind kp; `_owners`)
     return Created(doc, item)
+
+
+SOURCE_KINDS = frozenset({RecordKind.PDF, RecordKind.DOCX, RecordKind.XLSX, RecordKind.IMAGE,
+                          RecordKind.SCREENSHOT, RecordKind.NOTE, RecordKind.VOICE,
+                          RecordKind.EMAIL, RecordKind.TG_MESSAGE})  # fmt: skip
+WAITING = frozenset({RecordStatus.PENDING, RecordStatus.PROCESSING})
+REQUEST_MAX = 4000
+
+
+async def request_record(session: AsyncSession, user_id: int, text: str, *,
+                         voice: bool = False) -> Item:  # fmt: skip
+    """The ТЗ said or typed as a phrase («сделай КП для ТОО Ромашка: 20 светильников, монтаж»):
+    a record in the person's words, like any note (Ф-50), so the КП has a source to point to."""
+    from assistant.records import detect_lang, enqueue_ingest
+
+    body = normalize_text(text)[:REQUEST_MAX]
+    if not body:
+        raise KpError(422, "kp_source_empty")
+    item = Item(user_id=user_id, client_id=uuid.uuid4(), kind=RecordKind.NOTE,
+                source=RecordSource.MIC if voice else RecordSource.TYPED,
+                status=RecordStatus.PENDING, title=None, text=body, text_lang=detect_lang(body),
+                content_hash=content_hash(body), source_meta={"kp_request": True},
+                ai_generated=False)  # fmt: skip
+    session.add(item)
+    await session.flush()
+    item.occurred_at = item.created_at
+    await enqueue_ingest(session, item)
+    await place_item(session, item)
+    return item
+
+
+async def start(session: AsyncSession, user_id: int, *, sources: list[Item], wishes: str | None,
+                client_id: uuid.UUID | None, now: datetime, per_day: int) -> Created:  # fmt: skip
+    """A new КП from its ТЗ records (the screen, «Сделать КП из этого», the line): the checks of
+    `POST /v1/documents/kp`, then the record + document; the caller queues the job. Raises
+    KpError: `item_kind`, `kp_source_not_ready` (a file still being read), `kp_source_empty`,
+    `kp_daily_limit`. Consent is the caller's (the line already needs `ai_cross_border`)."""
+    if not sources or any(i.kind not in SOURCE_KINDS for i in sources):
+        raise KpError(422, "item_kind")
+    # a record still being read waits; the ТЗ just said as a phrase (`request_record`) is its text
+    if any(i.status in WAITING and not (i.source_meta or {}).get("kp_request") for i in sources):
+        raise KpError(409, "kp_source_not_ready", {"retry_after": 2})
+    if not any((i.text or i.raw_text or "").strip() for i in sources):
+        raise KpError(422, "kp_source_empty")
+    tz = await user_tz(session, user_id)
+    day_start = now.astimezone(tz).replace(hour=0, minute=0, second=0, microsecond=0)
+    today = await session.scalar(select(func.count()).select_from(Document).where(
+        Document.user_id == user_id, Document.kind == DocKind.KP, Document.ai_generated,
+        Document.created_at >= day_start.astimezone(ZoneInfo("UTC")))) or 0  # fmt: skip
+    if today >= per_day:
+        raise KpError(429, "kp_daily_limit")
+    return await create(session, user_id, sources=sources, wishes=wishes, client_id=client_id,
+                        now=now)  # fmt: skip
 
 
 @dataclass
@@ -432,7 +485,7 @@ async def rows_dicts(session: AsyncSession, docs: list[Document]) -> list[dict[s
 
 
 def field_values(row: dict[str, Any]) -> dict[str, Any]:
-    """«Документы и КП» page fields of a КП (the template's `document.*` sources)."""
+    """«Документы» page fields of a КП (the template's `document.*` sources)."""
     values = {"doc_type": "kp", "client": (row.get("client") or {}).get("name"),
               "amount": row.get("total"), "kp_status": row.get("deal_status")}  # fmt: skip
     return {k: v for k, v in values.items() if v is not None}

@@ -10,7 +10,8 @@ usual shape `{code, message_ru, message_kk, details?}`.
 
 `POST /auth/anonymous` → one welcome screen with «Начать» and the privacy-policy line →
 «Начать» = `POST /consents` with `"screen": "welcome"` (`auth.md`) → `POST /pages/batch
-{"path": "skipped"}` (makes «Заметки» + «Дела»; «Сегодня» comes with the account; marks the first
+{"path": "skipped"}` (makes «Заметки», «Расходы», «Дела» — week 20, Ф-48, `features.md`
+`pages.default`; «Сегодня» comes with the account; marks the first
 launch done) → «Сегодня». No S41, S35, S04b, notifications or alarm setup in the first minutes:
 those are asked when needed. «Покупки», «Расходы», «Документы и КП» are made by the server on
 their first record (`features.md`). The endpoints below stay (gallery and «Новая страница» use
@@ -113,7 +114,7 @@ One request, **one action** with «Отменить».
 | `phrase_first` | 1–6 keys | those pages | `onboarding_phrase` |
 | `gallery` | 1–6 keys | those pages | `onboarding_gallery` |
 | `blank` | ignored | one `custom` page, `title` or «Моя страница» | `onboarding_blank` |
-| `skipped` | ignored | `default_templates` (Заметки + Дела и напоминания) | `onboarding_skipped` |
+| `skipped` | ignored | `features.pages.default` without «Сегодня»: notes, expenses, tasks (week 20, Ф-48; `default_templates` stays the S35 ticks) | `onboarding_skipped` |
 | `catalog` | 1–6 keys | those pages (from «Мои страницы»; onboarding state is not touched) | `user` |
 
 - Keys: `notes | tasks | shopping | documents | expenses | custom`; each at most once
@@ -161,7 +162,7 @@ done at once with «Отменить»), or after «Да» on a proposal. Propos
 | `key` (`kind: data_proposal`) | Shown when | `text_ru` | [Да] (`do.type: "accept"`) |
 |---|---|---|---|
 | `page_from_stack` | a stack (`stacks.md`) has ≥10 live records and no live page of that name exists | «Про «Ремонт» уже 14 записей. Сделать страницу «Ремонт»?» | a new «Своя страница» with the stack's records; the stack leaves its page (records stay there, out of the group) |
-| `add_documents_page` | the company profile is filled and there is no live «Документы и КП» page | «Добавить страницу «Документы и КП»?» | adds that page (or brings the removed one back) |
+| `add_documents_page` | the company profile is filled and there is no live «Документы» page | «Добавить страницу «Документы и КП»?» | adds that page (or brings the removed one back) |
 
 `yes_label`: «Да, сделать» / «Да, добавить»; `no_label`: «Не сейчас». `payload` is not sent.
 

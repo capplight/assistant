@@ -19,8 +19,13 @@ from assistant.memory.retention import (
 )
 from assistant.memory.search import Hit, PageRef, SearchResult, embed_query, search_records
 from assistant.memory.summaries import rebuild_summaries
+from assistant.memory.value import Value, asks_value, find_value, value_of_answer
 
 __all__ = [
+    "Value",
+    "asks_value",
+    "find_value",
+    "value_of_answer",
     "JOB_EMBED", "Hit", "OriginalFacts", "OriginalFate", "PageRef", "SearchResult", "StorageFlags",
     "embed_query", "enqueue_embed", "enqueue_missing", "original_fate", "purge_files",
     "rebuild_summaries", "run_embed", "search_records", "trash_orphan_uploads",

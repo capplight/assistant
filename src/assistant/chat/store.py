@@ -115,6 +115,19 @@ def proposal_out(prop: dict[str, Any] | None, now: datetime) -> dict[str, Any] |
     return out
 
 
+def answer_value(text: str | None, citations: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Ф-50 «ответ значением»: a short checked answer that gives one value («Код домофона —
+    4512.») → `{"text": "4512", "source": Citation}`; the phone shows the value big, with
+    «Скопировать» and the source. Code only, read from the saved answer (no model call)."""
+    from assistant.memory import value_of_answer
+
+    if not citations:
+        return None
+    value = value_of_answer(text or "")
+    source = {k: v for k, v in citations[0].items() if k != "_pk"}
+    return {"text": value, "source": source} if value else None
+
+
 def message_dict(m: ConversationMessage, *, page: dict[str, Any] | None,
                  reply_to: uuid.UUID | None, ai_label: str,
                  action: dict[str, Any] | None = None,
@@ -133,6 +146,8 @@ def message_dict(m: ConversationMessage, *, page: dict[str, Any] | None,
         "proposal": proposal_out(m.proposal, now or datetime.now(UTC)) if assistant else None,
         "choice": m.choice if not assistant else None,
         "error_code": m.error_code if assistant else None,
+        "value": answer_value(m.content, citations)
+        if assistant and m.answer_kind == "text" and m.state == MessageState.DONE else None,
         "seq": m.seq,
         "created_at": _iso(m.created_at),
     }  # fmt: skip

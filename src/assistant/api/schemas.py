@@ -447,7 +447,7 @@ class PageEntryOut(BaseModel):
     fields: dict[str, Any]
     task: "TaskOut | None" = None  # week 9: on «Дела» / «Покупки»
     expense: "ExpenseOut | None" = None  # week 12: on «Расходы»
-    document: "DocumentRowOut | None" = None  # week 14: a КП on «Документы и КП»
+    document: "DocumentRowOut | None" = None  # week 14: a КП on «Документы»
 
 
 class PageItemsOut(BaseModel):
@@ -622,9 +622,21 @@ class SearchHitOut(BaseModel):
     matched_by: list[str]  # words | typo | meaning
 
 
+class SearchAnswerOut(BaseModel):
+    """Ф-50 «ответ значением»: the value written in the person's record, found by code."""
+
+    value: str  # «4512», as written in the record
+    item_id: uuid.UUID  # the source record (also in `results`)
+    title: str | None
+    context: str  # the record's line around the value («Код домофона 4512, подъезд 3»)
+    pages: list[PageRefOut]
+    occurred_at: datetime | None
+
+
 class SearchOut(BaseModel):
     results: list[SearchHitOut]
     semantic: bool  # false: search by meaning did not run this time
+    answer: SearchAnswerOut | None = None
 
 
 class SyncOut(BaseModel):
@@ -698,6 +710,13 @@ class ChatCitationOut(BaseModel):
     occurred_at: datetime | None
 
 
+class ChatValueOut(BaseModel):
+    """Ф-50: the answer is a value («4512»): show it big with «Скопировать» and its source."""
+
+    text: str
+    source: ChatCitationOut
+
+
 class ChatMessageOut(BaseModel):
     id: uuid.UUID
     client_id: uuid.UUID | None
@@ -716,6 +735,7 @@ class ChatMessageOut(BaseModel):
     proposal: dict[str, Any] | None = None
     choice: dict[str, Any] | None = None
     error_code: str | None = None
+    value: ChatValueOut | None = None
     seq: int = 0
     created_at: datetime
 
@@ -768,6 +788,16 @@ class ActionSummaryOut(BaseModel):
     kk: str | None
 
 
+class SavedToOut(BaseModel):
+    """Ф-50: a page the action's new records are on now («Сохранил в «Заметки» · Переложить»)."""
+
+    page_id: uuid.UUID
+    title: str
+    icon: str | None = None
+    template_key: str | None = None
+    item_ids: list[uuid.UUID]
+
+
 class ActionOut(BaseModel):
     id: uuid.UUID
     kind: str
@@ -778,6 +808,7 @@ class ActionOut(BaseModel):
     changes: list[ActionChangeOut]
     changed_item_ids: list[uuid.UUID]
     created_page_id: uuid.UUID | None
+    saved_to: list[SavedToOut] = Field(default_factory=list)
     undoable: bool
     undoable_until: datetime | None
     undone_at: datetime | None
@@ -793,6 +824,23 @@ class ReminderEventActionOut(ActionOut):
 
 class ActionsOut(BaseModel):
     actions: list[ActionOut]
+    has_more: bool
+
+
+class HistoryEntryOut(BaseModel):
+    """One line of «История» (Ф-50): what the person said → what was done (chat.md)."""
+
+    id: uuid.UUID  # the person's message (`kind: turn`) or the action (`kind: action`)
+    kind: Literal["turn", "action"]
+    status: Literal["done", "undone", "waiting", "answered", "pending", "deferred", "failed"]
+    at: datetime
+    said: "ChatMessageOut | None"  # the person's phrase (turn only)
+    answer: "ChatMessageOut | None"  # the assistant's answer to it (turn only, may be missing)
+    action: ActionOut | None  # what was done: «Отменить» = POST /v1/actions/{id}/undo
+
+
+class HistoryOut(BaseModel):
+    entries: list[HistoryEntryOut]  # newest first
     has_more: bool
 
 
@@ -1351,6 +1399,92 @@ class DoneForYouOut(BaseModel):
     count_today: int
 
 
+class BriefTextOut(BaseModel):
+    ru: str
+    kk: str  # until reviewed (R-39)
+
+
+class BriefLinesOut(BaseModel):
+    ru: list[str]  # ≤3
+    kk: list[str]
+
+
+class BriefPlanOut(BaseModel):
+    """One thing of the day plan: a reminder occurrence (has a time) or a to-do (no time)."""
+
+    kind: Literal["reminder", "task"]
+    title: str
+    time: str | None  # local «09:00»; null = «без времени»
+    at: datetime | None
+    done: bool
+    missed: bool
+    reminder_id: uuid.UUID | None = None
+    task_id: uuid.UUID | None = None
+    item_id: uuid.UUID | None = None
+
+
+class BriefTasksOut(BaseModel):
+    done: int
+    total: int
+    next_time: str | None
+    next_title: str | None
+
+
+class BriefSpentOut(BaseModel):
+    currency: str
+    today: str  # money as text
+    count_today: int
+    month: str
+    budget: "BudgetOut | None"  # «осталось …» when a budget is set
+
+
+class BriefRemindersOut(BaseModel):
+    today: int
+    next_time: str | None
+
+
+class BriefTomorrowOut(BaseModel):
+    count: int
+    first_time: str | None
+    first_title: str | None
+
+
+class BriefNewOut(BaseModel):
+    count: int
+    since: datetime  # morning: from yesterday's start; later: from today's start
+    period: Literal["yesterday", "today"]
+
+
+class BriefMetricsOut(BaseModel):
+    tasks: BriefTasksOut
+    spent: BriefSpentOut
+    reminders: BriefRemindersOut
+    tomorrow: BriefTomorrowOut
+    new_records: BriefNewOut
+
+
+class BriefWaitingOut(BaseModel):
+    """«Ждёт вас»: a missed reminder, an overdue to-do, a question waiting for a tap."""
+
+    kind: Literal["missed", "overdue", "question"]
+    title: str
+    text_ru: str
+    at: datetime | None
+    reminder_id: uuid.UUID | None = None
+    task_id: uuid.UUID | None = None
+    item_id: uuid.UUID | None = None
+    message_id: uuid.UUID | None = None  # the answer with the open question («Ответить»)
+
+
+class BriefOut(BaseModel):
+    part: Literal["morning", "day", "evening"]
+    headline: BriefTextOut
+    lines: BriefLinesOut
+    metrics: BriefMetricsOut
+    plan: list[BriefPlanOut]  # timed by time, then «без времени»
+    waiting: list[BriefWaitingOut]
+
+
 class TodayOut(BaseModel):
     date: str
     tz: str
@@ -1365,6 +1499,7 @@ class TodayOut(BaseModel):
     empty: bool
     example: str | None
     page_tiles: list["PageTileOut"] = []  # week 16 (Ф-32): ≤2, by code, none in the first 7 days
+    brief: BriefOut | None = None  # week 20 (mocks v2): the briefing, by code
 
 
 class PageTileOut(BaseModel):
@@ -1542,6 +1677,35 @@ class AggregateGroupOut(BaseModel):
     count: int
 
 
+class BudgetMonthOut(BaseModel):
+    from_: str = Field(alias="from")
+    to: str
+
+    model_config = {"populate_by_name": True}
+
+
+class BudgetOut(BaseModel):
+    """The monthly budget of «Расходы» (week 20): every number is code's."""
+
+    amount: str  # money as text, «120000.00»
+    currency: str
+    month: BudgetMonthOut
+    spent: str  # this month, in the budget's currency (expense − refund)
+    left: str  # amount − spent; negative = over the budget
+    over: bool
+    percent: int  # spent / amount, rounded
+    days_left: int  # days after today until the month ends
+
+
+class BudgetEnvelopeOut(BaseModel):
+    budget: BudgetOut | None
+
+
+class BudgetIn(BaseModel):
+    amount: str = Field(min_length=1, max_length=20)  # «120000», «120 000», «120000.00»
+    currency: str = Field(default="KZT", pattern=r"^[A-Z]{3}$")
+
+
 class AggregateOut(BaseModel):
     calc_version: str
     period: AggregatePeriodOut
@@ -1550,6 +1714,7 @@ class AggregateOut(BaseModel):
     groups: list[AggregateGroupOut]
     review_count: int
     basis_ids: list[uuid.UUID]
+    budget: BudgetOut | None = None  # `period=month` only, when a budget is set
 
 
 class CategoriesOut(BaseModel):
@@ -1597,7 +1762,7 @@ class DocumentClientOut(BaseModel):
 
 
 class DocumentRowOut(BaseModel):
-    """A КП as a card in «Документы и КП» (sync, page rows, lists): no lines, no requisites."""
+    """A КП as a card in «Документы» (sync, page rows, lists): no lines, no requisites."""
 
     id: uuid.UUID
     client_id: uuid.UUID | None
@@ -1637,3 +1802,5 @@ for _m in (ReminderEventsOut, HabitPatchOut, PageCreateOut, PageEntryOut, PageIt
     _m.model_rebuild()
 SyncOut.model_rebuild()  # after the reminder shapes it refers to
 
+for _m in (BriefSpentOut, BriefMetricsOut, BriefOut, TodayOut, HistoryEntryOut, HistoryOut):
+    _m.model_rebuild()  # week 20: BudgetOut and ChatMessageOut are defined later in the file

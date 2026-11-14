@@ -17,7 +17,7 @@ carry `tasks: [Task]` (week 9, `today.md`).
 
 **Where things go (Ф-47, week 19).** The person never picks the page they talk about: there is
 no «Про: …» chip. A new record goes where the server's page rules put it (`auto_rule` and kind:
-«Заметки», «Дела», «Покупки», «Расходы», «Документы и КП», incl. pages made on first use,
+«Заметки», «Дела», «Покупки», «Расходы», «Документы», incl. pages made on first use,
 `features.md`), never onto the open page by itself; questions search all records. `page_id`,
 `visible_item_ids` and `selected_item_id` are only context: they resolve «это / здесь / эту
 запись» (and page actions such as «разложи по темам» on the open page) and an explicit «сюда / на
@@ -296,6 +296,49 @@ Send `Last-Event-ID: <last id you got>` (or `?after=<id>`; `0` = from the start)
 Reconnect with a short backoff (1 s, 2 s, 4 s, then every 10 s). `GET /chat/messages/{id}` is the
 plain JSON alternative.
 
+**Week 20 (Ф-50).**
+- Every save from the line carries `action.saved_to` (`actions.md`): «Сохранил в «…» · Переложить
+  · Отменить».
+- **Answer as a value.** `banner` and ChatMessage have `value`: `{"text": "4512", "source":
+  Citation}` when a short checked text answer (≤80 chars) gives exactly one value and has a
+  citation; else `null`. Show the value big with «Скопировать» and the source chip. Code only.
+- **A КП from the line.** «сделай КП для ТОО Ромашка: 20 светильников, монтаж», «составь КП …»,
+  «сделать документ / КП из этого» (code reads the order; never from shared text): a new КП as
+  `POST /v1/documents/kp` does (same checks, daily limit). The rest of the phrase is saved as the
+  person's record (the ТЗ); «из этого» = `selected_item_id` (or the only visible record). Event
+  `kp_started` `{"reply_id", "document_id", "from_this"}` → open the КП and follow
+  `GET /v1/documents/{id}/progress`; the answer is a text «Готовлю КП — открою, когда будет
+  готово.» (`answer_kind: "text"`). Without a ТЗ: «Что войдёт в КП? …»; «из этого» with nothing
+  selected: «Из какой записи? …»; limit: «На сегодня КП достаточно — продолжу завтра.».
+  `tool_activity.tool` may be `kp`.
+
+## «История» (week 20, Ф-50): `GET /v1/history?only=&before=&limit=`
+
+«Переписка» + «Что я сделал» in one feed: what the person said → what was done. Newest first.
+
+| Param | Notes |
+|---|---|
+| `only` | `all` (default) · `changes` (phrases that changed something + changes without a phrase) · `questions` (phrases answered with text) · `waiting` (a question back waits for a tap). |
+| `before` | the `id` of the last entry shown; unknown: `404 not_found`. |
+| `limit` | 1...50, default 30. |
+
+`{"entries": [Entry], "has_more": bool}`. Entry:
+
+```json
+{"id": "0194...", "kind": "turn", "status": "done", "at": "2026-11-13T12:41:00Z",
+ "said": ChatMessage, "answer": ChatMessage, "action": Action}
+```
+
+- `kind: "turn"`: a phrase the person sent (`id` = that message); `answer` = the assistant's reply
+  (null while none); `action` = what the phrase did (the same as `answer.action`).
+- `kind: "action"`: a change made without a phrase (a tick, a move by hand, «Отменить», a form, a
+  phrase whose message was cleared); `id` = the action, `said` / `answer` null.
+- `status`: `done` · `undone` (show «Отменено · Вернуть» = undo of the undo, see `actions.md`) ·
+  `waiting` («Ждёт · Ответить»: open `answer.proposal`) · `answered` · `pending` · `deferred` ·
+  `failed`.
+- «Отменить» = `POST /v1/actions/{action.id}/undo`. «Очистить переписку» removes the phrases; their
+  changes then show as `kind: "action"`.
+
 ## History («Переписка», S36)
 
 ChatMessage:
@@ -319,6 +362,7 @@ ChatMessage:
   "proposal": null,
   "choice": null,
   "error_code": null,
+  "value": null,
   "seq": 4560,
   "created_at": "2026-11-07T14:20:00Z"
 }

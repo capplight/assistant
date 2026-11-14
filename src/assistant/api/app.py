@@ -136,7 +136,7 @@ def create_app(
                    items.router,
                    pages.items_router, pages.habits_router, views.router, pages.router,
                    pages.templates_router, sync.router, me.router, misc.ai, chat.router,
-                   chat.feedback_router,
+                   chat.feedback_router, chat.history_router,
                    actions.router, reminders.router, tasks.router, today.router,
                    today.suggestions_router, duplicates.router, duplicates.pending_router,
                    imports.router, collections.router, events.router, expense_docs.router,

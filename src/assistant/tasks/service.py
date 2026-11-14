@@ -83,6 +83,30 @@ def page_made_change(page: Screen) -> dict[str, Any]:
             "page_id": str(page.public_id), "text": f"Новая страница «{page.title}»"}
 
 
+_BUY_VERB = ("купить", "купи", "докупить", "сатып", "buy")
+
+
+def as_todo(spec: TaskSpec) -> TaskSpec:
+    """Ф-49 (shopping list hidden): a thing to buy is a to-do on «Дела»: «хлеб», 2 шт →
+    «Купить хлеб, 2 шт». A title that already says «купить …» is kept."""
+    if spec.list_key != ListKey.SHOPPING:
+        return spec
+    title = " ".join((spec.title or "").split())
+    if not title.lower().startswith(_BUY_VERB):
+        title = f"Купить {lower_first(title)}"
+    if spec.qty:
+        title = f"{title}, {' '.join(spec.qty.split())}"
+    if spec.where:
+        title = f"{title} ({' '.join(spec.where.split())})"
+    return TaskSpec(ListKey.TODO, title[:TITLE_MAX], due_date=spec.due_date)
+
+
+def shopping_on() -> bool:
+    from assistant.config import get_settings
+
+    return get_settings().feature_shopping
+
+
 @dataclass
 class Added:
     tasks: list[Task] = field(default_factory=list)
@@ -104,9 +128,11 @@ async def add(session: AsyncSession, user_id: int, specs: Sequence[TaskSpec], *,
     out = Added()
     if not specs:
         return out
+    if not shopping_on():  # Ф-49: every new thing to buy is a to-do («Купить молоко»)
+        specs = [as_todo(sp) for sp in specs]
     list_key = specs[0].list_key
     page, made = None, False
-    if list_key == ListKey.SHOPPING:  # «Покупки» is made on its first thing (Ф-35)
+    if list_key == ListKey.SHOPPING:  # «Покупки» is made on its first thing (Ф-35, Ф-49 on)
         page, made = await first_use_page(session, user_id, "shopping")
     page = page or await list_page(session, user_id, list_key)
     out.page = page

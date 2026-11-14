@@ -174,6 +174,12 @@ The ТЗ is a record first (shared PDF / Excel / Word / photo, or a typed note):
 {"client_id": "...", "item_ids": ["<the ТЗ record>"], "wishes": "доставка до объекта"}
 ```
 
+Week 20 (Ф-50): `item_ids` may be empty when `text` is sent: `{"client_id", "text": "Светильники
+LED 20 шт, монтаж"}` (≤4000 chars, the ТЗ typed or said; saved as the person's record first);
+neither → `422 validation_error`. «Сделать КП из этого» on a record / a shared file = this call
+with that record in `item_ids`. The line starts a КП the same way (`chat.md`, event
+`kp_started`).
+
 Queues KP_EXTRACT (worker `python -m assistant.kp`). `needs_profile: true` → S16 first shows «Ваша
 компания» → S19 (the КП is still made; the PDF waits for the required fields).
 
@@ -316,7 +322,7 @@ back.
   `action.kind = "delete_item"` with «Отменить». A КП still being read is finished anyway, so the
   undo brings back a whole one.
 - `GET /v1/documents?limit=50&before=` → `{documents: [DocumentRow], next_before}`.
-- `GET /v1/documents/summary` → the dividers and folders of the «Документы и КП» page, counted by
+- `GET /v1/documents/summary` → the dividers and folders of the «Документы» page, counted by
   code: `{by_type: {kp, contract, receipt, other}, deal_status: {draft, sent, seen, accepted,
   declined}, clients: [{name, count}]}` (`name: null` = «Без клиента», last).
 
@@ -571,14 +577,14 @@ Drafts travel in `/v1/sync` (`drafts`).
 version was sent; `sent_at` = when, «Отправлено 3 ноя») · `archived` · `failed` (`error` + `progress.message`). The mini-sheet of the card is drawn
 from `title` / `total` / `deal_status` (no picture).
 
-## Pages: «Документы и КП» (template v2)
+## Pages: «Документы» (template v2; Ф-51, migration 0026: was «Документы и КП»)
 
 `GET /v1/pages/{id}/items` entries of a КП carry `document` (DocumentRow) and `fields`:
 `doc_type: "kp"`, `client`, `amount` (= `total`), `kp_status` (= `deal_status`). Other documents
 on the page get `doc_type` from their envelope (`contract` · `receipt` · `other`). Template v2
 (0020): `kp_status` options `draft, sent, seen, accepted, declined`; `default_view.group_by:
 "client"` (folders by client). The КП record is `items.kind = "kp"`, `ai_generated: true`; it
-lands on «Документы и КП» (and not on «Заметки»).
+lands on «Документы» (and not on «Заметки»).
 
 ## Sync
 

@@ -7,6 +7,7 @@ Phu Quoc) are stored as UTC plus the IANA tz of the place, so reminders fire on 
 import enum
 import uuid
 from datetime import date, datetime, time
+from decimal import Decimal
 
 import sqlalchemy as sa
 from geoalchemy2 import Geography
@@ -21,6 +22,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     Time,
@@ -188,6 +190,10 @@ class User(Base):
     # 0025: template keys of pages the server made on first use (Ф-35): each made once
     pages_first_use: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list,
                                                        server_default="{}")  # fmt: skip
+    # 0026: the monthly budget of «Расходы» (null = none; «осталось» = budget − month spent)
+    expense_budget: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    expense_budget_currency: Mapped[str] = mapped_column(Text, default="KZT",
+                                                         server_default="KZT")  # fmt: skip
 
     trips: Mapped[list["Trip"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
