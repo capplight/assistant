@@ -146,8 +146,10 @@ def test_quiet_hours():
 def test_topic_palette_week_11a():
     from assistant.chat.mutate import topic_palette
 
-    got = topic_palette(["Ремонт", "Остальное", "Дача", "Врачи", "Дети", "Рецепты", "Работа"])
+    topics = ["Ремонт", "Остальное", "Дача", "Врачи", "Дети", "Рецепты", "Работа", "Хобби"]
+    got = topic_palette(topics)
     assert got["Остальное"] is None  # no topic: no colour
     assert [got[t] for t in ("Ремонт", "Дача", "Врачи", "Дети", "Рецепты")] == \
         ["yellow", "green", "blue", "pink", "peach"]  # fmt: skip
-    assert got["Работа"] == "yellow"  # the five colours in turn; white is never a topic
+    assert got["Работа"] == "lilac"  # lilac from design v2 (0027)
+    assert got["Хобби"] == "yellow"  # the six colours in turn; white is never a topic

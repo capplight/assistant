@@ -214,7 +214,7 @@ class SetViewArgs(BaseModel):
     title: str | None
     icon: Literal["people", "documents", "shopping", "money", "health", "home", "work",
                   "other"] | None
-    color: Literal["yellow", "pink", "green", "blue", "peach", "white", "none"] | None
+    color: Literal["yellow", "pink", "green", "blue", "peach", "lilac", "white", "none"] | None
     color_records: list[str] | None
     color_by: Literal["topic"] | None
     group_order: list[str] | None
@@ -1335,9 +1335,10 @@ async def _rerun_view(env: Any, proposal: dict[str, Any], plan: dict[str, Any],
 
 # --- «раскрась по темам» (week 11а, proposal 2.1, 2.8) ---
 
-TOPIC_COLORS = ("yellow", "green", "blue", "pink", "peach")  # white = no colour, never a topic
+# white = no colour, never a topic
+TOPIC_COLORS = ("yellow", "green", "blue", "pink", "peach", "lilac")
 COLOR_WORDS = {"yellow": "жёлтый", "green": "зелёный", "blue": "голубой", "pink": "розовый",
-               "peach": "персиковый"}  # fmt: skip
+               "peach": "персиковый", "lilac": "сиреневый"}  # fmt: skip
 LEGEND_TOPICS = 5
 RU_STICKERS = ("стикер", "стикера", "стикеров")
 

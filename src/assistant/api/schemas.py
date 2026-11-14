@@ -468,7 +468,7 @@ class PageItemAddOut(BaseModel):
 # --- page views (week 11, docs/api/views.md) ---
 
 FieldType = Literal["text", "number", "money", "date", "bool"]
-NoteColor = Literal["yellow", "pink", "green", "blue", "peach", "white"]
+NoteColor = Literal["yellow", "pink", "green", "blue", "peach", "white", "lilac"]
 
 
 class FieldPrefIn(BaseModel):
