@@ -225,7 +225,7 @@ export const size = {
   tabBar: 72, // capsule height (was 60)
   tabBarInset: 12,
   tabPill: { width: 68, height: 56 }, // icon + label inside the pill (p14)
-  centreTab: 60, // emerald circle, raised by 20 above the bar top
+  centreTab: 60, // Ф-58: «Помощник» (chat) emerald circle, raised by 20; active = extra 3 dp ring brand @ 33 %
   centreTabLift: 20,
   assistantCapsule: 56, // was 52
   assistantMic: 44,
@@ -288,5 +288,20 @@ export const motion = {
 } as const;
 export const springSheet = { damping: 22, stiffness: 220 } as const;
 export const reducedMotionFade = 150;
+
+/** Ф-58: the «Помощник» chat tab (screens-v3.html). */
+export const chat = {
+  userBubble: { bg: 'brand', text: 'onBrand', radius: [18, 18, 6, 18], maxWidth: '78%' }, // the person — right, filled emerald
+  assistantText: { type: 'body', color: 'ink' }, // the assistant — left, no bubble; values in `answerValue`
+  sourceChip: { height: 28, bg: 'surfaceSunken', type: 'caption' },
+  actionCard: { radius: 18, bg: 'surface' }, // result of an action + «Переложить · Отменить»
+  planCard: { radius: 22, bg: 'surface' }, // «План»: days → time + item + source dot (metric «new» colour)
+  daySeparator: { bg: 'surfaceSunken', type: 'caption' },
+  quickAnswer: { radius: 22, bg: 'surfaceRaised', maxLines: 3 }, // answer card above the capsule on the other tabs
+  inputPlaceholder: 'Спросите, запишите или попросите план',
+} as const;
+
+/** Tabs (Ф-58). At fontScale >= 1.5: only today · chat · more (labels 13, bar 74). */
+export const tabs = { default: ['today', 'notes', 'chat', 'expenses', 'more'], largeFont: ['today', 'chat', 'more'] } as const;
 
 export const alarmScreen = { bg: '#B4361E', text: '#FFFFFF' } as const; // unchanged
