@@ -73,14 +73,15 @@ describe('theme tokens', () => {
     expect(darkColors.highlight).toBe('#FFB547');
   });
 
-  it('platform sizes (Ф-45): body 16–17, buttons never larger than body, nothing below 11, caps only in `eyebrow`', () => {
+  it('platform sizes (Ф-45): body 16–17, buttons never larger than body, nothing below 11, no caps anywhere (Ф-56)', () => {
     expect(type.body.fontSize).toBeGreaterThanOrEqual(16);
     expect(type.body.fontSize).toBeLessThanOrEqual(17);
     expect(type.button.fontSize).toBeLessThanOrEqual(type.body.fontSize!);
     for (const [name, t] of Object.entries(type)) {
       expect(t.fontSize).toBeGreaterThanOrEqual(11);
-      // v2: caps only in the short tile labels / status line (design-system v2 §3 `eyebrow`).
-      if (name !== 'eyebrow') expect(t.textTransform).toBeUndefined();
+      expect(t.textTransform).toBeUndefined();
+      expect(t.letterSpacing ?? 0).toBeLessThanOrEqual(0.2);
+      void name;
       // Room for the tails of қ ң ғ ұ (digits-only tokens — a tile number, the answer value — are tight on purpose).
       if (name !== 'metric' && name !== 'answerValue') expect(t.lineHeight! / t.fontSize!).toBeGreaterThanOrEqual(1.1);
     }

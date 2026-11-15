@@ -189,14 +189,15 @@ export const lightNoteColors: Record<NoteColorKey, string> = {
   green: '#DDEFC4',
 };
 
+/** Ф-57: one step brighter than v2 (they looked muddy on the A23); `noteInk.dark` stays ≥ 4.5:1 on each. */
 export const darkNoteColors: Record<NoteColorKey, string> = {
   white: '#1D4239',
-  yellow: '#4D4020',
-  peach: '#4D3424',
-  pink: '#4D2C36',
-  lilac: '#3A3352',
-  blue: '#22405A',
-  green: '#354A26',
+  yellow: '#5A4A22',
+  peach: '#5A3C29',
+  pink: '#5A3340',
+  lilac: '#443C60',
+  blue: '#284A68',
+  green: '#3D5530',
 };
 
 export const noteInk = { light: { ink: '#1F2B24', ink2: '#4A5A50' }, dark: { ink: '#DAF1DE', ink2: '#B9D5C1' } } as const;

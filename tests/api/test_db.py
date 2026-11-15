@@ -127,7 +127,7 @@ async def test_anonymous_same_key_same_account(db_app):
 
 
 async def test_refresh_rotation_and_reuse_detection(db_app):
-    app, _, _ = db_app
+    app, _, check = db_app
     async with client(app) as c:
         t1 = await _anon(c)
         r = await c.post("/v1/auth/refresh", json={"refresh_token": t1["refresh_token"]})
@@ -137,10 +137,32 @@ async def test_refresh_rotation_and_reuse_detection(db_app):
         # old access token's session is revoked by rotation
         assert (await c.get("/v1/consents", headers=_auth(t1))).status_code == 401
         assert (await c.get("/v1/consents", headers=_auth(t2))).status_code == 200
-        # reuse of the rotated token kills the chain
+        # the same token again soon, t2 never used: a lost answer (app updated / killed
+        # mid-refresh, server restart) — a new pair, t2 is dropped, nobody is logged out
+        again = await c.post("/v1/auth/refresh", json={"refresh_token": t1["refresh_token"]})
+        assert again.status_code == 200, again.text
+        t3 = again.json()
+        assert t3["refresh_token"] not in (t1["refresh_token"], t2["refresh_token"])
+        assert (await c.get("/v1/consents", headers=_auth(t3))).status_code == 200
+        assert (await c.get("/v1/consents", headers=_auth(t2))).status_code == 401
+        # once the chain moved on (t3 rotated), t1 again is reuse: the chain is killed
+        r = await c.post("/v1/auth/refresh", json={"refresh_token": t3["refresh_token"]})
+        assert r.status_code == 200
+        t4 = r.json()
         reuse = await c.post("/v1/auth/refresh", json={"refresh_token": t1["refresh_token"]})
         assert reuse.status_code == 401 and reuse.json()["code"] == "invalid_refresh"
-        assert (await c.get("/v1/consents", headers=_auth(t2))).status_code == 401
+        assert (await c.get("/v1/consents", headers=_auth(t4))).status_code == 401
+        # after the grace window a rotated token is reuse even if its replacement is unused
+        t5 = await _anon(c)
+        r = await c.post("/v1/auth/refresh", json={"refresh_token": t5["refresh_token"]})
+        assert r.status_code == 200
+        t6 = r.json()
+        await check.execute(text("UPDATE auth_sessions SET revoked_at = revoked_at - "
+                                 "interval '10 minutes' WHERE revoked_at IS NOT NULL"))
+        await check.commit()
+        late = await c.post("/v1/auth/refresh", json={"refresh_token": t5["refresh_token"]})
+        assert late.status_code == 401
+        assert (await c.get("/v1/consents", headers=_auth(t6))).status_code == 401
         bad = await c.post("/v1/auth/refresh", json={"refresh_token": "x" * 40})
         assert bad.status_code == 401
 
@@ -360,6 +382,8 @@ async def test_a_rejected_refresh_says_whether_the_account_is_linked(db_app):
         anon = await _anon(c)
         fresh = (await c.post("/v1/auth/refresh",
                               json={"refresh_token": anon["refresh_token"]})).json()  # fmt: skip
+        # the chain moved on (else a quick resend is a retry of a lost answer)
+        await c.post("/v1/auth/refresh", json={"refresh_token": fresh["refresh_token"]})
         assert await _rejected(c, anon["refresh_token"]) is False  # reused
 
         anon2 = await _anon(c)
@@ -368,6 +392,7 @@ async def test_a_rejected_refresh_says_whether_the_account_is_linked(db_app):
         body = {"refresh_token": linked["refresh_token"]}
         rotated = (await c.post("/v1/auth/refresh", json=body)).json()
         assert rotated["user"]["is_anonymous"] is False
+        await c.post("/v1/auth/refresh", json={"refresh_token": rotated["refresh_token"]})
         assert await _rejected(c, linked["refresh_token"]) is True  # reused
 
         other = await _link(c, sms, None, "+77015550022")

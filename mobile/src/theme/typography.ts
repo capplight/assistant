@@ -69,8 +69,8 @@ export const type: Record<TypeToken, TextStyle> = {
   callout: { fontFamily: fontFamily.regular, fontSize: 15, lineHeight: 20 },
   /** Block titles «План дня», «Ждёт вас» — never uppercase (v2: 700). */
   sectionLabel: { fontFamily: fontFamily.bold, fontSize: 15, lineHeight: 20 },
-  /** v2: tile labels and the brief's status line ONLY (≤3 words), caps. */
-  eyebrow: { fontFamily: fontFamily.bold, fontSize: 12, lineHeight: 16, letterSpacing: 0.8, textTransform: 'uppercase' },
+  /** Tile labels and the brief's status line (Ф-56: sentence case, no caps — 13/600 keeps them reading as labels). */
+  eyebrow: { fontFamily: fontFamily.semibold, fontSize: 13, lineHeight: 18 },
   /** Dates, the privacy line. */
   footnote: { fontFamily: fontFamily.regular, fontSize: 13, lineHeight: 18 },
   /** Chips. */

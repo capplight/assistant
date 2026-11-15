@@ -81,6 +81,11 @@ class Settings(BaseSettings):
     hash_key: SecretStr = Field(default=SecretStr(""))
     access_token_minutes: int = 15
     refresh_token_days: int = 60
+    # A rotated refresh token sent again within this window, while the token that replaced it
+    # was never used, is a retry (the answer was lost: app killed or updated mid-refresh, server
+    # restart, network): the replacement is revoked and a new pair issued instead of logging
+    # the person out. Later, or once the chain moved on, it is reuse and kills the chain.
+    refresh_reuse_grace_seconds: int = 300
     sms_provider: str = "fake"  # fake | mobizon | smsc (only fake exists yet)
 
     # Object storage (S3 in KZ). "local" = filesystem stub served by the API itself (dev).

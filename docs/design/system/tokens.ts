@@ -160,19 +160,19 @@ export const lightNoteColors: Record<NoteColorKey, string> = {
   white: '#FFFFFF', yellow: '#FFEDB0', peach: '#FFDCC7', pink: '#FBD5DC', lilac: '#E6DDFB', blue: '#D4E6FB', green: '#DDEFC4',
 };
 export const darkNoteColors: Record<NoteColorKey, string> = {
-  white: '#1D4239', yellow: '#4D4020', peach: '#4D3424', pink: '#4D2C36', lilac: '#3A3352', blue: '#22405A', green: '#354A26',
+  white: '#1D4239', yellow: '#5A4A22', peach: '#5A3C29', pink: '#5A3340', lilac: '#443C60', blue: '#284A68', green: '#3D5530', // Ф-57: brighter
 };
 export const noteInk = { light: { ink: '#1F2B24', ink2: '#4A5A50' }, dark: { ink: '#DAF1DE', ink2: '#B9D5C1' } } as const;
 
 /** «Расходы» categories: solid = icon/bar; tint = solid @ 15 % (light) / 22 % (dark). Text amounts use `categoryText`. */
 export type CategoryKey = 'food' | 'transport' | 'home' | 'cafe' | 'health' | 'kids' | 'bills' | 'other';
 export const categoryColors: Record<'light' | 'dark', Record<CategoryKey, string>> = {
-  light: { food: '#2E9F6A', transport: '#3E7BEA', home: '#D98A0B', cafe: '#E36A5A', health: '#D9467A', kids: '#00A3B4', bills: '#56708F', other: '#8A9A93' },
-  dark: { food: '#5CC98F', transport: '#78A6FF', home: '#FFC061', cafe: '#FF9585', health: '#FF85AE', kids: '#4FD3E0', bills: '#93A9C6', other: '#A9BAB3' },
+  light: { food: '#2E9F6A', transport: '#3E7BEA', home: '#D98A0B', cafe: '#8A63D2', health: '#D9467A', kids: '#00A3B4', bills: '#56708F', other: '#8A9A93' },
+  dark: { food: '#5CC98F', transport: '#78A6FF', home: '#FFC061', cafe: '#C3A6FF', health: '#FF85AE', kids: '#4FD3E0', bills: '#93A9C6', other: '#A9BAB3' },
 };
 /** Darker text variants for amounts on light surface (≥ 4.5:1); dark theme uses categoryColors.dark as is. */
 export const categoryText: Record<CategoryKey, string> = {
-  food: '#1E7F52', transport: '#2F6FD6', home: '#A65A08', cafe: '#B9483A', health: '#B23462', kids: '#00788A', bills: '#4A6280', other: '#5E6E67',
+  food: '#1E7F52', transport: '#2F6FD6', home: '#A65A08', cafe: '#7650C4', health: '#B23462', kids: '#00788A', bills: '#4A6280', other: '#5E6E67',
 };
 
 /* ---------------- typography (Onest; Kazakh ӘҒҚҢӨҰҮҺІ checked in the font cmap) ---------------- */
@@ -190,7 +190,7 @@ export const type: Record<string, T> = {
   bodyStrong: { fontFamily: fontFamily.semibold, fontSize: 17, lineHeight: 24 },
   callout: { fontFamily: fontFamily.regular, fontSize: 15, lineHeight: 20 },
   sectionLabel: { fontFamily: fontFamily.bold, fontSize: 15, lineHeight: 20 }, // block titles «План дня», no caps
-  eyebrow: { fontFamily: fontFamily.bold, fontSize: 12, lineHeight: 16, letterSpacing: 0.8, textTransform: 'uppercase' }, // NEW tile labels / status line ONLY (≤ 3 words)
+  eyebrow: { fontFamily: fontFamily.semibold, fontSize: 13, lineHeight: 18 }, // tile labels / status line; Ф-56: sentence case, NO caps anywhere
   footnote: { fontFamily: fontFamily.regular, fontSize: 13, lineHeight: 18 },
   caption: { fontFamily: fontFamily.medium, fontSize: 12, lineHeight: 16 },
   tabLabel: { fontFamily: fontFamily.medium, fontSize: 11, lineHeight: 13 },

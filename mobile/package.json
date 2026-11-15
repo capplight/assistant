@@ -79,7 +79,7 @@
     "moduleNameMapper": {
       "^lucide-react-native$": "<rootDir>/node_modules/lucide-react-native/dist/cjs/lucide-react-native.js"
     },
-    "testTimeout": 300000,
+    "testTimeout": 60000,
     "maxWorkers": "50%"
   }
 }

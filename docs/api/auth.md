@@ -8,7 +8,11 @@ Errors have the usual shape `{code, message_ru, message_kk, details?}`.
 - `POST /auth/anonymous {device_key, locale, tz}`: account of this device key (`created: true` when
   new). The same key always means the same account.
 - `POST /auth/refresh {refresh_token}`: new pair; the old refresh token dies at once. Send one
-  refresh at a time: re-sending a used token counts as theft and revokes the sessions.
+  refresh at a time and save the new pair before anything else. A used token sent again within
+  5 min (`refresh_reuse_grace_seconds`) while the pair it was swapped for was never refreshed is
+  a retry of a lost answer (timeout, app killed or updated mid-refresh, server restart): `200`
+  with a new pair, the lost pair is revoked. Otherwise re-sending a used token counts as theft
+  and revokes the sessions.
 - `POST /auth/logout`.
 - Every pair carries `user`: `{id, display_name, locale, tz, country, is_anonymous, age_confirmed}`.
   `is_anonymous: false` means a verified phone is linked. Keep the last value you saw.

@@ -133,6 +133,20 @@ def _refresh_rejected(linked: bool | None) -> ApiError:
     return ApiError(401, "invalid_refresh", details={"account_linked": linked})
 
 
+async def _lost_rotation(db: AsyncSession, ctx: ApiContext, session: AuthSession,
+                         now: datetime) -> AuthSession | None:  # fmt: skip
+    """The session that replaced `session` when that answer never reached the phone: rotated
+    within `refresh_reuse_grace_seconds`, by rotation (not logout / reuse revocation), and the
+    replacement itself not rotated or revoked since. None = real reuse."""
+    grace = timedelta(seconds=ctx.settings.refresh_reuse_grace_seconds)
+    if session.revoked_at is None or now - session.revoked_at > grace:
+        return None
+    return await db.scalar(
+        select(AuthSession).where(AuthSession.rotated_from == session.id,
+                                  AuthSession.revoked_at.is_(None), AuthSession.expires_at > now)
+        .order_by(AuthSession.id.desc()).limit(1).with_for_update())  # fmt: skip
+
+
 async def rotate_refresh(db: AsyncSession, ctx: ApiContext, refresh_token: str) -> TokenPair:
     refresh_hash = ctx.hash(refresh_token, purpose="refresh")
     session = await db.scalar(
@@ -143,6 +157,14 @@ async def rotate_refresh(db: AsyncSession, ctx: ApiContext, refresh_token: str) 
     linked = await has_verified_phone(db, session.user_id)
     now = _now()
     if session.revoked_at is not None:
+        retry = await _lost_rotation(db, ctx, session, now)
+        if retry is not None:
+            user = await db.get(User, session.user_id)
+            assert user is not None  # FK
+            ensure_active(user)
+            retry.revoked_at = now  # the pair the phone never got
+            return await issue_session(db, ctx, user, device_id=session.device_id,
+                                       rotated_from=retry.id)  # fmt: skip
         # Reuse of a rotated token: someone else may hold the chain. Revoke all of the user's
         # sessions on that device (or all, if unknown) and force sign-in.
         stmt = update(AuthSession).where(
