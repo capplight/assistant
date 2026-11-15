@@ -78,7 +78,7 @@ export class Capture {
     this.newId = d.newId ?? (() => Crypto.randomUUID());
   }
 
-  async saveText(o: { text: string; source: ItemSource; pageId?: string; url?: string }): Promise<LocalRecord> {
+  async saveText(o: { text: string; source: ItemSource; pageId?: string; url?: string; fromLine?: boolean }): Promise<LocalRecord> {
     const text = o.text.trim();
     const id = this.newId();
     const occurredAt = new Date().toISOString();
@@ -113,6 +113,8 @@ export class Capture {
       ...(o.url && kind !== 'link' ? { url: o.url } : {}),
       ...(hash ? { contentHash: hash } : {}),
       ...(o.pageId ? { pageId: o.pageId } : {}),
+      // items.md «Phone QA 1»: a phrase of the line saved here — the server may still make it an expense or a task.
+      ...(o.fromLine ? { sourceMeta: { from_line: true } } : {}),
     };
     await this.d.outbox.enqueue('item.create', payload);
     this.d.onSaved?.();

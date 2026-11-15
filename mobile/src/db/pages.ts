@@ -112,6 +112,8 @@ export interface PagesRepository {
   restoreLinks(links: PageLink[]): Promise<void>;
   /** Every row of one record, on any page (S39: «сейчас здесь», «уже там»). */
   linksForItem(itemKey: string): Promise<PageLink[]>;
+  /** Server ids of records the server placed on some page (a live row): the phone's own guess for them is dropped. */
+  placedItemIds(): Promise<Set<string>>;
   /** One row by (page key, item key). */
   getLink(pageKey: string, itemKey: string): Promise<PageLink | null>;
   /**
@@ -302,6 +304,10 @@ export class InMemoryPagesRepository implements PagesRepository {
 
   async linksForItem(itemKey: string) {
     return [...this.links.values()].filter((l) => l.itemServerId === itemKey);
+  }
+
+  async placedItemIds() {
+    return new Set([...this.links.values()].filter((l) => !l.removedAt && !l.itemServerId.startsWith('local:')).map((l) => l.itemServerId));
   }
 
   async getLink(pageKey: string, itemKey: string) {
@@ -643,6 +649,13 @@ export class SqlitePagesRepository implements PagesRepository {
   async linksForItem(itemKey: string) {
     const rows = await this.db.getAllAsync<LinkRow>('SELECT * FROM page_links WHERE item_server_id = ?', itemKey);
     return rows.map(linkFromRow);
+  }
+
+  async placedItemIds() {
+    const rows = await this.db.getAllAsync<{ item_server_id: string }>(
+      "SELECT DISTINCT item_server_id FROM page_links WHERE removed_at IS NULL AND item_server_id NOT LIKE 'local:%'",
+    );
+    return new Set(rows.map((r) => r.item_server_id));
   }
 
   async getLink(pageKey: string, itemKey: string) {

@@ -170,8 +170,9 @@ async def test_rules_first_reads_without_the_model(env9):
         assert script.n("ExpenseReply") == 0
 
 
-async def test_parse_without_ai_consent_is_the_form_unless_rules_first(env9):
-    for rules_first, status in ((False, "form"), (True, "ok")):
+async def test_parse_without_ai_consent_is_read_by_code(env9):
+    # QA 1: without consent («Без ИИ») code reads the phrase in both modes; the model never
+    for rules_first, status in ((False, "ok"), (True, "ok")):
         app = env9.make_app(router9(env9.maker, Script12(expense=petrol())),
                             expenses_rules_first=rules_first)  # fmt: skip
         async with client(app) as c:

@@ -61,3 +61,30 @@ comparison is `original_sha256` (the bytes), not this.
 
 `duplicate` on `POST /v1/items` (week 10) also has `action_id`: the `auto_merge_exact` action;
 «Отменить» = `POST /v1/actions/{action_id}/undo` or `undo_path` (`duplicates.md`).
+
+## Phone QA 1 (2026-11-15)
+
+**A line phrase saved on the phone** (offline, «Без ИИ», the answering service down — Ф-47:
+`POST /v1/items` with `source_meta: {"from_line": true}`, `source` typed or mic, text only, no title, ≤300 chars; without the flag a record is never converted) is read by code the way the
+line reads it, before the page rules place it:
+- a spend («Я потратил 2000 на мороженое», «Я сегодня потратил 5000») → an expense with this record
+  as its record, on «Расходы» (not «Заметки»); action `create_expense`, «Отменить» takes the
+  expense away and keeps the record;
+- a to-do («купить хлеб на завтра, и напомни в 10 утра») → a task on «Дела» with this record
+  (`list_key: "todo"`, «Купить хлеб», `due_date` = tomorrow); several («купить молоко, сыр и
+  яйца») → one task each and the phrase goes to the trash; action `save_item`, «Отменить» as for
+  the line. A reminder is never set this way (it needs «Сохранить»);
+- anything else stays a note. The phone gets it all by `/v1/sync` (`expenses`, `tasks`,
+  `screen_items`, `actions`). The phone must drop its own «Заметки» placeholder row for the record
+  when the server's rows arrive.
+
+**The AI label.** `ai_label` is set only when the record's content was made by the assistant
+(`ai_generated: true`: a КП, a draft). A record from the person's own words never has it, even
+when the assistant made its title or summary (`ai_fields: ["title"]` stays to say which fields
+were made). Migration 0028 cleared `ai_generated` on records made from the person's phrases.
+
+**Errors.** Items have `error_ru` next to `error`: the text to show. Voice records never stay
+«Разбираю…»: without speech-to-text they fail at once (`stt_unavailable`); while the provider is
+down they are retried, and after 10 minutes in `pending` / `processing` they fail (`stt_timeout`).
+Both: «Не получилось разобрать запись. Запись сохранена — её можно прослушать.» The recording is
+kept.

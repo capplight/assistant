@@ -17,7 +17,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from assistant.actions import engine
 from assistant.db.models import Item
-from assistant.db.models_actions import Initiator
 from assistant.db.models_pages import Screen
 from assistant.db.models_tasks import ListKey, Task
 from assistant.db.models_v2 import RecordKind, RecordSource, RecordStatus
@@ -170,7 +169,7 @@ async def add(session: AsyncSession, user_id: int, specs: Sequence[TaskSpec], *,
                     status=RecordStatus.PENDING, title=None, text=body,
                     text_lang=detect_lang(body), content_hash=content_hash(body),
                     source_meta={"task_list": str(spec.list_key)},
-                    ai_generated=by == Initiator.AGENT)  # fmt: skip
+                    ai_generated=False)  # the person's own words (only a title may be made)
         session.add(item)
         await session.flush()
         item.occurred_at = item.created_at
@@ -206,6 +205,51 @@ async def add(session: AsyncSession, user_id: int, specs: Sequence[TaskSpec], *,
     if page is not None:
         out.pages.add(page.id)
     out.sentence = sentence_for(page, list_key, titles)
+    return out
+
+
+async def attach(session: AsyncSession, user_id: int, item: Item, spec: TaskSpec, *, by: str,
+                 now: datetime) -> Added:  # fmt: skip
+    """The person's own record (a line phrase saved on the phone offline, Ф-47) becomes the
+    record of one task on its list page, as if the line had read it. «Отменить» = the task and
+    its record go to the trash, as for a task made from the line."""
+    await lock_user(session, user_id)
+    if not shopping_on():
+        spec = as_todo(spec)
+    out = Added()
+    page, made = None, False
+    if spec.list_key == ListKey.SHOPPING:
+        page, made = await first_use_page(session, user_id, "shopping")
+    page = page or await list_page(session, user_id, spec.list_key)
+    out.page = page
+    if made and page is not None:
+        out.changes.append(page_made_change(page))
+    title = clean_title(spec.title)
+    meta = dict(item.source_meta or {})
+    meta["task_list"] = str(spec.list_key)
+    item.source_meta = meta
+    task = Task(user_id=user_id, item_id=item.id, list_key=str(spec.list_key), title=title,
+                qty=clean_short(spec.qty) if spec.list_key == ListKey.SHOPPING else None,
+                where_text=clean_short(spec.where) if spec.list_key == ListKey.SHOPPING
+                else None,
+                due_date=spec.due_date if spec.list_key == ListKey.TODO else None)  # fmt: skip
+    session.add(task)
+    await session.flush()
+    out.inverse = [{"op": "delete_entity_soft", "entity": "tasks", "id": str(task.public_id),
+                    "item": str(item.public_id)}]  # fmt: skip
+    if page is not None:
+        res = await engine.apply(session, user_id, [
+            {"op": "add_screen_item", "page": str(page.public_id),
+             "item": str(item.public_id)}], by=by, check=False, now=now)  # fmt: skip
+        out.pages |= res.pages | {page.id}
+    out.tasks.append(task)
+    out.items.add(str(item.public_id))
+    out.item_pks.append(item.id)
+    out.changes.append({"item_id": str(item.public_id), "task_id": str(task.public_id),
+                        "title": title, "kind": "create",
+                        "page_id": str(page.public_id) if page else None,
+                        "text": f"«{title}»" + (f" → {page.title}" if page else "")})
+    out.sentence = sentence_for(page, spec.list_key, [title])
     return out
 
 

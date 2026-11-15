@@ -531,7 +531,7 @@ export async function ask(
  */
 async function saveNote(text: string): Promise<void> {
   const capture = await getCapture();
-  const rec = await capture.saveText({ text, source: 'typed' });
+  const rec = await capture.saveText({ text, source: 'typed', fromLine: true });
   showSavedToast(rec.id, text);
 }
 

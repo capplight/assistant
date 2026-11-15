@@ -59,7 +59,7 @@ def _hit_out(hit: Hit) -> SearchHitOut:
         status=_LEGACY_STATUS.get(hit.status, hit.status), title=hit.title, snippet=hit.snippet,
         highlights=hit.highlights, occurred_at=hit.occurred_at, created_at=hit.created_at,
         ai_label=(get_settings().label_ai_generated
-                  if hit.ai_generated or hit.ai_fields else None),
+                  if hit.ai_generated else None),  # not for a made title of their record
         pages=[PageRefOut(id=p.id, title=p.title, icon=p.icon) for p in hit.pages],
         matched_by=hit.matched_by,
     )  # fmt: skip

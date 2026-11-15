@@ -550,7 +550,7 @@ async def tool_create(env: Any, args: CreateArgs, *, by_code: bool = False) -> R
             item = Item(user_id=m.user_id, client_id=uuid.uuid4(), kind=RecordKind.NOTE,
                         source=RecordSource.TYPED, status=RecordStatus.PENDING, title=title,
                         text=body, text_lang=detect_lang(body), content_hash=h, source_meta={},
-                        ai_generated=True)  # fmt: skip
+                        ai_generated=not by_code)  # by code = the person's own words  # fmt: skip
             s.add(item)
             await s.flush()
             item.occurred_at = item.created_at

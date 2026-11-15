@@ -3,6 +3,7 @@ import type { LocalRecord } from '@/db/records';
 import type { Page } from '@/store/pages';
 
 import { usePages } from '@/store/pages';
+import { useExpenses } from '@/expenses/store';
 import { useTasks } from '@/tasks/store';
 
 import { compareRank } from './lexorank';
@@ -19,13 +20,26 @@ const NOT_NOTES = new Set(['tasks', 'shopping', 'expenses', 'documents']);
  * link record that is not a task's own record and was not saved on «Дела», «Покупки», «Расходы» or
  * «Документы». Any other page: what was saved on it.
  */
-export function placesLocally(page: Page, record: LocalRecord, taskItems: ReadonlySet<string> = taskItemIds()): boolean {
+export function placesLocally(
+  page: Page,
+  record: LocalRecord,
+  taskItems: ReadonlySet<string> = taskItemIds(),
+  placed: ReadonlySet<string> = expenseItemIds(),
+): boolean {
   if (record.pageId === page.id) return true;
   if (!getTemplate(page.templateKey).placeAll) return false;
   if (!NOTE_KINDS.has(record.kind)) return false;
   const savedOn = record.pageId ? usePages.getState().pages.find((p) => p.id === record.pageId) : undefined;
   if (savedOn && NOT_NOTES.has(savedOn.templateKey)) return false;
-  return !(record.serverId && taskItems.has(record.serverId));
+  // Phone QA 1 (items.md): once the server filed the phrase — an expense, a task, a row on another page — the
+  // phone's own «Заметки» placeholder goes; the record shows only where the server put it.
+  if (record.serverId && (taskItems.has(record.serverId) || placed.has(record.serverId))) return false;
+  return true;
+}
+
+/** Server ids of the records that are expenses («Расходы»). */
+export function expenseItemIds(): Set<string> {
+  return new Set(Object.values(useExpenses.getState().entries).flatMap((e) => (e.item_id && !e.deleted_at ? [e.item_id] : [])));
 }
 
 /** Server ids of the records that are tasks («Дела», «Покупки»). */
@@ -72,7 +86,7 @@ export function comparePageEntries(a: PageEntry, b: PageEntry): number {
  * Records without a link have no key yet: they go where their date puts them, below rows placed
  * by hand. The server gives them the same place, so nothing jumps after sync.
  */
-export function pageEntries(page: Page, records: LocalRecord[], links: PageLink[]): PageEntry[] {
+export function pageEntries(page: Page, records: LocalRecord[], links: PageLink[], placedElsewhere: ReadonlySet<string> = new Set()): PageEntry[] {
   const byItem = new Map<string, PageLink>();
   // A page made offline has rows under both keys once it is on the server: pending ones win.
   for (const l of links) {
@@ -80,13 +94,14 @@ export function pageEntries(page: Page, records: LocalRecord[], links: PageLink[
     if (!old || ((l.pending ?? 0) > 0 && !(old.pending ?? 0))) byItem.set(l.itemServerId, l);
   }
   const taskItems = taskItemIds();
+  const placed = new Set([...expenseItemIds(), ...placedElsewhere]);
   const linked: PageEntry[] = [];
   const loose: PageEntry[] = [];
   for (const record of records) {
     const link = linkOf(byItem, record);
     if (link) {
       if (!link.removedAt) linked.push({ record, link });
-    } else if (placesLocally(page, record, taskItems)) {
+    } else if (placesLocally(page, record, taskItems, placed)) {
       loose.push({ record, link: null });
     }
   }

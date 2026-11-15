@@ -182,16 +182,31 @@ def _shop_line(part: str) -> TaskSpec | None:
     return TaskSpec(ListKey.SHOPPING, title, qty)
 
 
+# «…, и напомни в 10 утра»: a reminder needs the person's «Сохранить» (S13), so code keeps the
+# to-do and leaves the reminder clause out of its title.
+_REMIND_TAIL = re.compile(r"[,;]?\s*(?:и\s+|а\s+)?(?:напомн|разбуд)\w*(?=$|[\s,.:;!]).*$",
+                          re.IGNORECASE)
+_DAY_IN_LINE = re.compile(
+    r"\s*(?:на\s+|в\s+|во\s+)?(?:сегодня|завтра|послезавтра|понедельник|вторник|среду|четверг|"
+    r"пятницу|субботу|воскресенье)(?=$|[\s,.:;!])", re.IGNORECASE)  # fmt: skip
+
+
 def rules_parse(text: str, today: date, default_list: str | None = None) -> Reading | None:
     """Code's reading of the simple shapes, or None (then the model, or a plain note). On a list
     page (`default_list`) a bare phrase is a line of that list: «хлеб, молоко» on «Покупки»."""
     phrase = " ".join(text.split()).strip(" .!")
     if not phrase or phrase.endswith("?") or len(phrase) > 500:
         return None
+    phrase = _REMIND_TAIL.sub("", phrase).strip(" .!,") or phrase
     m = _SHOP_HEAD.match(phrase)
     if m:
         rest = m.group("rest") or m.group("rest2") or m.group("rest3") or ""
+        due = to_date(day_in(rest), today)  # «купить хлеб на завтра»: a day for the to-do
+        if due is not None:
+            rest = _DAY_IN_LINE.sub("", rest)
         specs = [s for s in (_shop_line(p) for p in _SPLIT.split(rest)) if s][:MAX_LINES]
+        for spec in specs:
+            spec.due_date = due
         return Reading(ListKey.SHOPPING, specs) if specs else None
     m = _TODO_HEAD.match(phrase)
     if m:
@@ -265,26 +280,29 @@ def model_inputs(text: str, default_list: str | None = None) -> TaskInputs:
 
 async def read_phrase(text: str, *, today: date, rules_first: bool, router: object | None,
                       user_id: int, default_list: str | None = None) -> Reading | None:  # fmt: skip
-    """The phrase as tasks, or None (a plain note). Never raises for a provider problem.
+    """The phrase as tasks, or None (a plain note). Never raises for a provider problem: without
+    the model code reads it (`rules_parse`).
     `default_list`: the list of the page the line is on, if it is «Покупки» or «Дела»."""
     if rules_first:
         found = rules_parse(text, today, default_list)
         if found is not None:
             return found
+    # The model down, «Без ИИ», no consent, an odd reply: code still reads the simple shapes
+    # («купить хлеб на завтра»), so a to-do never ends up as a note (QA 1, 2026-11-15).
     if router is None:
-        return None
+        return None if rules_first else rules_parse(text, today, default_list)
     try:
         result = await router.run(LLMTask.TASKS_PARSE, TasksReply,  # type: ignore[attr-defined]
                                   model_inputs(text, default_list),
                                   user_id=user_id)  # fmt: skip
     except AIConsentRequired:
-        return None
+        return None if rules_first else rules_parse(text, today, default_list)
     except AIError as exc:
         log.info("tasks_parse unavailable: %s", error_text(exc))
-        return None
-    except Exception as exc:  # an odd reply: the phrase is still kept, as a note
+        return None if rules_first else rules_parse(text, today, default_list)
+    except Exception as exc:  # an odd reply: code's reading, else the phrase is kept as a note
         log.warning("tasks_parse failed: %s", error_text(exc))
-        return None
+        return None if rules_first else rules_parse(text, today, default_list)
     if result.data is None:
         return None
     reading = check_reply(text, result.data, today)

@@ -162,7 +162,8 @@ async def test_note_is_enriched_and_labelled(db_app):
     assert got["title"] == "Заголовок записи" and got["summary"] == "Краткая сводка"
     assert got["status"] == "ready" and got["enrich_state"] == "done"
     assert got["ai_fields"] == ["title", "summary"] and got["ai_generated"] is False
-    assert got["ai_label"] == "Подготовил помощник (ИИ) по вашим записям — проверьте"
+    # QA 1: a made title / summary of the person's own record is not a reason for the label
+    assert got["ai_label"] is None
     assert fake.calls == 1
     req = fake.requests[0]
     assert req.model == "claude-haiku-5-5" and req.json_schema is not None

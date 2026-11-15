@@ -194,7 +194,7 @@ export async function loadEntries(page: Page): Promise<PageEntry[]> {
     ...(page.serverId ? await repo.linksFor(page.serverId) : []),
     ...(await repo.linksFor(`local:${page.id}`)),
   ];
-  return pageEntries(page, await records.list(2000), links);
+  return pageEntries(page, await records.list(2000), links, await repo.placedItemIds());
 }
 
 // --- on a page: «Выше», «Ниже», dragged ---

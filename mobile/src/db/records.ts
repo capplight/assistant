@@ -129,7 +129,8 @@ function fromServer(item: ItemOut, now: number, base?: LocalRecord | null): Loca
     aiGenerated: !!item.ai_generated,
     hiddenReason: item.hidden_reason ?? null,
     canonicalId: item.canonical_id ?? null,
-    error: item.error ?? null,
+    // The server's words for a failure win over the code (items.md: `error_ru`, e.g. stt_unavailable / stt_timeout).
+    error: item.error_ru ?? item.error ?? null,
     pending: base?.pending ?? {},
     seq: item.seq,
     occurredAt: item.occurred_at ?? base?.occurredAt ?? item.created_at,

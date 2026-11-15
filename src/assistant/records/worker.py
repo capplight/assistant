@@ -23,6 +23,7 @@ from assistant.records.ingest import JOB_PREFIX, IngestDeps, give_up, run_ingest
 
 log = logging.getLogger("assistant.records.worker")
 PURGE_EVERY_SECONDS = 3600
+STUCK_EVERY_SECONDS = 60
 BATCH_TICK_SECONDS = 30.0
 
 
@@ -104,10 +105,21 @@ async def purge_once(maker: async_sessionmaker[AsyncSession],
     return n
 
 
+async def fail_stuck(maker: async_sessionmaker[AsyncSession]) -> int:
+    """«Разбираю…» never forever (QA 1): voice records past the speech-to-text deadline fail."""
+    async with maker() as s:
+        stuck = await store.fail_stuck_voice(s, store.now_utc())
+        await s.commit()
+    if stuck:
+        log.info("voice records past the speech-to-text deadline: %s", stuck)
+    return stuck
+
+
 async def worker_loop(maker: async_sessionmaker[AsyncSession], deps: IngestDeps,
                       stop: asyncio.Event, poll: float) -> None:  # fmt: skip
     next_purge = 0.0
     next_batch = 0.0
+    next_stuck = 0.0
     while not stop.is_set():
         busy = False
         try:
@@ -116,6 +128,9 @@ async def worker_loop(maker: async_sessionmaker[AsyncSession], deps: IngestDeps,
                 purged = await purge_once(maker, deps)
                 if purged:
                     log.info("purged %s records from trash", purged)
+            if time.monotonic() >= next_stuck:
+                next_stuck = time.monotonic() + STUCK_EVERY_SECONDS
+                await fail_stuck(maker)
             if deps.router is not None and deps.settings is not None \
                     and time.monotonic() >= next_batch:
                 next_batch = time.monotonic() + BATCH_TICK_SECONDS

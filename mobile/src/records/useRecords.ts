@@ -34,12 +34,13 @@ export function usePageEntries(page: Page | undefined): PageEntry[] | null {
     if (!page) return [];
     const [records, repo] = await Promise.all([getRecords(), getPagesRepo()]);
     // Rows made on this phone before the page reached the server are under its local key.
-    const [list, server, local] = await Promise.all([
+    const [list, server, local, placed] = await Promise.all([
       records.list(LIST_LIMIT),
       page.serverId ? repo.linksFor(page.serverId) : Promise.resolve([]),
       repo.linksFor(pageKey({ id: page.id, serverId: null })),
+      repo.placedItemIds(),
     ]);
-    return pageEntries(page, list, [...server, ...local]);
+    return pageEntries(page, list, [...server, ...local], placed);
   }, [page?.id, page?.serverId, page?.templateKey]);
 }
 

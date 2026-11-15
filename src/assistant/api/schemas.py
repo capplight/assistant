@@ -203,6 +203,9 @@ class SourceMetaIn(BaseModel):
     total_duration_ms: int | None = Field(default=None, ge=0)
     file_name: str | None = Field(default=None, max_length=255)
     mime: str | None = Field(default=None, max_length=127)
+    # QA 1: the phrase was said in the assistant line and saved on the phone (offline, «Без ИИ»,
+    # the service down): the server reads it as the line would (a spend, a to-do)
+    from_line: bool | None = None
 
     @model_validator(mode="after")
     def _fragment_fits(self) -> "SourceMetaIn":
@@ -272,6 +275,7 @@ class ItemOut(BaseModel):
     canonical_id: uuid.UUID | None  # set when hidden as a repeat of another record
     hidden_reason: str | None  # duplicate_merged | null
     error: str | None  # short code, e.g. pdf_encrypted, ingest_failed
+    error_ru: str | None = None  # ready text for that code («Не получилось разобрать запись…»)
     files: list[ItemFileOut]
     seq: int
     occurred_at: datetime | None

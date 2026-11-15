@@ -310,7 +310,7 @@ async def create(session: AsyncSession, user_id: int, spec: NewExpense, *, by: s
                     status=RecordStatus.PENDING, title=None, text=body,
                     text_lang=detect_lang(body), content_hash=content_hash(body),
                     source_meta={"expense": True, **(spec.record_meta or {})},
-                    ai_generated=by == Initiator.AGENT)  # fmt: skip
+                    ai_generated=False)  # the person's words / a code-made line, not AI content
         session.add(item)
         await session.flush()
         item.occurred_at = item.created_at

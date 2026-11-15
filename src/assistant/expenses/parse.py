@@ -398,25 +398,28 @@ def model_inputs(text: str, categories: list[tuple[str, str]]) -> TaskInputs:
 async def read_phrase(text: str, *, today: date, rules_first: bool, router: object | None,
                       user_id: int, categories: list[tuple[str, str]],
                       on_page: bool = False) -> ExpenseDraft | None:  # fmt: skip
-    """The phrase as an expense, or None. Never raises for a provider problem. `categories`:
+    """The phrase as an expense, or None. Never raises for a provider problem: without the model
+    code reads it (`rules_parse`). `categories`:
     (key, title) of the person's live categories, for the model to choose from."""
     if rules_first:
         found = rules_parse(text, today, on_page=on_page)
         if found is not None:
             return found
+    # The model down, «Без ИИ», no consent, an odd reply: code still reads the simple shapes
+    # («потратил 2000 на мороженое»), so a spend never ends up as a note (QA 1, 2026-11-15).
     if router is None:
-        return None
+        return None if rules_first else rules_parse(text, today, on_page=on_page)
     try:
         result = await router.run(LLMTask.EXPENSE_PARSE, ExpenseReply,  # type: ignore[attr-defined]
                                   model_inputs(text, categories), user_id=user_id)  # fmt: skip
     except AIConsentRequired:
-        return None
+        return None if rules_first else rules_parse(text, today, on_page=on_page)
     except AIError as exc:
         log.info("expense_parse unavailable: %s", error_text(exc))
-        return None
-    except Exception as exc:  # an odd reply: the phrase is still kept, as a note
+        return None if rules_first else rules_parse(text, today, on_page=on_page)
+    except Exception as exc:  # an odd reply: code's reading, else the phrase is kept as a note
         log.warning("expense_parse failed: %s", error_text(exc))
-        return None
+        return None if rules_first else rules_parse(text, today, on_page=on_page)
     if result.data is None:
         return None
     draft = check_reply(text, result.data, today, {k for k, _ in categories})

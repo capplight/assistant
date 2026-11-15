@@ -39,7 +39,10 @@ one gets `deferred`.
 «добавь в покупки молоко», «позвонить маме завтра» become tasks on «Покупки» / «Дела и
 напоминания» (one `action`, `kind: "save_item"`, «Добавил в Покупки: хлеб, молоко, лекарства
 маме.», the `action` event also has `"tasks": [Task]`; details and who reads the phrase:
-`today.md`). Not a list → a plain note as above. «Напомни …», «разбуди …», «не дай забыть …»,
+`today.md`). Not a list → a plain note as above. When the reader model is down, in «Без ИИ» or
+without consent, code reads spends and lists (`expenses.parse.rules_parse`,
+`tasks.parse.rules_parse`), so «Я потратил 2000 на мороженое» is an expense and «купить хлеб на
+завтра, и напомни в 10 утра» a to-do for tomorrow, never a note (phone QA 1). «Напомни …», «разбуди …», «не дай забыть …»,
 «поставь будильник …» give a `reminder_draft` event for S13 (nothing saved until [Сохранить]:
 `reminders.md`). The phone should send these phrases here, not to `/reminders/parse`.
 

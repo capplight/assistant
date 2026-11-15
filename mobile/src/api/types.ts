@@ -203,8 +203,10 @@ export type ItemOut = {
   /** Public id of the record this one was merged into (hidden repeat). */
   canonical_id?: string | null;
   hidden_reason?: string | null;
-  /** Short code, e.g. pdf_encrypted, ingest_failed. */
+  /** Short code, e.g. pdf_encrypted, ingest_failed, stt_unavailable, stt_timeout. */
   error?: string | null;
+  /** items.md «Phone QA 1»: the text to show for `error` («Не получилось разобрать запись…»). */
+  error_ru?: string | null;
   occurred_at: string | null;
   created_at: string;
   updated_at: string;

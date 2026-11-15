@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from assistant.api.consent_gate import require_base_consent
 from assistant.api.deps import CurrentUser, Db
 from assistant.api.errors import ApiError
+from assistant.api.line_records import file_line_phrase
 from assistant.api.schemas import (
     DuplicateOut,
     ItemCreateIn,
@@ -112,6 +113,22 @@ def _file_out(f: File) -> ItemFileOut:
     )  # fmt: skip
 
 
+# What the card shows for a record that could not be read (QA 1: never «Разбираю…» forever).
+ERROR_RU = {
+    "stt_unavailable": "Не получилось разобрать запись. Запись сохранена — её можно прослушать.",
+    "stt_timeout": "Не получилось разобрать запись. Запись сохранена — её можно прослушать.",
+    "ingest_failed": "Не получилось прочитать. Оригинал сохранён.",
+    "original_missing": "Файл не дошёл. Пришлите его ещё раз.",
+    "pdf_encrypted": "PDF защищён паролем — не получилось прочитать.",
+    "pdf_too_many_pages": "Слишком длинный PDF — прочитать не получилось.",
+    "pdf_unreadable": "Не получилось прочитать PDF. Оригинал сохранён.",
+    "docx_unreadable": "Не получилось прочитать документ. Оригинал сохранён.",
+    "xlsx_unreadable": "Не получилось прочитать таблицу. Оригинал сохранён.",
+    "legacy_failed": "Не получилось прочитать.",
+}
+ERROR_RU_OTHER = "Не получилось прочитать."
+
+
 def _error_code(item: Item) -> str | None:
     if item.error is None:
         return None
@@ -132,10 +149,11 @@ def item_out(item: Item, files: list[File], canonical_public_id: uuid.UUID | Non
         source_meta=item.source_meta or {}, confidence=item.confidence,
         ai_generated=item.ai_generated, ai_fields=item.ai_fields or [],
         ai_label=(get_settings().label_ai_generated
-                  if item.ai_generated or item.ai_fields else None),
+                  if item.ai_generated else None),  # QA 1: never on the person's own record
         enrich_state=item.enrich_state, content_hash=item.content_hash,
         original_sha256=item.original_sha256, canonical_id=canonical_public_id,
         hidden_reason=item.hidden_reason, error=_error_code(item),
+        error_ru=ERROR_RU.get(_error_code(item) or "", ERROR_RU_OTHER) if item.error else None,
         files=[_file_out(f) for f in files], seq=item.seq, occurred_at=item.occurred_at,
         created_at=item.created_at, updated_at=item.updated_at, deleted_at=item.deleted_at,
         purge_after=item.purge_after,
@@ -326,6 +344,8 @@ async def create_item(body: ItemCreateIn, user: GatedUser, db: Db,
     else:
         await enqueue_ingest(db, item)
     await db.flush()
+    if canonical is None:  # a line phrase saved on the phone offline: a spend / a to-do (QA 1)
+        await file_line_phrase(db, user.id, item, datetime.now(UTC))
     if not item.fragment_no:  # a fragment reaches pages through its recording
         await place_item(db, item)
     if canonical is None and text:

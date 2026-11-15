@@ -77,7 +77,8 @@ export function statusLine(rec: LocalRecord, t: T, now: number = Date.now()): st
     case 'needs_consent':
       return t('record.needs_consent');
     case 'failed':
-      return t('record.failed');
+      // The server's own words when it sent them (a voice that could not be read: stt_unavailable / stt_timeout).
+      return rec.error && /\s/.test(rec.error) ? rec.error : t('record.failed');
     default:
       return null;
   }

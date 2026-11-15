@@ -239,3 +239,26 @@ async def needs_consent_items(session: AsyncSession, user_id: int) -> list[Item]
             .with_for_update()
         )
     )  # fmt: skip
+
+
+STT_DEADLINE_SECONDS = 600  # «Разбираю…» never longer than this (QA 1, 2026-11-15)
+
+
+async def fail_stuck_voice(session: AsyncSession, now: datetime,
+                           deadline_s: int = STT_DEADLINE_SECONDS) -> int:  # fmt: skip
+    """Voice records still `pending` / `processing` after the deadline (no speech-to-text, an
+    outage, a lost job) end as `failed` with `error = "stt_timeout"`: the app shows «Не
+    получилось разобрать запись» with the recording kept. Their ingest jobs are dropped. A
+    later successful run is not blocked (the person may «Повторить»)."""
+    rows = (await session.execute(text("""
+        UPDATE items SET status = 'failed', error = 'stt_timeout', processed_at = :now
+        WHERE kind = 'voice' AND status IN ('pending', 'processing') AND deleted_at IS NULL
+          AND created_at < :cutoff
+        RETURNING id"""), {"now": now, "cutoff": now - timedelta(seconds=deadline_s)})).all()
+    ids = [r[0] for r in rows]
+    if ids:
+        await session.execute(text("""
+            DELETE FROM jobs WHERE kind LIKE 'ingest:%' AND status = 'queued'
+              AND CAST(payload ->> 'item_id' AS BIGINT) = ANY(:ids)
+        """), {"ids": ids})  # fmt: skip
+    return len(ids)

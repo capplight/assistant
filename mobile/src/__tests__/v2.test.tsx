@@ -12,6 +12,7 @@ import { getRecords } from '@/db';
 import { looksLikeKp, openServerKp } from '@/kp/start';
 import { useKp } from '@/kp/store';
 import { useConnectivity } from '@/store/connectivity';
+import { placesLocally } from '@/pages/contents';
 import { mainTabs, visiblePages } from '@/pages/tabs';
 import { isDefaultTitle } from '@/pages/templates';
 import { statusLine } from '@/records/format';
@@ -406,5 +407,33 @@ describe('phone QA 1 (docs/design/qa/v2-phone-qa-1.md)', () => {
     const rec = { status: 'processing', text: null, createdAt: Date.now() - 120_000, kind: 'voice' } as never;
     expect(statusLine(rec, t)).toBe('record.processing_stuck');
     expect(statusLine({ ...(rec as object), createdAt: Date.now() } as never, t)).toBe('record.processing');
+  });
+});
+
+describe('backend QA follow-up (items.md «Phone QA 1»)', () => {
+  const t = (k: string) => k;
+
+  it('a phrase the server filed elsewhere leaves «Заметки»: an expense, a task, a row on another page', () => {
+    const notes = pageOf('notes');
+    const rec = { id: 'r1', serverId: 'srv-r1', kind: 'note', pageId: null } as never;
+    expect(placesLocally(notes, rec, new Set(), new Set())).toBe(true);
+    expect(placesLocally(notes, rec, new Set(), new Set(['srv-r1']))).toBe(false);
+    expect(placesLocally(notes, rec, new Set(['srv-r1']), new Set())).toBe(false);
+  });
+
+  it('an offline save from the line says so (`source_meta.from_line`), so the server may file it', async () => {
+    const outbox = resetApp();
+    finishOnboarding('no_ai');
+    await renderRouter(APP_DIR, { initialUrl: '/' });
+    await fireEvent.changeText(screen.getByTestId('assistant-input'), 'потратил 2000 на мороженое');
+    await fireEvent(screen.getByTestId('assistant-input'), 'submitEditing');
+    await settle(() => outbox.all().some((r) => r.kind === 'item.create'));
+    expect(outbox.all().find((r) => r.kind === 'item.create')!.payload).toMatchObject({ sourceMeta: { from_line: true } });
+  });
+
+  it('a voice the server could not read shows its words, not «Разбираю…»', () => {
+    const rec = { status: 'failed', text: null, createdAt: Date.now(), kind: 'voice', error: 'Не получилось разобрать запись. Запись сохранена — её можно прослушать.' } as never;
+    expect(statusLine(rec, t)).toBe('Не получилось разобрать запись. Запись сохранена — её можно прослушать.');
+    expect(statusLine({ ...(rec as object), error: 'stt_timeout' } as never, t)).toBe('record.failed');
   });
 });

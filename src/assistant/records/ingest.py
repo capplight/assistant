@@ -36,7 +36,13 @@ from assistant.memory import (
 )
 from assistant.pages import place_item
 from assistant.records import enrich, store, voice
-from assistant.records.adapters import FakeOcr, FakeTranscriber, Ocr, Transcriber
+from assistant.records.adapters import (
+    FakeOcr,
+    FakeTranscriber,
+    Ocr,
+    Transcriber,
+    TranscriberUnavailable,
+)
 from assistant.records.extract import (
     Extracted,
     ExtractError,
@@ -196,7 +202,12 @@ async def _extract(kind: str, data: bytes, mime: str, size: int, deps: IngestDep
         return _Result(text=ocr.text, confidence=ocr.confidence, review=review,
                        meta={"ocr": deps.ocr.name})  # fmt: skip
     if kind == RecordKind.VOICE:
-        tr = await deps.transcriber.transcribe(data, mime=mime, lang_hint=None)
+        try:
+            tr = await deps.transcriber.transcribe(data, mime=mime, lang_hint=None)
+        except TranscriberUnavailable as exc:
+            if deps.transcriber.name == "none":  # nothing configured: waiting will not help
+                raise ExtractError("stt_unavailable") from exc
+            raise  # an outage: the queue retries until `stt_deadline` (store.fail_stuck_voice)
         review = detect_review_fields(tr.text)  # a fragment's own fields; voice.py rebuilds them
         if tr.confidence < store.KEEP_BELOW_CONFIDENCE:
             review["transcript"] = {"kind": "transcript", "value": None, "state": "unverified"}
