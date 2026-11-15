@@ -12,3 +12,4 @@ Items the founder accepted for now and wants revisited later.
 - **Week 18:** a provider whose SDK fails to import (ModuleNotFoundError) must count as a provider failure and fall through to the fallback in the chain; on the device test the chat showed «связь прервалась» instead of answering via Groq.
 - **Week 18:** per-person message rate limit (per minute + per day) on the chat/AI path (founder 2026-11-12).
 - **Editor pass on all app text (founder 2026-11-13):** after the redesign, an editor rewrites every user-facing string (RU, then KK via the review CSV) — short, clear, consistent. Not started.
+- **Imports and photo cleanup (founder agreed with the recommendations 2026-11-15, not scheduled):** AI-chat export import (ChatGPT/Claude/Gemini files), WhatsApp chat export, on-device gallery cleanup (duplicates, blurry, screenshots) — see `docs/spec/proposals/integrations-access.md`.
