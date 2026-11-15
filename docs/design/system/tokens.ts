@@ -304,4 +304,8 @@ export const chat = {
 /** Tabs (Ф-58). At fontScale >= 1.5: only today · chat · more (labels 13, bar 74). */
 export const tabs = { default: ['today', 'notes', 'chat', 'expenses', 'more'], largeFont: ['today', 'chat', 'more'] } as const;
 
+/** v4 (Ф-65…Ф-67, Ф-73). */
+export const notice = { position: 'top', height: 52, radius: 22, ms: 3000, deleteMs: 5000, progressHeight: 2 } as const;
+export const changedMark = { dot: 14, ringAlpha: 0.5, rowTintAlpha: 0.33, ttlHours: 24, label: 'изменил помощник' } as const;
+
 export const alarmScreen = { bg: '#B4361E', text: '#FFFFFF' } as const; // unchanged
