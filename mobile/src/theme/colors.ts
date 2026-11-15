@@ -204,8 +204,8 @@ export const noteInk = { light: { ink: '#1F2B24', ink2: '#4A5A50' }, dark: { ink
 /** «Расходы» categories: solid = dot / bar / icon, tint = solid at 12% (light) / 22% (dark) behind the icon. */
 export type CategoryKey = 'food' | 'transport' | 'home' | 'cafe' | 'health' | 'kids' | 'bills' | 'other';
 export const categoryColors: Record<'light' | 'dark', Record<CategoryKey, string>> = {
-  light: { food: '#2E9F6A', transport: '#3E7BEA', home: '#D98A0B', cafe: '#E36A5A', health: '#D9467A', kids: '#00A3B4', bills: '#56708F', other: '#8A9A93' },
-  dark: { food: '#5CC98F', transport: '#78A6FF', home: '#FFC061', cafe: '#FF9585', health: '#FF85AE', kids: '#4FD3E0', bills: '#93A9C6', other: '#A9BAB3' },
+  light: { food: '#2E9F6A', transport: '#3E7BEA', home: '#D98A0B', cafe: '#8A63D2', health: '#D9467A', kids: '#00A3B4', bills: '#56708F', other: '#8A9A93' },
+  dark: { food: '#5CC98F', transport: '#78A6FF', home: '#FFC061', cafe: '#C3A6FF', health: '#FF85AE', kids: '#4FD3E0', bills: '#93A9C6', other: '#A9BAB3' },
 };
 export const categoryTintAlpha = { light: 0.15, dark: 0.22 } as const;
 /** Darker variants for amounts on a light card (≥4.5:1); the dark theme uses `categoryColors.dark`. */
@@ -213,7 +213,7 @@ export const categoryText: Record<CategoryKey, string> = {
   food: '#1E7F52',
   transport: '#2F6FD6',
   home: '#A65A08',
-  cafe: '#B9483A',
+  cafe: '#7650C4',
   health: '#B23462',
   kids: '#00788A',
   bills: '#4A6280',

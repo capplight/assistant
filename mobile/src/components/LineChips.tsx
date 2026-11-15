@@ -2,7 +2,7 @@ import { CalendarClock, ListChecks, NotebookPen, ReceiptText, ShoppingCart, type
 import { useTranslation } from 'react-i18next';
 import { ScrollView } from 'react-native';
 
-import { useTheme } from '@/theme';
+import { useLayout, useTheme } from '@/theme';
 
 import { Chip } from './ui/Chip';
 
@@ -16,13 +16,16 @@ type Hint = { key: string; icon: LucideIcon; label: string; phrase: string };
 export function LineChips({ kind, onPick }: { kind: string; onPick: (phrase: string) => void }) {
   const theme = useTheme();
   const { t } = useTranslation();
+  const { width } = useLayout();
   const note: Hint = { key: 'note', icon: NotebookPen, label: t('line.chip_note'), phrase: t('line.chip_note_phrase') };
   const tomorrow: Hint = { key: 'tomorrow', icon: CalendarClock, label: t('line.chip_tomorrow'), phrase: t('line.chip_tomorrow') };
   const remind: Hint = { key: 'remind', icon: ListChecks, label: t('line.chip_remind'), phrase: t('line.chip_remind_phrase') };
   const buy: Hint = { key: 'buy', icon: ShoppingCart, label: t('line.chip_buy'), phrase: t('line.chip_buy_phrase') };
   const spend: Hint = { key: 'spend', icon: ReceiptText, label: t('line.chip_spend'), phrase: t('line.chip_spend_phrase') };
-  const hints: Hint[] =
+  const all: Hint[] =
     kind === 'tasks' ? [tomorrow, remind, buy] : kind === 'expenses' ? [spend, tomorrow] : kind === 'notes' ? [note, remind] : [note, tomorrow, remind];
+  // QA v2 §4.8: under 400 dp two chips, so the last one is never cut mid-word.
+  const hints = width < 400 ? all.slice(0, 2) : all;
   return (
     <ScrollView
       testID="line-chips"

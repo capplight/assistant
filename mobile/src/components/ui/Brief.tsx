@@ -183,8 +183,11 @@ export function MetricTile({
           {caption}
         </AppText>
       ) : null}
-      <View style={styles.flex} />
-      {progress !== undefined && progress !== null ? <ProgressBar value={progress} color={color} /> : null}
+      {progress !== undefined && progress !== null ? (
+        <View style={{ marginTop: theme.space[2] }}>
+          <ProgressBar value={progress} color={color} />
+        </View>
+      ) : null}
     </>
   );
   if (!onPress)

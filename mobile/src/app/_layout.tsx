@@ -8,7 +8,11 @@ import {
   useFonts,
 } from '@expo-google-fonts/onest';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
+import { NavigationBar } from 'expo-navigation-bar';
 import { StatusBar } from 'expo-status-bar';
+import * as SystemUI from 'expo-system-ui';
+import { useEffect } from 'react';
+import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useAlarmsLifecycle } from '@/alarms/useAlarms';
@@ -66,10 +70,22 @@ export default function RootLayout() {
 function RootStack() {
   const theme = useTheme();
   const { insets, landscape } = useLayout();
+  useEffect(() => {
+    // QA v2 §0.1: Android draws edge-to-edge; the system bar shows the root colour — the theme's `fade` — with light /
+    // dark buttons. Imperative and Android-only (the declarative component re-applies on every render).
+    if (Platform.OS !== 'android') return;
+    void SystemUI.setBackgroundColorAsync(theme.colors.fade).catch(() => undefined);
+    try {
+      NavigationBar.setStyle(theme.scheme === 'dark' ? 'light' : 'dark');
+    } catch {
+      // an old Android without the module: the bar keeps the system colour
+    }
+  }, [theme.colors.fade, theme.scheme]);
   const side = landscape ? { paddingLeft: insets.left, paddingRight: insets.right } : null;
   return (
     <>
       <StatusBar style={theme.scheme === 'dark' ? 'light' : 'dark'} />
+
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.colors.bg, ...side } }}>
         <Stack.Screen name="(main)" />
         <Stack.Screen name="(onboarding)" options={{ gestureEnabled: false }} />

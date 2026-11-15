@@ -124,8 +124,9 @@ function fromServer(item: ItemOut, now: number, base?: LocalRecord | null): Loca
     files: base?.files ?? [],
     pageId: base?.pageId ?? null,
     reviewFields: item.review_fields ?? base?.reviewFields ?? {},
-    // Created by the assistant, or it wrote the title or summary of the person's own record.
-    aiGenerated: !!item.ai_generated || (item.ai_fields?.length ?? 0) > 0,
+    // QA v2 §0.6: only what the assistant generated (a КП, a draft) carries the AI label — never the person's own
+    // record, even when the assistant wrote its title or summary (`ai_fields`).
+    aiGenerated: !!item.ai_generated,
     hiddenReason: item.hidden_reason ?? null,
     canonicalId: item.canonical_id ?? null,
     error: item.error ?? null,

@@ -782,7 +782,7 @@ describe('on screen', () => {
       () => screen.getByTestId(`move-target-${page('tasks').id}`).props.accessibilityState?.disabled === true,
     );
     expect(screen.getByTestId(`move-target-${page('tasks').id}`).props.accessibilityLabel).toBe(
-      'Дела и напоминания, уже там',
+      'Дела, уже там',
     );
     await fireEvent.press(screen.getByTestId(`move-target-${page('expenses').id}`));
     expect(screen.getByTestId('move-go').props.accessibilityLabel).toBe('Показать (1)');
@@ -812,7 +812,7 @@ describe('on screen', () => {
     await fireEvent.press(screen.getByTestId('my-pages-sheet-remove'));
     await settle(() => !tabOrder().includes('tasks'));
     expect(screen.getByTestId('undo-strip-text').props.children).toBe(
-      'Страница «Дела и напоминания» убрана. Записи остались.',
+      'Страница «Дела» убрана. Записи остались.',
     );
     await fireEvent.press(screen.getByTestId('undo-strip-undo'));
     // Back where it was; «Дела» is a fixed tab again (Ф-48).

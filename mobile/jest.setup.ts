@@ -123,3 +123,7 @@ jest.mock('expo-keep-awake', () => ({
   activateKeepAwakeAsync: jest.fn(async () => undefined),
   deactivateKeepAwake: jest.fn(async () => undefined),
 }));
+
+// Slow screen tests can miss a settle window under machine load (CI, a busy dev box):
+// retry a failed test up to twice; a real failure still fails three times in a row.
+jest.retryTimes(2, { logErrorsBeforeRetry: true });

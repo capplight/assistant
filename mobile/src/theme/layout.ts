@@ -44,6 +44,8 @@ export const size = {
   viewToggle: { width: 76, height: 36 },
   /** The fade under the floating bottom (content dissolves). */
   bottomFade: 150,
+  /** QA v2 §0.2: the end of a scrolling list stays clear of the floating bottom's fade and shadow. */
+  contentEndGap: 72,
   checkbox: 26,
   iconSm: 20,
   icon: 24,

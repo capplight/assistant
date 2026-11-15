@@ -31,7 +31,8 @@ type Props = {
  */
 export function ToastBar({ text, success, actions = [], onClose, closeLabel, textTestID, style, testID }: Props) {
   const theme = useTheme();
-  const column = theme.largeFont || actions.length > 0;
+  // Two lines only for two actions («Переложить · Отменить»); one action stays on the line (QA v2 §6.1).
+  const column = theme.largeFont || actions.length > 1;
   return (
     <View
       testID={testID}
@@ -39,7 +40,7 @@ export function ToastBar({ text, success, actions = [], onClose, closeLabel, tex
       style={[
         styles.bar,
         {
-          minHeight: actions.length > 0 ? theme.size.toastMinHeight : theme.size.toastHeight,
+          minHeight: actions.length > 1 ? theme.size.toastMinHeight : theme.size.toastHeight + 4,
           borderRadius: theme.radius.xl,
           backgroundColor: theme.colors.surfaceRaised,
           paddingLeft: theme.space[4],

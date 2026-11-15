@@ -75,6 +75,8 @@ type OnboardingState = {
   /** S04b was shown; it opens by itself only once. */
   phoneAskedAt: string | null;
   phoneLinkedAt: string | null;
+  /** «+7 701 ••• 12 90» for the profile card (QA v2 §5.1); the full number is not kept here. */
+  phoneMasked: string | null;
   /** «Как к вам обращаться?». The server's name wins after a sign-in. */
   displayName: string | null;
   accountConsent: AccountConsent | null;
@@ -98,7 +100,7 @@ type OnboardingState = {
   setPath: (path: OnboardingPath) => void;
   complete: () => void;
   markPhoneAsked: () => void;
-  markPhoneLinked: () => void;
+  markPhoneLinked: (phone?: string) => void;
   setDisplayName: (name: string | null) => void;
   requireAccountConsent: (c: AccountConsent) => void;
   clearAccountConsent: () => void;
@@ -116,6 +118,7 @@ const initial = {
   doneAt: null,
   phoneAskedAt: null,
   phoneLinkedAt: null,
+  phoneMasked: null,
   displayName: null,
   accountConsent: null,
   openedAt: null,
@@ -168,7 +171,7 @@ export const useOnboarding = create<OnboardingState>()(
       setStartConfig: ({ defaultPath, pathsEnabled }) => set({ defaultPath, pathsEnabled }),
       complete: () => set({ doneAt: new Date().toISOString() }),
       markPhoneAsked: () => set((s) => ({ phoneAskedAt: s.phoneAskedAt ?? new Date().toISOString() })),
-      markPhoneLinked: () => set({ phoneLinkedAt: new Date().toISOString() }),
+      markPhoneLinked: (phone) => set((s) => ({ phoneLinkedAt: new Date().toISOString(), phoneMasked: phone ? maskPhone(phone) : s.phoneMasked })),
       setDisplayName: (displayName) => set({ displayName }),
       requireAccountConsent: (accountConsent) => set({ accountConsent }),
       clearAccountConsent: () => set({ accountConsent: null }),
@@ -200,6 +203,7 @@ export const useOnboarding = create<OnboardingState>()(
         doneAt,
         phoneAskedAt,
         phoneLinkedAt,
+        phoneMasked,
         displayName,
         accountConsent,
         openedAt,
@@ -218,6 +222,7 @@ export const useOnboarding = create<OnboardingState>()(
         accountConsent,
         phoneAskedAt,
         phoneLinkedAt,
+        phoneMasked,
         displayName,
         language,
         welcomeSeenAt,
@@ -235,3 +240,11 @@ export const useOnboarding = create<OnboardingState>()(
 
 /** True when the user chose «Без ИИ»: no voice, no AI calls, text-only. */
 export const selectNoAi = (s: OnboardingState) => s.consent?.mode === 'no_ai';
+
+/** «+77010001290» → «+7 701 ••• 12 90». */
+export function maskPhone(phone: string): string {
+  const d = phone.replace(/\D/g, '');
+  if (d.length < 10) return phone;
+  const n = d.length === 10 ? `7${d}` : d;
+  return `+${n.slice(0, 1)} ${n.slice(1, 4)} ••• ${n.slice(-4, -2)} ${n.slice(-2)}`;
+}

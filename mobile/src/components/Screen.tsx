@@ -36,7 +36,7 @@ export function Screen({
       <ScreenBackground />
       {scroll ? (
         <ScrollView
-          contentContainerStyle={[pad, { paddingVertical: theme.space[4] }, styles.center, contentContainerStyle]}
+          contentContainerStyle={[pad, { paddingTop: theme.space[4], paddingBottom: theme.size.contentEndGap }, styles.center, contentContainerStyle]}
           keyboardShouldPersistTaps="handled"
         >
           {inner}

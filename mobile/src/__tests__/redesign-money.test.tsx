@@ -119,17 +119,18 @@ describe('«Расходы»: one total, the keys in a sheet, one «Требуе
     resetApp();
     finishOnboarding('full');
     await renderRouter(APP_DIR, { initialUrl: `/page/${expensesPage().id}` });
-    await settle(() => screen.queryByTestId('exp-bring') !== null);
+    // QA v2 §3.3: no «Чек» on the page — a receipt comes through «+» of the line on «Расходы».
+    await settle(() => screen.queryByTestId('exp-board') !== null);
+    expect(screen.queryByTestId('exp-bring')).toBeNull();
     expect(screen.queryByTestId('exp-kaspi')).toBeNull();
-    await fireEvent.press(screen.getByTestId('exp-bring'));
-    await settle(() => screen.queryByTestId('exp-bring-sheet') !== null);
-    expect(screen.getByTestId('exp-bring-camera')).toBeTruthy();
-    expect(screen.getByTestId('exp-bring-photo')).toBeTruthy();
-    expect(screen.queryByTestId('exp-bring-qr')).toBeNull();
-    expect(screen.queryByTestId('exp-bring-statement')).toBeNull();
+    await fireEvent.press(screen.getByTestId('assistant-plus'));
+    expect(screen.getByTestId('add-camera')).toBeTruthy();
+    expect(screen.getByTestId('add-photo')).toBeTruthy();
+    expect(screen.queryByTestId('add-qr')).toBeNull();
+    expect(screen.queryByTestId('add-file')).toBeNull();
     await act(async () => useFeatureStore.getState().set({ ...FEATURE_DEFAULTS, statements_pdf: true, receipt_qr: true }));
-    await settle(() => screen.queryByTestId('exp-bring-qr') !== null);
-    expect(screen.getByTestId('exp-bring-statement')).toBeTruthy();
+    await settle(() => screen.queryByTestId('add-qr') !== null);
+    expect(screen.getByTestId('add-file')).toBeTruthy();
   });
 });
 

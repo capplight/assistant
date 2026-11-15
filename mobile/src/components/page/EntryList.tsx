@@ -252,7 +252,7 @@ export function EntryList({
           onScrollBeginDrag={() => setTouching(true)}
           onMomentumScrollEnd={() => setTouching(false)}
           // The header sits right under the safe area (≤56 dp, ux-audit P0-2); the end clears the floating bottom.
-          contentContainerStyle={{ paddingTop: theme.space[2], paddingBottom: theme.space[4] }}
+          contentContainerStyle={{ paddingTop: theme.space[2], paddingBottom: theme.size.contentEndGap }}
           keyboardShouldPersistTaps="handled"
           ListHeaderComponent={header}
           ListFooterComponent={footer}

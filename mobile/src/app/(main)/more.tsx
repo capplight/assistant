@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { ChevronRight, CircleHelp, FolderInput, LayoutGrid, Phone, Plus, Search, Settings, ShieldAlert } from 'lucide-react-native';
+import { ChevronRight, CircleHelp, FolderInput, LayoutGrid, Plus, Search, Settings, ShieldAlert } from 'lucide-react-native';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
@@ -20,6 +20,7 @@ import { addCustomPage, ensureTemplatePage } from '@/pages/service';
 import { mainTabs } from '@/pages/tabs';
 import { usePageLabels } from '@/pages/usePageLabels';
 import { LIST_LIMIT, useLocalQuery } from '@/records/useRecords';
+import { useAssistant } from '@/store/assistant';
 import { useFeatures } from '@/store/features';
 import { useOnboarding } from '@/store/onboarding';
 import { selectSortedPages, usePages } from '@/store/pages';
@@ -50,11 +51,13 @@ export default function MoreScreen() {
   const shopping = useFeatures((f) => f.shopping);
   const name = useOnboarding((s) => s.displayName);
   const phoneLinked = useOnboarding((s) => s.phoneLinkedAt !== null);
+  const phone = useOnboarding((s) => s.phoneMasked);
   const needsConsent = useOnboarding((s) => s.accountConsent !== null);
   const needsSignIn = useSession((s) => s.needsSignIn);
   const showToast = useToast((s) => s.show);
   const docs = useKp((s) => s.docs);
   const actions = useTasks((s) => s.actions);
+  const messages = useAssistant((s) => s.messages);
   const [naming, setNaming] = useState(false);
   const records = useLocalQuery(async () => (await getRecords()).list(LIST_LIMIT), []);
   const { overflow } = mainTabs(pages, { largeFont: theme.largeFont, shopping });
@@ -66,6 +69,8 @@ export default function MoreScreen() {
   const lastDoc = [...liveDocs].sort((a, b) => (b.updated_at ?? '').localeCompare(a.updated_at ?? ''))[0];
   const today = new Date().toDateString();
   const todayActions = Object.values(actions).filter((a) => !a.undo_of && a.created_at && new Date(a.created_at).toDateString() === today);
+  const todayTurns = messages.filter((m) => m.role === 'user' && new Date(m.at).toDateString() === today);
+  const historyToday = todayTurns.length + todayActions.filter((a) => !a.message_id).length;
   const lastAction = [...todayActions].sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))[0];
   const time = (iso: string) => {
     try {
@@ -80,27 +85,27 @@ export default function MoreScreen() {
       else showToast(t('gallery.limit'), 4000);
     });
   const displayName = name ?? t('more.profile');
+  const signInFirst = needsSignIn || !phoneLinked;
+  const profileMeta = signInFirst ? t('more.sign_in_keep') : (phone ?? t('more.profile_hint'));
 
   return (
     <Screen testID="page-more" edges={['top']}>
       <Header title={t('more.title')} />
       <View style={{ gap: theme.space[3] }}>
-        {needsSignIn || needsConsent ? (
+        {needsConsent ? (
           <ListGroup>
-            {needsSignIn ? (
-              <ListRow testID="more-sign_in" icon={Phone} title={t('phone.sign_in_row')} meta={t('phone.sign_in_hint')} chevron onPress={() => router.push('/phone?reason=expired')} />
-            ) : null}
             {needsConsent ? (
               <ListRow testID="more-consent" icon={ShieldAlert} title={t('account_consent.row')} meta={t('account_consent.row_hint')} chevron onPress={() => router.push('/account-consent')} />
             ) : null}
           </ListGroup>
         ) : null}
 
+        {/* QA v2 §5.1: one profile card — signed in: the masked number; not yet / expired: the sign-in, here. */}
         <Pressable
           testID="more-profile"
           accessibilityRole="button"
-          accessibilityLabel={displayName}
-          onPress={() => router.push('/settings')}
+          accessibilityLabel={`${displayName}. ${profileMeta}`}
+          onPress={() => (signInFirst ? router.push(needsSignIn ? '/phone?reason=expired' : '/phone') : router.push('/settings'))}
           style={({ pressed }) => [
             styles.row,
             { backgroundColor: theme.colors.surface, borderRadius: theme.radius.xxl, padding: theme.space[4], gap: theme.space[3] },
@@ -116,7 +121,9 @@ export default function MoreScreen() {
           </View>
           <View style={styles.flex}>
             <AppText variant="headline">{displayName}</AppText>
-            <AppText variant="callout">{phoneLinked ? t('phone.linked') : t('more.profile_hint')}</AppText>
+            <AppText testID="profile-meta" variant="callout">
+              {profileMeta}
+            </AppText>
           </View>
           <Icon icon={ChevronRight} size="sm" color="iconSecondary" />
         </Pressable>
@@ -134,7 +141,7 @@ export default function MoreScreen() {
           <MetricTile
             testID="more-history"
             label={t('more.history')}
-            value={String(todayActions.length)}
+            value={String(historyToday)}
             unit={t('more.today_unit')}
             caption={lastAction?.created_at ? t('more.last_at', { time: time(lastAction.created_at) }) : t('more.history_empty')}
             color={metricColors[theme.scheme].reminders}

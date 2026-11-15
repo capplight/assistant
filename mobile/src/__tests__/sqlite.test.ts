@@ -87,7 +87,7 @@ d('SQLite repositories', () => {
     );
     expect(await records.get('a')).toMatchObject({
       serverId: 'srv-a',
-      aiGenerated: true,
+      aiGenerated: false, // QA v2 §0.6: a generated summary does not make the note AI content
       summary: 'кратко',
       reviewFields: { amount: { value: '5 ₸' } },
     });

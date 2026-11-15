@@ -12,7 +12,7 @@ import { useAlarms } from '@/alarms/store';
 import type { SuggestionOut } from '@/api/types';
 import { AppText } from '@/components/AppText';
 import { PendingAnswerCard } from '@/components/PendingAnswerCard';
-import { AlarmRiskBanner } from '@/components/ReminderCards';
+import { AlarmRiskRow, useAlarmRisk } from '@/components/ReminderCards';
 import { useMinuteClock, useMissed } from '@/components/ReminderLists';
 import { Screen } from '@/components/Screen';
 import { PageTiles, SectionLabel, ShoppingLine } from '@/components/TodaySheet';
@@ -104,7 +104,9 @@ export default function TodayScreen() {
   const live = liveEntries(expenses.entries, expenses.edits);
   const month = board(live, periodOf('month', today), expenses.categories);
   const spentMinor = month.main?.currency === 'KZT' ? month.main.total : 0n;
-  const todaySpends = live.filter((e) => e.spent_on === today && e.direction === 'expense').length;
+  const todayRows = live.filter((e) => e.spent_on === today && e.direction === 'expense' && e.currency === 'KZT');
+  const todaySpends = todayRows.length;
+  const todayMinor = board(todayRows, { from: today, to: today }, expenses.categories).main?.total ?? 0n;
   const leftMinor = budget !== null ? budget - spentMinor : null;
   const spentText = spentMinor > 0n ? formatMinor(spentMinor) : null;
 
@@ -199,7 +201,8 @@ export default function TodayScreen() {
     dateLine = timeText(now);
   }
 
-  const waiting = missed.length > 0 || repeats > 0 || proposals.length > 0 || !!tip;
+  const risk = useAlarmRisk();
+  const waiting = risk || missed.length > 0 || repeats > 0 || proposals.length > 0 || !!tip;
 
   return (
     <Screen testID="page-today" edges={['top']}>
@@ -213,45 +216,46 @@ export default function TodayScreen() {
           ]}
         />
       </View>
-      <View style={{ gap: theme.space[3] }}>
+      <View style={{ gap: theme.space[2] }}>
         <PendingAnswerCard />
-        <AlarmRiskBanner />
-        <BriefCard testID="today-brief" status={brief.status} headline={brief.headline} body={brief.body} more={t('today.more')} />
+        {/* «Подробнее» only when the summary is longer than its 3 lines (QA v2 §1.6). */}
+        <BriefCard testID="today-brief" status={brief.status} headline={brief.headline} body={brief.body} more={brief.body.length > 140 ? t('today.more') : undefined} />
 
         <TileGrid testID="today-tiles-grid">
           <MetricTile
             testID="tile-tasks"
             label={t('today.tile_tasks')}
             value={String(done)}
-            unit={t('today.of_total', { total })}
+            unit={total > 0 ? t('today.of_total', { total }) : t('today.tasks_unit', { count: 0 })}
             caption={
-              part === 'evening'
-                ? firstOpen
-                  ? t('today.left_one', { title: firstOpen.title })
-                  : t('today.all_done')
-                : nextRing
-                  ? t('today.next_at', { time: timeText(nextRing.fireAt) })
-                  : total === 0
-                    ? t('today.nothing_planned')
+              total === 0
+                ? t('today.nothing_planned')
+                : part === 'evening'
+                  ? firstOpen
+                    ? t('today.left_one', { title: firstOpen.title })
+                    : t('today.all_done')
+                  : nextRing
+                    ? t('today.next_at', { time: timeText(nextRing.fireAt) })
                     : undefined
             }
             color={metricColors[theme.scheme].tasks}
-            progress={total > 0 ? done / total : 0}
+            progress={total > 0 ? done / total : null}
             onPress={() => openPage('tasks')}
           />
           <MetricTile
             testID="tile-spent"
             label={t('today.tile_spent')}
-            value={bare(formatMinor(spentMinor))}
+            // QA v2 §1.3: the sum and its line come from one period — the month against the budget, or today.
+            value={bare(formatMinor(leftMinor !== null ? spentMinor : todayMinor))}
             unit="₸"
             caption={
               leftMinor !== null
                 ? leftMinor >= 0n
                   ? t('today.budget_left', { sum: formatMinor(leftMinor) })
                   : t('today.budget_over', { sum: formatMinor(-leftMinor) })
-                : part === 'evening'
+                : todaySpends > 0
                   ? t('today.spent_today', { count: todaySpends })
-                  : t('today.this_month')
+                  : t('today.spent_none')
             }
             captionColor={leftMinor !== null && leftMinor < 0n ? 'danger' : 'ink2'}
             color={metricColors[theme.scheme].spent}
@@ -281,8 +285,8 @@ export default function TodayScreen() {
           <MetricTile
             testID="tile-new"
             label={t('today.tile_new')}
-            value={`+${fresh}`}
-            caption={part === 'morning' ? t('today.new_yesterday', { count: fresh }) : t('today.new_today', { count: fresh })}
+            value={fresh > 0 ? `+${fresh}` : '0'}
+            caption={fresh === 0 ? t('today.new_none') : part === 'morning' ? t('today.new_yesterday', { count: fresh }) : t('today.new_today', { count: fresh })}
             color={metricColors[theme.scheme].new}
             onPress={() => openPage('notes')}
           />
@@ -329,16 +333,20 @@ export default function TodayScreen() {
               </>
             ) : null}
           </View>
-        ) : total === 0 ? (
-          <Card testID="today-empty">
-            <AppText color="ink2">{last?.empty && last.example ? t('today.free_example', { example: last.example }) : t('today.free')}</AppText>
-          </Card>
-        ) : null}
+        ) : (
+          <View testID="today-list-empty">
+            <SectionLabel title={t('today.plan')} />
+            <Card testID="today-empty">
+              <AppText color="ink2">{last?.empty && last.example ? t('today.free_example', { example: last.example }) : t('today.plan_empty')}</AppText>
+            </Card>
+          </View>
+        )}
 
         {waiting ? (
           <View testID="today-waiting">
             <SectionLabel title={t('today.waiting')} />
             <View style={{ gap: theme.space[2] }}>
+              <AlarmRiskRow />
               {missed.length > 0 ? (
                 <ListGroup>
                   {missed.slice(0, 2).map((row) => (

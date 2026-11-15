@@ -444,17 +444,14 @@ describe('a repeat found after saving (files and voice)', () => {
 });
 
 describe('AI label', () => {
-  it('shows for a generated record and for a generated title or summary on the person\'s own record', async () => {
+  it('QA v2 §0.6: only a generated record carries it, never the person own one even with a generated summary', async () => {
     const records = new InMemoryRecordsRepository();
     await records.applyRemote(itemOut('a', 1, { ai_generated: true }));
     await records.applyRemote(itemOut('b', 2, { ai_generated: false, ai_fields: ['summary'] }));
     await records.applyRemote(itemOut('c', 3, { ai_generated: false, ai_fields: [] }));
     expect((await records.get('a'))?.aiGenerated).toBe(true);
-    expect((await records.get('b'))?.aiGenerated).toBe(true);
-    expect((await records.get('c'))?.aiGenerated).toBe(false);
-    // The person edited the summary away: the label goes too.
-    await records.applyRemote(itemOut('b', 4, { ai_fields: [] }));
     expect((await records.get('b'))?.aiGenerated).toBe(false);
+    expect((await records.get('c'))?.aiGenerated).toBe(false);
   });
 });
 

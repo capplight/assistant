@@ -59,7 +59,7 @@ export async function confirmPhone(o: { challengeId: string; phone: string; code
   }
   await tokens.saveTokens(out);
   useSession.getState().setNeedsSignIn(false);
-  s.markPhoneLinked();
+  s.markPhoneLinked(o.phone);
 
   // After a sign-in the server's name wins; it is not typed here, so nothing is sent.
   if (switched) s.setDisplayName(out.user.display_name ?? null);

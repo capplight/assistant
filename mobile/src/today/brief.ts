@@ -34,7 +34,10 @@ export function briefOf(i: BriefInput, t: T): Brief {
   const next = i.ahead[0];
   let status: string;
   let headline: string;
-  if (i.part === 'morning') {
+  if (i.total === 0) {
+    status = t(`brief.status_${i.part}_free`);
+    headline = t(`brief.free_${i.part}`);
+  } else if (i.part === 'morning') {
     status = t('brief.status_morning', { count: i.total });
     headline = i.total === 0 ? t('brief.free') : i.total <= 5 ? t('brief.calm') : t('brief.busy');
   } else if (i.part === 'day') {
@@ -45,7 +48,9 @@ export function briefOf(i: BriefInput, t: T): Brief {
     headline = i.total === 0 || i.done * 2 >= i.total ? t('brief.good') : t('brief.done_day');
   }
   const parts: string[] = [];
-  if (i.part !== 'evening') {
+  if (i.total === 0) {
+    parts.push(t('brief.no_tasks'));
+  } else if (i.part !== 'evening') {
     const timed = i.ahead.slice(0, 2).map((a, n) => (n === 0 ? t('brief.at_first', { title: a.title, time: a.time }) : t('brief.at_next', { title: lowerFirst(a.title), time: a.time })));
     if (i.part === 'day' && next && next.inMinutes <= 60) parts.push(t('brief.in_minutes', { n: Math.max(1, next.inMinutes), title: lowerFirst(next.title) }));
     else if (timed.length > 0) parts.push(`${timed.join(', ')}.`);
@@ -53,7 +58,7 @@ export function briefOf(i: BriefInput, t: T): Brief {
   } else if (open > 0) {
     parts.push(t('brief.left_open', { count: open }));
   }
-  if (i.spent) parts.push(i.left ? t('brief.spent_left', { spent: i.spent, left: i.left }) : t('brief.spent', { spent: i.spent }));
+  if (i.spent) parts.push(i.left ? t('brief.spent_left', { spent: i.spent, left: i.left }) : t('brief.spent_month', { spent: i.spent }));
   if (i.part === 'evening' && i.tomorrow) parts.push(t('brief.tomorrow', { time: i.tomorrow.time, title: lowerFirst(i.tomorrow.title) }));
   return { status, headline, body: parts.join(' ') };
 }

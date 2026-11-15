@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { AlarmClock, Copy, Download, FileText, Info, Languages, LifeBuoy, Mail, Phone, Repeat, Send, ShieldCheck, Trash2, UserX, Wallet } from 'lucide-react-native';
+import { AlarmClock, Copy, Download, Info, Languages, LifeBuoy, Mail, Phone, Repeat, Send, ShieldCheck, Trash2, UserX, Wallet } from 'lucide-react-native';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Linking, View } from 'react-native';
@@ -112,7 +112,6 @@ export default function SettingsScreen() {
         </ListGroup>
 
         <ListGroup title={t('settings.about')}>
-          <ListRow testID="settings-terms" icon={FileText} title={t('legal.terms')} chevron onPress={() => router.push({ pathname: '/legal', params: { doc: 'terms' } })} />
           <ListRow testID="settings-consents" icon={ShieldCheck} title={t('legal.consents')} chevron onPress={() => router.push({ pathname: '/legal', params: { doc: 'consents' } })} />
           {support ? (
             <ListRow testID="settings-support" icon={LifeBuoy} title={t('settings.support')} chevron onPress={() => void Linking.openURL(support).catch(() => undefined)} />

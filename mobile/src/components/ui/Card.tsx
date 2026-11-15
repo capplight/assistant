@@ -19,7 +19,7 @@ function toneBg(theme: Theme, tone: CardTone): string {
 /** v2.1: the light card's 1 px green ring, the dark glass card's hairline (design-system v2 §4). */
 export function cardEdge(theme: Theme): ViewStyle | null {
   if (theme.elevation.ring) return theme.elevation.ring;
-  return theme.colors.glassBorder ? { borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.glassBorder } : null;
+  return theme.colors.glassBorder ? { borderWidth: 1, borderColor: theme.colors.glassBorder } : null;
 }
 
 type CardProps = {

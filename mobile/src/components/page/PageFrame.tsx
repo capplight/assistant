@@ -33,7 +33,7 @@ import { entryRow, shownEntries, sortEntries } from './rows';
  */
 export function PageFrame({ page }: { page: Page }) {
   const theme = useTheme();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { title } = usePageLabels();
   const loaded = usePageEntries(page);
   // Sort by a field (S38 / the assistant): the phone orders the same way the server does.
@@ -102,7 +102,13 @@ export function PageFrame({ page }: { page: Page }) {
       <Header
         testID="page-header"
         title={title(page)}
-        meta={isNotes && entries ? t(notesLook === 'list' ? 'notes.count_list' : 'notes.count', { count: entries.length }) : undefined}
+        meta={
+          isNotes && entries
+            ? t(notesLook === 'list' ? 'notes.count_list' : 'notes.count', { count: entries.length })
+            : page.templateKey === 'tasks'
+              ? todayLine(i18n.language)
+              : undefined
+        }
         accessory={
           page.templateKey === 'expenses' ? (
             <Button testID="exp-enter" label={t('exp.add_short')} size="small" icon={<Icon icon={Plus} size="sm" color="onBrand" />} onPress={() => useView.getState().requestKeypad()} />
@@ -131,7 +137,9 @@ export function PageFrame({ page }: { page: Page }) {
             onPress: () => (searchShown ? closeSearch() : router.navigate({ pathname: '/search', params: { page: page.id } })),
           },
               ]),
-          { key: 'menu', testID: 'page-menu', icon: Ellipsis, label: t('move.menu_a11y', { what: title(page) }), onPress: () => setMenuOpen(true) },
+          ...(page.templateKey === 'expenses'
+            ? []
+            : [{ key: 'menu', testID: 'page-menu', icon: Ellipsis, label: t('move.menu_a11y', { what: title(page) }), onPress: () => setMenuOpen(true) }]),
         ]}
       />
       {searchShown ? (
@@ -215,4 +223,13 @@ export function PageFrame({ page }: { page: Page }) {
       ) : null}
     </Screen>
   );
+}
+
+/** «суббота, 14 ноября» above the title of «Дела» (QA v2 §4.1). */
+function todayLine(lang: string): string {
+  try {
+    return new Date().toLocaleDateString(lang, { weekday: 'long', day: 'numeric', month: 'long' });
+  } catch {
+    return new Date().toDateString();
+  }
 }

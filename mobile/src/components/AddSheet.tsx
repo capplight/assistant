@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { AlarmClock, Camera, FileText, Image as ImageIcon } from 'lucide-react-native';
+import { AlarmClock, Camera, FileText, Image as ImageIcon, QrCode } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 
 import { useFeatures } from '@/store/features';
@@ -14,7 +14,8 @@ import { ActionList, Sheet, type SheetAction } from './ui/Sheet';
 export function AddSheet({ visible, onClose, expensesPageId = null }: { visible: boolean; onClose: () => void; expensesPageId?: string | null }) {
   const { t } = useTranslation();
   const statements = useFeatures((f) => f.statements_pdf);
-  const receipt = (kind: 'photo' | 'camera' | 'statement') => () => {
+  const qr = useFeatures((f) => f.receipt_qr);
+  const receipt = (kind: 'photo' | 'camera' | 'statement' | 'qr') => () => {
     onClose();
     if (expensesPageId) router.push({ pathname: '/receipt', params: { kind, page: expensesPageId } });
   };
@@ -22,6 +23,7 @@ export function AddSheet({ visible, onClose, expensesPageId = null }: { visible:
   if (expensesPageId) {
     actions.push({ key: 'photo', testID: 'add-photo', label: t('add.receipt_photo'), icon: ImageIcon, onPress: receipt('photo') });
     actions.push({ key: 'camera', testID: 'add-camera', label: t('add.camera'), icon: Camera, onPress: receipt('camera') });
+    if (qr) actions.push({ key: 'qr', testID: 'add-qr', label: t('exp.bring_qr'), icon: QrCode, onPress: receipt('qr') });
     if (statements) actions.push({ key: 'file', testID: 'add-file', label: t('exp.bring_statement'), icon: FileText, onPress: receipt('statement') });
   }
   actions.push({

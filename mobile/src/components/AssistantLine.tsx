@@ -114,7 +114,12 @@ export function AssistantLine({
     await voice.start();
   };
 
-  const placeholder = noAi ? t('line.no_ai_hint') : t('line.placeholder');
+  // v2 mocks: «Спросите или запишите что угодно»; on «Расходы» an example of a spending.
+  const placeholder = noAi
+    ? t('line.no_ai_hint')
+    : current.kind === 'page' && current.page.templateKey === 'expenses'
+      ? t('line.placeholder_expenses')
+      : t('line.placeholder');
 
   const send = async () => {
     const value = text.trim();

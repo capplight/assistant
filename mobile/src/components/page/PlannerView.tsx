@@ -1,9 +1,9 @@
 import { useFeatures } from '@/store/features';
 import { router } from 'expo-router';
-import { AlarmClock, Bell, CalendarDays, CircleCheck, Clock, Ellipsis, PencilLine, Trash2 } from 'lucide-react-native';
+import { AlarmClock, Bell, CalendarDays, CircleCheck, Clock, Ellipsis, PencilLine, ShoppingCart, Trash2 } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 
 import { dayOffset, dayText } from '@/alarms/format';
@@ -15,6 +15,7 @@ import type { LocalRecord } from '@/db';
 import { usePages } from '@/store/pages';
 import { useToast } from '@/store/toast';
 import { useUndo } from '@/store/undo';
+import { recordTitle } from '@/records/format';
 import { changeTask, shownTask } from '@/tasks/edit';
 import '@/tasks/actions'; // the undo of a tick (registers `tickUndo`)
 import { listRows, localDate, type ListRow, type Segment } from '@/tasks/rows';
@@ -24,7 +25,7 @@ import { useTasks } from '@/tasks/store';
 import { useTheme, withAlpha } from '@/theme';
 
 import { AppText } from '../AppText';
-import { ActionList, Button, CheckMark, Icon, Sheet, type SheetAction } from '../ui';
+import { ActionList, Card, CheckMark, Icon, pressedStyle, Sheet, type SheetAction } from '../ui';
 import type { MenuExtra } from '../RecordMenuSheet';
 import { MissedList, removeReminder, Segments, useMinuteClock, useMissed } from '../ReminderLists';
 import { TaskRow } from '../TaskRow';
@@ -47,15 +48,6 @@ const startOfDay = (ms: number) => {
   return d.getTime();
 };
 
-/** «Вторник, 10 ноября». */
-function longDay(ms: number, lang: string): string {
-  try {
-    const s = new Date(ms).toLocaleDateString(lang, { weekday: 'long', day: 'numeric', month: 'long' });
-    return s.charAt(0).toUpperCase() + s.slice(1);
-  } catch {
-    return new Date(ms).toDateString();
-  }
-}
 
 /**
  * «Дела и напоминания» — the day planner (template-screens 2.3; week 11а, replaces the week 9
@@ -69,7 +61,7 @@ function longDay(ms: number, lang: string): string {
  */
 export function PlannerView({ page, entries, frameTop, ordering }: ViewProps) {
   const theme = useTheme();
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const shoppingOn = useFeatures((f) => f.shopping);
   const hasShoppingPage = usePages((st) => shoppingOn && st.pages.some((p) => p.templateKey === 'shopping'));
   // eslint-disable-next-line react-hooks/exhaustive-deps -- the lists follow «Покупки» existing
@@ -159,7 +151,8 @@ export function PlannerView({ page, entries, frameTop, ordering }: ViewProps) {
 
   const renderEntry = (row: EntryRow, ctx: EntryCtx) => {
     const task = row.task;
-    if (!task) return null;
+    // QA v2 §4.2: a record on «Дела» that is not a task yet (an old «купить хлеб») is a plain row, not a note card.
+    if (!task) return <PlainRow title={recordTitle(row.entry.record, t)} onPress={ctx.onPress} onLayout={ctx.onLayout} />;
     const overdue = !row.done && !!task.due_date && task.due_date < today;
     return (
       <View onLayout={ctx.onLayout}>
@@ -180,7 +173,7 @@ export function PlannerView({ page, entries, frameTop, ordering }: ViewProps) {
   const header = (
     <View style={{ marginBottom: theme.space[3], gap: theme.space[3] }}>
       {frameTop}
-      <Segments value={segment} onChange={setSegment} missedCount={missed.length + overdue} />
+      <Segments value={segment} onChange={setSegment} missedCount={missed.length + overdue} todayCount={hours.length + rows.length} soonCount={soonSlots.length} />
       {segment === 'missed' ? (
         missed.length + overdue > 0 ? (
           <MissedList rows={missed} now={now} />
@@ -189,13 +182,10 @@ export function PlannerView({ page, entries, frameTop, ordering }: ViewProps) {
         )
       ) : segment === 'today' ? (
         <View testID="planner-sheet" style={{ gap: theme.space[2] }}>
-          <AppText testID="planner-day" variant="title2" accessibilityRole="header">
-            {longDay(now, i18n.language)}
-          </AppText>
           {hours.length === 0 && rows.length === 0 ? (
             <EmptyDay />
           ) : (
-            <View>
+            <Card padded={false} style={{ overflow: 'hidden', paddingHorizontal: theme.space[1] }}>
               {hours.map((s, i) => (
                 <View key={s.key}>
                   {i === nowAt ? <NowLine now={now} /> : null}
@@ -203,7 +193,7 @@ export function PlannerView({ page, entries, frameTop, ordering }: ViewProps) {
                 </View>
               ))}
               {hours.length > 0 && nowAt === hours.length ? <NowLine now={now} /> : null}
-            </View>
+            </Card>
           )}
         </View>
       ) : (
@@ -232,7 +222,6 @@ export function PlannerView({ page, entries, frameTop, ordering }: ViewProps) {
         {segment === 'today'
           ? ackedToday.map((s) => <SlotRow key={s.key} slot={s} late={false} task={null} onMenu={() => undefined} onMissed={() => undefined} />)
           : null}
-        <Button testID="tasks-new-reminder" label={t('today.new_reminder')} variant="text" onPress={() => router.push('/reminder-new')} />
       </View>
     );
 
@@ -439,3 +428,26 @@ const styles = StyleSheet.create({
   center: { alignItems: 'center', justifyContent: 'center' },
   divider: { position: 'absolute', right: 0, bottom: 0, height: StyleSheet.hairlineWidth },
 });
+
+/** A row of «Дела» for a record that is not a task: an empty circle, the words, «без времени», a cart for «купить …». */
+function PlainRow({ title, onPress, onLayout }: { title: string; onPress: () => void; onLayout?: (e: LayoutChangeEvent) => void }) {
+  const theme = useTheme();
+  const { t } = useTranslation();
+  const buy = /^(купи|купить|сатып)/iu.test(title.trim());
+  return (
+    <Pressable
+      onLayout={onLayout}
+      testID={`plain-row-${title}`}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: theme.space[3], minHeight: theme.size.rowHeightMeta, paddingHorizontal: theme.space[1] }, pressedStyle(pressed)]}
+    >
+      <CheckMark checked={false} />
+      <View style={{ flex: 1 }}>
+        <AppText>{title}</AppText>
+        <AppText variant="footnote">{t('tasks.no_time')}</AppText>
+      </View>
+      {buy ? <Icon icon={ShoppingCart} size="sm" color="iconSecondary" /> : null}
+    </Pressable>
+  );
+}

@@ -301,7 +301,8 @@ describe('«Расходы» — the calculator', () => {
     await settle(() => screen.queryByTestId('exp-board') !== null);
     expect(screen.getByTestId('page-view-expenses:builtin:expenses')).toBeTruthy();
     // v2 mock: the title, «+ Трата» and ⋯ (the one search lives on the other pages and in the line).
-    for (const id of ['page-title', 'exp-enter', 'page-menu']) expect(screen.getByTestId(id)).toBeTruthy();
+    for (const id of ['page-title', 'exp-enter']) expect(screen.getByTestId(id)).toBeTruthy();
+    expect(screen.queryByTestId('page-menu')).toBeNull(); // QA v2 §3.7
     expect(text('exp-total')).toBe('0 ₸');
     expect(screen.getByTestId('exp-empty-total')).toBeTruthy();
     // Empty: the keys are open, with the hint.
@@ -428,8 +429,9 @@ describe('«Расходы» — the calculator', () => {
     await withPageRecord('e1');
     await renderRouter(APP_DIR, { initialUrl: `/page/${expensesPage().id}` });
     await settle(() => screen.queryByTestId('exp-row-e1') !== null);
-    await fireEvent.press(screen.getByTestId('page-menu'));
-    await fireEvent.press(screen.getByTestId('page-order'));
+    // QA v2 §3.7: no ⋯ on «Расходы» — «Порядок категорий» is in the period sheet.
+    await fireEvent.press(screen.getByTestId('exp-period-open'));
+    await fireEvent.press(screen.getByTestId('exp-order-open'));
     await settle(() => screen.queryByTestId('exp-cat-order') !== null);
     await fireEvent.press(screen.getByTestId('exp-order-up-home'));
     await settle(() => s.callsTo('PATCH /expense-categories/reorder').length === 1);

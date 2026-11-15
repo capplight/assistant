@@ -35,14 +35,15 @@ export function Glass({
         {children}
       </View>
     );
+  const edge = { borderWidth: 1, borderColor: theme.colors.glassBorder ?? 'transparent' };
   if (!blurSupported()) return (
-      <View testID={testID} accessibilityRole={accessibilityRole} style={[style, { backgroundColor: theme.colors.surfaceSolid }]}>
+      <View testID={testID} accessibilityRole={accessibilityRole} style={[style, { backgroundColor: theme.colors.surfaceSolid }, edge]}>
         {children}
       </View>
     );
   return (
     // The fill is drawn over the blur, not under it (an opaque parent would hide what the blur shows).
-    <View testID={testID} accessibilityRole={accessibilityRole} style={[styles.clip, style, styles.clear]}>
+    <View testID={testID} accessibilityRole={accessibilityRole} style={[styles.clip, style, styles.clear, edge]}>
       <BlurView intensity={40} tint="dark" blurMethod="dimezisBlurViewSdk31Plus" style={StyleSheet.absoluteFill} />
       <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: bg }]} />
       {children}

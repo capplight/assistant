@@ -10,20 +10,42 @@ import { useTheme } from '@/theme';
 
 import { AppText } from './AppText';
 import { Button } from './ui/Button';
-import { Card } from './ui/Card';
+import { Card, ListGroup, ListRow } from './ui/Card';
 import { Icon } from './ui/Icon';
 
 /**
  * «Будильники могут не сработать на этом телефоне · Исправить» (alarm.risk): a narrow line, not a block
  * (ux-audit P0-3) — only once something rings (a reminder exists) or S15 was shown, and a step of S15 is not done.
  */
-export function AlarmRiskBanner() {
-  const theme = useTheme();
-  const { t } = useTranslation();
-  const show = useAlarms((s) => {
+/** Only once there is a ring on this phone (ux-audit п. 3), and the phone may not ring it. */
+export function useAlarmRisk(): boolean {
+  return useAlarms((s) => {
     const any = s.offeredAt !== null || Object.values(s.reminders).some((r) => r.kind === 'normal' && !r.deleted_at);
     return any && alarmRisk(s.caps, s);
   });
+}
+
+/** QA v2 §1.1: a row of «Ждёт вас» — «Будильник может не сработать · 2 шага, чтобы точно звенел» [Исправить]. */
+export function AlarmRiskRow() {
+  const { t } = useTranslation();
+  if (!useAlarmRisk()) return null;
+  return (
+    <ListGroup testID="alarm-risk">
+      <ListRow
+        icon={TriangleAlert}
+        danger
+        title={t('alarm.risk_row')}
+        meta={t('alarm.risk_row_meta')}
+        right={<Button testID="alarm-risk-fix" label={t('alarm.fix')} variant="secondary" size="small" onPress={() => router.push('/alarm-setup')} />}
+      />
+    </ListGroup>
+  );
+}
+
+export function AlarmRiskBanner() {
+  const theme = useTheme();
+  const { t } = useTranslation();
+  const show = useAlarmRisk();
   if (!show) return null;
   return (
     <View

@@ -348,7 +348,7 @@ describe('components', () => {
     expect(StyleSheet.flatten(screen.getByTestId('n').props.style)).toMatchObject({ backgroundColor: lightNoteColors.green, borderRadius: 18 });
     await fireEvent(screen.getByTestId('n'), 'longPress');
     expect(onLong).toHaveBeenCalled();
-    expect(screen.getByText('Купить молоко').props.numberOfLines).toBe(8);
+    expect(screen.getByText('Купить молоко').props.numberOfLines).toBe(6);
   });
 
   it('EmptyState and ToastBar', async () => {
@@ -365,7 +365,7 @@ describe('components', () => {
     await fireEvent.press(screen.getByTestId('t-undo'));
     await fireEvent.press(screen.getByLabelText('Закрыть'));
     expect([ex, undo, close].map((f) => f.mock.calls.length)).toEqual([1, 1, 1]);
-    expect(StyleSheet.flatten(screen.getByTestId('t').props.style)).toMatchObject({ borderRadius: 22, minHeight: 72 });
+    expect(StyleSheet.flatten(screen.getByTestId('t').props.style)).toMatchObject({ borderRadius: 22, minHeight: 52 });
   });
 
   it('TabBar: tablist, selected tab, brand pill', async () => {

@@ -1,4 +1,4 @@
-import { act, fireEvent, renderRouter, screen } from 'expo-router/testing-library';
+import { act, fireEvent, renderRouter, screen, within } from 'expo-router/testing-library';
 
 import { actionOut, budgetOut, FEATURE_DEFAULTS, todayOut } from '@/api/endpoints';
 import type { ActionOut, ReminderDraft } from '@/api/types';
@@ -14,11 +14,12 @@ import { useKp } from '@/kp/store';
 import { useConnectivity } from '@/store/connectivity';
 import { mainTabs, visiblePages } from '@/pages/tabs';
 import { isDefaultTitle } from '@/pages/templates';
+import { statusLine } from '@/records/format';
 import { useAlarms } from '@/alarms/store';
 import { useAssistant, type ChatMessage } from '@/store/assistant';
 import { budgetMinor, useBudget } from '@/store/budget';
 import { useFeatureStore } from '@/store/features';
-import { useOnboarding } from '@/store/onboarding';
+import { maskPhone, useOnboarding } from '@/store/onboarding';
 import { usePages } from '@/store/pages';
 import { useReminderCard } from '@/store/reminderCard';
 import { useUndo } from '@/store/undo';
@@ -370,5 +371,40 @@ describe('mock gaps closed (Ф-55)', () => {
 
   it('the dark theme draws glass; old Android gets the solid fill', () => {
     expect(typeof blurSupported()).toBe('boolean');
+  });
+});
+
+describe('phone QA 1 (docs/design/qa/v2-phone-qa-1.md)', () => {
+  const t = (k: string, o?: Record<string, unknown>) => `${k}${o ? JSON.stringify(o) : ''}`;
+
+  it('§1.2: an empty day never says «0 из 0» or «Хороший день»', () => {
+    const b = briefOf({ part: 'evening', total: 0, done: 0, ahead: [], spent: '8 000 ₸', left: null, tomorrow: null }, t);
+    expect(b.status).toBe('brief.status_evening_free');
+    expect(b.headline).toBe('brief.free_evening');
+    expect(b.body).toContain('brief.no_tasks');
+  });
+
+  it('§1.1 / §1.3–1.5: the alarm risk is a row of «Ждёт вас»; tiles say nothing contradictory', async () => {
+    useAlarms.setState({ offeredAt: new Date().toISOString(), caps: { backend: 'android', exactAlarms: false, notifications: 'granted' } as never });
+    await renderRouter(APP_DIR, { initialUrl: '/' });
+    expect(screen.getByTestId('today-waiting')).toBeTruthy();
+    expect(within(screen.getByTestId('today-waiting')).getByTestId('alarm-risk-fix')).toBeTruthy();
+    expect(screen.getByTestId('tile-tasks')).not.toHaveTextContent(/из 0/);
+    expect(screen.getByTestId('tile-new')).toHaveTextContent(/пока ничего/);
+    expect(screen.getByTestId('tile-spent')).toHaveTextContent(/сегодня трат нет/);
+  });
+
+  it('§5.1: one profile card — not signed in asks to sign in there; signed in shows the masked number', async () => {
+    useOnboarding.setState({ phoneLinkedAt: null });
+    await renderRouter(APP_DIR, { initialUrl: '/more' });
+    expect(screen.queryByTestId('more-sign_in')).toBeNull();
+    expect(screen.getByTestId('profile-meta')).toHaveTextContent('Войдите по номеру, чтобы не потерять записи');
+    expect(maskPhone('+77010001290')).toBe('+7 701 ••• 12 90');
+  });
+
+  it('§2.2 / §2.4: a reading that hangs is told plainly after a minute; a typed note shows only its date', () => {
+    const rec = { status: 'processing', text: null, createdAt: Date.now() - 120_000, kind: 'voice' } as never;
+    expect(statusLine(rec, t)).toBe('record.processing_stuck');
+    expect(statusLine({ ...(rec as object), createdAt: Date.now() } as never, t)).toBe('record.processing');
   });
 });

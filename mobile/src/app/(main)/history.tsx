@@ -117,7 +117,7 @@ export default function HistoryScreen() {
   const days = shown.map((e) => dayTitle(e.at));
   return (
     <Screen testID="history-screen" edges={['top']} scroll={false}>
-      <ScrollView ref={scrollRef} testID="chat-screen" contentContainerStyle={{ paddingVertical: theme.space[4], gap: theme.space[3] }} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scrollRef} testID="chat-screen" contentContainerStyle={{ paddingTop: theme.space[4], paddingBottom: theme.size.contentEndGap, gap: theme.space[3] }} keyboardShouldPersistTaps="handled">
         <Header
           title={t('history.title')}
           meta={t('history.meta')}

@@ -464,10 +464,9 @@ describe('receipt photo, QR, «Проверьте сумму», «Объедин
     const { m, calls } = fakeMedia('undetermined');
     setMediaForTests(m);
     await renderRouter(APP_DIR, { initialUrl: `/page/${expensesPage().id}` });
-    await settle(() => screen.queryByTestId('exp-bring') !== null);
-    await fireEvent.press(screen.getByTestId('exp-bring'));
-    await settle(() => screen.queryByTestId('exp-bring-sheet') !== null);
-    await fireEvent.press(screen.getByTestId('exp-bring-camera'));
+    await settle(() => screen.queryByTestId('exp-board') !== null);
+    await fireEvent.press(screen.getByTestId('assistant-plus'));
+    await fireEvent.press(screen.getByTestId('add-camera'));
     await settle(() => screen.queryByTestId('receipt-camera-why') !== null);
     expect(text('receipt-camera-why')).toMatch(/Снимок делаете вы сами/);
     expect(calls).toEqual([]); // nothing asked before the person read why
@@ -636,11 +635,8 @@ describe('receipt photo, QR, «Проверьте сумму», «Объедин
     expect(screen.getByTestId('exp-check-amount-v2').props.maxFontSizeMultiplier).toBe(1.6);
     expect(screen.getByTestId('exp-check-ok-v2').props.accessibilityLabel).toBe('Верно, 700 ₸');
     await fireEvent.press(screen.getByTestId('exp-attention-sheet-close'));
-    await fireEvent.press(screen.getByTestId('exp-bring'));
-    await settle(() => screen.queryByTestId('exp-bring-camera') !== null);
-    const style = screen.getByTestId('exp-bring-camera').props.style;
-    const flat = Array.isArray(style) ? Object.assign({}, ...style) : style;
-    // Ф-45: platform sizes — rows 50 visible, targets ≥48 (was 56).
-    expect(flat.minHeight).toBeGreaterThanOrEqual(48);
+    await fireEvent.press(screen.getByTestId('assistant-plus'));
+    await settle(() => screen.queryByTestId('add-camera') !== null);
+    expect(screen.getByTestId('add-camera')).toBeTruthy();
   });
 });

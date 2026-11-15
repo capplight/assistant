@@ -56,18 +56,24 @@ export function sourceLine(rec: LocalRecord, lang: string, t: T): string {
   if (rec.kind === 'link') return t('record.source_link', { date });
   if (rec.files.length > 0 || rec.kind !== 'note') return t('record.source_file', { date });
   if (rec.source === 'share') return t('record.source_share', { date });
-  return t('record.source_typed', { date });
+  // QA v2 §2.4: what the person wrote shows just its date («вчера»), no «вы написали».
+  return date;
 }
 
+/** A reading (voice, photo, file) with no answer for this long is told as not done (QA v2 §2.2). */
+export const READING_TIMEOUT_MS = 60_000;
+
 /** What is happening with the record, when there is something to say. */
-export function statusLine(rec: LocalRecord, t: T): string | null {
+export function statusLine(rec: LocalRecord, t: T, now: number = Date.now()): string | null {
   switch (rec.status) {
     case 'queued':
       return t('queue');
     case 'pending':
     case 'processing':
-      // Plain text needs no reading; only say this about what has to be read first.
-      return rec.text ? null : t('record.processing');
+      // Plain text needs no reading; only say this about what has to be read first. A reading that hangs for a
+      // minute is told plainly, with the record still there to open (the server times the job out too).
+      if (rec.text) return null;
+      return now - rec.createdAt > READING_TIMEOUT_MS ? t('record.processing_stuck') : t('record.processing');
     case 'needs_consent':
       return t('record.needs_consent');
     case 'failed':

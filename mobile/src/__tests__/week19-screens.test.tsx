@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { act, fireEvent, renderRouter, screen } from 'expo-router/testing-library';
 
 import { FEATURE_DEFAULTS } from '@/api/endpoints';
@@ -43,7 +44,11 @@ describe('«Ещё» (Ф-41)', () => {
 
   it('the profile and «Настройки» open the one settings screen; «История» opens the merged history', async () => {
     const r = await renderRouter(APP_DIR, { initialUrl: '/more' });
+    // Not signed in yet: the one profile card leads to the number (QA v2 §5.1); «Настройки» is its own row.
     await fireEvent.press(screen.getByTestId('more-profile'));
+    expect(r.getPathname()).toBe('/phone');
+    await act(async () => router.back());
+    await fireEvent.press(screen.getByTestId('more-settings'));
     expect(r.getPathname()).toBe('/settings');
     await fireEvent.press(screen.getByTestId('header-back'));
     expect(r.getPathname()).toBe('/more');
@@ -63,7 +68,7 @@ describe('«Ещё» (Ф-41)', () => {
 describe('«Настройки»', () => {
   it('theme, language, alarms, budget, data, the assistant, account, about and «Удалить аккаунт» in one screen', async () => {
     const r = await renderRouter(APP_DIR, { initialUrl: '/settings' });
-    for (const id of ['phone', 'my_data', 'duplicates', 'trash', 'habits', 'alarms', 'lang', 'budget', 'policy', 'terms', 'consents', 'version', 'delete_account']) {
+    for (const id of ['phone', 'my_data', 'duplicates', 'trash', 'habits', 'alarms', 'lang', 'budget', 'policy', 'consents', 'version', 'delete_account']) {
       expect(screen.getByTestId(`settings-${id}`)).toBeTruthy();
     }
     await fireEvent.press(screen.getByTestId('settings-consents'));

@@ -16,7 +16,7 @@ function Preview({ scheme }: { scheme: Scheme }) {
     <View
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
-      style={{ backgroundColor: scheme === 'dark' ? c.bg : '#E4F3EA', borderRadius: 12, padding: 10, gap: 6 }}
+      style={{ backgroundColor: c.bg, borderRadius: 12, padding: 10, gap: 6 }}
     >
       <View style={{ width: '60%', height: 6, borderRadius: 3, backgroundColor: scheme === 'dark' ? '#5E7D72' : '#2A4A3D' }} />
       {block(0, scheme === 'dark' ? c.surfaceRaised : '#FFFFFF', 30)}

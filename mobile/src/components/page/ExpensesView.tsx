@@ -28,11 +28,12 @@ import { Button } from '../ui/Button';
 import { ActionList } from '../ui/Sheet';
 import { MetricTile, ProgressBar, StatusDot, TileGrid } from '../ui/Brief';
 import { Card, cardEdge } from '../ui/Card';
+import { Chip } from '../ui/Chip';
 import { Icon } from '../ui/Icon';
 import { pressedStyle } from '../ui/motion';
 import { SegmentedControl } from '../ui/SegmentedControl';
-import { categoryLook } from './expenseColors';
-import { AttentionCard, AttentionSheet, attentionItems, BringButton, sourceWord, useBringKinds } from './ExpenseInbox';
+import { categoryLook, colorKeyOf } from './expenseColors';
+import { AttentionCard, AttentionSheet, attentionItems, sourceWord, useBringKinds } from './ExpenseInbox';
 import { CategoryChips, CategoryDot, DayChip, EntryPanel, Sheet, SumDisplay, useSum } from './ExpenseParts';
 import { ExpenseKeypad } from './ExpenseKeypad';
 import type { ViewProps } from './registry';
@@ -76,6 +77,8 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
   const [attention, setAttention] = useState(false);
   const [allBars, setAllBars] = useState(false);
   const [periodOpen, setPeriodOpen] = useState(false);
+  // «Порядок категорий» lives in the period sheet (QA v2 §3.7: no ⋯ on «Расходы»).
+  const [ordering2, setOrdering2] = useState(false);
   const jobs = useExpenses((s) => s.jobs);
   const statements = useExpenses((s) => s.statements);
   const duplicates = useExpenses((s) => s.duplicates);
@@ -172,15 +175,19 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
         title={periodTitle(period, lang)}
         board={b}
         budget={thisMonth ? budget : null}
+        onSetBudget={thisMonth ? () => setBudgetOpen(true) : undefined}
         today={today}
         period={period}
         onlyToCheck={onlyToCheck}
         onToCheck={() => setOnlyToCheck((v) => !v)}
       />
       <AttentionCard items={queue} onOpen={() => setAttention(true)} />
-      {/* Receipts: also «+» in the line on this page; here as a quiet link (the mock has no button bar). */}
-      <BringButton pageId={page.id} style={styles.start} />
-      {ordering ? <CategoryOrder chips={chips} pending={orderEdit?.keys ?? null} /> : null}
+      {ordering || ordering2 ? (
+        <View style={{ gap: theme.space[2] }}>
+          <CategoryOrder chips={chips} pending={orderEdit?.keys ?? null} />
+          {ordering2 ? <Button testID="exp-order-done" label={t('page.order_done')} size="small" onPress={() => setOrdering2(false)} style={styles.start} /> : null}
+        </View>
+      ) : null}
       {empty ? (
         <View style={{ gap: theme.space[2] }}>
           <AppText testID="exp-or-say" color="ink2">
@@ -197,7 +204,11 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
             <AppText variant="sectionLabel" accessibilityRole="header" style={styles.flex}>
               {t('exp.by_category')}
             </AppText>
-            <Button testID="exp-budget" label={t('budget.link')} variant="text" onPress={() => setBudgetOpen(true)} />
+            {budget !== null ? (
+              <AppText testID="exp-budget-note" variant="footnote">
+                {t('budget.link')}
+              </AppText>
+            ) : null}
           </View>
           <TileGrid testID="exp-tiles">
             {shownBars.map((bar) => {
@@ -205,7 +216,8 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
               const chip = cat ? (chips.find((c) => c.key === cat.key) ?? null) : null;
               const look = categoryLook(theme, bar.key || null);
               const key = (bar.key || 'other') as keyof typeof categoryText;
-              const color = theme.scheme === 'light' ? (categoryText[key] ?? look.color) : look.color;
+              const other = colorKeyOf(bar.key || null) === 'other';
+              const color = other ? theme.colors.ink : theme.scheme === 'light' ? (categoryText[key] ?? look.color) : look.color;
               return (
                 <MetricTile
                   key={bar.key || 'none'}
@@ -215,7 +227,7 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
                   title={bar.title}
                   value={formatMinor(bar.minor).replace(/\s?₸$/, '')}
                   unit="₸"
-                  caption={t('exp.share', { n: Math.round(bar.share) })}
+                  caption={t('exp.share_of_all', { n: Math.round(bar.share) })}
                   color={color}
                   progress={bar.share / 100}
                   onPress={() => openEntry(chip)}
@@ -313,7 +325,7 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
         </View>
       }
       ListFooterComponent={footer ?? undefined}
-      contentContainerStyle={[column, { paddingTop: theme.space[4], paddingBottom: theme.space[6] }]}
+      contentContainerStyle={[column, { paddingTop: theme.space[4], paddingBottom: theme.size.contentEndGap }]}
       keyboardShouldPersistTaps="handled"
     />
   );
@@ -322,7 +334,7 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
     <View style={styles.flex}>
       {two ? (
         <View style={[styles.row, styles.flex]}>
-          <ScrollView testID="exp-overview-pane" style={{ flex: 1 }} contentContainerStyle={[column, { paddingTop: theme.space[4], paddingBottom: theme.space[6], gap: theme.space[4] }]}>
+          <ScrollView testID="exp-overview-pane" style={{ flex: 1 }} contentContainerStyle={[column, { paddingTop: theme.space[4], paddingBottom: theme.size.contentEndGap, gap: theme.space[4] }]}>
             {frameTop}
             {overview}
           </ScrollView>
@@ -355,6 +367,15 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
               onPress={() => setPeriod((p) => shiftPeriod(p, 1))}
             />
           </View>
+          <Button
+            testID="exp-order-open"
+            label={t('exp.order_categories')}
+            variant="text"
+            onPress={() => {
+              setPeriodOpen(false);
+              setOrdering2(true);
+            }}
+          />
         </Sheet>
       ) : null}
       {entry ? (
@@ -422,6 +443,7 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
 /** Pattern 1: «‹ Ноябрь ›», the total 40 with no box, one context line «23 траты · ⚠ проверить 2». */
 function Overview({
   onPeriod,
+  onSetBudget,
   title,
   board: b,
   onlyToCheck,
@@ -431,6 +453,7 @@ function Overview({
   period,
 }: {
   onPeriod: () => void;
+  onSetBudget?: () => void;
   title: string;
   board: ReturnType<typeof board>;
   budget: bigint | null;
@@ -449,7 +472,14 @@ function Overview({
   const left = budget !== null ? budget - spent : null;
   const share = budget !== null && budget > 0n ? Number((spent * 1000n) / budget) / 1000 : null;
   const daysLeft = period.to ? Math.max(0, Math.round((Date.parse(`${period.to}T12:00:00`) - Date.parse(`${today}T12:00:00`)) / 86_400_000)) : null;
-  const status = budget === null ? title : left !== null && left >= 0n ? t('exp.status_in_budget', { period: title }) : t('exp.status_over', { period: title });
+  const status =
+    budget === null
+      ? onSetBudget
+        ? t('exp.status_no_budget', { period: title })
+        : title
+      : left !== null && left >= 0n
+        ? t('exp.status_in_budget', { period: title })
+        : t('exp.status_over', { period: title });
   return (
     <View
       testID="exp-board"
@@ -486,8 +516,8 @@ function Overview({
           {t('exp.empty_total')}
         </AppText>
       ) : (
-        <View style={[styles.rowCenter, { justifyContent: 'center', flexWrap: 'wrap', columnGap: theme.space[2] }]}>
-          <AppText testID="exp-count" variant="callout">
+        <View style={[styles.rowCenter, { flexWrap: 'wrap', columnGap: theme.space[2] }]}>
+          <AppText testID="exp-count" variant="briefBody" color="ink2">
             {t('exp.count', { count: main.count })}
           </AppText>
           {b.review > 0 || onlyToCheck ? (
@@ -508,7 +538,7 @@ function Overview({
       )}
       {budget !== null && left !== null ? (
         <View testID="exp-budget-box" style={{ gap: theme.space[2], marginTop: theme.space[2] }}>
-          <AppText testID="exp-budget-left" color="ink2" style={styles.center}>
+          <AppText testID="exp-budget-left" variant="briefBody" color="ink2">
             {left >= 0n ? t('exp.budget_left', { left: formatMinor(left), budget: formatMinor(budget) }) : t('exp.budget_over', { over: formatMinor(-left) })}
           </AppText>
           <ProgressBar testID="exp-budget-bar" value={share ?? 0} color={left >= 0n ? theme.colors.brand : theme.colors.danger} />
@@ -517,6 +547,9 @@ function Overview({
             {daysLeft !== null ? <AppText variant="footnote">{t('exp.days_left', { count: daysLeft })}</AppText> : null}
           </View>
         </View>
+      ) : null}
+      {budget === null && onSetBudget ? (
+        <Chip testID="exp-set-budget" label={t('budget.set')} onPress={onSetBudget} style={{ alignSelf: 'flex-start', marginTop: theme.space[2] }} />
       ) : null}
       {main && main.income > 0n ? (
         <AppText testID="exp-income" variant="callout" style={styles.center}>

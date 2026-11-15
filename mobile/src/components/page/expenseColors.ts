@@ -22,7 +22,7 @@ const SYSTEM: Record<string, { color: CategoryKey; icon: LucideIcon }> = {
 
 const OWN: CategoryKey[] = ['food', 'transport', 'home', 'cafe', 'health', 'kids', 'bills'];
 
-function colorKey(key: string | null): CategoryKey {
+export function colorKey(key: string | null): CategoryKey {
   if (!key) return 'other';
   const s = SYSTEM[key];
   if (s) return s.color;
@@ -37,3 +37,6 @@ export function categoryLook(theme: Pick<Theme, 'scheme'>, key: string | null): 
   const color = categoryColors[theme.scheme][colorKey(key)];
   return { color, tint: withAlpha(color, categoryTintAlpha[theme.scheme]), icon: (key && SYSTEM[key]?.icon) || Tag };
 }
+
+/** The colour family of a category key (`other` = no colour of its own). */
+export const colorKeyOf = (key: string | null): CategoryKey => colorKey(key);

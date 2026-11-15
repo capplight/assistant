@@ -115,7 +115,7 @@ export function StickyNote({
         </View>
       ) : null}
       <View style={list ? styles.listBody : undefined}>
-        <AppText variant="callout" numberOfLines={list ? 3 : 8} style={[textStyle, list ? styles.flex : null]}>
+        <AppText variant="callout" numberOfLines={list ? 3 : 6} style={[textStyle, list ? styles.flex : null]}>
           {text}
         </AppText>
         {pinned && list ? <Icon testID={testID ? `${testID}-pin` : undefined} icon={Pin} size="sm" color={ink.ink2} /> : null}
