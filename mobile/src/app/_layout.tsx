@@ -17,6 +17,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useAlarmsLifecycle } from '@/alarms/useAlarms';
 import { ToastHost } from '@/components/Toast';
+import { TopNoticeHost } from '@/components/UndoStrip';
 import { usePushAnswers } from '@/push/usePushAnswers';
 import { ShareAskHost } from '@/share/ShareAskHost';
 import { useFeaturesLifecycle } from '@/store/features';
@@ -57,6 +58,8 @@ export default function RootLayout() {
           <RootStack />
           <ShareAskHost />
           <ToastHost />
+          {/* v4: «Отменить» lives at the top on every screen (design-system §10.2). */}
+          <TopNoticeHost />
         </ThemeProvider>
       </SafeAreaProvider>
     </ShareIntentRoot>

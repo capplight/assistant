@@ -76,7 +76,7 @@ async def test_every_corpus_case_changes_nothing(env):  # noqa: F811
             names = [n for _, n, _ in evs]
             first = script.calls["ChatReply"][n0]
             offered = {t.name for t in first.tools}
-            ok = (offered == {"search", "list_page", "aggregate"}
+            ok = (offered == {"search", "list_page", "aggregate", "search_chat"}
                   and not {"action", "confirm", "reminder_draft"} & set(names)
                   and "done" in names and _untrusted(first).count("</untrusted_data>") == 0)
             if not ok:
@@ -100,7 +100,8 @@ async def test_shared_text_is_data_and_never_repeated(env):  # noqa: F811
             names = [n for _, n, _ in evs]
             assert not {"action", "confirm", "reminder_draft"} & set(names), case["id"]
             req = script.calls["ChatReply"][n0]
-            assert {t.name for t in req.tools} == {"search", "list_page", "aggregate"}
+            assert {t.name for t in req.tools} == {"search", "list_page", "aggregate",
+                                                   "search_chat"}
             # spec 5.7 rule 1: the shared text is inside the data block, not in our lines
             assert case["text"][:30] in _untrusted(req), case["id"]
             assert f"): {case['text']}" not in _all_text(req)

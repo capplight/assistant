@@ -281,18 +281,16 @@ describe('S38 «Настроить страницу»', () => {
     await settle(() => s.callsTo('POST /actions/av1/undo').length === 1);
   });
 
-  it('«Вернуть как было» asks first (S25, «Нет» first), then `reset: true`', async () => {
+  it('«Вернуть как было» is done at once (Ф-65: reversible, no «Да»), `reset: true`', async () => {
     const s = server();
     s.on('POST /pages/*/view', () => ({ status: 200, body: { page: pageOut(null, 91, { id: 'srv-rem', title: 'Ремонт' }), changed: true, repeated: false, action: action('ar', 'Вернул страницу «Ремонт» как было.', { kind: 'screen_reset' }), page_patch: null } }));
     await online(s);
     const page = await customPage('table');
     await renderRouter(APP_DIR, { initialUrl: `/page-settings/${page.id}` });
     await settle(() => screen.queryByTestId('settings-reset') !== null);
+    // Ф-65: reversible — done at once, «Отменить» in the top notice; no «Да».
     await fireEvent.press(screen.getByTestId('settings-reset'));
-    const sheet = screen.getByTestId('confirm-sheet');
-    expect(within(sheet).getByText('Вернуть страницу как было?')).toBeTruthy();
-    expect(s.callsTo('POST /pages/srv-rem/view')).toHaveLength(0);
-    await fireEvent.press(screen.getByTestId('confirm-yes'));
+    expect(screen.queryByTestId('confirm-sheet')).toBeNull();
     await settle(() => s.callsTo('POST /pages/srv-rem/view').length === 1);
     expect(s.callsTo('POST /pages/srv-rem/view')[0]!.body).toMatchObject({ reset: true });
     expect(pageNow(page.id).layout).toBe('list');
@@ -448,7 +446,8 @@ describe('the assistant changes a view (Ф-31): at once, «Что изменил
     await fireEvent.press(screen.getByTestId('assistant-send'));
     await settle(() => screen.queryByTestId('page-view-custom:table') !== null);
     expect(within(screen.getByTestId('undo-strip')).getByText('Вид: Список → Таблица.')).toBeTruthy();
-    await fireEvent.press(screen.getByTestId('undo-strip-changes'));
+    // v4 TopNotice: a tap on the text opens «Что изменилось».
+    await fireEvent.press(screen.getByTestId('undo-strip-open'));
     await fireEvent.press(screen.getByTestId('change-revert-key-0'));
     await settle(() => s.callsTo('POST /actions/ag/undo').length === 1);
     expect(s.callsTo('POST /actions/ag/undo')[0]!.body).toMatchObject({ keys: ['srv-rem:layout'] });

@@ -1,4 +1,4 @@
-import type { ItemKind, ItemOut, ItemSource, ReviewFieldOut } from '@/api/types';
+import type { ItemKind, ItemOut, ItemSource, ParseLaterOut, ReviewFieldOut } from '@/api/types';
 
 import type { SqlDb } from './outbox';
 
@@ -62,6 +62,11 @@ export type LocalRecord = {
   deletedAt: number | null;
   /** Server's end of the 30 days in «Удалённые записи». */
   purgeAfter: number | null;
+  /** Ф-73 «изменил помощник»: when, and by which action (the mark lives 24 h). */
+  assistantChangedAt?: string | null;
+  assistantActionId?: string | null;
+  /** Ф-69 «сохранил как заметку · разберу позже» (`waiting`) → «Разобрал: …» (`done`). */
+  parseLater?: ParseLaterOut | null;
 };
 
 export type NewRecord = Pick<LocalRecord, 'kind' | 'source'> &
@@ -138,6 +143,9 @@ function fromServer(item: ItemOut, now: number, base?: LocalRecord | null): Loca
     updatedAt: now,
     deletedAt: item.deleted_at ? Date.parse(item.deleted_at) || now : null,
     purgeAfter: item.purge_after ? Date.parse(item.purge_after) || null : null,
+    assistantChangedAt: item.assistant_changed_at ?? null,
+    assistantActionId: item.assistant_action_id ?? null,
+    parseLater: item.parse_later ?? null,
   };
 }
 
@@ -313,6 +321,9 @@ type Row = {
   updated_at: number;
   deleted_at: number | null;
   purge_after: number | null;
+  assistant_changed_at?: string | null;
+  assistant_action_id?: string | null;
+  parse_later?: string | null;
 };
 
 const rowTo = (r: Row): LocalRecord => ({
@@ -339,11 +350,15 @@ const rowTo = (r: Row): LocalRecord => ({
   updatedAt: r.updated_at,
   deletedAt: r.deleted_at,
   purgeAfter: r.purge_after,
+  assistantChangedAt: r.assistant_changed_at ?? null,
+  assistantActionId: r.assistant_action_id ?? null,
+  parseLater: r.parse_later ? (JSON.parse(r.parse_later) as ParseLaterOut) : null,
 });
 
 const COLS =
   'id, server_id, kind, source, status, title, text, summary, url, files, page_id, review_fields, ai_generated, ' +
-  'hidden_reason, canonical_id, error, pending, seq, occurred_at, created_at, updated_at, deleted_at, purge_after';
+  'hidden_reason, canonical_id, error, pending, seq, occurred_at, created_at, updated_at, deleted_at, purge_after, ' +
+  'assistant_changed_at, assistant_action_id, parse_later';
 
 export class SqliteRecordsRepository implements RecordsRepository {
   constructor(
@@ -358,7 +373,7 @@ export class SqliteRecordsRepository implements RecordsRepository {
 
   private async write(r: LocalRecord, mode: 'INSERT OR IGNORE' | 'INSERT OR REPLACE') {
     await this.db.runAsync(
-      `${mode} INTO records (${COLS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `${mode} INTO records (${COLS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       r.id,
       r.serverId,
       r.kind,
@@ -382,6 +397,9 @@ export class SqliteRecordsRepository implements RecordsRepository {
       r.updatedAt,
       r.deletedAt,
       r.purgeAfter,
+      r.assistantChangedAt ?? null,
+      r.assistantActionId ?? null,
+      r.parseLater ? JSON.stringify(r.parseLater) : null,
     );
   }
 

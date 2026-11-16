@@ -54,7 +54,7 @@ from assistant.ai.prompting import TaskInputs, ToolRound
 from assistant.ai.router import Router
 from assistant.ai.store import period_starts
 from assistant.ai.types import ToolResult
-from assistant.chat import jobs, kp_line, limits, store, undo_line
+from assistant.chat import jobs, kp_line, limits, memory, store, undo_line
 from assistant.chat.context import (
     PROMPT_VERSION,
     Assembled,
@@ -107,6 +107,7 @@ from assistant.db.models_chat import (
     MessageRole,
     MessageState,
 )
+from assistant.db.models_memory import FactSource, MemoryFact
 from assistant.db.models_pages import Screen
 from assistant.embeddings import ChunkEmbedder, NullChunkEmbedder
 from assistant.expenses import parse as expenses_parse
@@ -555,6 +556,9 @@ class ChatService:
             if turn.input_kind != "share" and (undo := undo_phrase(turn.text)) is not None:
                 await self._undo_by_phrase(run, turn, undo)  # «верни как было» (Ф-73)
                 return
+            if turn.input_kind != "share" and (ask := memory.memory_phrase(turn.text)):
+                await self._memory_phrase(run, turn, ask)  # «что ты обо мне помнишь?», «забудь»
+                return
             if turn.input_kind != "share" and is_reminder_phrase(turn.text):
                 if background:  # nothing is set up later behind the person's back
                     await self._fail(run, "not_done", text=TEXT_NOT_DONE[lang], retry=True)
@@ -745,6 +749,48 @@ class ChatService:
         await self._finish_change(run, turn, m, Decimal(0),
                                   [{"name": "create", "arguments": {}, "error": res.is_error,
                                     "by": "code"}])  # fmt: skip
+
+    async def _memory_phrase(self, run: ReplyRun, turn: TurnInput, ask: memory.MemoryAsk) -> None:
+        """Step 5 (Ф-59: no screen): the memory is seen and changed by phrase, by code."""
+        book = await book_for(self.sessionmaker, turn.user_id, turn.page_pk)
+        m = self._mutation(run, turn, book, False, False)
+        now = self.clock()
+        _, today = await self._local_today(turn.user_id)
+        async with self.sessionmaker() as s:
+            if ask.what == "list":
+                m.note = memory.list_text(await memory.active(s, turn.user_id, today))
+            elif ask.what == "forget":
+                gone = await memory.forget(s, turn.user_id, ask.about)
+                m.note = ("Забыл: " + "; ".join(f"«{g}»" for g in gone[:5]) + "." if gone
+                          else memory.TEXT_NOT_IN_MEMORY)  # fmt: skip
+            elif ask.what == "forget_all":
+                n = await s.scalar(select(func.count()).select_from(MemoryFact)
+                                   .where(MemoryFact.user_id == turn.user_id)) or 0
+                if n == 0:
+                    m.note = memory.list_text([])
+                else:  # it cannot be undone: one compact «Да» (Ф-66)
+                    m.proposal = {
+                        "kind": "count", "question": f"Забыть всё, что я о вас помню ({n})?",
+                        "count": n, "item_ids": [], "default": None, "state": "open",
+                        "options": [{"id": "yes", "label": "Забыть", "kind": "yes",
+                                     "item_id": None},
+                                    {"id": "no", "label": "Не сейчас", "kind": "no",
+                                     "item_id": None}],
+                        "expires_at": (now + timedelta(hours=24)).isoformat(),
+                        "plan": {"tool": "forget_all"},
+                    }  # fmt: skip
+            else:
+                kind = memory.guess_kind(ask.value)
+                stored = await memory.remember(s, turn.user_id, kind, ask.value,
+                                               source=FactSource.SAID, now=now,
+                                               message_id=turn.message_id)  # fmt: skip
+                m.note = (f"Запомнил: {stored}." if stored else memory.TEXT_WONT_KEEP)
+            await s.commit()
+        if ask.what == "remember":
+            await memory.embed_facts(self.sessionmaker, self.embedder, turn.user_id)
+        await self._finish_change(run, turn, m, Decimal(0),
+                                  [{"name": "memory", "arguments": {"what": ask.what},
+                                    "error": False, "by": "code"}])  # fmt: skip
 
     async def _undo_by_phrase(self, run: ReplyRun, turn: TurnInput, phrase: UndoPhrase) -> None:
         """«верни как было», «отмени», «верни запись про хлеб» (undo_line.py): the same undo as
@@ -1040,6 +1086,11 @@ class ChatService:
             m.note = TEXT_STALE_CHOICE[lang]
         elif option in ("no", "cancel"):
             m.note = TEXT_CANCELLED[lang]
+        elif prop["plan"].get("tool") == "forget_all":  # «забудь всё» → «Забыть»
+            async with self.sessionmaker() as s:
+                await memory.forget_all(s, turn.user_id)
+                await s.commit()
+            m.note = memory.TEXT_FORGOT_ALL
         elif prop["plan"].get("tool") == "rerun":
             pk = prop["plan"].get("options", {}).get(option)
             if pk is None:
@@ -1271,6 +1322,7 @@ class ChatService:
                                             .where(ConversationMessage.id == run.reply_pk))
                 if conv is not None:
                     await jobs.maybe_enqueue_summary(session, conv)
+                    await memory.maybe_enqueue(session, conv, self.clock())  # step 5
                 await session.commit()
         except Exception:
             log.exception("chat: after-answer work failed")

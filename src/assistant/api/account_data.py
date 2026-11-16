@@ -57,6 +57,8 @@ USER_TABLES: dict[str, Mode] = {
     "public.drafts": "cascade",  # week 15 (0021)
     "public.kp_price_history": "cascade",
     "public.user_habits": "cascade",
+    "public.memory_facts": "cascade",  # step 5: what the assistant remembers
+    "public.message_embeddings": "cascade",  # step 5: vectors of past turns
     # chat and actions
     "public.conversations": "cascade",
     "public.conversation_messages": "cascade",

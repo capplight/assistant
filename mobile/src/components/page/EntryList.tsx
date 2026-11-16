@@ -355,10 +355,11 @@ export function EntryList({
           }}
           onDelete={() => {
             const id = menuEntry.record.id;
+            const what = recordTitle(menuEntry.record, t);
             setMenuFor(null);
             void getRecordActions()
               .then((a) => a.remove(id))
-              .then(() => useUndo.getState().showDeleted(id));
+              .then(() => useUndo.getState().showDeleted(id, what));
           }}
           onClose={() => setMenuFor(null)}
         />

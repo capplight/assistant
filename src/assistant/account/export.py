@@ -48,6 +48,7 @@ conversation.jsonl  — вся Переписка с помощником.
 drafts.json         — черновики сообщений.
 stacks.json         — стопки.
 habits.json         — «Что я для вас настроил».
+memory.json         — что помощник помнит о вас (люди, места, предпочтения, текущие дела).
 originals/          — сохранённые оригиналы (фото, файлы, логотип, подпись, печать).
 
 Номер телефона в архиве не указан: мы храним его только в зашифрованном виде.
@@ -275,6 +276,9 @@ async def snapshot(s: AsyncSession, user: User, cipher: Cipher | None) -> Snapsh
     put("habits.json", _json(await _rows(s, """
         SELECT kind, key, value, status, evidence_count, created_at, updated_at
         FROM user_habits WHERE user_id = :u ORDER BY id""", uid)))
+    put("memory.json", _json(await _rows(s, """
+        SELECT public_id AS id, kind, text, source, valid_until, mentions, created_at,
+               updated_at FROM memory_facts WHERE user_id = :u ORDER BY id""", uid)))
 
     files = await _rows(s, f"""
         SELECT f.public_id, f.role, f.mime, f.storage_key, i.public_id AS item_id

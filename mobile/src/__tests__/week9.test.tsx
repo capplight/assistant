@@ -294,7 +294,7 @@ describe('screens', () => {
     const r = await renderRouter(APP_DIR, { initialUrl: '/' });
     await fireEvent.changeText(screen.getByTestId('assistant-input'), 'купить молоко');
     await fireEvent.press(screen.getByTestId('assistant-send'));
-    await settle(() => screen.queryByTestId('undo-strip-replace') !== null);
+    await settle(() => screen.queryByTestId('undo-strip-text') !== null);
     expect(screen.getByTestId('undo-strip-text')).toHaveTextContent('Сохранил в «Покупки»');
     expect(useTasks.getState().tasks['srv-t9']?.title).toBe('Молоко');
     await act(async () => router.navigate(`/page/${page('shopping').id}`));
@@ -326,7 +326,7 @@ describe('screens', () => {
     expect(screen.queryByText(/^Про:/)).toBeNull();
     await fireEvent.changeText(screen.getByTestId('assistant-input'), 'купить молоко');
     await fireEvent.press(screen.getByTestId('assistant-send'));
-    await settle(() => screen.queryByTestId('undo-strip-replace') !== null);
+    await settle(() => screen.queryByTestId('undo-strip-text') !== null);
     // The open page goes along only so that «это / здесь» resolve; the server decides the place.
     expect(s.callsTo('POST /chat/messages')[0]?.body).toMatchObject({ text: 'купить молоко', page_id: 'srv-notes' });
     expect(screen.getByTestId('undo-strip-text')).toHaveTextContent('Сохранил в «Покупки»');

@@ -97,7 +97,7 @@ describe('the assistant line above the keyboard at 200%, 320 × 568', () => {
     );
   });
 
-  it('«Отменить» never covers the line: same column, above it, bounded and scrolling while typing', async () => {
+  it('«Отменить» never covers the line: the notice is at the top (v4), the footer still bounds what is above while typing', async () => {
     setWindow({ fontScale: 2, ...NARROW });
     const kb = keyboardSpy();
     resetApp();
@@ -105,12 +105,14 @@ describe('the assistant line above the keyboard at 200%, 320 × 568', () => {
     await renderRouter(APP_DIR, { initialUrl: '/' });
     await act(async () => useUndo.getState().showCustom('Добавил в Покупки: молоко, хлеб, яйца, сыр, масло и ещё четыре строки', () => undefined));
     await kb.open(KB);
-    expect(inside('footer-above-line', 'undo-strip')).toBe(true);
+    // v4 TopNotice (design-system §10.2): at the top, never in the footer — it cannot cover the line or the keyboard.
+    expect(inside('footer-above-line', 'undo-strip')).toBe(false);
+    expect(inside('main-footer', 'undo-strip')).toBe(false);
     expect(inside('footer-above-line', 'assistant-line')).toBe(false);
     const above = flat('footer-above-line');
     expect(above.maxHeight).toBe(aboveLineMaxHeight(NARROW.height, KB));
     expect(screen.getByTestId('footer-above-line').props.scrollEnabled).toBe(true);
-    for (const id of ['undo-strip', 'assistant-line', 'footer-above-line']) expect(flat(id).position).not.toBe('absolute');
+    for (const id of ['assistant-line', 'footer-above-line']) expect(flat(id).position).not.toBe('absolute');
     // Order in the footer: what is above, then the line.
     const footer = screen.getByTestId('main-footer');
     const order = footer.children.filter((c): c is typeof footer => typeof c !== 'string').map((c) => c.props.testID);

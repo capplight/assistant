@@ -7,6 +7,7 @@ import type { LocalRecord } from '@/db';
 import { recordTitle, sourceLine, statusLine } from '@/records/format';
 import { unverifiedCount } from '@/records/review';
 import { useTheme } from '@/theme';
+import { ChangedMark } from '@/components/ChangedMark';
 
 import { AppText } from './AppText';
 import { Icon } from './ui/Icon';
@@ -121,6 +122,7 @@ export function RecordRow({
         {snippet && snippet !== title ? <AppText variant="callout">{snippet}</AppText> : null}
         <AppText variant="footnote">{source}</AppText>
         {status ? <AppText variant="footnote">{status}</AppText> : null}
+        <ChangedMark at={record.assistantChangedAt} actionId={record.assistantActionId} testID={`changed-${record.id}`} />
         {record.aiGenerated ? <AiLabel variant="footnote" short /> : null}
         {toCheck ? (
           <View

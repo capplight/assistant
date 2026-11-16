@@ -125,6 +125,8 @@ export function fromAction(a: ActionOut): ChatAction {
     savedTo: (a.saved_to ?? []).map((s) => ({ pageServerId: s.page_id, title: s.title, itemIds: s.item_ids })),
     undoable: a.undoable,
     undone: !!a.undone_at,
+    notice: a.notice ?? null,
+    undoOf: a.undo_of,
   };
 }
 
@@ -214,9 +216,18 @@ function apply(answerId: string, e: ChatEvent): void {
       if (e.tasks && e.tasks.length > 0) taskSink.applyServer(e.tasks);
       // Week 12: «потратил 5000 на бензин» — the month total is counted by code from these at once.
       if (e.expenses && e.expenses.length > 0) applyExpenses(e.expenses);
-      rememberActions([e.action]);
-      // Several `action` events in one reply are the same action growing: replace it.
-      const action = { ...fromAction(e.action), changedItemIds: e.changedItemIds };
+      rememberActions(e.undone ? [e.action, e.undone] : [e.action]);
+      // Undo by phrase (Ф-67): the action it undid is «отменено» wherever it shows in the conversation.
+      const undone = e.undone;
+      if (undone) {
+        for (const m of store().messages) {
+          if (m.action?.id === undone.id) updateMessage(m.id, { action: { ...m.action, ...fromAction(undone), undone: true, undoable: false } });
+        }
+      }
+      // Several `action` events in one reply are the same action growing: replace it (an undo keeps what it undid).
+      const prev = store().messages.find((m) => m.id === answerId)?.action;
+      const undid = undone ? [...new Set([...(prev?.undid ?? []), undone.id])] : prev?.undid;
+      const action = { ...fromAction(e.action), changedItemIds: e.changedItemIds, ...(undid ? { undid, undoOf: e.action.undo_of ?? undone?.id ?? null } : {}) };
       updateMessage(answerId, { action, answerKind: 'action', activity: null });
       // The result is on the page, not in a banner (R-52 п. 2); «Отменить» lives with the line.
       if (store().banner?.messageId === answerId) store().closeBanner();

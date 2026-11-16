@@ -213,8 +213,15 @@ export type ItemOut = {
   deleted_at?: string | null;
   /** In «Удалённые записи» until this time. */
   purge_after?: string | null;
+  /** Ф-73: made or changed by the assistant within 24 h (by that action); null otherwise. */
+  assistant_changed_at?: string | null;
+  assistant_action_id?: string | null;
+  /** Ф-69: a note saved while the model was down — `waiting`, then `done` («Разобрал: перенёс в «Расходы»»). */
+  parse_later?: ParseLaterOut | null;
   seq: number;
 };
+
+export type ParseLaterOut = { state: 'waiting' | 'done'; text_ru: string | null; text_kk: string | null; to: string | null; action_id: string | null };
 
 /** PATCH /v1/items/{id}. `base_seq`: 409 `conflict` (details.seq) if the record changed since. */
 export type ItemPatchIn = {
@@ -713,6 +720,20 @@ export type ActionOut = {
   event_client_id?: string | null;
   /** Week 20 (Ф-50): the pages the action's new records are on now — «Сохранил в «…» · Переложить · Отменить». */
   saved_to?: SavedToOut[];
+  /** Steps 3–4 (Ф-65, Ф-67): the 3-second top notice — shown as it is, no texts built on the phone. */
+  notice?: ActionNoticeOut | null;
+  /** Ф-69: made in the background from a note saved while the model was down (arrives by /sync). */
+  parsed_later?: boolean;
+};
+
+export type ActionNoticeOut = {
+  text_ru: string;
+  text_kk: string | null;
+  target: { kind: string; id: string | null; page_id: string | null } | null;
+  /** «Отменить» / «Восстановить» / «Вернуть»; null = no button. */
+  undo_label_ru: string | null;
+  undo_label_kk: string | null;
+  ms: number;
 };
 
 /** Week 20 (chat.md «История»): one entry of `GET /v1/history`. */
@@ -818,7 +839,7 @@ export type ChatEvent = (
   /** Resume of a finished reply: replace what was shown. */
   | { type: 'snapshot'; message: ChatMessageOut }
   /** Several in one reply = the same action growing: replace by `action.id`. */
-  | { type: 'action'; action: ActionOut; changedItemIds: string[]; tasks?: TaskOut[]; expenses?: ExpenseOut[] }
+  | { type: 'action'; action: ActionOut; changedItemIds: string[]; tasks?: TaskOut[]; expenses?: ExpenseOut[]; undone?: ActionOut | null }
   /** Week 9: a reminder phrase read as `/reminders/parse` would (S13; nothing saved). */
   | { type: 'reminder_draft'; replyId: string | null; draft: ReminderParseOut; createdVia: 'voice' | 'typed' }
   | { type: 'page_patch'; patch: PagePatchOut }
@@ -1028,6 +1049,9 @@ export type TaskOut = {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  /** Ф-73: made or changed by the assistant within 24 h (by that action); null otherwise. */
+  assistant_changed_at?: string | null;
+  assistant_action_id?: string | null;
 };
 
 /** POST /tasks (offline through the outbox: the same `client_id` → the same task). */
@@ -1315,6 +1339,9 @@ export type ExpenseOut = {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  /** Ф-73: made or changed by the assistant within 24 h (by that action); null otherwise. */
+  assistant_changed_at?: string | null;
+  assistant_action_id?: string | null;
 };
 
 /** A category: the person's copy of the 8 system ones, the hidden service «Переводы», own ones. */

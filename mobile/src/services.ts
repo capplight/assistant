@@ -19,7 +19,7 @@ import { useSession } from '@/store/session';
 import { useToast } from '@/store/toast';
 import { useUndo } from '@/store/undo';
 import { SyncEngine, type DeviceInfo } from '@/sync/engine';
-import { rememberActions, taskSink } from '@/tasks/service';
+import { noticeParsedLater, rememberActions, taskSink } from '@/tasks/service';
 import { taskPatchSink } from '@/tasks/edit';
 import i18n from '@/i18n';
 import { applySyncExtras } from '@/today/service';
@@ -180,7 +180,10 @@ export function getSyncEngine(): Promise<SyncEngine> {
           useOnboarding.getState().requireAccountConsent({ userId: '', switched: false }),
         reminders: reminderSink,
         tasks: { ...taskSink, ...taskPatchSink },
-        actions: rememberActions,
+        actions: (acts) => {
+          rememberActions(acts);
+          noticeParsedLater(acts);
+        },
         extras: applySyncExtras,
         dedup: dedupSink,
         views: viewSink,

@@ -169,6 +169,21 @@ export const taskSink = {
 };
 
 /** Actions from /sync, /today and the answers: «Что я сделал», «Я сделал за вас». */
+const noticed = new Set<string>();
+
+/**
+ * Ф-69: an action the server made in the background (`parsed_later`) arrives only by /v1/sync — its notice
+ * («Разобрал: перенёс в «Расходы»») shows once, when it is new (not older than 10 minutes, not undone).
+ */
+export function noticeParsedLater(actions: ActionOut[], now: number = Date.now()): void {
+  const fresh = actions.filter(
+    (a) => a.parsed_later && a.notice && !a.undone_at && !noticed.has(a.id) && (!a.created_at || now - Date.parse(a.created_at) < 10 * 60_000),
+  );
+  for (const a of actions) if (a.parsed_later) noticed.add(a.id);
+  const last = fresh.at(-1);
+  if (last) useUndo.getState().showServer(last);
+}
+
 export function rememberActions(list: ActionOut[]): void {
   if (list.length === 0) return;
   const s = tasksState();

@@ -89,7 +89,7 @@ describe('main navigation', () => {
     expect((await testRecords.list())[0]).toMatchObject({ text: 'Купить хлеб', status: 'queued' });
 
     expect(screen.getByTestId('undo-strip-text')).toHaveTextContent(/^Сохранил в «Заметки»: Купить хлеб/);
-    expect(screen.getByTestId('undo-strip-replace')).toBeTruthy();
+    expect(screen.getByTestId('undo-strip-undo')).toHaveTextContent('Отменить');
     await act(async () => router.push('/history'));
     expect(r.getPathname()).toBe('/history');
     expect(screen.getByText('История')).toBeTruthy();

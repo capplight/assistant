@@ -235,19 +235,17 @@ describe('«История» (Ф-50: «Переписка» + «Что я сде
 });
 
 describe('SaveToast «Сохранил в «…» · Переложить · Отменить» (Ф-50)', () => {
-  it('a note saved on this phone names its page; «Переложить» opens the pages', async () => {
-    await renderRouter(APP_DIR, { initialUrl: '/' });
+  it('a note saved on this phone names its page at the top (v4 TopNotice); a tap opens the record', async () => {
+    const r = await renderRouter(APP_DIR, { initialUrl: '/' });
     await fireEvent.changeText(screen.getByTestId('assistant-input'), 'код домофона 4512');
     await fireEvent(screen.getByTestId('assistant-input'), 'submitEditing');
     await settle(() => useUndo.getState().strip?.kind === 'saved');
     expect(screen.getByTestId('undo-strip-text')).toHaveTextContent(/^Сохранил в «Заметки»: код домофона 4512/);
-    expect(screen.getByTestId('undo-strip-undo')).toBeTruthy();
-    await fireEvent.press(screen.getByTestId('undo-strip-replace'));
-    await settle(() => screen.queryByTestId('replace-sheet') !== null);
-    await fireEvent.press(screen.getByTestId(`replace-${pageOf('tasks').id}`));
-    await fireEvent.press(screen.getByTestId('replace-go'));
-    await settle(() => useUndo.getState().strip?.kind === 'manual');
-    expect((await (await getRecords()).list(10)).length).toBe(1);
+    expect(screen.getByTestId('undo-strip-undo')).toHaveTextContent('Отменить');
+    expect(screen.queryByTestId('undo-strip-replace')).toBeNull();
+    const [rec] = await (await getRecords()).list(10);
+    await fireEvent.press(screen.getByTestId('undo-strip-open'));
+    await settle(() => r.getPathname() === `/record/${rec!.id}`);
   });
 });
 

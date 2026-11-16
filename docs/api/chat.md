@@ -337,6 +337,37 @@ plain JSON alternative.
   phrase with `POST /v1/items` `source_meta.from_line` (`items.md`): what code cannot read there
   gets the same `parse_later` (only with the `ai_cross_border` consent).
 
+**Step 5 of the vision plan (2026-11-16, Ф-59…Ф-61, Ф-70): memory and the whole conversation.**
+No screen of its own (Ф-59): all of it is by phrase in the line, answered by code (no model),
+`done.answer_kind: "text"` with a `banner`:
+- «Что ты обо мне помнишь?» / «что ты знаешь обо мне» — the facts by kind («Люди: …»,
+  «Текущие дела: …»), «(из материала)» on those taken from saved materials.
+- «запомни: я не ем свинину», «запомни, что мой брат Ерлан» — stored at once: «Запомнил: …».
+  Never kept, with an honest answer: document / card / ИИН numbers and long numbers, health,
+  religion, politics, intimate life, nationality, passwords.
+- «забудь про ремонт» — the matching facts are deleted for good: «Забыл: «…»». Nothing matched:
+  «Такого в памяти не нашёл…».
+- «забудь всё» — it cannot be undone, so a compact `confirm` (Proposal `kind: "count"`, options
+  «Забыть» / «Не сейчас»); «Забыть» → «Забыл всё, что помнил о вас.».
+Automatic (Ф-61): every 4 new phrases (or 4 new shared / forwarded records) the chat worker
+(`chat:memory`, light model, background budget, ≤6 reads per person a day) keeps short facts:
+people, places, preferences, routines, ongoing projects with an end date, agreements. From the
+person's words (`said`) and from materials (`material`, «из материала», Ф-70); the same
+never-kept list is checked by code after the model, and a fact the model attributes to the
+person must have the person's words in it. One row per fact (deduped by its words), ≤150 per
+person; an ended project goes 30 days after its date. Facts are in the data export
+(`memory.json`) and go with the account. «Очистить переписку» does not clear the memory (that is
+«забудь всё»).
+Every answer gets the memory as a data block «Память о человеке» (≤500 tokens: ongoing projects,
+then facts about the phrase — by words, by meaning when embeddings are on — then the most
+mentioned). The phone shows nothing new for it.
+**Whole conversation (Ф-60).** New read tool `search_chat` (`tool_activity` «Ищу в переписке…»):
+the model may look up any earlier turn; a phrase that points to the past («как в прошлый раз»,
+«что ты мне советовал про …», «мы обсуждали») also gets up to 4 such turns in its context.
+By words now, by meaning when the embedder is on (`search.md`). Shared text is never searched as
+the person's words. These turns are not records: no citation chips for them; the answer says the
+date («вы писали 3 марта»).
+
 **Week 20 (Ф-50).**
 - Every save from the line carries `action.saved_to` (`actions.md`): «Сохранил в «…» · Переложить
   · Отменить».

@@ -8,7 +8,6 @@ import { AmountText } from '@/components/AmountText';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/Screen';
-import { StandaloneUndoStrip } from '@/components/UndoStrip';
 import { formatMinor, toMinor } from '@/expenses/calc';
 import { dayName, planTitle } from '@/expenses/feed';
 import { confirmStatement, loadStatement, planNumbers, rejectStatement, undoStatement, type PlanResult } from '@/expenses/receipts';
@@ -205,7 +204,6 @@ export default function StatementScreen() {
       <Screen testID="plan-screen">
         <View style={{ gap: theme.space[4] }}>{body()}</View>
       </Screen>
-      <StandaloneUndoStrip />
     </>
   );
 }

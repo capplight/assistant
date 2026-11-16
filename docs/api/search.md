@@ -155,3 +155,28 @@ Stop keeping it. It goes to the 7-day trash, unless the text is still unconfirme
 `409 original_system`: a logo, template, signature or stamp, kept always.
 
 `GET /v1/items/{id}/original` (spec 4.3) is not there yet: it needs presigned GET and `audit_log`.
+
+## The conversation and the memory (step 5, 2026-11-16)
+
+No new endpoint: both are used inside the chat (`chat.md` «Step 5»).
+
+**Past turns** (`assistant.chat.recall`): every finished phrase and answer of the person's one
+conversation (not shared text, not deleted, not unfinished).
+- By words: `conversation_messages.tsv` (generated, Postgres `russian` config, so «плитку» finds
+  «плитка»), any of the query's words (≥3 letters, small words dropped), ranked by `ts_rank_cd`.
+- By meaning: `message_embeddings` (bge-m3, 1024, HNSW cosine), filled in the background by the
+  chat worker every 30 s, 64 at a time, only for people whose embedding may run (TEI in KZ, or
+  DeepInfra when the `ai_cross_border` grant lists it — the same rule as records). Without the
+  embedder (DeepInfra without balance, TEI off) words still find everything: degraded, not broken.
+- Merged by RRF (k = 60), returned as turns: what the person said + the answer, with the date.
+  The turns already shown word for word in the context are left out.
+
+**Memory facts** (`memory_facts`): one short line each; an embedding when the embedder may run for
+the person (made after each background read and after «запомни»). The chat's memory layer ranks
+facts near the phrase by that embedding when the phrase was embedded anyway (no extra call).
+
+**Cost [estimate, measured once live 2026-11-16: $0.0006 per read with claude-haiku-5-5, ≈1.5k
+tokens in, ≈250 out]:** reads ≤6 a day → ≤$0.11, typically 2–3 a day → ≈$0.04–0.05 per active
+person a month; the memory layer ≤500 tokens per answer ≈ $0.00005 → ≈$0.05 a month at 30 answers
+a day; embeddings of turns and facts (bge-m3, ~50 tokens a turn) < $0.001 a month on DeepInfra,
+free on our TEI. Total ≈ **$0.05–0.15 per active person a month**, inside the «median ≤ $1» goal.

@@ -109,6 +109,13 @@ modules/alarms/              native Expo module: Android (Kotlin) AlarmManager +
   Переложить · Отменить всё»), the offline banner, the empty state with the tagline and 4 examples. The small line
   on other tabs writes into the same conversation; its banner says «Продолжить в чате ›»; «составь план…» goes to the
   chat. Pushes, «Ответ готов» and `/chat` open it on the answer.
+- **Steps 3–4** (Ф-65…Ф-73): «Отменить» is the **top notice** (`UndoStrip` in `TopNoticeHost`, root layout): page
+  square, one line, one button, a 2 dp time bar; 3 s (`action.notice.ms`, 30 s with a screen reader), swipe up
+  closes, a tap on the text opens `notice.target`. The server's `notice` words and button win («Восстановить»,
+  «Вернуть»); `parsed_later` actions from `/v1/sync` show theirs once. No «Да» for reversible things (page reset
+  included). «верни как было» in the chat: `UndoResultCard`, the undone action «отменено». «изменил помощник»
+  (`ChangedMark`, 24 h) on records, stickers (ring), tasks (brandTint row) and expenses; a tap → «Что изменилось»
+  + «Отменить». `parse_later.waiting` records say «сохранил как заметку · разберу позже». SQLite v10 keeps them.
 - **AI consent v2** (`consent/texts.ts`, `consent/AiConsentUpdate.tsx`): the bundled snapshot is `ai-2026-11-v2`
   (+ DeepInfra). A person whose local grant is v1 gets a small sheet once per launch (word search until «Согласен»).
 - **No shopping list** (Ф-49): feature `shopping` (default off, `GET /v1/features`): «Покупки», «Я в магазине» and

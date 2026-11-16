@@ -2,7 +2,7 @@ import { Pin } from 'lucide-react-native';
 import { Children, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View, type AccessibilityActionEvent, type AccessibilityActionInfo, type LayoutChangeEvent } from 'react-native';
 
-import { gridItemWidth, NOTE_COLOR_KEYS, noteInk, useLayout, useTheme, type NoteColorKey } from '@/theme';
+import { gridItemWidth, NOTE_COLOR_KEYS, noteInk, useLayout, useTheme, withAlpha, type NoteColorKey } from '@/theme';
 
 import { cardEdge } from './Card';
 
@@ -26,6 +26,8 @@ type NoteProps = {
   onAccessibilityAction?: (e: AccessibilityActionEvent) => void;
   /** Just changed by the assistant: `highlightTint` for 600 ms. */
   highlighted?: boolean;
+  /** Ф-73 «изменил помощник» (24 h): a thin `brand` 50 % ring with a soft glow (design-system §10.3). */
+  changed?: boolean;
   /** Small extra lines under the text (status, the AI label, «Проверить»). */
   children?: ReactNode;
   /** v2: `grid` (masonry cell) or `list` (full width: title 17, text 15, the date on the right — easier for elders). */
@@ -61,6 +63,7 @@ export function StickyNote({
   accessibilityActions,
   onAccessibilityAction,
   highlighted,
+  changed,
   children,
   look = 'grid',
   testID,
@@ -98,6 +101,17 @@ export function StickyNote({
         },
         white ? theme.elevation.card : null,
         white ? cardEdge(theme) : null,
+        changed
+          ? {
+              borderWidth: 1.5,
+              borderColor: withAlpha(theme.colors.brand, 0.5),
+              shadowColor: theme.colors.brand,
+              shadowOpacity: 0.35,
+              shadowRadius: 10,
+              shadowOffset: { width: 0, height: 0 },
+              elevation: 3,
+            }
+          : null,
         pressedStyle(pressed),
       ]}
     >

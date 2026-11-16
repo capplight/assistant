@@ -23,6 +23,7 @@ import { doneAt, isDone, listsForPage, setDone } from '@/tasks/service';
 import { nowIndex, sheetSlots, timedItemIds, type Slot } from '@/tasks/sheet';
 import { useTasks } from '@/tasks/store';
 import { useTheme, withAlpha } from '@/theme';
+import { ChangedMark, markFresh } from '@/components/ChangedMark';
 
 import { AppText } from '../AppText';
 import { ActionList, Card, CheckMark, Icon, pressedStyle, Sheet, type SheetAction } from '../ui';
@@ -288,7 +289,7 @@ function SlotRow({
   const actions = canMenu ? [{ name: 'menu', label: t('planner.move_time') }] : undefined;
   // design-system §3 Checkbox: overdue colours the time and the word, never the circle.
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, task && markFresh(task.assistant_changed_at) ? { backgroundColor: withAlpha(theme.colors.brandTint, 0.33) } : null]}>
       {task ? (
         <Pressable
           testID={`task-${task.id}`}
@@ -339,6 +340,7 @@ function SlotRow({
             {t('rem.late_risk')}
           </AppText>
         ) : null}
+        {task ? <ChangedMark at={task.assistant_changed_at} actionId={task.assistant_action_id} testID={`changed-task-${task.id}`} /> : null}
       </Pressable>
       {canMenu ? (
         <Pressable

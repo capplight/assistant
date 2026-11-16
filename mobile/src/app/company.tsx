@@ -10,7 +10,6 @@ import { CheckBadge } from '@/components/kp/KpParts';
 import { ChoiceSheet } from '@/components/page/FieldSheets';
 import { Screen } from '@/components/Screen';
 import { Header } from '@/components/ui/Header';
-import { StandaloneUndoStrip } from '@/components/UndoStrip';
 import { getMedia } from '@/expenses/media';
 import { editProfile, refreshProfile, setProfileImage, verifyProfileField } from '@/kp/service';
 import { shownProfile, useKp, type ProfileFields, type ProfileImageRole } from '@/kp/store';
@@ -202,7 +201,6 @@ export default function CompanyScreen() {
           <Button testID="company-prices" label={`${t('kp.my_prices')} ›`} variant="secondary" onPress={() => router.push('/price-list')} />
         </View>
       </Screen>
-      <StandaloneUndoStrip />
       {legalOpen ? (
         <ChoiceSheet
           testID="company-legal-sheet"

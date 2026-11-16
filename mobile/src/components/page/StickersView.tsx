@@ -18,6 +18,7 @@ import { unverifiedCount } from '@/records/review';
 import { useFeatures } from '@/store/features';
 import { useNotesLook } from '@/store/notesLook';
 import { NOTE_COLOR_KEYS, useLayout, useTheme } from '@/theme';
+import { ChangedMark, markFresh } from '@/components/ChangedMark';
 
 import { AppText } from '../AppText';
 import type { MenuExtra } from '../RecordMenuSheet';
@@ -258,6 +259,7 @@ function Sticker({ entry, ctx, index, total, look }: { entry: PageEntry; ctx: En
         color={color ?? autoNoteColor(rec.serverId ?? rec.id)}
         look={look}
         pinned={pinned}
+        changed={markFresh(rec.assistantChangedAt)}
         highlighted={ctx.highlighted}
         accessibilityLabel={stickerLabel(rec, { color, pinned, index, total }, t, i18n.language)}
         accessibilityActions={actions}
@@ -266,6 +268,7 @@ function Sticker({ entry, ctx, index, total, look }: { entry: PageEntry; ctx: En
         onLongPress={moves?.onMenu}
       >
         {status ? <AppText variant="footnote">{status}</AppText> : null}
+        <ChangedMark at={rec.assistantChangedAt} actionId={rec.assistantActionId} testID={`changed-${rec.id}`} />
         {rec.aiGenerated ? <AiLabel variant="footnote" short /> : null}
         {toCheck ? (
           <View

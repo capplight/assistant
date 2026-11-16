@@ -42,6 +42,7 @@ import type {
   StatementRowOut,
   StatementStatus,
   StatementWithRowsOut,
+  ActionNoticeOut,
   ActionOut,
   BriefOut,
   HistoryEntryOut,
@@ -338,6 +339,8 @@ export function actionOut(v: unknown): ActionOut | null {
       const pid = s && str(s.page_id);
       return s && pid ? [{ page_id: pid, title: str(s.title) ?? '', icon: str(s.icon), template_key: str(s.template_key), item_ids: strs(s.item_ids) }] : [];
     }),
+    notice: noticeOut(o.notice),
+    parsed_later: o.parsed_later === true,
   };
 }
 
@@ -716,7 +719,9 @@ export function decodeChatEvent(m: SseMessage): ChatEvent | null {
         const tasks = tasksOf(d.tasks ?? obj(d.action)?.tasks);
         // Week 12 (expenses.md «From the line»): the expenses it saved, so the totals change at once.
         const expenses = expensesOf(d.expenses ?? obj(d.action)?.expenses);
-        return { type: 'action', action, changedItemIds: ids.length > 0 ? ids : action.changed_item_ids, tasks, expenses };
+        // Undo by phrase (Ф-67): `undone` is the action it undid, as it is now (mark it «отменено»).
+        const undone = actionOut(d.undone);
+        return { type: 'action', action, changedItemIds: ids.length > 0 ? ids : action.changed_item_ids, tasks, expenses, undone };
       }
       case 'reminder_draft': {
         // Week 9 (reminders.md «From the assistant line»): S13, nothing is saved.
@@ -907,6 +912,27 @@ export function taskOut(v: unknown): TaskOut | null {
     created_at: str(o.created_at) ?? now,
     updated_at: str(o.updated_at) ?? now,
     deleted_at: str(o.deleted_at),
+    ...markOut(o),
+  };
+}
+
+/** Ф-73 «изменил помощник» on a record / task / expense. */
+export function markOut(o: Record<string, unknown>): { assistant_changed_at: string | null; assistant_action_id: string | null } {
+  return { assistant_changed_at: str(o.assistant_changed_at), assistant_action_id: str(o.assistant_action_id) };
+}
+
+export function noticeOut(v: unknown): ActionNoticeOut | null {
+  const o = obj(v);
+  const text = o && str(o.text_ru);
+  if (!o || !text) return null;
+  const tg = obj(o.target);
+  return {
+    text_ru: text,
+    text_kk: str(o.text_kk),
+    target: tg ? { kind: str(tg.kind) ?? 'item', id: str(tg.id), page_id: str(tg.page_id) } : null,
+    undo_label_ru: str(o.undo_label_ru),
+    undo_label_kk: str(o.undo_label_kk),
+    ms: num(o.ms, 3000) || 3000,
   };
 }
 
@@ -1752,6 +1778,7 @@ export function expenseOut(v: unknown): ExpenseOut | null {
     created_at: str(o.created_at) ?? now,
     updated_at: str(o.updated_at) ?? now,
     deleted_at: str(o.deleted_at),
+    ...markOut(o),
   };
 }
 
@@ -2427,6 +2454,11 @@ export class Api {
   /** «Не сейчас». */
   dismissSuggestion(id: string): Promise<unknown> {
     return this.client.request('POST', `/suggestions/${encodeURIComponent(id)}/dismiss`, { body: {} });
+  }
+
+  /** One action (Ф-73: the «изменил помощник» mark opens it). */
+  async action(id: string): Promise<ActionOut | null> {
+    return actionOut(await this.client.request<unknown>('GET', `/actions/${encodeURIComponent(id)}`));
   }
 
   /** S20 «Что я сделал»: newest first; `before` = an action id. */

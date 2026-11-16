@@ -65,6 +65,8 @@ export const READING_TIMEOUT_MS = 60_000;
 
 /** What is happening with the record, when there is something to say. */
 export function statusLine(rec: LocalRecord, t: T, now: number = Date.now()): string | null {
+  // Ф-69: saved while the model was down; read in the background once it is back.
+  if (rec.parseLater?.state === 'waiting') return t('later.waiting');
   switch (rec.status) {
     case 'queued':
       return t('queue');

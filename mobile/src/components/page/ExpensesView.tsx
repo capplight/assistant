@@ -18,6 +18,7 @@ import { useView } from '@/store/view';
 import { kickSync, syncBlocked } from '@/services';
 import { localDate } from '@/tasks/rows';
 import { categoryText, readableColumn, useLayout, useTheme } from '@/theme';
+import { ChangedMark } from '@/components/ChangedMark';
 
 import { AmountText } from '../AmountText';
 import { AppText } from '../AppText';
@@ -652,6 +653,7 @@ function FeedLine({ e, today, last, marked, onOpen }: { e: ExpenseOut; today: st
         <View style={[styles.flex, { minWidth: theme.largeFont ? '60%' : undefined }]}>
           <AppText>{title}</AppText>
           <AppText variant="callout">{meta}</AppText>
+          <ChangedMark at={e.assistant_changed_at} actionId={e.assistant_action_id} testID={`changed-exp-${e.id}`} />
         </View>
         <View style={{ alignItems: 'flex-end' }}>
           <AppText

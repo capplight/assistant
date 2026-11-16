@@ -1,6 +1,5 @@
 import { router } from 'expo-router';
 import { fireEvent, renderRouter, screen } from 'expo-router/testing-library';
-import { Dimensions } from 'react-native';
 
 import { lineRouting } from '@/chat/service';
 import type { InMemoryOutboxRepository } from '@/db';
@@ -11,7 +10,7 @@ import { useConnectivity } from '@/store/connectivity';
 import { useOnboarding } from '@/store/onboarding';
 import { usePages } from '@/store/pages';
 import { useSession } from '@/store/session';
-import { undoStripMs, useUndo } from '@/store/undo';
+import { NOTICE_MS, useUndo } from '@/store/undo';
 import type { Call, FakeServer } from '@/testing/fakeServer';
 import { happyServer, itemOut, pageOut, tokenPair } from '@/testing/fakeServer';
 import { APP_DIR, finishOnboarding, offlineFetch, resetApp, settle, testPages, testRecords } from '@/testing/helpers';
@@ -523,27 +522,14 @@ describe('copy', () => {
     expect(input.props.accessibilityHint).toBe('Например: что я обещал ТОО Арман?');
   });
 
-  it('the undo strip follows 2-design 4.3: 10 s, 15 s with a large font, 30 s with a screen reader', () => {
-    expect(undoStripMs({ largeFont: false, screenReader: false })).toBe(10_000);
-    expect(undoStripMs({ largeFont: true, screenReader: false })).toBe(15_000);
-    expect(undoStripMs({ largeFont: true, screenReader: true })).toBe(30_000);
-  });
-
-  it('a large font keeps the strip on screen past 10 s', async () => {
-    const dims = { width: 390, height: 844, scale: 3, fontScale: 1.5 };
-    Dimensions.set({ window: dims, screen: dims });
-    try {
-      resetApp();
-      finishOnboarding();
-      await renderRouter(APP_DIR, { initialUrl: '/' });
-      useUndo.getState().showMerged('r1', '2026-03-12T10:00:00Z');
-      await settle(() => screen.queryByTestId('undo-strip') !== null);
-      await settle(() => false, 600).catch(() => undefined); // 12 s
-      expect(screen.queryByTestId('undo-strip')).not.toBeNull();
-    } finally {
-      const back = { width: 390, height: 844, scale: 3, fontScale: 1 };
-      Dimensions.set({ window: back, screen: back });
-    }
+  it('the top notice goes after 3 s (Ф-67, Ф-75)', async () => {
+    expect(NOTICE_MS).toBe(3_000);
+    resetApp();
+    finishOnboarding();
+    await renderRouter(APP_DIR, { initialUrl: '/' });
+    useUndo.getState().showMerged('r1', '2026-03-12T10:00:00Z');
+    await settle(() => screen.queryByTestId('undo-strip') !== null);
+    await settle(() => screen.queryByTestId('undo-strip') === null, 600);
   });
 });
 
@@ -732,7 +718,9 @@ describe('«Удалённые записи»', () => {
     await settle(() => screen.queryByTestId('record-delete') !== null);
     await fireEvent.press(screen.getByTestId('record-delete'));
     await settle(() => r.getPathname() === `/page/${notes().id}`);
-    await settle(() => screen.queryByText('Удалил запись') !== null);
+    // Ф-66: «Удалено: «…» · Восстановить» at the top.
+    await settle(() => screen.queryByText('Удалено: «Лишняя запись»') !== null);
+    expect(screen.getByTestId('undo-strip-undo')).toHaveTextContent('Восстановить');
     await settle(() => outbox.all().some((e) => e.kind === 'item.delete'));
     await settle(() => screen.queryByText('Лишняя запись') === null);
     router.navigate('/trash');

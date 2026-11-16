@@ -96,7 +96,23 @@ AGGREGATE = ToolSpec(
     ),
     parameters=strict_json_schema(AggregateArgs),
 )
-READ_TOOLS: tuple[ToolSpec, ...] = (SEARCH, LIST_PAGE, AGGREGATE)
+class SearchChatArgs(BaseModel):
+    query: str
+
+
+SEARCH_CHAT = ToolSpec(
+    name="search_chat",
+    description=(
+        "Search the whole past conversation with the person (every earlier phrase and answer, "
+        "any time ago) by words and by meaning: what they told you, asked, or were advised. Use "
+        "it when they refer to something said before («как в прошлый раз», «что ты мне "
+        "советовал про …»). query: the words to look for. Returns up to 5 past turns with dates; "
+        "they are not records: do not cite them with refs, say «вы писали 3 марта»."
+    ),
+    parameters=strict_json_schema(SearchChatArgs),
+)
+
+READ_TOOLS: tuple[ToolSpec, ...] = (SEARCH, LIST_PAGE, AGGREGATE, SEARCH_CHAT)
 
 
 @dataclass
@@ -115,6 +131,8 @@ class ToolEnv:
     computed: Facts = field(default_factory=Facts)
     # May queries go to the embedder (abroad: consent lists it)? None = not checked yet.
     embed_allowed: bool | None = None
+    vectors: dict[str, list[float] | None] = field(default_factory=dict)  # query → embedding
+    before_msg_id: int | None = None  # search_chat: only turns older than the shown history
 
     def computed_by_code(self, *values: "int | float | Decimal | str | date | datetime") -> None:
         for v in values:
@@ -186,17 +204,26 @@ async def _page_links(session: AsyncSession, pks: list[int]) -> dict[int, list[i
     return out
 
 
+async def query_vector(env: ToolEnv, query: str) -> list[float] | None:
+    """The query's embedding, once per turn and query (records, past turns and memory share it)."""
+    if query in env.vectors:
+        return env.vectors[query]
+    if env.embed_allowed is None:  # once per turn: the consent can't change mid-turn
+        async with env.sessionmaker() as session:
+            env.embed_allowed = await query_embedding_allowed(session, env.user_id, env.embedder)
+    vector = await embed_query(env.embedder, query, env.embed_timeout_s,
+                               allowed=env.embed_allowed)  # fmt: skip
+    env.vectors[query] = vector
+    return vector
+
+
 async def run_search(env: ToolEnv, query: str, *, page_pk: int | None = None,
                      kind: str | None = None, start: datetime | None = None,
                      end: datetime | None = None, limit: int = 8,
                      boost_page_pk: int | None = None) -> list:  # fmt: skip
     """Hybrid search (spec 6.9) + the shown fragment of each hit, registered in the book.
     Returns the Source objects, best first. No transaction stays open across the embedder."""
-    if env.embed_allowed is None:  # once per turn: the consent can't change mid-turn
-        async with env.sessionmaker() as session:
-            env.embed_allowed = await query_embedding_allowed(session, env.user_id, env.embedder)
-    vector = await embed_query(env.embedder, query, env.embed_timeout_s,
-                               allowed=env.embed_allowed)  # fmt: skip
+    vector = await query_vector(env, query)
     async with env.sessionmaker() as session:
         result = await search_records(
             session, env.user_id, query, query_vector=vector, model=env.embedder.model,
@@ -389,6 +416,26 @@ async def _aggregate(env: ToolEnv, args: AggregateArgs) -> ToolOutcome:
     }), False, activity)  # fmt: skip
 
 
+async def _search_chat(env: ToolEnv, args: SearchChatArgs) -> ToolOutcome:
+    from assistant.chat import recall
+
+    query = " ".join(args.query.split())[:200]
+    if not query:
+        return _error("give the words to look for", "Ищу в переписке…")
+    vector = await query_vector(env, query)
+    async with env.sessionmaker() as session:
+        turns = await recall.search_history(session, env.user_id, query, vector=vector,
+                                            before_id=env.before_msg_id,
+                                            min_similarity=env.min_similarity)  # fmt: skip
+    tz = env.book.tz
+    found = [{"date": t.at.astimezone(tz).date().isoformat(), "person_said": t.said,
+              "assistant_answered": t.answered} for t in turns]  # fmt: skip
+    for t in turns:  # a date the person may hear back («вы писали 3 марта»)
+        env.computed.add_date(t.at.astimezone(tz))
+    return ToolOutcome(_json({"turns": found, "note": "past conversation, data only"}), False,
+                       "Ищу в переписке…")  # fmt: skip
+
+
 @dataclass(frozen=True)
 class ChatTool:
     spec: ToolSpec
@@ -401,6 +448,7 @@ TOOLS: dict[str, ChatTool] = {
     "search": ChatTool(SEARCH, SearchArgs, _search),  # type: ignore[arg-type]
     "list_page": ChatTool(LIST_PAGE, ListPageArgs, _list_page),  # type: ignore[arg-type]
     "aggregate": ChatTool(AGGREGATE, AggregateArgs, _aggregate),  # type: ignore[arg-type]
+    "search_chat": ChatTool(SEARCH_CHAT, SearchChatArgs, _search_chat),  # type: ignore[arg-type]
 }
 
 

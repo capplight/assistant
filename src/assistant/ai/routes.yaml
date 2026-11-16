@@ -72,6 +72,9 @@ tasks:
   chat: {budget_class: answers, escalate: strong, timeout_s: 8}
   # The next chat turn may need it (spec 5.10, layer 5).
   chat_summarize: {budget_class: background}
+  # Step 5 (Ф-60, Ф-61): facts about the person, every few phrases, in the background; light model,
+  # capped per person per day in code (chat/memory.py MEMORY_RUNS_PER_DAY).
+  memory_extract: {budget_class: background, max_tokens: 1500}
   page_group: {budget_class: answers}
   # Receipts have a "within 1 min" promise (product spec, F-40).
   expense_extract: {budget_class: background, escalate: strong}

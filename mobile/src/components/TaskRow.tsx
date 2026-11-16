@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, View, type AccessibilityActionEvent } from 'reac
 
 import type { TaskOut } from '@/api/types';
 import { useTheme, withAlpha } from '@/theme';
+import { ChangedMark, markFresh } from '@/components/ChangedMark';
 
 import { AppText } from './AppText';
 import { Button } from './ui/Button';
@@ -84,14 +85,16 @@ export function TaskRow({
       </AppText>
     )
   ) : null);
+  const changed = markFresh(task.assistant_changed_at);
   return (
     <View
       style={[
         styles.row,
         {
           paddingLeft: theme.space[1],
-          backgroundColor: highlighted ? theme.colors.highlightTint : undefined,
-          borderRadius: highlighted ? theme.radius.sm : 0,
+          // Ф-73: a row the assistant just made or changed — a light `brandTint` 33 % (design-system §10.3).
+          backgroundColor: highlighted ? theme.colors.highlightTint : changed ? withAlpha(theme.colors.brandTint, 0.33) : undefined,
+          borderRadius: highlighted || changed ? theme.radius.sm : 0,
         },
       ]}
     >
@@ -131,6 +134,7 @@ export function TaskRow({
               {meta}
             </AppText>
           ) : null}
+          <ChangedMark at={task.assistant_changed_at} actionId={task.assistant_action_id} testID={`changed-task-${task.id}`} />
         </View>
       </Pressable>
       {right}

@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+import type { ActionNoticeOut } from '@/api/types';
+
 import { persistStorage } from './storage';
 
 /** A source chip: the record and the page it is on. Ids are the server's. */
@@ -66,6 +68,12 @@ export type ChatAction = {
   savedTo?: { pageServerId: string; title: string; itemIds: string[] }[];
   undoable: boolean;
   undone?: boolean;
+  /** Steps 3–4: the top notice's words and button, as the server sent them (`action.notice`). */
+  notice?: ActionNoticeOut | null;
+  /** Undo by phrase (Ф-67): this action undid that one («Вернул как было»). */
+  undoOf?: string | null;
+  /** The ids of what it undid in this reply (each marked «отменено» in the conversation). */
+  undid?: string[];
 };
 
 /**

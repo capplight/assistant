@@ -11,7 +11,6 @@ import { AppText } from '@/components/AppText';
 import { Button } from '@/components/ui/Button';
 import { PageIcon } from '@/components/Icon';
 import { Screen } from '@/components/Screen';
-import { StandaloneUndoStrip } from '@/components/UndoStrip';
 import { usePageLabels } from '@/pages/usePageLabels';
 import { getApi, kickSync, syncBlocked } from '@/services';
 import { useOnboarding } from '@/store/onboarding';
@@ -176,7 +175,6 @@ export default function HabitsScreen() {
           </View>
         </Modal>
       </Screen>
-      <StandaloneUndoStrip />
     </View>
   );
 }

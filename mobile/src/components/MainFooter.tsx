@@ -12,7 +12,6 @@ import { ConfirmCard } from './ConfirmCard';
 import { ReminderDraftStrip } from './ReminderCards';
 import { ToastLine, useToastAnchor } from './Toast';
 import { BottomFade } from './ui/BottomFade';
-import { UndoStrip } from './UndoStrip';
 import { aboveLineMaxHeight, useKeyboardHeight } from './useKeyboard';
 
 /**
@@ -65,7 +64,6 @@ export function MainFooter() {
           <AnswerBanner />
           <ConfirmCard />
           <ReminderDraftStrip />
-          <UndoStrip />
           <ToastLine />
         </ScrollView>
         <AssistantLine compact={shop} keyboardHeight={keyboard} />

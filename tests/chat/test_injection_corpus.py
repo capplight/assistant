@@ -152,11 +152,12 @@ def test_obeying_model_cannot_change_or_reach_outside(case):
 
 def test_no_tool_sends_shares_fetches_or_changes_reminders():
     names = {t.name for t in (*READ_TOOLS, *MUTATING_TOOLS)}
-    assert names == {"search", "list_page", "aggregate", "create", "update", "move", "reorder",
-                     "create_page_from_template", "set_view"}
+    assert names == {"search", "list_page", "aggregate", "search_chat", "create", "update",
+                     "move", "reorder", "create_page_from_template", "set_view"}
     assert not any(re.search(r"send|share|fetch|url|http|remind|export|delete_forever", n)
                    for n in names)  # fmt: skip
-    assert MUTATING_NAMES == names - {"search", "list_page", "aggregate"} | {"rename_page"}
+    reads = {"search", "list_page", "aggregate", "search_chat"}
+    assert MUTATING_NAMES == names - reads | {"rename_page"}
     assert not re.search(r"send|share|fetch|url|http|remind|export", RENAME_PAGE.name)
     for t in (*READ_TOOLS, *MUTATING_TOOLS):  # reveal: no tool can name another person
         props = set(t.parameters.get("properties") or {})

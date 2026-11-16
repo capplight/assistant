@@ -102,7 +102,11 @@ export function AssistantMessage({ m, testID }: { m: ChatMessage; testID?: strin
         </View>
       ) : null}
       {m.status === 'streaming' && !m.text ? <AppText color="ink2">{m.activity ?? t('assistant.thinking')}</AppText> : null}
-      {m.action ? <ActionResultCard m={m} action={m.action} /> : null}
+      {m.action && (m.action.undoOf || (m.action.undid?.length ?? 0) > 0) ? (
+        <UndoResultCard m={m} action={m.action} />
+      ) : m.action ? (
+        <ActionResultCard m={m} action={m.action} />
+      ) : null}
       {value ? (
         <View>
           <AppText testID={testID ? `${testID}-value` : undefined} variant="answerValue">
@@ -326,10 +330,34 @@ export function ChatEmpty() {
   );
 }
 
-/** «Вернул как было» after an undo by phrase (v4 `UndoResultCard`) — a small card with what came back. */
-export function UndoMark() {
+/**
+ * «Вернул как было» after an undo by phrase (v4 `UndoResultCard`, Ф-67): ↩ and the server's words, what came back
+ * (`summary`), and «Открыть «Историю»». The action it undid says «отменено» where it is in the conversation.
+ */
+export function UndoResultCard({ m, action }: { m: ChatMessage; action: ChatAction }) {
   const theme = useTheme();
-  return <Icon icon={Undo2} size="sm" color={theme.colors.brand} />;
+  const { t, i18n } = useTranslation();
+  const head = action.notice ? (i18n.language === 'kk' && action.notice.text_kk) || action.notice.text_ru : t('assistant.undid');
+  const body = actionText(action, i18n.language);
+  return (
+    <View
+      testID={`chat-undo-result-${m.id}`}
+      style={[{ backgroundColor: theme.colors.surface, borderRadius: theme.radius.xl, padding: theme.space[3], gap: theme.space[2] }, theme.elevation.card, cardEdge(theme)]}
+    >
+      <View style={[styles.row, { gap: theme.space[3] }]}>
+        <View style={[styles.center, { width: 36, height: 36, borderRadius: theme.radius.sm, backgroundColor: theme.colors.brandTint }]}>
+          <Icon icon={Undo2} size="sm" color="brand" />
+        </View>
+        <View style={styles.flex}>
+          <AppText variant="headline">{head}</AppText>
+          {body && body !== head ? <AppText variant="footnote">{body}</AppText> : null}
+        </View>
+      </View>
+      <View style={[styles.row, { justifyContent: 'flex-end' }]}>
+        <Button testID={`chat-open-history-${m.id}`} label={t('assistant.open_history')} variant="text" onPress={() => router.push('/history')} />
+      </View>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({

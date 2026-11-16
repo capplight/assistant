@@ -10,7 +10,6 @@ import { ContactPhoneField } from '@/components/kp/ContactPhoneField';
 import { KpTextField } from '@/components/kp/KpEdits';
 import { CheckBadge } from '@/components/kp/KpParts';
 import { Screen } from '@/components/Screen';
-import { StandaloneUndoStrip } from '@/components/UndoStrip';
 import { answerDraft, discardDraft, editDraftText, openDraft, type DraftOpenResult } from '@/kp/service';
 import { shownDraft, useKp } from '@/kp/store';
 import { useTheme } from '@/theme';
@@ -47,7 +46,6 @@ export default function DraftScreen() {
             <Button testID="draft-close" label={t('common.close')} variant="secondary" onPress={close} />
           </View>
         </Screen>
-        <StandaloneUndoStrip />
       </View>
     );
   }
@@ -165,7 +163,6 @@ export default function DraftScreen() {
           ) : null}
         </View>
       </Screen>
-      <StandaloneUndoStrip />
     </View>
   );
 }

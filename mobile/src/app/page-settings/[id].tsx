@@ -9,8 +9,7 @@ import { AppText } from '@/components/AppText';
 import { PageIcon } from '@/components/Icon';
 import { AddFieldSheet, ChoiceSheet } from '@/components/page/FieldSheets';
 import { effectiveLayout, hasTool } from '@/components/page/registry';
-import { Button, Card, CheckMark, Header, Icon, ListGroup, ListRow, SegmentedControl, Sheet } from '@/components/ui';
-import { StandaloneUndoStrip } from '@/components/UndoStrip';
+import { Button, Card, CheckMark, Header, Icon, ListGroup, ListRow, SegmentedControl } from '@/components/ui';
 import { catalogTemplate, fieldTitle, MAX_CUSTOM_FIELDS, useCatalog } from '@/pages/catalog';
 import { facetKey, useFacets } from '@/pages/facets';
 import { renamePage } from '@/pages/service';
@@ -51,7 +50,7 @@ export default function PageSettingsScreen() {
   const { title } = usePageLabels();
   const [name, setName] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
-  const [sheet, setSheet] = useState<'sort' | 'group' | 'reset' | null>(null);
+  const [sheet, setSheet] = useState<'sort' | 'group' | null>(null);
 
   // The catalogue once per open, when the server can be asked (offline: the local copy).
   useEffect(() => {
@@ -367,11 +366,10 @@ export default function PageSettingsScreen() {
           ) : null}
 
           {full ? (
-            <Button testID="settings-reset" label={t('view.reset')} variant="text" style={styles.start} onPress={() => setSheet('reset')} />
+            <Button testID="settings-reset" label={t('view.reset')} variant="text" style={styles.start} onPress={() => void changeView(page, { kind: 'reset' })} />
           ) : null}
         </View>
       </ScrollView>
-      <StandaloneUndoStrip />
 
       {adding ? (
         <AddFieldSheet
@@ -408,18 +406,6 @@ export default function PageSettingsScreen() {
           }}
         />
       ) : null}
-      {sheet === 'reset' ? (
-        <ConfirmSheet
-          title={t('view.reset_q')}
-          body={t('view.reset_body')}
-          yes={t('view.reset_yes')}
-          onYes={() => {
-            setSheet(null);
-            void changeView(page, { kind: 'reset' });
-          }}
-          onNo={() => setSheet(null)}
-        />
-      ) : null}
     </SafeAreaView>
   );
 }
@@ -433,28 +419,6 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
       </AppText>
       {children}
     </View>
-  );
-}
-
-/** S25: the question with the numbers; «Нет» first in focus, «Да» never in focus by default. */
-function ConfirmSheet({ title, body, yes, onYes, onNo }: { title: string; body: string; yes: string; onYes: () => void; onNo: () => void }) {
-  const { t } = useTranslation();
-  return (
-    <Sheet
-      visible
-      testID="confirm-sheet"
-      title={title}
-      closeButton={false}
-      onClose={onNo}
-      footer={
-        <>
-          <Button testID="confirm-no" label={t('view.no')} variant="secondary" onPress={onNo} />
-          <Button testID="confirm-yes" label={yes} variant="text" labelColor="danger" onPress={onYes} />
-        </>
-      }
-    >
-      <AppText>{body}</AppText>
-    </Sheet>
   );
 }
 

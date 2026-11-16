@@ -9,6 +9,8 @@
 | 5 | conversation summary (no `untrusted_data`) | ≤600 |
 | 6 | last messages, with page labels | 6-10 messages, ≤2 500 |
 | 7 | found across all pages (`<untrusted_data>`, masked) | ≤8 fragments, ≤2 500 |
+| 2b | memory about the person (step 5, `memory.py`; data block) | ≤500 |
+| 6b | past turns (whole conversation, `recall.py`; a phrase about the past) | ≤600 |
 
 The whole input is capped at `chat_max_input_tokens` (12 000): layer 7 is cut first, then 6;
 layers 1-4 never. Stable first, changing last (prompt cache): no time stamp in the system part.
@@ -47,6 +49,8 @@ BUDGET_FOUND = 2500
 MAX_VISIBLE = 40
 MAX_FOUND = 8
 MAX_HISTORY = 10
+MAX_PAST = 4
+BUDGET_PAST = 600  # step 5: past turns from the whole conversation (recall.py)
 VISIBLE_ITEM_CHARS = 100
 SHARED_LABEL = "Текст, которым поделились"
 SHARED_CHARS = 6000
@@ -162,14 +166,14 @@ async def _visible(session: AsyncSession, turn: TurnInput, book: SourceBook,
 
 
 async def _history(session: AsyncSession, turn: TurnInput, book: SourceBook,
-                   tz: ZoneInfo) -> tuple[str | None, list[tuple[str, str]]]:  # fmt: skip
+                   tz: ZoneInfo) -> tuple[str | None, list[tuple[str, str]], int]:  # fmt: skip
     conv = (await session.execute(text(
         "SELECT summary, summary_upto_msg_id FROM conversations WHERE id = :c"),
         {"c": turn.conversation_id})).one()  # fmt: skip
     summary = conv.summary
     # What the summary folded in is not repeated word for word (layer 5 vs 6).
     rows = (await session.execute(text("""
-        SELECT role, content, screen_id, created_at, input_kind FROM conversation_messages
+        SELECT id, role, content, screen_id, created_at, input_kind FROM conversation_messages
         WHERE conversation_id = :c AND id <> :m AND deleted_at IS NULL AND id > :upto
           AND role IN ('user', 'assistant') AND state = 'done' AND content <> ''
         ORDER BY id DESC LIMIT :n
@@ -186,7 +190,8 @@ async def _history(session: AsyncSession, turn: TurnInput, book: SourceBook,
             where = f"на странице «{page.title}», " if page else ""
             line = f"[{where}{short_date(when)} {when:%H:%M}] {line}"
         out.append((r.role, line))
-    return summary, out
+    oldest = min([r.id for r in rows] + [turn.message_id])  # older turns: search_chat / recall
+    return summary, out, oldest
 
 
 def _index_lines(pages: list[PageInfo], current: PageInfo | None) -> list[str]:
@@ -266,7 +271,7 @@ async def assemble(
         book.current = page
         visible = await _visible(session, turn, book, page)
         selected = await _selected(session, turn, book)
-        summary, history = await _history(session, turn, book, ZoneInfo(tz))
+        summary, history, oldest_shown = await _history(session, turn, book, ZoneInfo(tz))
         view_line = None
         views = any(t.name == "set_view" for t in tools)
         if page is not None and views:  # week 11: for set_view
@@ -274,13 +279,38 @@ async def assemble(
 
             view_line = await describe(session, page.pk)
     env = ToolEnv(sessionmaker, embedder, turn.user_id, book, embed_timeout_s, min_similarity,
-                  counts=set())  # fmt: skip
+                  counts=set(), before_msg_id=oldest_shown)  # fmt: skip
 
     before = {s.ref for s in book.all()}
     found: list[Source] = []
+    data_question = looks_like_data_question(turn.text) and turn.input_kind != "share"
     if looks_like_data_question(turn.text):
         found = await run_search(env, turn.text, limit=MAX_FOUND,
                                  boost_page_pk=page.pk if page else None)  # fmt: skip
+    # Step 5 (Ф-60, Ф-61): what the assistant remembers about the person, every turn, compact;
+    # and for a phrase that points to the past, the turns about it from the whole conversation.
+    from assistant.chat import memory as memory_mod
+    from assistant.chat import recall
+
+    today = now.astimezone(ZoneInfo(tz)).date()
+    memory_part = await memory_mod.memory_block(
+        sessionmaker, turn.user_id, "" if turn.input_kind == "share" else turn.text, today,
+        vector=env.vectors.get(turn.text), min_similarity=min_similarity)  # fmt: skip
+    past_lines: list[str] = []
+    if data_question and recall.points_to_past(turn.text):
+        async with sessionmaker() as session:
+            turns = await recall.search_history(
+                session, turn.user_id, turn.text, vector=env.vectors.get(turn.text),
+                before_id=oldest_shown, limit=MAX_PAST, min_similarity=min_similarity)
+        local = ZoneInfo(tz)
+        used = 0
+        for t in turns:
+            line = (f"{short_date(t.at.astimezone(local))}: человек — {t.said}"
+                    + (f" / ответ — {t.answered}" if t.answered else ""))
+            used += est_tokens(line)
+            if used > BUDGET_PAST:
+                break
+            past_lines.append(line)
 
     # --- layers ---
     tools_text = "".join(t.name + t.description + str(t.parameters) for t in tools)
@@ -309,6 +339,11 @@ async def assemble(
         context.append("Изменения: в этой фразе человек ничего менять не просил; только ответ.")
     if summary:
         context.append("Свёртка прошлых сообщений: " + _cut(summary, BUDGET_SUMMARY))
+    if memory_part is not None:
+        context.append(memory_mod.MEMORY_CONTEXT_LINE)
+    if past_lines:
+        context.append("Из прошлой переписки (блок данных «Из прошлой переписки»): что человек "
+                       "говорил раньше об этом; ссылайся датой, не ref.")  # fmt: skip
     context.append(question)
 
     page_lines: list[str] = []
@@ -348,10 +383,15 @@ async def assemble(
         "page": sum(est_tokens(x) for x in page_lines),
         "history": sum(est_tokens(x) for _, x in hist),
         "found": sum(est_tokens(x) for x in found_lines(keep)),
+        "memory": est_tokens(memory_part.text) if memory_part is not None else 0,
+        "past": sum(est_tokens(x) for x in past_lines),
     }
     while sum(tokens.values()) > max_input_tokens and keep:  # cut layer 7 first
         keep.pop()
         tokens["found"] = sum(est_tokens(x) for x in found_lines(keep))
+    while sum(tokens.values()) > max_input_tokens and past_lines:  # then the past turns
+        past_lines.pop()
+        tokens["past"] = sum(est_tokens(x) for x in past_lines)
     while sum(tokens.values()) > max_input_tokens and hist:  # then layer 6, oldest first
         hist.pop(0)
         tokens["history"] = sum(est_tokens(x) for _, x in hist)
@@ -363,6 +403,10 @@ async def assemble(
         hist.pop(0)
 
     untrusted = []
+    if memory_part is not None:
+        untrusted.append(memory_part)
+    if past_lines:
+        untrusted.append(UntrustedPart("Из прошлой переписки", "\n".join(past_lines)))
     if shared:
         untrusted.append(UntrustedPart(SHARED_LABEL, turn.text[:SHARED_CHARS]))
     if selected is not None:

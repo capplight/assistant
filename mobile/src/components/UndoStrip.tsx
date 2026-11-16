@@ -1,63 +1,58 @@
 import { router } from 'expo-router';
+import { Check, Trash2 } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AccessibilityInfo } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { AccessibilityInfo, Animated, Easing, PanResponder, Pressable, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import type { ActionNoticeOut } from '@/api/types';
 import { actionText, undoAction } from '@/chat/service';
+import { getRecords } from '@/db';
 import { undoManual } from '@/pages/manual';
 import { usePageLabels } from '@/pages/usePageLabels';
 import { formatShortDate } from '@/records/format';
-import { getRecords, type LocalRecord } from '@/db';
-import { placesLocally } from '@/pages/contents';
 import { getRecordActions, kickSync } from '@/services';
 import { useAssistant } from '@/store/assistant';
-import { usePages, type Page } from '@/store/pages';
 import { useConnectivity } from '@/store/connectivity';
 import { useToast } from '@/store/toast';
-import { SAVE_TOAST_MS, undoStripMs, useUndo, type ManualStripText } from '@/store/undo';
-import { useTheme } from '@/theme';
+import { usePages, type Page } from '@/store/pages';
+import { undoServerAction } from '@/tasks/actions';
+import { NOTICE_MS, useUndo, type ManualStripText, type UndoStripState } from '@/store/undo';
+import { useLayout, useTheme } from '@/theme';
 
+import { AppText } from './AppText';
 import { ChangesSheet } from './ChangesSheet';
-import { ReplaceSheet } from './ReplaceSheet';
-import { ToastBar, type ToastAction } from './ui/ToastBar';
+import { Icon, PageIcon } from './ui/Icon';
+import { pressedStyle, useReducedMotion } from './ui/motion';
 import { useCurrentPage } from './useCurrentPage';
 
+/** With a screen reader the notice waits longer (2-design 4.3): it cannot be read and pressed in 3 s. */
+const SCREEN_READER_MS = 30_000;
+
+/** A notice's words in the app language (`*_kk` is null until reviewed: then Russian). */
+const noticeText = (n: ActionNoticeOut, lang: string) => (lang === 'kk' && n.text_kk) || n.text_ru;
+const noticeUndo = (n: ActionNoticeOut, lang: string) => (lang === 'kk' && n.undo_label_kk) || n.undo_label_ru;
+
 /**
- * «Уже было — добавил к записи от 12 мар · Отменить», «Удалил запись · Отменить», and the result
- * of an assistant action «Разложил 23 заметки в 5 групп [Что изменилось] [Отменить]» (2-design
- * 4.3 «Итог действия»): lives with the assistant line, in one frame with it. Stays longer with a
- * large font or a screen reader (2-design 4.3), and while «Что изменилось» is open. An action on
- * another page says so and offers [Открыть] (R-53).
- * Not done: «не исчезает, пока на ней фокус», React Native does not report screen reader focus.
+ * TopNotice (design-system §10.2, Ф-65 / Ф-67 / Ф-75): every reversible result — «Кофе 1 200 ₸ → Расходы», «Удалено:
+ * «Шины»», «Вернул как было» — is a small capsule at the **top**, under the status bar: the page square 28, one line
+ * of `callout` 600, the button on the right («Отменить» / «Восстановить» / «Вернуть»), a 2 dp bar of the time left.
+ * It goes after 3 s (`notice.ms`), a swipe up closes it, a tap on the text opens what changed. The assistant's words
+ * come from the server (`action.notice`); the phone's own changes keep their texts. In the chat the result card
+ * carries its own «Отменить» instead.
  */
 export function UndoStrip() {
-  const theme = useTheme();
   const { t, i18n } = useTranslation();
   const strip = useUndo((s) => s.strip);
   const hide = useUndo((s) => s.hide);
-  const showToast = useToast((s) => s.show);
   const current = useCurrentPage();
-  const message = useAssistant((s) =>
-    strip?.kind === 'action' ? s.messages.find((m) => m.id === strip.messageId) : undefined,
-  );
+  const message = useAssistant((s) => (strip?.kind === 'action' ? s.messages.find((m) => m.id === strip.messageId) : undefined));
   const action = message?.action;
-  const otherPage = usePages((s) =>
-    action?.pageServerId ? s.pages.find((p) => p.serverId === action.pageServerId) : undefined,
-  );
+  const pages = usePages((s) => s.pages);
   const { title } = usePageLabels();
-  const openTarget = usePages((s) =>
-    (strip?.kind === 'manual' || strip?.kind === 'custom') && strip.openPageId
-      ? s.pages.find((p) => p.id === strip.openPageId)
-      : undefined,
-  );
-  const [screenReader, setScreenReader] = useState(false);
   const online = useConnectivity((s) => s.online);
+  const [screenReader, setScreenReader] = useState(false);
   const [changesOpen, setChangesOpen] = useState(false);
-  const [replace, setReplace] = useState<{ record: LocalRecord; what: string; from: Page | null } | null>(null);
-  const savePage = usePages((s) =>
-    strip?.kind === 'saved' ? (strip.pageId ? s.pages.find((p) => p.id === strip.pageId) : undefined) : undefined,
-  );
 
   useEffect(() => {
     let alive = true;
@@ -73,141 +68,96 @@ export function UndoStrip() {
     };
   }, []);
 
-  const isSave = strip?.kind === 'saved' || (strip?.kind === 'action' && ((action?.savedTo?.length ?? 0) > 0 || action?.kind === 'save_item'));
-  const savedToPage = usePages((s) => {
-    const to = action?.savedTo?.[0];
-    return to ? s.pages.find((p) => p.serverId === to.pageServerId) : undefined;
-  });
-  const durationMs = isSave && !theme.largeFont && !screenReader ? SAVE_TOAST_MS : undoStripMs({ largeFont: theme.largeFont, screenReader });
+  const notice = strip?.kind === 'server' ? (strip.action.notice ?? null) : (action?.notice ?? null);
+  const durationMs = screenReader ? SCREEN_READER_MS : (notice?.ms ?? NOTICE_MS);
 
   useEffect(() => {
-    if (!strip || changesOpen || replace) return;
+    if (!strip || changesOpen) return;
     const timer = setTimeout(() => hide(strip.id), durationMs);
     return () => clearTimeout(timer);
-  }, [strip, hide, durationMs, changesOpen, replace]);
+  }, [strip, hide, durationMs, changesOpen]);
 
-  const replaceSheet = replace ? (
-    <ReplaceSheet record={replace.record} what={replace.what} from={replace.from} onClose={() => setReplace(null)} />
-  ) : null;
-  if (!strip) return replaceSheet;
+  if (!strip) return null;
   if (strip.kind === 'action' && !action) return null;
-  // In the chat the result card carries «Переложить · Отменить» itself (v4 «Сделал 3 дела»).
-  if (strip.kind === 'action' && current.kind === 'assistant') return replaceSheet;
+  if (strip.kind === 'action' && current.kind === 'assistant') return null;
+
+  const byServer = (id: string | null | undefined) => (id ? pages.find((p) => p.serverId === id) : undefined);
+  const byId = (id: string | null | undefined) => (id ? pages.find((p) => p.id === id) : undefined);
+  const page: Page | undefined =
+    strip.kind === 'saved'
+      ? byId(strip.pageId)
+      : strip.kind === 'manual' || strip.kind === 'custom'
+        ? byId(strip.openPageId)
+        : strip.kind === 'action'
+          ? (byServer(notice?.target?.page_id) ?? byServer(action?.savedTo?.[0]?.pageServerId) ?? byServer(action?.pageServerId))
+          : strip.kind === 'server'
+            ? (byServer(notice?.target?.page_id) ?? byServer(strip.action.page?.id))
+            : undefined;
+
+  const text = stripText(strip, { t, lang: i18n.language, title, page, online, action, notice });
+  const undoLabel =
+    strip.kind === 'action' || strip.kind === 'server'
+      ? notice
+        ? noticeUndo(notice, i18n.language)
+        : strip.kind === 'action' && action?.undoable && !action.undone
+          ? t('common.undo')
+          : null
+      : strip.kind === 'deleted'
+        ? t('notice.restore')
+        : t('common.undo');
 
   const undo = () => {
     hide(strip.id);
     setChangesOpen(false);
-    showToast(t('common.undone'));
-    if (strip.kind === 'action') {
-      void undoAction(strip.messageId);
-      return;
-    }
-    if (strip.kind === 'manual') {
-      void undoManual(strip.outboxIds);
-      return;
-    }
-    if (strip.kind === 'custom') {
-      strip.onUndo();
-      return;
-    }
-    if (strip.kind === 'saved') {
-      void getRecordActions().then((a) => a.remove(strip.recordId));
-      return;
-    }
-    void getRecordActions().then((a) =>
-      strip.kind === 'merged' ? a.unmerge(strip.recordId) : a.restore(strip.recordId),
-    );
+    useToast.getState().show(t('common.undone'));
+    if (strip.kind === 'action') return void undoAction(strip.messageId);
+    if (strip.kind === 'server') return void undoServerAction(strip.action.id);
+    if (strip.kind === 'manual') return void undoManual(strip.outboxIds);
+    if (strip.kind === 'custom') return strip.onUndo();
+    if (strip.kind === 'saved') return void getRecordActions().then((a) => a.remove(strip.recordId));
+    void getRecordActions().then((a) => (strip.kind === 'merged' ? a.unmerge(strip.recordId) : a.restore(strip.recordId)));
   };
 
-  const manualText = (m: ManualStripText) => {
-    const names = (m.pages ?? []).map((p) => title(p));
-    const base =
-      m.key === 'move.also_done' && names.length > 1
-        ? t('move.also_done_many', { pages: names.join(', ') })
-        : t(m.key, { page: names[0] ?? '' });
-    return m.extra ? `${base} ${m.extra}` : base;
-  };
-  // «Сохранил в «Заметки»: код домофона» (Ф-50): the page the record went to, from the server's action or this phone.
-  const saveFrom = strip.kind === 'saved' ? (savePage ?? null) : strip.kind === 'action' ? (savedToPage ?? otherPage ?? null) : null;
-  const savedToTitle = strip.kind === 'action' ? (action?.savedTo?.[0]?.title ?? null) : null;
-  const saveWhat = strip.kind === 'saved' ? strip.what : (action?.changes[0]?.title ?? '');
-  const savePageName = saveFrom ? title(saveFrom) : savedToTitle;
-  const savedText = savePageName
-    ? saveWhat
-      ? t('save.saved_in', { page: savePageName, what: saveWhat })
-      : t('save.saved_in_plain', { page: savePageName })
-    : t('save.saved_plain', { what: saveWhat });
-  // Honest about the connection (week 4): a note kept on this phone says it goes when there is a connection.
-  const text = isSave
-    ? strip.kind === 'saved' && !online
-      ? `${savedText} ${t('save.offline_tail')}`
-      : savedText
-    : strip.kind === 'merged'
-      ? t('dedup.exact', { date: formatShortDate(strip.canonicalDate, i18n.language) })
-      : strip.kind === 'deleted'
-        ? t('record.deleted')
-        : strip.kind === 'manual'
-          ? manualText(strip.text)
-          : strip.kind === 'custom'
-            ? strip.text
-          : action
-            ? actionText(action, i18n.language)
-            : '';
-  const target = strip.kind === 'manual' || strip.kind === 'custom' ? openTarget : otherPage;
-  const showOpen = !isSave && strip.kind !== 'merged' && strip.kind !== 'deleted' && !!target && target.id !== current.id;
-  const canUndo = strip.kind !== 'action' || (!!action?.undoable && !action.undone);
-  const hasChanges = !isSave && strip.kind === 'action' && (action?.changes.length ?? 0) > 0;
-
-  const openReplace = async () => {
-    const repo = await getRecords();
-    let record: LocalRecord | null = null;
-    if (strip.kind === 'saved') record = await repo.get(strip.recordId);
-    else if (action) {
-      const serverId = action.savedTo?.[0]?.itemIds[0] ?? action.changedItemIds[0] ?? action.changes[0]?.itemId ?? null;
-      if (serverId) {
-        record = await repo.findByServerId(serverId);
-        if (!record) {
-          // The record comes with /sync: ask for it once and look again.
-          kickSync();
-          await new Promise((r) => setTimeout(r, 1500));
-          record = await repo.findByServerId(serverId);
-        }
+  // A tap on the text opens what changed: the server's `target`, else the page it went to.
+  const open = async () => {
+    if (strip.kind === 'deleted') return;
+    const target = notice?.target;
+    if (target?.kind === 'document' && target.id) {
+      hide(strip.id);
+      return router.navigate({ pathname: '/kp/[id]', params: { id: target.id } });
+    }
+    if (target?.kind === 'item' && target.id) {
+      const rec = await (await getRecords()).findByServerId(target.id);
+      if (rec) {
+        hide(strip.id);
+        return router.navigate({ pathname: '/record/[id]', params: { id: rec.id } });
       }
+      kickSync();
     }
-    if (!record) {
-      showToast(t('save.replace_later'), 4000);
-      return;
+    if (strip.kind === 'saved' || strip.kind === 'merged') {
+      hide(strip.id);
+      return router.navigate({ pathname: '/record/[id]', params: { id: strip.recordId } });
     }
-    const pages = usePages.getState().pages;
-    const from = saveFrom ?? pages.find((p) => placesLocally(p, record)) ?? null;
-    hide(strip.id);
-    setReplace({ record, what: saveWhat || title(from ?? pages[0]!), from });
+    if (page && page.id !== current.id) {
+      hide(strip.id);
+      return router.navigate({ pathname: '/page/[id]', params: { id: page.id } });
+    }
+    if (strip.kind === 'action' && (action?.changes.length ?? 0) > 0) setChangesOpen(true);
   };
-
-  const actions: ToastAction[] = [];
-  if (isSave) actions.push({ key: 'replace', testID: 'undo-strip-replace', label: t('save.replace'), onPress: () => void openReplace() });
-  if (showOpen && target)
-    actions.push({
-      key: 'open',
-      testID: 'undo-strip-open',
-      label: t('line.open'),
-      accessibilityLabel: t('move.open_a11y', { page: title(target) }),
-      onPress: () => router.navigate({ pathname: '/page/[id]', params: { id: target.id } }),
-    });
-  if (hasChanges) actions.push({ key: 'changes', testID: 'undo-strip-changes', label: t('line.changed'), onPress: () => setChangesOpen(true) });
-  if (canUndo) actions.push({ key: 'undo', testID: 'undo-strip-undo', label: t('common.undo'), onPress: undo });
 
   return (
     <>
-      <ToastBar
-        testID="undo-strip"
-        textTestID="undo-strip-text"
+      <NoticeBar
+        key={strip.id}
         text={text}
-        success={strip.kind !== 'deleted'}
-        actions={actions}
+        page={page}
+        deleted={strip.kind === 'deleted'}
+        undoLabel={undoLabel}
+        durationMs={durationMs}
+        onUndo={undo}
+        onOpen={() => void open()}
         onClose={() => hide(strip.id)}
       />
-      {replaceSheet}
       {strip.kind === 'action' && message ? (
         <ChangesSheet message={changesOpen ? message : null} onClose={() => setChangesOpen(false)} onUndoAll={undo} />
       ) : null}
@@ -215,16 +165,177 @@ export function UndoStrip() {
   );
 }
 
+function stripText(
+  strip: UndoStripState,
+  o: {
+    t: (k: string, v?: Record<string, unknown>) => string;
+    lang: string;
+    title: (p: Page) => string;
+    page: Page | undefined;
+    online: boolean;
+    action: ReturnType<typeof useAssistant.getState>['messages'][number]['action'];
+    notice: ActionNoticeOut | null;
+  },
+): string {
+  const { t, lang, title, page, online, action, notice } = o;
+  if (strip.kind === 'server') return notice ? noticeText(notice, lang) : (lang === 'kk' && strip.action.summary.kk) || strip.action.summary.ru;
+  if (strip.kind === 'action') {
+    if (notice) return noticeText(notice, lang);
+    const saved = (action?.savedTo?.length ?? 0) > 0 || action?.kind === 'save_item';
+    if (saved) {
+      const where = page ? title(page) : (action?.savedTo?.[0]?.title ?? null);
+      const what = action?.changes[0]?.title ?? '';
+      return where ? (what ? t('save.saved_in', { page: where, what }) : t('save.saved_in_plain', { page: where })) : t('save.saved_plain', { what });
+    }
+    return action ? actionText(action, lang) : '';
+  }
+  if (strip.kind === 'saved') {
+    const base = page ? t('save.saved_in', { page: title(page), what: strip.what }) : t('save.saved_plain', { what: strip.what });
+    return online ? base : `${base} ${t('save.offline_tail')}`;
+  }
+  if (strip.kind === 'merged') return t('dedup.exact', { date: formatShortDate(strip.canonicalDate, lang) });
+  if (strip.kind === 'deleted') return strip.what ? t('notice.deleted', { what: strip.what }) : t('record.deleted');
+  if (strip.kind === 'manual') return manualText(strip.text, t, title);
+  return strip.text;
+}
 
-/**
- * The strip on a screen outside the main area (S20 «Что я сделал», S30 «Что я для вас настроил»,
- * S38): the same «Отменить» at the same bottom edge, over the safe area.
- */
-export function StandaloneUndoStrip() {
+function manualText(m: ManualStripText, t: (k: string, v?: Record<string, unknown>) => string, title: (p: Page) => string): string {
+  const names = (m.pages ?? []).map((p) => title(p));
+  const base = m.key === 'move.also_done' && names.length > 1 ? t('move.also_done_many', { pages: names.join(', ') }) : t(m.key, { page: names[0] ?? '' });
+  return m.extra ? `${base} ${m.extra}` : base;
+}
+
+/** The capsule itself (design-system §10.2 `notice`: height 52, radius 22). */
+function NoticeBar({
+  text,
+  page,
+  deleted,
+  undoLabel,
+  durationMs,
+  onUndo,
+  onOpen,
+  onClose,
+}: {
+  text: string;
+  page: Page | undefined;
+  deleted: boolean;
+  undoLabel: string | null;
+  durationMs: number;
+  onUndo: () => void;
+  onOpen: () => void;
+  onClose: () => void;
+}) {
   const theme = useTheme();
+  const { t } = useTranslation();
+  const reduced = useReducedMotion();
+  const [left] = useState(() => new Animated.Value(1));
+  const [drag] = useState(() => new Animated.Value(0));
+
+  useEffect(() => {
+    if (reduced) return;
+    const a = Animated.timing(left, { toValue: 0, duration: durationMs, easing: Easing.linear, useNativeDriver: false });
+    a.start();
+    return () => a.stop();
+  }, [left, durationMs, reduced]);
+
+  // A swipe up closes it (the bar is mounted anew for every notice, so its `onClose` is the one to keep).
+  const [pan] = useState(() =>
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_e, g) => g.dy < -8 && Math.abs(g.dy) > Math.abs(g.dx),
+      onPanResponderMove: (_e, g) => drag.setValue(Math.min(0, g.dy)),
+      onPanResponderRelease: (_e, g) => {
+        if (g.dy < -24) onClose();
+        else Animated.spring(drag, { toValue: 0, useNativeDriver: false }).start();
+      },
+    }),
+  );
+
   return (
-    <SafeAreaView edges={['bottom']} style={{ paddingHorizontal: theme.size.tabBarInset, paddingVertical: theme.space[2] }}>
-      <UndoStrip />
-    </SafeAreaView>
+    <Animated.View
+      testID="undo-strip"
+      accessibilityLiveRegion="polite"
+      {...pan.panHandlers}
+      style={[
+        styles.bar,
+        {
+          minHeight: theme.size.noticeHeight,
+          borderRadius: theme.radius.notice,
+          backgroundColor: theme.colors.surfaceRaised,
+          paddingLeft: theme.space[3],
+          transform: [{ translateY: drag }],
+        },
+        theme.elevation.floating,
+      ]}
+    >
+      <Pressable
+        testID="undo-strip-open"
+        accessibilityRole="button"
+        accessibilityLabel={text}
+        accessibilityHint={t('notice.open_hint')}
+        onPress={onOpen}
+        style={({ pressed }) => [styles.row, styles.grow, { gap: theme.space[3], paddingVertical: theme.space[2] }, pressedStyle(pressed)]}
+      >
+        <View style={[styles.square, { borderRadius: theme.radius.xs + 2, backgroundColor: deleted ? theme.colors.surfaceSunken : theme.colors.brandTint }]}>
+          {deleted ? (
+            <Icon icon={Trash2} size="sm" color="ink2" />
+          ) : page ? (
+            <PageIcon name={page.icon} size={16} color={theme.colors.brand} />
+          ) : (
+            <Check size={16} color={theme.colors.brand} strokeWidth={2.4} />
+          )}
+        </View>
+        <AppText testID="undo-strip-text" variant="callout" color="ink" numberOfLines={theme.largeFont ? 3 : 1} style={[styles.grow, { fontFamily: theme.type.headline.fontFamily }]}>
+          {text}
+        </AppText>
+      </Pressable>
+      {undoLabel ? (
+        <Pressable
+          testID="undo-strip-undo"
+          accessibilityRole="button"
+          accessibilityLabel={undoLabel}
+          onPress={onUndo}
+          style={({ pressed }) => [styles.button, { minWidth: theme.size.minTouch, minHeight: theme.size.minTouch, paddingHorizontal: theme.space[3] }, pressedStyle(pressed)]}
+        >
+          <AppText variant="callout" color="brand" style={{ fontFamily: theme.type.largeTitle.fontFamily }}>
+            {undoLabel}
+          </AppText>
+        </Pressable>
+      ) : (
+        <View style={{ width: theme.space[3] }} />
+      )}
+      {reduced ? null : (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.progress,
+            { left: theme.radius.notice, right: theme.radius.notice, backgroundColor: theme.colors.brand, transform: [{ scaleX: left }] },
+          ]}
+        />
+      )}
+    </Animated.View>
   );
 }
+
+/** The top place of the notice: under the status bar, in the ≤600 column, over every screen (root layout). */
+export function TopNoticeHost() {
+  const theme = useTheme();
+  const layout = useLayout();
+  const insets = useSafeAreaInsets();
+  return (
+    <View pointerEvents="box-none" style={[styles.host, { top: insets.top + theme.space[1], paddingHorizontal: theme.size.tabBarInset }]}>
+      <View pointerEvents="box-none" style={{ width: '100%', maxWidth: layout.contentMaxWidth }}>
+        <UndoStrip />
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  host: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  bar: { flexDirection: 'row', alignItems: 'center', overflow: 'hidden' },
+  row: { flexDirection: 'row', alignItems: 'center' },
+  grow: { flex: 1, flexShrink: 1 },
+  square: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
+  button: { alignItems: 'center', justifyContent: 'center' },
+  progress: { position: 'absolute', bottom: 0, height: 2, borderRadius: 1 },
+});

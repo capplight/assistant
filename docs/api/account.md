@@ -57,6 +57,7 @@ Errors: `404 not_found` (bad token or unknown) · `410 export_expired`.
 | `company.json` | «Моя компания» including БИН/ИИН and bank details (decrypted for you), price lists |
 | `conversation.jsonl` | the whole «Переписка» |
 | `drafts.json`, `stacks.json`, `habits.json` | drafts of messages, stacks, «Что я для вас настроил» |
+| `memory.json` | what the assistant remembers about the person (`memory_facts`, chat.md «Memory»): kind, text, source `said` / `material`, `valid_until` |
 | `originals/*` | originals still kept (saved by you, logo, signature, stamp, not yet deleted) |
 
 Not inside: the phone number (the server keeps only a keyed hash of it), technical logs, the

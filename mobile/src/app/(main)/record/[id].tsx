@@ -201,7 +201,7 @@ export default function RecordScreen() {
         onPress={() => {
           const recordId = record.id;
           void getRecordActions().then((a) => a.remove(recordId));
-          showDeleted(recordId);
+          showDeleted(recordId, recordTitle(record, t));
           back();
         }}
       />

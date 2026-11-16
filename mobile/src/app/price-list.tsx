@@ -11,7 +11,6 @@ import { NumberSheet } from '@/components/kp/NumberSheet';
 import { Sheet } from '@/components/page/ExpenseParts';
 import { Screen } from '@/components/Screen';
 import { Header } from '@/components/ui/Header';
-import { StandaloneUndoStrip } from '@/components/UndoStrip';
 import { priceText } from '@/kp/calc';
 import { addPrices, changePrice, refreshPrices, removePrice } from '@/kp/service';
 import { shownPrices, useKp } from '@/kp/store';
@@ -115,7 +114,6 @@ export default function PriceListScreen() {
           ) : null}
         </View>
       </Screen>
-      <StandaloneUndoStrip />
 
       {menu ? (
         <Sheet testID="price-menu" title={menu.name} onClose={() => setMenu(null)}>

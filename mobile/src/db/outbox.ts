@@ -226,6 +226,10 @@ export const OUTBOX_MIGRATIONS: readonly string[] = [
    ALTER TABLE page_links ADD COLUMN board_y REAL;
    ALTER TABLE page_links ADD COLUMN board_z INTEGER;
    ALTER TABLE page_links ADD COLUMN board_manual INTEGER NOT NULL DEFAULT 0;`,
+  // v10 (steps 3–4): «изменил помощник» (Ф-73) and «разберу позже» (Ф-69)
+  `ALTER TABLE records ADD COLUMN assistant_changed_at TEXT;
+   ALTER TABLE records ADD COLUMN assistant_action_id TEXT;
+   ALTER TABLE records ADD COLUMN parse_later TEXT;`,
 ];
 
 type Row = {

@@ -36,6 +36,7 @@ class LLMTask(enum.StrEnum):
     EXPENSE_EXTRACT = "expense_extract"
     TASKS_PARSE = "tasks_parse"  # week 9: a phrase as to-dos / a shopping list
     EXPENSE_PARSE = "expense_parse"  # week 12: «потратил 5000 на бензин» (amount checked by code)
+    MEMORY_EXTRACT = "memory_extract"  # step 5: facts about the person, background (chat/memory)
 
 
 class BudgetClass(enum.StrEnum):

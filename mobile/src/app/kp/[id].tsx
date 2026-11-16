@@ -27,7 +27,6 @@ import { Header } from '@/components/ui/Header';
 import { Icon } from '@/components/ui/Icon';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { ActionList } from '@/components/ui/Sheet';
-import { StandaloneUndoStrip } from '@/components/UndoStrip';
 import { priceText, qtyText } from '@/kp/calc';
 import { addKpLine, assistantOn, editKp, findPrice, refreshDocument, shareKpFile, shownStatus, type PdfResult } from '@/kp/service';
 import { cachedVersion, sentVersion, shownData, useKp } from '@/kp/store';
@@ -309,7 +308,6 @@ export default function KpScreen() {
           onSend={() => setSending(true)}
         />
       </SafeAreaView>
-      <StandaloneUndoStrip />
 
       {lineFor && lineIndex >= 0 ? (
         <LineSheet

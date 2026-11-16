@@ -196,7 +196,7 @@ describe('US-24: «Разложи» → the result on the page, highlight 600 ms
     await settle(() => screen.queryByTestId('group-Ремонт') !== null);
     expect(screen.getByTestId('group-Здоровье')).toBeTruthy();
     expect(within(screen.getByTestId('undo-strip')).getByText('Разложил 12 заметок в 2 группы')).toBeTruthy();
-    expect(screen.getByTestId('undo-strip-changes')).toBeTruthy();
+    expect(screen.getByTestId('undo-strip-open')).toBeTruthy(); // v4: a tap on the text = «Что изменилось»
     expect(screen.queryByTestId('answer-banner')).toBeNull();
     expect(r.getPathname()).toBe(`/page/${notes().id}`);
     expect(notes().viewVersion).toBe(4);
@@ -227,8 +227,8 @@ describe('US-24: «Разложи» → the result on the page, highlight 600 ms
     s.on('POST /chat/messages', () => ({ status: 200, sse: actionReply() }));
     s.on('POST /actions/*/undo', () => ({ status: 200, body: undoOut(['srv-n1']) }));
     await say('разложи по темам');
-    await settle(() => screen.queryByTestId('undo-strip-changes') !== null);
-    await fireEvent.press(screen.getByTestId('undo-strip-changes'));
+    await settle(() => screen.queryByTestId('undo-strip-open') !== null);
+    await fireEvent.press(screen.getByTestId('undo-strip-open'));
     expect(within(screen.getByTestId('changes-sheet')).getByText('«Заметка 2» → Здоровье')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('change-revert-srv-n1'));
     await settle(() => s.callsTo('POST /actions/a1/undo').length === 1);

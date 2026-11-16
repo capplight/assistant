@@ -54,6 +54,8 @@ export const size = {
   segmentedHeight: 40,
   chipHeight: 36,
   toastHeight: 48,
+  /** v4 TopNotice (design-system §10.2): the capsule at the top. */
+  noticeHeight: 52,
   emptyIconCircle: 88,
   emptyIcon: 48,
   sheetHandle: { width: 36, height: 4 },
@@ -72,6 +74,8 @@ export const radius = {
   xl: 22,
   /** The brief card. */
   xxl: 26,
+  /** v4 TopNotice capsule. */
+  notice: 22,
   sheet: 28,
   /** Capsules, pills, mic. */
   round: 9999,
