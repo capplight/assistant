@@ -239,7 +239,7 @@ describe('S17: preview and tap-edits', () => {
     expect(text('kp-line-2-source')).toBe('укажите цену');
     expect(screen.getByTestId('kp-line-1-check')).toBeTruthy(); // qty to check
     expect(text('kp-missing-count')).toBe('Нет цены: 1. Итог ещё не полный');
-    expect(screen.getAllByText('Подготовил помощник (ИИ) по вашим записям — проверьте')).toHaveLength(1);
+    expect(screen.queryByText('Подготовил помощник (ИИ) по вашим записям — проверьте')).toBeNull(); // Ф-63
 
     await openLine(2);
     await fireEvent.press(screen.getByTestId('kp-line-2-price'));

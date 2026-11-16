@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from assistant.api.consent_gate import require_base_consent
 from assistant.api.deps import CurrentUser, Db
 from assistant.api.errors import ApiError
-from assistant.api.line_records import file_line_phrase
+from assistant.api.line_records import file_line_phrase, line_phrase
 from assistant.api.schemas import (
     DuplicateOut,
     ItemCreateIn,
@@ -28,6 +28,8 @@ from assistant.api.schemas import (
     ItemPatchIn,
     ReviewFieldOut,
 )
+from assistant.chat.parse_later import mark as mark_parse_later
+from assistant.chat.parse_later import status_of as parse_status
 from assistant.config import get_settings
 from assistant.db.models import Item
 from assistant.db.models_v2 import (
@@ -57,6 +59,7 @@ from assistant.records import (
     enqueue_ingest,
     enqueue_sweep,
     find_canonical,
+    mark_fields,
     merge_into,
     normalize_text,
     original_file,
@@ -157,6 +160,8 @@ def item_out(item: Item, files: list[File], canonical_public_id: uuid.UUID | Non
         files=[_file_out(f) for f in files], seq=item.seq, occurred_at=item.occurred_at,
         created_at=item.created_at, updated_at=item.updated_at, deleted_at=item.deleted_at,
         purge_after=item.purge_after,
+        **mark_fields(item.assistant_changed_at, item.assistant_action_id),
+        parse_later=parse_status(item.source_meta),
     )  # fmt: skip
 
 
@@ -345,7 +350,10 @@ async def create_item(body: ItemCreateIn, user: GatedUser, db: Db,
         await enqueue_ingest(db, item)
     await db.flush()
     if canonical is None:  # a line phrase saved on the phone offline: a spend / a to-do (QA 1)
-        await file_line_phrase(db, user.id, item, datetime.now(UTC))
+        filed = await file_line_phrase(db, user.id, item, datetime.now(UTC))
+        # Ф-69: code could not read it; once the model is back it reads it (not in «Без ИИ»)
+        if not filed and line_phrase(item) and await ai_consent_covers(db, user.id, None):
+            await mark_parse_later(db, item, datetime.now(UTC))
     if not item.fragment_no:  # a fragment reaches pages through its recording
         await place_item(db, item)
     if canonical is None and text:
@@ -450,6 +458,8 @@ async def patch_item(item_id: uuid.UUID, body: ItemPatchIn, user: GatedUser, db:
                     trash_file(file)
     if (item.title, item.text) != embeddable and item.hidden_reason is None:
         await enqueue_embed(db, item)
+    if (item.title, item.text) != embeddable or corrected:  # Ф-73: the person's edit wins
+        item.assistant_changed_at = item.assistant_action_id = None
     await db.flush()
     return await one_out(db, item)
 

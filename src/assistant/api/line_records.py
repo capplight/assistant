@@ -31,6 +31,11 @@ log = logging.getLogger(__name__)
 MAX_CHARS = 300  # a line phrase, not a long note
 
 
+def line_phrase(item: Item) -> bool:
+    """A short phrase from the line saved on the phone (the shape code may read)."""
+    return _is_phrase(item)
+
+
 def _is_phrase(item: Item) -> bool:
     text = (item.text or "").strip()
     meta = item.source_meta or {}

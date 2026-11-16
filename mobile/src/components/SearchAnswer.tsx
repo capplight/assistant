@@ -1,4 +1,5 @@
 import { Copy, ExternalLink } from 'lucide-react-native';
+import { AiLabel } from '@/components/AiLabel';
 import { useTranslation } from 'react-i18next';
 import { Share, StyleSheet, View } from 'react-native';
 
@@ -69,9 +70,7 @@ export function SearchAnswer({ answer, onOpen }: { answer: ChatMessage; onOpen?:
         </AppText>
       ) : null}
       {answer.aiGenerated ? (
-        <AppText testID="search-answer-ai" variant="footnote">
-          {t('ai.label_short')}
-        </AppText>
+        <AiLabel testID="search-answer-ai" variant="footnote" short />
       ) : null}
     </View>
   );

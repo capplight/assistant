@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { ChevronRight, CircleHelp, FolderInput, LayoutGrid, Plus, Search, Settings, ShieldAlert } from 'lucide-react-native';
+import { ChevronRight, CircleHelp, FolderInput, History, LayoutGrid, Plus, Search, Settings, ShieldAlert } from 'lucide-react-native';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
@@ -15,6 +15,9 @@ import { Header } from '@/components/ui/Header';
 import { Icon, PageIcon } from '@/components/ui/Icon';
 import { pressedStyle } from '@/components/ui/motion';
 import { getRecords } from '@/db';
+import { formatMinor, periodOf } from '@/expenses/calc';
+import { board, liveEntries } from '@/expenses/feed';
+import { useExpenses } from '@/expenses/store';
 import { useKp } from '@/kp/store';
 import { addCustomPage, ensureTemplatePage } from '@/pages/service';
 import { mainTabs } from '@/pages/tabs';
@@ -26,6 +29,8 @@ import { useOnboarding } from '@/store/onboarding';
 import { selectSortedPages, usePages } from '@/store/pages';
 import { useSession } from '@/store/session';
 import { useToast } from '@/store/toast';
+import { localDate } from '@/tasks/rows';
+import { isDone, liveTasks } from '@/tasks/service';
 import { useTasks } from '@/tasks/store';
 import { metricColors, useTheme } from '@/theme';
 
@@ -58,7 +63,16 @@ export default function MoreScreen() {
   const docs = useKp((s) => s.docs);
   const actions = useTasks((s) => s.actions);
   const messages = useAssistant((s) => s.messages);
+  const tasks = useTasks((s) => s.tasks);
+  const ticks = useTasks((s) => s.ticks);
+  const monthSpent = useExpenses((s) => {
+    const today = localDate(Date.now());
+    const m = board(liveEntries(s.entries, s.edits), periodOf('month', today), s.categories).main;
+    return m?.currency === 'KZT' ? m.total : 0n;
+  });
+  const notesPage = pages.find((p) => p.templateKey === 'notes');
   const [naming, setNaming] = useState(false);
+  const [todayKey] = useState(() => localDate(Date.now()));
   const records = useLocalQuery(async () => (await getRecords()).list(LIST_LIMIT), []);
   const { overflow } = mainTabs(pages, { largeFont: theme.largeFont, shopping });
   const shownOverflow = overflow.filter((p) => p.templateKey !== 'documents');
@@ -79,6 +93,13 @@ export default function MoreScreen() {
       return iso.slice(11, 16);
     }
   };
+  const openTemplate = (k: 'tasks' | 'notes' | 'expenses') =>
+    void ensureTemplatePage(k).then((p) => {
+      if (p) router.navigate({ pathname: '/page/[id]', params: { id: p.id } });
+    });
+  const tasksToday = liveTasks(tasks, 'todo').filter((x) => !!x.due_date && x.due_date <= todayKey && !isDone(x, ticks)).length;
+  const notesCount = notesPage ? (records ?? []).filter((r) => r.pageId === notesPage.id).length : 0;
+  const spentText = formatMinor(monthSpent).replace(/\s?₸$/, '');
   const openDocuments = () =>
     void ensureTemplatePage('documents').then((p) => {
       if (p) router.navigate({ pathname: '/page/[id]', params: { id: p.id } });
@@ -129,6 +150,22 @@ export default function MoreScreen() {
         </Pressable>
 
         <TileGrid testID="tiles-more">
+          {/* Дела left the tab bar for the centre «Помощник» (VISION-2026-11): a tile here, «Все дела ›» on «Сегодня». */}
+          <MetricTile
+            testID="more-tasks"
+            label={t('more.tasks')}
+            value={String(tasksToday)}
+            unit={t('more.on_today')}
+            caption={tasksToday === 0 ? t('more.tasks_free') : t('more.tasks_ok')}
+            color={metricColors[theme.scheme].reminders}
+            onPress={() => openTemplate('tasks')}
+          />
+          {theme.largeFont ? (
+            <>
+              <MetricTile testID="more-notes" label={t('more.notes')} value={String(notesCount)} caption={t('more.notes_hint')} color={metricColors[theme.scheme].new} onPress={() => openTemplate('notes')} />
+              <MetricTile testID="more-expenses" label={t('more.expenses')} value={spentText} unit="₸" caption={t('more.expenses_hint')} color={metricColors[theme.scheme].spent} onPress={() => openTemplate('expenses')} />
+            </>
+          ) : null}
           <MetricTile
             testID="more-documents"
             label={t('more.documents')}
@@ -138,18 +175,18 @@ export default function MoreScreen() {
             color={metricColors[theme.scheme].tasks}
             onPress={openDocuments}
           />
-          <MetricTile
-            testID="more-history"
-            label={t('more.history')}
-            value={String(historyToday)}
-            unit={t('more.today_unit')}
-            caption={lastAction?.created_at ? t('more.last_at', { time: time(lastAction.created_at) }) : t('more.history_empty')}
-            color={metricColors[theme.scheme].reminders}
-            onPress={() => router.push('/history')}
-          />
         </TileGrid>
 
         <ListGroup>
+          <ListRow testID="more-import" icon={FolderInput} title={t('more.import')} meta={t('more.import_hint')} chevron onPress={() => router.push('/import')} />
+          <ListRow
+            testID="more-history"
+            icon={History}
+            title={t('more.history')}
+            meta={historyToday > 0 && lastAction?.created_at ? t('more.last_at', { time: time(lastAction.created_at) }) : t('more.history_hint')}
+            chevron
+            onPress={() => router.push('/history')}
+          />
           <ListRow
             testID="more-records"
             icon={Search}
@@ -158,7 +195,6 @@ export default function MoreScreen() {
             chevron
             onPress={() => router.navigate('/records')}
           />
-          <ListRow testID="more-import" icon={FolderInput} title={t('more.import')} meta={t('more.import_hint')} chevron onPress={() => router.push('/import')} />
           <ListRow testID="more-settings" icon={Settings} title={t('more.settings')} meta={t('more.settings_hint')} chevron onPress={() => router.push('/settings')} />
           {support ? <ListRow testID="more-help" icon={CircleHelp} title={t('more.help')} chevron onPress={() => void Linking.openURL(support).catch(() => undefined)} /> : null}
         </ListGroup>

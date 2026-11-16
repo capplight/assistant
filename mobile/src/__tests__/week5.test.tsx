@@ -1,4 +1,5 @@
-import { fireEvent, renderRouter, screen, within } from 'expo-router/testing-library';
+import { act, fireEvent, renderRouter, screen, within } from 'expo-router/testing-library';
+import { router } from 'expo-router';
 
 import { decodeChatEvent } from '@/api/endpoints';
 import { SseParser } from '@/api/sse';
@@ -127,7 +128,7 @@ describe('US-25: a question on one page, the answer with a source from another',
     const banner = within(screen.getByTestId('answer-banner'));
     expect(banner.getByText(ANSWER)).toBeTruthy();
     expect(banner.getByText('Заметки · Ерлан, ремонт, 3 ноя')).toBeTruthy();
-    expect(banner.getByText(AI_LABEL)).toBeTruthy();
+    expect(banner.queryByText(AI_LABEL)).toBeNull(); // Ф-63: no «ИИ» label in the beta
     // A question is not a record, and nothing on «Покупки» changed.
     expect(outbox.all().filter((e) => e.kind === 'item.create')).toHaveLength(0);
     expect(screen.getByTestId('page-empty')).toBeTruthy();
@@ -162,25 +163,25 @@ describe('US-25: a question on one page, the answer with a source from another',
   });
 });
 
-describe('US-26: banner → «Открыть ответ» → «Переписка»', () => {
-  it('opens on the answer: divider by page, the question, the whole answer, sources, the label; «Свернуть» closes the banner', async () => {
+describe('US-26: banner → «Продолжить в чате» → «Помощник»', () => {
+  it('opens the chat on the answer: the question «с вкладки», the whole answer, sources, the label; the banner is closed', async () => {
     setup();
     await erlanRecord();
     const long = ['На ремонт в ноябре ушло 186 400 ₸. ', 'Ерлану вы должны 120 000 ₸ до 20 ноября. ', 'Плитки осталось купить около 8 м².'];
     s.on('POST /chat/messages', () => ({ status: 200, sse: reply('r1', long) }));
     const r = await askOnShopping();
     await settle(() => lastAnswer()?.status === 'done');
+    expect(screen.getByTestId('answer-open')).toHaveTextContent('Продолжить в чате ›');
     await fireEvent.press(screen.getByTestId('answer-open'));
-    await settle(() => r.getPathname() === '/history');
-    expect(screen.getByText('Вы: «сколько я должна Ерлану?»')).toBeTruthy();
+    await settle(() => r.getPathname() === '/assistant');
+    expect(screen.getByText('сколько я должна Ерлану?')).toBeTruthy();
+    expect(screen.getByText('с вкладки «Покупки»')).toBeTruthy();
     expect(screen.getAllByText(long.join('')).length).toBeGreaterThan(0);
-    expect(screen.getByText('Подготовил помощник (ИИ) по вашим записям — проверьте')).toBeTruthy();
+    expect(screen.queryByText('Подготовил помощник (ИИ) по вашим записям — проверьте')).toBeNull(); // Ф-63
     expect(screen.getAllByTestId('source-srv-erlan').length).toBeGreaterThan(0);
     await settle(() => s.callsTo('POST /chat/messages/r1/delivery').some((c) => (c.body as { delivery: string }).delivery === 'opened'));
-
-    await fireEvent.press(screen.getByTestId('chat-collapse'));
-    await settle(() => r.getPathname() === `/page/${page('shopping').id}`);
     expect(screen.queryByTestId('answer-banner')).toBeNull();
+    expect(useAssistant.getState().banner).toBeNull();
   });
 
   it('streams: the banner shows what is being done, then the text grows', async () => {
@@ -228,7 +229,7 @@ describe('US-26: banner → «Открыть ответ» → «Переписк
       },
     }));
     await fireEvent.press(screen.getByTestId('answer-open'));
-    await settle(() => r.getPathname() === '/history');
+    await settle(() => r.getPathname() === '/assistant');
     await settle(() => screen.queryAllByText('Половина. Целиком.').length > 0);
     expect(screen.getByText('С другого телефона.')).toBeTruthy();
     expect(useAssistant.getState().messages.filter((m) => m.role === 'assistant' && m.serverId === 'r1')).toHaveLength(1);
@@ -385,7 +386,7 @@ describe('«Сообщить о проблеме»', () => {
     s.on('POST /chat/messages', () => ({ status: 200, sse: reply() }));
     const r = await askOnShopping();
     await settle(() => lastAnswer()?.status === 'done');
-    await fireEvent.press(screen.getByTestId('answer-open'));
+    await act(async () => router.push('/history'));
     await settle(() => r.getPathname() === '/history');
     await fireEvent.press(screen.getByTestId(`chat-more-${lastAnswer()!.id}`));
     await fireEvent.press(screen.getByTestId('answer-report'));

@@ -804,7 +804,7 @@ describe('on screen', () => {
     const exp = page('expenses').id;
     expect(screen.getByTestId(`my-pages-up-${exp}`).props.accessibilityLabel).toBe('Выше: Расходы');
     await fireEvent.press(screen.getByTestId(`my-pages-up-${exp}`));
-    // Ф-48: the tabs are fixed (Сегодня · Заметки · Расходы · Дела · Ещё); the order is the pages' order.
+    // The tabs are fixed (Сегодня · Заметки · Помощник · Расходы · Ещё); the order is the pages' order.
     await settle(() => tabOrder().indexOf('expenses') < tabOrder().indexOf('tasks'));
     expect(tabs()).toContain('tab-expenses');
     const tasks = page('tasks').id;
@@ -815,8 +815,8 @@ describe('on screen', () => {
       'Страница «Дела» убрана. Записи остались.',
     );
     await fireEvent.press(screen.getByTestId('undo-strip-undo'));
-    // Back where it was; «Дела» is a fixed tab again (Ф-48).
+    // Back where it was; «Дела» are not a tab (VISION-2026-11): «Ещё» and «Сегодня» lead there.
     await settle(() => tabOrder().includes('tasks'));
-    expect(tabs()).toContain(`tab-${tasks}`);
+    expect(tabs()).not.toContain(`tab-${tasks}`);
   });
 });

@@ -144,7 +144,7 @@ describe('КП: compact lines, «Правка | Просмотр», the send she
     expect(text('kp-line-0-calc')).toBe('48 м² × 4 500 ₸');
     expect(text('kp-line-0-sum')).toBe('216 000 ₸');
     expect(screen.getByTestId('kp-total').props.accessibilityLabel).toBe('Итого: 519 400 ₸');
-    expect(screen.getByTestId('kp-ai-label')).toBeTruthy();
+    expect(screen.queryByTestId('kp-ai-label')).toBeNull(); // Ф-63: no «ИИ» label in the beta
     await fireEvent.press(screen.getByTestId('kp-line-0'));
     await settle(() => screen.queryByTestId('kp-line-sheet') !== null);
     expect(screen.getByTestId('kp-line-0-price')).toBeTruthy();

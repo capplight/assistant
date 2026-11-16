@@ -2,6 +2,8 @@ import { lineRouting } from '@/chat/service';
 import { router } from 'expo-router';
 import { act, fireEvent, renderRouter, screen, within } from 'expo-router/testing-library';
 
+import { FEATURE_DEFAULTS } from '@/api/endpoints';
+import { useFeatureStore } from '@/store/features';
 import { useOnboarding } from '@/store/onboarding';
 import { usePages } from '@/store/pages';
 import { useUndo } from '@/store/undo';
@@ -161,7 +163,16 @@ describe('S09 card', () => {
     expect(screen.getByText('Проверьте 2 места — я мог ошибиться при распознавании')).toBeTruthy();
   });
 
-  it('the label appears only on generated content; ordinary records never say «ИИ»', async () => {
+  it('Ф-63: no «ИИ» label in the beta (feature `ai_label` off), even on generated content', async () => {
+    await openCard({ ai_generated: true });
+    expect(screen.queryByText(/ИИ/)).toBeNull();
+    await fireEvent.press(screen.getByTestId('record-c1'));
+    await settle(() => screen.queryByTestId('record-card') !== null);
+    expect(screen.queryByTestId('record-ai-label')).toBeNull();
+  });
+
+  it('with `ai_label` on, the label appears only on generated content; ordinary records never say «ИИ»', async () => {
+    useFeatureStore.getState().set({ ...FEATURE_DEFAULTS, ai_label: true });
     await openCard({ ai_generated: true });
     expect(screen.getByText('Подготовил помощник (ИИ) — проверьте')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('record-c1'));

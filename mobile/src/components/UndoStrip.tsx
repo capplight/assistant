@@ -91,6 +91,8 @@ export function UndoStrip() {
   ) : null;
   if (!strip) return replaceSheet;
   if (strip.kind === 'action' && !action) return null;
+  // In the chat the result card carries «Переложить · Отменить» itself (v4 «Сделал 3 дела»).
+  if (strip.kind === 'action' && current.kind === 'assistant') return replaceSheet;
 
   const undo = () => {
     hide(strip.id);

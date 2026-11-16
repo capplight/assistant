@@ -55,19 +55,21 @@ describe('tokens v2 (design-system v2 §2)', () => {
 });
 
 describe('Ф-48 tabs', () => {
-  it('«Сегодня · Заметки · Расходы · Дела · Ещё»; at ≥150 % «Заметки» go to «Ещё», «Дела» stay', () => {
+  it('«Сегодня · Заметки · Помощник · Расходы · Ещё»; at ≥150 % «Сегодня · Помощник · Ещё»; «Дела» are in «Ещё»', () => {
     const pages = usePages.getState().pages;
-    expect(mainTabs(pages, { largeFont: false, shopping: false }).slots.map((s) => s.key)).toEqual(['notes', 'expenses', 'tasks']);
+    const normal = mainTabs(pages, { largeFont: false, shopping: false });
+    expect(normal.slots.map((s) => s.key)).toEqual(['notes', 'assistant', 'expenses']);
+    expect(normal.overflow.map((p) => p.templateKey)).toContain('tasks');
     const large = mainTabs(pages, { largeFont: true, shopping: false });
-    expect(large.slots.map((s) => s.key)).toEqual(['expenses', 'tasks']);
+    expect(large.slots.map((s) => s.key)).toEqual(['assistant']);
     expect(large.overflow.map((p) => p.templateKey)).toContain('notes');
   });
 
   it('«Расходы» is a tab even before the page exists; the first tap makes it and opens it', async () => {
     usePages.setState((s) => ({ pages: s.pages.filter((p) => p.templateKey !== 'expenses') }));
-    expect(mainTabs(usePages.getState().pages, { largeFont: false, shopping: false }).slots[1]).toMatchObject({ key: 'expenses', page: null, centre: true });
+    expect(mainTabs(usePages.getState().pages, { largeFont: false, shopping: false }).slots[2]).toMatchObject({ key: 'expenses', page: null, centre: false });
     const r = await renderRouter(APP_DIR, { initialUrl: '/' });
-    expect(screen.getByTestId('tab-expenses-circle')).toBeTruthy();
+    expect(screen.getByTestId('tab-assistant-circle')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('tab-expenses'));
     await settle(() => usePages.getState().pages.some((p) => p.templateKey === 'expenses'));
     expect(r.getPathname()).toBe(`/page/${pageOf('expenses').id}`);
@@ -78,20 +80,20 @@ describe('Ф-48 tabs', () => {
     await settle(() => screen.queryByTestId('exp-entry-sheet') !== null);
   });
 
-  it('the app shows 5 tabs, and 4 at font 200 %', async () => {
+  it('the app shows 5 tabs, and 3 at font 200 %', async () => {
     await renderRouter(APP_DIR, { initialUrl: '/' });
     expect(screen.getAllByRole('tab')).toHaveLength(5);
     expect(screen.getByTestId(`tab-${pageOf('notes').id}`)).toBeTruthy();
     resetWindow();
     setWindow({ fontScale: 2, width: 320, height: 568 });
     await renderRouter(APP_DIR, { initialUrl: '/' });
-    expect(screen.getAllByRole('tab')).toHaveLength(4);
+    expect(screen.getAllByRole('tab')).toHaveLength(3);
     expect(screen.queryByTestId(`tab-${pageOf('notes').id}`)).toBeNull();
-    expect(screen.getByTestId(`tab-${pageOf('tasks').id}`)).toBeTruthy();
+    expect(screen.getByTestId('tab-assistant')).toBeTruthy();
   });
 
   it.each(AUDIT_MATRIX.map((w) => [`${w.width} @ ${w.fontScale}`, w] as const))('the bar fits %s', async (_n, w) => {
-    const count = w.fontScale >= 1.5 ? 4 : 5;
+    const count = w.fontScale >= 1.5 ? 3 : 5;
     const m = tabBarMetrics({ windowWidth: w.width, count });
     expect(m.cell).toBeGreaterThanOrEqual(48);
     expect(m.pill).toBeLessThanOrEqual(m.cell);
@@ -119,10 +121,11 @@ describe('Ф-49 no shopping list', () => {
 });
 
 describe('«Сегодня» v2 — the briefing', () => {
-  it('four blocks: the brief, the 2×2 tiles; the headline follows the part of the day', async () => {
+  it('the brief, two tiles (v4: Потрачено · Новое); the headline follows the part of the day', async () => {
     await renderRouter(APP_DIR, { initialUrl: '/' });
     expect(screen.getByTestId('today-brief')).toBeTruthy();
-    for (const id of ['tile-tasks', 'tile-spent', 'tile-new']) expect(screen.getByTestId(id)).toBeTruthy();
+    for (const id of ['tile-spent', 'tile-new']) expect(screen.getByTestId(id)).toBeTruthy();
+    expect(screen.queryByTestId('tile-tasks')).toBeNull();
     const t = (k: string, o?: Record<string, unknown>) => `${k}${o ? JSON.stringify(o) : ''}`;
     expect(dayPart(new Date(2026, 10, 13, 8).getTime())).toBe('morning');
     expect(dayPart(new Date(2026, 10, 13, 14).getTime())).toBe('day');
@@ -390,7 +393,7 @@ describe('phone QA 1 (docs/design/qa/v2-phone-qa-1.md)', () => {
     await renderRouter(APP_DIR, { initialUrl: '/' });
     expect(screen.getByTestId('today-waiting')).toBeTruthy();
     expect(within(screen.getByTestId('today-waiting')).getByTestId('alarm-risk-fix')).toBeTruthy();
-    expect(screen.getByTestId('tile-tasks')).not.toHaveTextContent(/из 0/);
+    expect(screen.queryByTestId('today-tasks')).toBeNull();
     expect(screen.getByTestId('tile-new')).toHaveTextContent(/пока ничего/);
     expect(screen.getByTestId('tile-spent')).toHaveTextContent(/сегодня трат нет/);
   });

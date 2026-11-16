@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { useLayout, useTheme } from '@/theme';
+import { useLayout, useTheme, withAlpha } from '@/theme';
 
 import { AppText } from '../AppText';
 import { Glass } from './Glass';
@@ -113,7 +113,8 @@ export function TabBar({ tabs, bottomInset = 0, testID = 'bottom-tabs' }: { tabs
                       height: circle + ring * 2,
                       borderRadius: (circle + ring * 2) / 2,
                       marginTop: -lift - ring - theme.space[1] - 2,
-                      backgroundColor: theme.colors.fade,
+                      // v3 §9.1: the open «Помощник» gets a 3 dp `brand` 33 % ring instead of a pill.
+                      backgroundColor: tab.active ? withAlpha(theme.colors.brand, 0.33) : theme.colors.fade,
                     },
                   ]}
                 >

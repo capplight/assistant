@@ -283,6 +283,11 @@ class ItemOut(BaseModel):
     updated_at: datetime
     deleted_at: datetime | None  # in "Удалённые записи" when set
     purge_after: datetime | None
+    # Ф-73 «изменил помощник»: set for 24 h after the assistant made or changed the record
+    assistant_changed_at: datetime | None = None
+    assistant_action_id: uuid.UUID | None = None  # tap on the mark: this action
+    # Ф-69: {state: waiting|done, text_ru, text_kk, to: expense|tasks|note|null, action_id}
+    parse_later: dict[str, Any] | None = None
 
 
 class DuplicateOut(BaseModel):
@@ -802,6 +807,21 @@ class SavedToOut(BaseModel):
     item_ids: list[uuid.UUID]
 
 
+class NoticeTargetOut(BaseModel):
+    kind: str  # expense | task | document | reminder | item | page
+    id: str | None
+    page_id: str | None
+
+
+class NoticeOut(BaseModel):
+    text_ru: str
+    text_kk: str | None
+    target: NoticeTargetOut | None
+    undo_label_ru: str | None  # «Отменить» | «Восстановить» | «Вернуть»; null: no button
+    undo_label_kk: str | None
+    ms: int
+
+
 class ActionOut(BaseModel):
     id: uuid.UUID
     kind: str
@@ -813,6 +833,8 @@ class ActionOut(BaseModel):
     changed_item_ids: list[uuid.UUID]
     created_page_id: uuid.UUID | None
     saved_to: list[SavedToOut] = Field(default_factory=list)
+    parsed_later: bool = False  # Ф-69: made in the background from a «разберу позже» note
+    notice: NoticeOut | None = None  # Ф-65: the 3-second notice (actions.md)
     undoable: bool
     undoable_until: datetime | None
     undone_at: datetime | None
@@ -1270,6 +1292,8 @@ class TaskOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     deleted_at: datetime | None
+    assistant_changed_at: datetime | None = None  # Ф-73, from the task's record
+    assistant_action_id: uuid.UUID | None = None
 
 
 class TasksOut(BaseModel):
@@ -1560,6 +1584,8 @@ class ExpenseOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     deleted_at: datetime | None
+    assistant_changed_at: datetime | None = None  # Ф-73, from the expense's record
+    assistant_action_id: uuid.UUID | None = None
 
 
 class ExpenseCategoryOut(BaseModel):

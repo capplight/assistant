@@ -309,6 +309,9 @@ class Item(Base):
     # Voice: fragments of one recording (records/voice.py). fragment 0 is the visible record.
     recording_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     fragment_no: Mapped[int | None] = mapped_column(Integer)
+    # --- 0029: «изменил помощник» for 24 h (Ф-73; assistant.records.marks) ---
+    assistant_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    assistant_action_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)  # actions.public_id
     seq: Mapped[int] = mapped_column(
         BigInteger, server_default=FetchedValue(), server_onupdate=FetchedValue()
     )

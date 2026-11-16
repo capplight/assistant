@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { AiLabel } from '@/components/AiLabel';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
@@ -143,7 +144,7 @@ export function KpVersionPanel({ docId, n, onBack, onDone }: { docId: string; n:
             {t(`kp.pdf_${file.result}`)}
           </AppText>
         ) : null}
-        {version.ai_generated ? <AppText variant="callout">{t('ai.label')}</AppText> : null}
+        {version.ai_generated ? <AiLabel variant="callout" /> : null}
       </View>
     </View>
   );

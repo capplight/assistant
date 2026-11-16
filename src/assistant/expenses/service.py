@@ -34,7 +34,13 @@ from assistant.db.models_v2 import RecordKind, RecordSource, RecordStatus
 from assistant.expenses import calc
 from assistant.expenses.parse import NOTE_MAX
 from assistant.pages import first_use_page, lexorank, lock_user, place_item
-from assistant.records import content_hash, detect_lang, enqueue_ingest, normalize_text
+from assistant.records import (
+    content_hash,
+    detect_lang,
+    enqueue_ingest,
+    mark_fields,
+    normalize_text,
+)
 
 PAGE_TEMPLATE = "expenses"
 FREQUENCY_DAYS = 90
@@ -380,9 +386,13 @@ async def expenses_dicts(session: AsyncSession,
     items: dict[int, uuid.UUID] = {}
     cats: dict[int, ExpenseCategory] = {}
     statements: dict[int, uuid.UUID] = {}
+    marks: dict[int, dict[str, Any]] = {}
     if rows:
-        items = dict((await session.execute(select(Item.id, Item.public_id).where(
-            Item.id.in_({r.item_id for r in rows})))).tuples().all())  # fmt: skip
+        for pk, pid, at, aid in await session.execute(
+                select(Item.id, Item.public_id, Item.assistant_changed_at,
+                       Item.assistant_action_id).where(
+                    Item.id.in_({r.item_id for r in rows}))):  # fmt: skip
+            items[pk], marks[pk] = pid, mark_fields(at, aid)
         ids = {r.category_id for r in rows if r.category_id}
         if ids:
             cats = {c.id: c for c in await session.scalars(
@@ -392,8 +402,9 @@ async def expenses_dicts(session: AsyncSession,
             statements = dict((await session.execute(
                 select(StatementImport.id, StatementImport.public_id)
                 .where(StatementImport.id.in_(sids)))).tuples().all())  # fmt: skip
-    return [expense_dict(r, items.get(r.item_id), cats.get(r.category_id or 0),
-                         statements.get(r.statement_import_id or 0)) for r in rows]
+    return [{**expense_dict(r, items.get(r.item_id), cats.get(r.category_id or 0),
+                            statements.get(r.statement_import_id or 0)),
+             **marks.get(r.item_id, mark_fields(None, None))} for r in rows]
 
 
 def expense_dict(e: ExpenseEntry, item_id: uuid.UUID | None, cat: ExpenseCategory | None,

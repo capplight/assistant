@@ -1,4 +1,5 @@
 import { ArrowDown, ArrowUp, Check, Ellipsis, StickyNote as StickyNoteIcon } from 'lucide-react-native';
+import { AiLabel } from '@/components/AiLabel';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, View, type AccessibilityActionEvent } from 'react-native';
@@ -265,7 +266,7 @@ function Sticker({ entry, ctx, index, total, look }: { entry: PageEntry; ctx: En
         onLongPress={moves?.onMenu}
       >
         {status ? <AppText variant="footnote">{status}</AppText> : null}
-        {rec.aiGenerated ? <AppText variant="footnote">{t('ai.label_short')}</AppText> : null}
+        {rec.aiGenerated ? <AiLabel variant="footnote" short /> : null}
         {toCheck ? (
           <View
             testID={`record-check-${rec.id}`}

@@ -40,7 +40,8 @@ Week 10 adds (same shapes): `auto_merge_exact`, `merge_group`, `dismiss_group`, 
 (repeats, `duplicates.md`), `create_stack`, `stack_add`, `stack_remove`, `delete_stack`, and
 `user_edit` on a stack (`stacks.md`), `import_batch` (a Telegram import: «Отменить» moves what it
 brought to the trash, `import.md`). `changes[].kind` adds `merge` and `keep_apart`. From the
-assistant line every delete now asks «Да» first (`chat.md`, `confirm`).
+assistant line every delete now asks «Да» first (`chat.md`, `confirm`) — replaced by Ф-66
+(2026-11-16): no «Да» for a trash, see «Steps 3–4» below.
 
 Week 11 adds (`views.md`): `screen_view_change` (a view setting, by hand or by the assistant),
 `screen_reset` («Вернуть как было»), and `facet_edit` for values of a page's own fields
@@ -74,6 +75,51 @@ reminder; like `create_page` it has no «Вернуть» of its own, only «О�
 Task rows have `item_id` (the task's record) and `task_id`. Show `text` as before; unknown kinds:
 just the text.
 
+## Steps 3–4 of the vision plan (2026-11-16, Ф-64…Ф-73)
+
+**`notice`** on every Action (chat `action` event, undo result, `/v1/actions`, `/v1/sync`): the
+3-second top notice (Ф-65, Ф-67, Ф-75; design-system §10.2) — show it, do not build texts on the
+phone.
+
+```json
+"notice": {"text_ru": "Записал в «Дела»", "text_kk": null,
+           "target": {"kind": "task", "id": "0194...", "page_id": "0194..."},
+           "undo_label_ru": "Отменить", "undo_label_kk": null, "ms": 3000}
+```
+
+- `text_ru` examples: «Записал в «Дела»», «Записал трату в «Расходы»», «Записал 3 записи в
+  «Заметки»», «Удалил «Шины»», «Удалил 7 записей», «Обновил трату», «Вернул как было» (an undo),
+  «Сохранил как заметку, разберу позже» / «Разобрал: перенёс в «Расходы»» (Ф-69), else the
+  shortened `summary.ru`. `text_kk` null until reviewed (R-39): fall back to `text_ru`.
+- `target`: where a tap goes — `kind` `expense` | `task` | `document` | `reminder` | `item` |
+  `page`, `id` of that object, `page_id` to open (null for a record now in the trash). May be null.
+- `undo_label_ru`: the button — «Восстановить» after a trash, «Вернуть» after an undo, else
+  «Отменить»; null when `undoable` is false (show no button). The button = `POST
+  /v1/actions/{id}/undo` as before. `ms`: 3000 for every notice (Ф-75).
+
+**`parsed_later`** (bool): the action was made in the background by reading a note saved while the
+model was down (Ф-69, `chat.md`). Such an action arrives only by `/v1/sync` — show its notice
+when it arrives.
+
+**«Изменил помощник» (Ф-73).** Every record an **agent** action creates or changes (its
+`changes[].item_id`, not trash rows) gets `assistant_changed_at` + `assistant_action_id` on the
+record (`items.md`), and so on its task and expense (`today.md`). Cleared when the person changes
+the record (any of their own actions naming it, `PATCH /v1/items/{id}`) or undoes that action. The
+server sends null once 24 h have passed; the phone hides a mark older than 24 h by itself too.
+Tap on the mark → `GET /v1/actions/{assistant_action_id}` («Что изменилось», «Отменить»).
+
+**Trash without «Да» (Ф-66).** A delete from the line is done at once (`delete_item`, notice
+«Удалил … · Восстановить»); no `confirm` any more, at any count (≤50 records per call). The guard
+is code: only a phrase whose own words ask to delete («удали», «выброси», «убери в корзину»)
+can trash — record text never can. «Да» stays only for what cannot be undone (delete for good,
+sending a КП to a client) and the existing big-reorder / hand-placed questions.
+
+**Undo by phrase** («верни как было», «отмени», «отмени всё», «не туда», «верни запись про хлеб»):
+see `chat.md`. It runs this same undo; the new action has `undo_of` set, the undone one gets
+`undone_at`. «Отменить всё» of a multi-change phrase = the whole undo of that phrase's action
+(one phrase = one action today; step 6 keeps several actions of a phrase under one `message_id`,
+and the phrase undo already takes all actions of the last phrase together).
+
 ## Action
 
 ```json
@@ -92,6 +138,10 @@ just the text.
   "created_page_id": null,
   "saved_to": [{"page_id": "0194...", "title": "Заметки", "icon": "documents",
                 "template_key": "notes", "item_ids": ["0193..."]}],
+  "parsed_later": false,
+  "notice": {"text_ru": "Записал в «Заметки»", "text_kk": null,
+             "target": {"kind": "item", "id": "0193...", "page_id": "0194..."},
+             "undo_label_ru": "Отменить", "undo_label_kk": null, "ms": 3000},
   "undoable": true,
   "undoable_until": "2026-12-07T10:00:00+00:00",
   "undone_at": null,

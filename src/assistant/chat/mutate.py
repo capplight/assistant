@@ -13,7 +13,8 @@ Rules held here, in code:
 - Each change is one short transaction, committed before its `action` / `page_patch` events.
   No transaction is open during PAGE_GROUP.
 - Records placed by hand (`manual_order`) or pinned are not moved without «Да» (`confirm_manual`);
-  a reorder of >150 records and every trash ask «Да» first; «это» without a
+  a reorder of >150 records asks «Да» first; a trash does not (Ф-66) but needs a delete verb in
+  the person's own phrase (`intent.is_delete`); «это» without a
   selected record never picks one by itself.
 - Numbers and dates in text the model writes into a record or a title must be in the person's
   phrase or the records shown (verify.py), otherwise the change is refused.
@@ -37,7 +38,7 @@ from assistant.actions.patch import page_patches
 from assistant.ai import LLMTask, Masker, TaskInputs, ToolSpec, UntrustedPart
 from assistant.ai.adapters import strict_json_schema
 from assistant.ai.store import period_starts
-from assistant.chat.intent import asks_view, names_here, names_page
+from assistant.chat.intent import asks_view, is_delete, names_here, names_page
 from assistant.chat.sources import PageInfo, Source, SourceBook, title_of
 from assistant.chat.verify import Facts, check_sentence, facts_of
 from assistant.db.models import Item
@@ -72,8 +73,9 @@ from assistant.records import (
 log = logging.getLogger(__name__)
 
 MAX_RECORDS_PER_CALL = 50
-# Spec 5.10 rule 5 asked «Да» above 5 records; the founder (2026-11-09) made it every delete.
-TRASH_ASK_ABOVE = 0
+# Spec 5.10 rule 5 asked «Да» above 5 records; the founder made it every delete (2026-11-09),
+# then none (Ф-66, 2026-11-16): a trash goes at once with «Восстановить»; at most
+# MAX_RECORDS_PER_CALL records per call, and only when the person's phrase asks to delete.
 REORDER_ASK_ABOVE = 150
 GROUP_BATCH = 150  # PAGE_GROUP sees at most this many records per call (spec 6.12)
 MAX_GROUPS = 12
@@ -349,6 +351,7 @@ class MutationState:
     action_pk: int | None = None
     action_public: str | None = None
     action_out: dict[str, Any] | None = None
+    more_action_pks: list[int] = field(default_factory=list)  # «отмени всё»: one per undo
     sentences: list[str] = field(default_factory=list)
     changed: set[str] = field(default_factory=set)
     proposal: dict[str, Any] | None = None  # set: the turn stops and asks
@@ -432,7 +435,8 @@ async def _commit(env: Any, *, kind: str, ops: list[dict[str, Any]], sentence: s
             )  # fmt: skip
         else:
             action = await extend(s, m.action_pk, summary=summary, changes=changes,
-                                  inverse=inverse, source_item_ids=source_pks)  # fmt: skip
+                                  inverse=inverse, source_item_ids=source_pks,
+                                  now=now)  # fmt: skip
             if prep.extra:
                 action.payload = {**action.payload, **prep.extra}
         await s.flush()
@@ -504,8 +508,10 @@ def _check_deictic(m: MutationState, records: list[Source]) -> str | None:
 # --- create ---
 
 
-async def tool_create(env: Any, args: CreateArgs, *, by_code: bool = False) -> Result:
+async def tool_create(env: Any, args: CreateArgs, *, by_code: bool = False,
+                      later: bool = False) -> Result:  # fmt: skip
     """`by_code`: the person's own words saved as they are (a plain note from the line).
+    `later` (Ф-69): the model is down; the note waits to be read (`parse_later`).
 
     Ф-47: a new record goes where the page rules put it («Заметки», «Покупки», «Расходы»...),
     never onto the open page by itself. A page is used only when the person named it, or said
@@ -560,6 +566,12 @@ async def tool_create(env: Any, args: CreateArgs, *, by_code: bool = False) -> R
             prep.inverse = [{"op": "delete_entity_soft", "entity": "items",
                              "id": str(item.public_id)}]  # fmt: skip
             kind_text = "Записал "
+            if later:
+                from assistant.chat import parse_later
+
+                await parse_later.mark(s, item, m.clock())
+                prep.sentence = parse_later.TEXT_WAITING[m.lang] + "."
+                prep.extra = {"parse_later": True}
         name = title_of(item.title, item.text)
         if page is not None:
             out = await engine.apply(s, m.user_id, [{"op": "add_screen_item",
@@ -640,15 +652,11 @@ async def tool_update(env: Any, args: UpdateArgs, *, confirmed: bool = False) ->
     if not confirmed and (problem := _check_deictic(m, records)):
         return _err(problem)
     if args.trash:
-        if not confirmed:  # founder 2026-11-09: every delete from the line asks «Да» first
-            n = len(records)
-            question = (f"Удалить {_q(records[0].title)}?" if n == 1
-                        else f"Удалить {count_words(n)}?")  # fmt: skip
-            _propose(m, kind="count", question=question, options=YES_NO,
-                     count=n, plan={"tool": "update", "items": [str(s.item_id) for s in records],
-                                    "trash": True})  # fmt: skip
-            return Result(_json({"asked": True, "question": m.proposal["question"]}),  # type: ignore[index]
-                          False, "Уточняю…")  # fmt: skip
+        # Ф-66: a trash is done at once («Удалено · Восстановить», undo for 30 days), no «Да».
+        # The guard is the person's own words: only a phrase that says «удали / выброси» may
+        # trash (record text that says so never does); a tap that answered a question counts.
+        if not confirmed and not is_delete(m.phrase):
+            return _err("the person did not ask to delete: change nothing, do not trash")
         ops = [{"op": "delete_entity_soft", "entity": "items", "id": str(s.item_id)}
                for s in records]  # fmt: skip
         n = len(records)

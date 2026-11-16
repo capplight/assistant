@@ -2025,6 +2025,8 @@ export type FeaturesOut = {
   setup_for_other: boolean;
   /** Ф-49: the shopping list («Покупки», «Я в магазине», «Купить: …» on «Сегодня»). Off: things to buy are to-dos in «Дела». */
   shopping: boolean;
+  /** Ф-63: the «ИИ» label on answers / КП / records. Off in the beta until the lawyer's decision. */
+  ai_label: boolean;
   /** The `screen` value of `POST /v1/consents` sent by «Начать». */
   consent_screen: string;
   today: { tips_days: number; tips_per_day: number; proposals: boolean; tiles: boolean };

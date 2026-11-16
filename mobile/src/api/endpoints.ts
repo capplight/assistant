@@ -1019,6 +1019,7 @@ export const FEATURE_DEFAULTS: FeaturesOut = {
   personal_mail: false,
   setup_for_other: false,
   shopping: false,
+  ai_label: false,
   consent_screen: 'welcome',
   today: { tips_days: 7, tips_per_day: 1, proposals: false, tiles: false },
   pages: { default: ['today', 'notes', 'expenses', 'tasks'], first_use: ['documents'] },
@@ -1042,6 +1043,7 @@ export function featuresOut(v: unknown): FeaturesOut {
     personal_mail: flag(o.personal_mail, d.personal_mail),
     setup_for_other: flag(o.setup_for_other, d.setup_for_other),
     shopping: flag(o.shopping, d.shopping),
+    ai_label: flag(o.ai_label, d.ai_label),
     consent_screen: str(o.consent_screen) ?? d.consent_screen,
     today: {
       tips_days: count(today.tips_days, d.today.tips_days),

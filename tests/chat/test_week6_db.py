@@ -358,15 +358,12 @@ async def test_delete_this_asks_which_one(w6):
         assert r.status_code == 200
         assert (await c.get(f"/v1/items/{newest}", headers=h)).json()["deleted_at"] is None
 
-        # With a selected record «это» is that record; deleting it still asks «Да» first
-        # (founder 2026-11-09: every delete from the line).
+        # With a selected record «это» is that record; it goes at once (Ф-66, no «Да»).
         evs = await say(c, h, "удали это", page_id=pid, visible_item_ids=ids,
                         selected_item_id=ids[0])
-        ask_ = last(evs, "confirm")
-        assert ask_["question"].startswith("Удалить «") and ask_["count"] == 1
-        assert (await c.get(f"/v1/items/{ids[0]}", headers=h)).json()["deleted_at"] is None
-        evs = await say(c, h, "Да", choice={"reply_id": ask_["reply_id"], "option": "yes"})
+        assert "confirm" not in [n for _, n, _ in evs]
         assert last(evs, "action")["action"]["changed_item_ids"] == [ids[0]]
+        assert (await c.get(f"/v1/items/{ids[0]}", headers=h)).json()["deleted_at"]
         others = [(await c.get(f"/v1/items/{i}", headers=h)).json()["deleted_at"] for i in ids[1:]]
         assert others == [None, None]
 
@@ -374,25 +371,24 @@ async def test_delete_this_asks_which_one(w6):
 # --- «Да» with a number ---
 
 
-async def test_trash_more_than_five_asks_first(w6):
+async def test_trash_goes_at_once_without_yes(w6):
+    """Ф-66 (2026-11-16): a trash from the line needs no «Да» — it is done at once with
+    «Восстановить» (the notice) and «Отменить»; the person's phrase must ask to delete."""
     def trash_all(req: AdapterRequest) -> list[ToolCall]:
         return [ToolCall("c1", "update", {"records": [f"s{i}" for i in range(1, 8)],
                                           "title": None, "trash": True})]
 
-    script = Script([trash_all, ChatReply(answer="Спрошу.", citations=[], insufficient=False)])
+    script = Script([trash_all, ChatReply(answer="Готово.", citations=[], insufficient=False)])
     async with client(w6.make_app(router_with(w6.maker, script))) as c:
         h = await signed_in(c)
         pid, ids = await home_page(c, h, w6.maker, HOME[:8])
         evs = await say(c, h, "удали все покупки", page_id=pid, visible_item_ids=ids)
-        ask_ = last(evs, "confirm")
-        assert ask_["question"] == "Удалить 7 записей?" and ask_["count"] == 7
-        assert script.n("ChatReply") == 1  # the loop stopped at the question
-        trashed = [(await c.get(f"/v1/items/{i}", headers=h)).json()["deleted_at"] for i in ids]
-        assert trashed == [None] * 8
-        evs = await say(c, h, "Да", choice={"reply_id": ask_["reply_id"], "option": "yes"})
+        assert "confirm" not in [n for _, n, _ in evs]
         action = last(evs, "action")["action"]
         assert action["summary"]["ru"] == "Убрал в корзину 7 записей."
         assert len(action["changes"]) == 7
+        assert action["notice"]["text_ru"] == "Удалил 7 записей"
+        assert action["notice"]["undo_label_ru"] == "Восстановить"
         # «Вернуть» one row of «Что изменилось».
         one = action["changed_item_ids"][0]
         r = (await c.post(f"/v1/actions/{action['id']}/undo", json={"item_ids": [one]},
@@ -547,9 +543,9 @@ async def test_record_text_cannot_call_tools(w6):
         assert await rows(w6.maker, pid) == before
 
 
-async def test_injection_during_a_real_change_needs_yes(w6):
-    """The person asked to move one record; a record tells the model to trash everything. The
-    trash of >5 records still waits for the person's «Да»."""
+async def test_injection_during_a_real_change_cannot_trash(w6):
+    """The person asked to move one record; a record tells the model to trash everything. No
+    «Да» any more (Ф-66): the person's phrase has no delete word, so code refuses the trash."""
     def obey_record(req: AdapterRequest) -> list[ToolCall]:
         return [ToolCall("x1", "update", {"records": [f"s{i}" for i in range(1, 8)],
                                           "title": None, "trash": True})]
@@ -559,11 +555,10 @@ async def test_injection_during_a_real_change_needs_yes(w6):
         h = await signed_in(c)
         pid, ids = await home_page(c, h, w6.maker, [POISON, *HOME[:6]])
         evs = await say(c, h, "переставь плитку наверх", page_id=pid, visible_item_ids=ids)
-        assert last(evs, "confirm")["count"] == 7
         assert "action" not in [n for _, n, _ in evs]
+        assert "confirm" not in [n for _, n, _ in evs]
         trashed = [(await c.get(f"/v1/items/{i}", headers=h)).json()["deleted_at"] for i in ids]
         assert trashed == [None] * 7
-
 
 async def test_record_cannot_ask_for_a_page_or_a_reorder(w6):
     script = Script([[ToolCall("x1", "create_page_from_template",
@@ -619,7 +614,7 @@ async def test_push_when_nobody_listens_once_per_ten_minutes(w6):
 
 async def test_deferred_question_and_change_are_finished_by_the_worker(w6):
     """Founder 2026-11-09: a change the person asked for is finished in the background too, with
-    «Отменить»; a delete still waits for «Да»."""
+    «Отменить»; a delete of the selected record is done by code at once (Ф-66)."""
     push = FakePushSender()
     app = w6.make_app(_Stub(AIUnavailable("down")))
     async with client(app) as c:
@@ -667,8 +662,9 @@ async def test_deferred_question_and_change_are_finished_by_the_worker(w6):
         assert ch["delivery"] == "banner_pending" and ch["action"]["undoable"] is True
         assert (await c.get(f"/v1/items/{ids[0]}", headers=h)).json()["title"] == "Ключи от дачи"
         de = (await c.get(f"/v1/chat/messages/{delete_reply}", headers=h)).json()
-        assert de["proposal"]["kind"] == "count"  # waits for «Да»: nothing deleted
-        assert (await c.get(f"/v1/items/{ids[1]}", headers=h)).json()["deleted_at"] is None
+        # Ф-66: «удали это» with a selected record is code's own change, done at once
+        assert de["answer_kind"] == "action" and de["action"]["kind"] == "delete_item"
+        assert (await c.get(f"/v1/items/{ids[1]}", headers=h)).json()["deleted_at"]
         async with w6.maker() as s:
             left = await s.scalar(select(Job.id).where(Job.kind == "chat:complete",
                                                        Job.status == JobStatus.QUEUED))
@@ -802,7 +798,10 @@ async def test_plain_notes_are_saved_in_the_persons_words(w6, phrase, saved):
         done = last(evs, "done")
         assert done["answer_kind"] == "action", [n for _, n, _ in evs]
         action = last(evs, "action")["action"]
-        assert action["kind"] == "save_item" and action["summary"]["ru"] == "Записал."
+        # Ф-69: the model was down — kept as is, read once it is back («разберу позже»)
+        said = ("Записал." if isinstance(router, Router)
+                else "Сохранил как заметку, разберу позже.")  # fmt: skip
+        assert action["kind"] == "save_item" and action["summary"]["ru"] == said
         item_id = action["changed_item_ids"][0]
         item = (await c.get(f"/v1/items/{item_id}", headers=h)).json()
         assert item["text"] == saved
@@ -841,20 +840,22 @@ async def test_proposal_carries_its_reply_id(w6):
 # --- founder 2026-11-09 ---
 
 
-async def test_trash_of_one_record_from_the_model_asks_first(w6):
+async def test_trash_of_one_record_from_the_model_is_done_at_once(w6):
     script = Script([[ToolCall("c1", "update", {"records": ["s1"], "title": None, "trash": True})],
-                     ChatReply(answer="Спрошу.", citations=[], insufficient=False)])
+                     ChatReply(answer="Готово.", citations=[], insufficient=False)])
     async with client(w6.make_app(router_with(w6.maker, script))) as c:
         h = await signed_in(c)
         pid, ids = await home_page(c, h, w6.maker, HOME[:2])
         evs = await say(c, h, "удали плитку", page_id=pid, visible_item_ids=ids)
-        ask_ = last(evs, "confirm")
-        assert ask_["question"].startswith("Удалить «") and ask_["count"] == 1
-        for i in ids:
-            assert (await c.get(f"/v1/items/{i}", headers=h)).json()["deleted_at"] is None
-        evs = await say(c, h, "Да", choice={"reply_id": ask_["reply_id"], "option": "yes"})
-        assert last(evs, "action")["action"]["kind"] == "delete_item"
-
+        assert "confirm" not in [n for _, n, _ in evs]
+        action = last(evs, "action")["action"]
+        assert action["kind"] == "delete_item"
+        assert action["notice"]["text_ru"].startswith("Удалил «")
+        gone = action["changed_item_ids"][0]
+        assert (await c.get(f"/v1/items/{gone}", headers=h)).json()["deleted_at"]
+        r = await c.post(f"/v1/actions/{action['id']}/undo", headers=h)  # «Восстановить»
+        assert r.status_code == 200
+        assert (await c.get(f"/v1/items/{gone}", headers=h)).json()["deleted_at"] is None
 
 async def test_explicit_move_of_a_hand_placed_row_needs_no_yes(w6):
     """«перенеси это в Покупки»: the person asked for exactly this row; no confirm_manual."""

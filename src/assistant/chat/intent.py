@@ -189,8 +189,59 @@ def fast_path(text: str) -> FastPath | None:
     return None
 
 
+_TO_TRASH = re.compile(r"в\s+корзин", re.IGNORECASE)
+
+
 def is_delete(text: str) -> bool:
-    return bool(_DELETE.search(_norm(text)))
+    """The person's own phrase asks to delete («удали», «выброси», «убери в корзину»)."""
+    norm = _norm(text)
+    return bool(_DELETE.search(norm) or _TO_TRASH.search(norm))
+
+
+# Ф-67 / Ф-73: undo by phrase for any action («верни как было», «отмени», «не туда»,
+# «отмени всё», «верни запись про хлеб», «отмени то, что ты сделал с хлебом»).
+_UNDO = re.compile(r"^(?:пожалуйста[,\s]+)?(?:(?P<verb>верни(?:те)?|отмени(?:те)?|откати(?:те)?|"
+                   r"отмена|қайтар(?:ыңыз)?|болдырма(?:ңыз)?)(?P<rest>(?:\s.*)?)|"
+                   r"не\s+туда(?:\s+(?:положил|записал|перенес))?)$", re.IGNORECASE | re.DOTALL)
+# «верни страницу как было», «верни вид / поле»: the page view (set_view reset), not an undo
+_UNDO_VIEW = re.compile(r"страниц|(?<!\w)вид[ау]?(?!\w)|(?<!\w)пол(?:е|я|ю|ей)(?!\w)|колонк|столбц|"
+                        r"(?<!\w)бет", re.IGNORECASE)  # fmt: skip
+_UNDO_FILLER = {"как", "было", "все", "обратно", "назад", "последнее", "последний", "последнюю",
+                "последние", "действие", "действия", "изменение", "изменения", "это", "эти",
+                "пожалуйста", "мне", "то", "что", "ты", "вы", "сделал", "сделала", "сделали",
+                "только", "сейчас", "уже", "бәрін", "барлығын", "соңғы", "қалай", "болса",
+                "солай", "ну", "давай", "а", "и", "же", "его", "ее", "их"}  # fmt: skip
+_UNDO_ALL = {"все", "бәрін", "барлығын"}
+_UNDO_LINK = {"про", "о", "об", "с", "со", "для", "запись", "записи", "заметку", "заметки",
+              "из", "в", "на", "по", "к", "у", "мою", "мой", "моё", "мое", "мои"}  # fmt: skip
+
+
+@dataclass(frozen=True)
+class UndoPhrase:
+    """«отмени» (the last change), «отмени всё» (`all`), «верни запись про хлеб» (`about`)."""
+
+    all: bool = False
+    about: tuple[str, ...] = ()
+
+
+def undo_phrase(text: str) -> UndoPhrase | None:
+    """Code only, on the person's own phrase. None: not an undo (a question, a page view)."""
+    norm = _norm(text).strip(" .!")
+    if "?" in norm or len(norm) > 120:
+        return None
+    m = _UNDO.match(norm)
+    if m is None:
+        return None
+    if m.group("verb") is None:  # «не туда»
+        return UndoPhrase()
+    rest = m.group("rest") or ""
+    if _UNDO_VIEW.search(rest):
+        return None
+    words = _WORDS.findall(rest)
+    about = tuple(w for w in words if w not in _UNDO_FILLER and w not in _UNDO_LINK)
+    if m.group("verb").startswith("верни") and not about and not words:
+        return None  # a bare «верни» says too little
+    return UndoPhrase(all=any(w in _UNDO_ALL for w in words), about=about)
 
 
 _VIEW = re.compile(

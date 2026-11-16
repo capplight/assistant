@@ -1,4 +1,5 @@
 import { router, useFocusEffect } from 'expo-router';
+import { AiLabel } from '@/components/AiLabel';
 import { useCallback } from 'react';
 import { MessageCircle } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
@@ -46,7 +47,7 @@ export function PendingAnswerCard() {
         </AppText>
         {message.aiGenerated && message.text ? (
           // The «ИИ» label is shown whole, never cut.
-          <AppText variant="footnote">{t('ai.label_short')}</AppText>
+          <AiLabel variant="footnote" short />
         ) : null}
         <View style={[styles.row, { gap: theme.space[2], flexWrap: 'wrap' }]}>
           <Button
@@ -56,7 +57,7 @@ export function PendingAnswerCard() {
             size="small"
             onPress={() => {
               const id = openPending();
-              if (id) router.push({ pathname: '/history', params: { focus: id } });
+              if (id) router.navigate({ pathname: '/assistant', params: { focus: id } });
             }}
           />
           <Button testID="pending-close" label={t('answer.close')} variant="text" onPress={closePending} />

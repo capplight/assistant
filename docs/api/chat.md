@@ -33,7 +33,8 @@ placed by the same rules when they arrive.
 (without a page name) save the rest of the phrase the same way. The text is never rewritten by a
 model. A question («где ключи?»), one word («плитка») or an order goes the usual way. When the
 answering service is down, a phrase of 3+ words or with a long number is still saved; a shorter
-one gets `deferred`.
+one gets `deferred`. Since 2026-11-16 (Ф-69) such a note is marked to be read later: see
+«Steps 3–4» below.
 
 **Tasks, shopping and reminders (week 9).** On any page: «купить хлеб, молоко и лекарства маме»,
 «добавь в покупки молоко», «позвонить маме завтра» become tasks on «Покупки» / «Дела и
@@ -166,7 +167,7 @@ data: {"text":"Плитка стоила 48 000 ₸. "}
 | `reminder_draft` | 0...1, a reminder phrase (week 9) | The `/v1/reminders/parse` result + `reply_id`, `created_via` (`reminders.md`): open S13 (or S12 for `status: "form"`). Followed by `banner` + `done` (`answer_kind: "text"`). Nothing was saved. |
 | `page_patch` | after each `action` that touched page rows | PagePatch (below): apply at once (move the cards); hold it while the person is dragging a card. |
 | `needs_choice` | instead of a change, when «это» is unclear | Proposal (below), `kind: "choice"`: «Какую?» with 2-3 options. Nothing was changed. |
-| `confirm` | instead of a big change, and **every delete** (week 10, founder 2026-11-09) | Proposal, `kind: "count"`: «Переставить 212 записей?» / «Удалить 8 записей?» / «Удалить «Купить хлеб»?» (`count: 1`) [Да] [Не сейчас]. Nothing was changed yet. A record picked in the answer to «Какую?» of a delete counts as the «Да». Deletes from the UI (`DELETE /v1/items/{id}`) are unchanged. An explicit move («перенеси это в Покупки») needs no «Да», also for a row placed by hand. |
+| `confirm` | instead of a big change (a delete: no more since Ф-66, 2026-11-16 — it is done at once) | Proposal, `kind: "count"`: «Переставить 212 записей?» / «Удалить 8 записей?» / «Удалить «Купить хлеб»?» (`count: 1`) [Да] [Не сейчас]. Nothing was changed yet. A record picked in the answer to «Какую?» of a delete counts as the «Да». Deletes from the UI (`DELETE /v1/items/{id}`) are unchanged. An explicit move («перенеси это в Покупки») needs no «Да», also for a row placed by hand. |
 | `confirm_manual` | instead of a reorder that would move records placed by hand | Proposal, `kind: "manual"`: «Вы сами расставили 4 записи. Переставить и их?» [Да] [Оставить мои]; focus «Оставить мои» (`default`). Nothing was changed yet. |
 | `banner` | once, for a text answer | `{"reply_id", "text", "preview", "short", "ai_label", "citations": [Citation]}` — the full checked answer (same as the tokens joined), a ≤140-char `preview` cut at a word, `short=true` when `text` fits in the preview. The phone decides «≤2 строк» by its font; `short` is only a hint. `ai_label` is set when the text was written by the assistant: show it (R-06). |
 | `done` | last, success | `{"reply_id", "state": "done", "answer_kind": "text" \| "action" \| "choice", "action_id": uuid \| null, "delivery", "limited": bool}` — sent **after** the answer is saved. `action`: a change was made (no `banner`: the line shows `action.summary`). `choice`: a Proposal waits for a tap (no `banner`). `limited=true`: the person's monthly limit is reached; the answer is search results without a written answer (the banner says «На сегодня достаточно — продолжу завтра…»). |
@@ -298,6 +299,43 @@ Send `Last-Event-ID: <last id you got>` (or `?after=<id>`; `0` = from the start)
 
 Reconnect with a short backoff (1 s, 2 s, 4 s, then every 10 s). `GET /chat/messages/{id}` is the
 plain JSON alternative.
+
+**Steps 3–4 of the vision plan (2026-11-16, Ф-64…Ф-73).**
+- **Notices.** Every `action` event's Action has `notice` (`actions.md`): show it as the 3-second
+  top notice instead of a big card; a tap opens `notice.target`, the button is
+  `notice.undo_label_ru` («Восстановить» after a delete).
+- **Delete without «Да» (Ф-66).** «удали плитку», «удали все покупки»: done at once
+  (`action` `delete_item`, notice «Удалил «…» · Восстановить»); no `confirm` event for a delete
+  any more. A phrase without a delete word («перенеси …») can never trash, whatever a record
+  says. `confirm` stays for >150 records in a reorder and `confirm_manual`; irreversible things
+  (delete for good, sending to a client) keep their own confirmations.
+- **Undo by phrase, any action (Ф-67, Ф-73).** «верни как было», «верни всё как было»,
+  «отмени», «отмени последнее», «отмени всё», «не туда», «верни запись про хлеб», «отмени то, что
+  ты сделал с плиткой» (Kazakh «қайтар», «болдырма»). Code only, no model:
+  - no words about what → the assistant's newest change of the last 24 h, with every action of
+    that same phrase («отмени всё»);
+  - with words → the newest undoable action of the last 30 days (the person's or the assistant's)
+    whose summary or «Что изменилось» rows contain them (by stem: «хлебом» finds «Хлеб»);
+  - it runs `POST /v1/actions/{id}/undo`'s undo. Events: `tool_activity` (`tool: "undo"`,
+    «Возвращаю…»), one `action` per undone action with **`undone`** (the undone Action as it is
+    now: `undone_at` set — mark it «отменено»), `page_patch`, `done` (`answer_kind: "action"`).
+    Answer text: «Вернул как было: записал в «Дела».» (+ «Часть вы уже изменили сами — её
+    оставил.» when partial). Nothing found: a text answer «Не нашёл, что отменить. В «Истории»
+    можно отменить любое действие.» / «Не нашёл недавнего действия про «…». …».
+  - «верни страницу как было», «верни вид / поле» are still the page view reset (`set_view`).
+- **Without the model (Ф-69).** When the model is down, a phrase the line would keep is saved as a
+  note at once: `action` `save_item` with `payload` `parse_later`, summary and notice
+  «Сохранил как заметку, разберу позже»; the record has `parse_later: {"state": "waiting", …}`
+  (`items.md`). The chat worker (`chat:parse_later`) reads it once the model is back — code
+  rules first, then the model; while the model is down it waits with backoff (and is retried for
+  7 days). A spend → an expense on «Расходы», a to-do → a task on «Дела», the note leaves
+  «Заметки»: one agent action with `parsed_later: true`, notice «Разобрал: перенёс в «Расходы»»,
+  «Отменить» as usual, the record gets «изменил помощник». Anything else stays a note
+  (`parse_later.state: "done"`, «Разобрал: оставил заметкой»). Questions and reminder phrases are
+  never acted on in the background this way. An order («перенеси…») or a question while the model
+  is down is still `deferred` and finished later (as before). The phone, offline, saves the
+  phrase with `POST /v1/items` `source_meta.from_line` (`items.md`): what code cannot read there
+  gets the same `parse_later` (only with the `ai_cross_border` consent).
 
 **Week 20 (Ф-50).**
 - Every save from the line carries `action.saved_to` (`actions.md`): «Сохранил в «…» · Переложить

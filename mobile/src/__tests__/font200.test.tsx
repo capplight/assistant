@@ -151,6 +151,7 @@ const SCREENS: Case[] = [
   { route: '(main)/stack/[id]', url: (p) => `/stack/col-1?from=${p.notes!.id}` },
   { route: '(main)/duplicates', url: () => '/duplicates' },
   { route: '(main)/history', url: () => '/history' },
+  { route: '(main)/assistant', url: () => '/assistant' },
   { route: '(main)/import', url: () => '/import' },
   { route: '(onboarding)/welcome', url: () => '/welcome', onboarding: true },
   { route: '(onboarding)/consent', url: () => '/consent', onboarding: true },

@@ -130,7 +130,7 @@ describe('lump-sum lines (kp-calc.v2)', () => {
     await settle(() => screen.queryByTestId('kp-line-2') === null);
     expect(label('kp-total')).toBe('Итого: 1 750 000 ₸');
     expect((await outbox.get(add.id))!.status).toBe('failed'); // dropped, never sent
-    expect(screen.getAllByText(/ИИ/)).toHaveLength(1);
+    expect(screen.queryAllByText(/ИИ/)).toHaveLength(0); // F-63: no AI label in the beta (flag ai_label off)
   });
 
   it('a quantity × price line can still be added next to lump sums', async () => {

@@ -41,7 +41,7 @@ describe('first launch flow (Ф-34)', () => {
     const st = useOnboarding.getState();
     expect(st.consent?.mode).toBe('full');
     expect(st.consent?.kinds).toEqual(expect.arrayContaining(['pd_processing', 'ai_cross_border', 'terms', 'age_confirmed_18', 'push_content']));
-    expect(st.consent?.texts.map((x) => x.version)).toEqual(['pd-2026-11-v1', 'ai-2026-11-v1', 'terms-2026-11-v1', 'push-2026-11-v1']);
+    expect(st.consent?.texts.map((x) => x.version)).toEqual(['pd-2026-11-v1', 'ai-2026-11-v2', 'terms-2026-11-v1', 'push-2026-11-v1']);
     expect(st.doneAt).not.toBeNull();
     expect(st.path).toBe('skipped');
     expect(usePages.getState().pages.map((p) => p.templateKey)).toEqual(['notes', 'tasks', 'expenses']);
@@ -75,7 +75,7 @@ describe('first launch flow (Ф-34)', () => {
     await fireEvent.press(screen.getByTestId('welcome-policy-link-policy'));
     expect(r.getPathname()).toBe('/legal');
     expect(screen.getByText('2. Передача сервисам ИИ за рубеж')).toBeTruthy();
-    expect(screen.getByText('Anthropic, OpenAI, Google, Groq')).toBeTruthy();
+    expect(screen.getByText('Anthropic, OpenAI, Google, Groq, DeepInfra')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('header-back'));
     expect(r.getPathname()).toBe('/welcome');
     await fireEvent.press(screen.getByTestId('welcome-policy-link-terms'));

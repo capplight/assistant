@@ -95,3 +95,23 @@ model (`text_lang`: `ru` / `kk` / `en`). Checked live on Russian. **Kazakh stays
 is weak on Kazakh (WER 40–77% in published studies) and our own KK benchmark on real recordings
 is pending (`docs/spec/proposals/ai-providers-2026-11.md` §4). STT calls are not in
 `provider_usage` yet (≈ $0.04 per hour of audio).
+
+## Steps 3–4 of the vision plan (2026-11-16)
+
+**«Изменил помощник» (Ф-73).** Item has `assistant_changed_at` (datetime or null) and
+`assistant_action_id` (uuid or null): the record was created or changed by the assistant within
+the last 24 h, by that action (`actions.md`). Show the small mark «изменил помощник» (with the
+time if it fits); a tap opens the action («Что изменилось», «Отменить»). Null after 24 h; hide it
+on the phone once `now - assistant_changed_at ≥ 24 h` too. The person's own edit (`PATCH`
+title / text / «Исправить») clears it, and so does undoing that action. A task's and an expense's
+mark is their record's (also on `TaskOut` / `ExpenseOut`).
+
+**«Разберу позже» (Ф-69).** Item has `parse_later`:
+- `null` — nothing waits;
+- `{"state": "waiting", "text_ru": "Сохранил как заметку, разберу позже", "text_kk": null, "to":
+  null, "action_id": null}` — show «сохранил как заметку · разберу позже» with the clock;
+- `{"state": "done", "text_ru": "Разобрал: перенёс в «Расходы»", "to": "expense" | "tasks" |
+  "note", "action_id": "<uuid>" | null, …}` — read in the background (`chat.md`).
+`source_meta.parse_later: true` / `source_meta.parsed_later` hold the same. A phone line phrase
+(`source_meta.from_line`) that code cannot read as a spend or a to-do on `POST /v1/items` is
+marked `waiting` when the person has the `ai_cross_border` consent (not in «Без ИИ»).

@@ -1,4 +1,5 @@
 import { ArrowDown, ArrowUp, Ellipsis } from 'lucide-react-native';
+import { AiLabel } from '@/components/AiLabel';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, View, type AccessibilityActionEvent, type LayoutChangeEvent } from 'react-native';
 
@@ -120,7 +121,7 @@ export function RecordRow({
         {snippet && snippet !== title ? <AppText variant="callout">{snippet}</AppText> : null}
         <AppText variant="footnote">{source}</AppText>
         {status ? <AppText variant="footnote">{status}</AppText> : null}
-        {record.aiGenerated ? <AppText variant="footnote">{t('ai.label_short')}</AppText> : null}
+        {record.aiGenerated ? <AiLabel variant="footnote" short /> : null}
         {toCheck ? (
           <View
             testID={`record-check-${record.id}`}

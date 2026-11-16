@@ -5,7 +5,7 @@ Short transactions only; the caller commits. Contract of the JSON: docs/api/acti
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select, text
@@ -15,6 +15,7 @@ from assistant.actions import engine
 from assistant.db.models_actions import UNDO_DAYS, Action, Initiator
 from assistant.db.models_chat import ConversationMessage
 from assistant.db.models_pages import Screen
+from assistant.records import clear_marks, set_marks
 
 TEXT_PARTIAL = "Часть уже изменена вами — вернул остальное."
 MAX_CHANGES = 500  # «Что изменилось» rows kept per action
@@ -54,12 +55,37 @@ async def record(session: AsyncSession, *, user_id: int, kind: str, initiated_by
     )  # fmt: skip
     session.add(action)
     await session.flush()
+    await _marks(session, action, changes, now)
     return action
+
+
+def _marked_ids(changes: list[dict[str, Any]]) -> list[str]:
+    """Records an action names (a record put in the trash is not shown: no mark)."""
+    return [str(c["item_id"]) for c in changes[:MAX_CHANGES]
+            if c.get("item_id") and c.get("kind") != "trash"]  # fmt: skip
+
+
+async def _marks(session: AsyncSession, action: Action, changes: list[dict[str, Any]],
+                 now: datetime) -> None:  # fmt: skip
+    """Ф-73 «изменил помощник»: the assistant's change marks its records for 24 h; the person's
+    change clears the mark (an undo clears only the marks of the action it undid)."""
+    ids = [str(c["item_id"]) for c in changes[:MAX_CHANGES] if c.get("item_id")]
+    if not ids:
+        return
+    if action.initiated_by == Initiator.AGENT:
+        await set_marks(session, action.user_id, _marked_ids(changes), action.public_id, now)
+        return
+    undone = None
+    if action.undo_of_action_id is not None:
+        undone = await session.scalar(select(Action.public_id)
+                                      .where(Action.id == action.undo_of_action_id))
+    await clear_marks(session, action.user_id, ids, action_id=undone)
 
 
 async def extend(session: AsyncSession, action_id: int, *, summary: dict[str, Any],
                  changes: list[dict[str, Any]], inverse: list[dict[str, Any]],
-                 source_item_ids: list[int] | None = None) -> Action:  # fmt: skip
+                 source_item_ids: list[int] | None = None,
+                 now: datetime | None = None) -> Action:  # fmt: skip
     """One chat turn = one action (spec 5.10 rule 3): a later change of the same turn joins it.
     Its undo runs first (newest first)."""
     engine.validate(inverse)
@@ -73,6 +99,7 @@ async def extend(session: AsyncSession, action_id: int, *, summary: dict[str, An
         action.undoable_until = action.created_at + timedelta(days=UNDO_DAYS)
     action.source_item_ids = list(dict.fromkeys([*action.source_item_ids,
                                                  *(source_item_ids or [])]))  # fmt: skip
+    await _marks(session, action, changes, now or datetime.now(UTC))
     return action
 
 
@@ -182,6 +209,82 @@ async def saved_to(session: AsyncSession,
     return out
 
 
+NOTICE_MS = 3000  # Ф-67 / Ф-75: every notice, «Удалено · Восстановить» too
+NOTICE_CHARS = 80
+_RU_RECORDS = ("запись", "записи", "записей")
+_RU_SPENDS = ("трату", "траты", "трат")
+
+
+def _plural(n: int, forms: tuple[str, str, str]) -> str:
+    n100, n10 = n % 100, n % 10
+    if n10 == 1 and n100 != 11:
+        return forms[0]
+    if 2 <= n10 <= 4 and not 12 <= n100 <= 14:
+        return forms[1]
+    return forms[2]
+
+
+def _short(text_: str, limit: int = NOTICE_CHARS) -> str:
+    text_ = " ".join(text_.split()).rstrip(".")
+    return text_ if len(text_) <= limit else text_[:limit - 1].rstrip() + "…"
+
+
+def _target(c: dict[str, Any] | None, page_id: str | None) -> dict[str, Any] | None:
+    """Where a tap on the notice goes: the expense / task / record, else the page."""
+    if c is None:
+        return {"kind": "page", "id": page_id, "page_id": page_id} if page_id else None
+    page_id = page_id or c.get("page_id")
+    for key, kind in (("expense_id", "expense"), ("task_id", "task"),
+                      ("document_id", "document"), ("reminder_id", "reminder")):  # fmt: skip
+        if c.get(key):
+            return {"kind": kind, "id": str(c[key]), "page_id": page_id}
+    if c.get("item_id"):
+        return {"kind": "item", "id": str(c["item_id"]), "page_id": page_id}
+    if page_id:
+        return {"kind": "page", "id": page_id, "page_id": page_id}
+    return None
+
+
+def notice(a: Action, where: list[dict[str, Any]], *, undoable: bool,
+           page_id: str | None) -> dict[str, Any]:  # fmt: skip
+    """The 3-second notice (Ф-65…Ф-67, design-system §10.2): one short line, where a tap goes,
+    and the label of its button (`Восстановить` after a trash, `Вернуть` after an undo)."""
+    changes = list((a.payload or {}).get("changes") or [])
+    rows = [c for c in changes if c.get("kind") != "create_page"]
+    kinds = {c.get("kind") for c in rows}
+    summary = (a.summary or {}).get("ru") or ""
+    first = rows[0] if rows else None
+    label = "Отменить"
+    if a.undo_of_action_id is not None:
+        text_, label = "Вернул как было", "Вернуть"
+    elif kinds == {"trash"}:
+        n = len(rows)
+        text_ = (f"Удалил «{_short(str(first.get('title') or ''), 50)}»" if n == 1  # type: ignore[union-attr]
+                 else f"Удалил {n} {_plural(n, _RU_RECORDS)}")  # fmt: skip
+        label = "Восстановить"
+        first = {**first, "page_id": None} if first else None  # it is in the trash now
+        page_id = None
+    elif kinds == {"create"} and where:
+        made = [c for c in rows if c.get("kind") == "create"]
+        page, n = where[0], len(made)
+        forms = _RU_SPENDS if a.kind in ("create_expense", "bulk_create_expenses") else _RU_RECORDS
+        what = ("трату " if forms is _RU_SPENDS else "") if n == 1 else f"{n} {_plural(n, forms)} "
+        text_ = f"Записал {what}в «{page['title']}»"
+        if (a.payload or {}).get("parsed_later"):  # Ф-69: a note read once the model was back
+            text_ = f"Разобрал: перенёс в «{page['title']}»"
+        elif (a.payload or {}).get("parse_later"):  # Ф-69: saved while the model was down
+            text_ = "Сохранил как заметку, разберу позже"
+        first = next((c for c in made if str(c.get("item_id")) in page["item_ids"]), first)
+        page_id = page["page_id"]
+    elif a.kind == "edit_expense":
+        text_ = "Обновил трату"
+    else:
+        text_ = _short(summary) or "Готово"
+    return {"text_ru": text_, "text_kk": None, "target": _target(first, page_id),
+            "undo_label_ru": label if undoable else None, "undo_label_kk": None,
+            "ms": NOTICE_MS}  # fmt: skip
+
+
 async def actions_dicts(session: AsyncSession, rows: list[Action],
                         now: datetime) -> list[dict[str, Any]]:  # fmt: skip
     screens = {s for a in rows for s in (a.screen_id,) if s}
@@ -208,18 +311,24 @@ async def actions_dicts(session: AsyncSession, rows: list[Action],
         reverted = set(a.payload.get("reverted") or [])
         changes = [{**c, "reverted": row_id(c) in reverted}
                    for c in a.payload.get("changes", [])]  # fmt: skip
+        undoable = is_undoable(a, now)
+        page = pages.get(a.screen_id) if a.screen_id else None
         out.append({
             "id": str(a.public_id), "kind": a.kind, "scope": a.scope,
             "initiated_by": a.initiated_by,
             "summary": {"ru": (a.summary or {}).get("ru") or "",
                         "kk": (a.summary or {}).get("kk")},
-            "page": pages.get(a.screen_id) if a.screen_id else None,
+            "page": page,
             "changes": changes,
             "changed_item_ids": list(dict.fromkeys(c["item_id"] for c in changes
                                                    if c.get("item_id"))),
             "created_page_id": a.payload.get("created_page_id"),
             "saved_to": where.get(a.id, []),
-            "undoable": is_undoable(a, now),
+            "parsed_later": bool(a.payload.get("parsed_later")),
+            "notice": notice(a, where.get(a.id, []), undoable=undoable,
+                             page_id=a.payload.get("created_page_id")
+                             or (page["id"] if page else None)),
+            "undoable": undoable,
             "undoable_until": a.undoable_until.isoformat() if a.undoable_until else None,
             "undone_at": a.undone_at.isoformat() if a.undone_at else None,
             "undo_of": str(undo_of[a.undo_of_action_id]) if a.undo_of_action_id in undo_of

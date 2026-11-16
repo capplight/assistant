@@ -102,6 +102,8 @@ export function PageFrame({ page }: { page: Page }) {
       <Header
         testID="page-header"
         title={title(page)}
+        // «Дела» are not a tab any more (VISION-2026-11): «‹ Сегодня» leads back to where they come from.
+        back={page.templateKey === 'tasks' ? { onPress: () => router.navigate('/'), label: t('today.today'), testID: 'page-back' } : undefined}
         meta={
           isNotes && entries
             ? t(notesLook === 'list' ? 'notes.count_list' : 'notes.count', { count: entries.length })

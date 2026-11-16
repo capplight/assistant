@@ -37,6 +37,9 @@ import { VoiceListening } from './VoiceListening';
  * server a note is saved here (offline-first). Voice is still a local record + outbox entry. Voice: fragments ≤3 min, no live transcription (R-17). «Без ИИ»: no mic —
  * «Написать» focuses the field (R-05) — and questions are a search by words, no AI call.
  */
+/** «Составь план поездки…», «сделай план на неделю» — answered in the chat (VISION-2026-11 §5.4). */
+export const PLAN_PHRASE = /^\s*((составь|сделай|придумай|разложи)\s+(мне\s+)?(план|мои\s+дела)|жоспар\s+құр)/i;
+
 export function AssistantLine({
   scope,
   compact = false,
@@ -117,9 +120,11 @@ export function AssistantLine({
   // v2 mocks: «Спросите или запишите что угодно»; on «Расходы» an example of a spending.
   const placeholder = noAi
     ? t('line.no_ai_hint')
-    : current.kind === 'page' && current.page.templateKey === 'expenses'
-      ? t('line.placeholder_expenses')
-      : t('line.placeholder');
+    : current.kind === 'assistant'
+      ? t('line.placeholder_assistant')
+      : current.kind === 'page' && current.page.templateKey === 'expenses'
+        ? t('line.placeholder_expenses')
+        : t('line.placeholder');
 
   const send = async () => {
     const value = text.trim();
@@ -134,11 +139,15 @@ export function AssistantLine({
     }
     // R-53: online the server decides what the phrase is (a question, a change, a note); offline
     // and in «Без ИИ» the phone guesses (src/chat/service.ts `sendFromLine`).
-    const result = await sendFromLine(value, {
-      id: current.id,
-      title: current.title,
-      serverId: current.kind === 'page' ? current.page.serverId : null,
-    });
+    // VISION-2026-11 §5.4: «составь план…» is a long answer — it goes on in the chat, not in a small banner.
+    const toChat = current.kind !== 'assistant' && PLAN_PHRASE.test(value);
+    if (toChat) router.navigate('/assistant');
+    const result = await sendFromLine(
+      value,
+      toChat
+        ? { id: 'assistant', title: t('tabs.assistant'), serverId: null }
+        : { id: current.id, title: current.title, serverId: current.kind === 'page' ? current.page.serverId : null },
+    );
     if (result === 'search') {
       router.navigate({ pathname: '/search', params: { q: value, from: 'line' } });
       return;
@@ -296,7 +305,7 @@ export function AssistantLine({
     {seen && (seen.day || seen.time) ? <CaughtCard c={seen} /> : null}
     {showChips ? (
       <LineChips
-        kind={current.kind === 'page' ? current.page.templateKey : 'today'}
+        kind={current.kind === 'page' ? current.page.templateKey : current.kind === 'assistant' ? 'assistant' : 'today'}
         onPick={(phrase) => {
           setText(phrase);
           inputRef.current?.focus();

@@ -21,9 +21,9 @@ beforeEach(() => {
 });
 
 describe('«Ещё» (Ф-41)', () => {
-  it('v2: the profile, the «Документы» / «История» tiles, four rows, «Ваши страницы»; no stubs', async () => {
+  it('v4: the profile, the «Дела» / «Документы» tiles, the rows (История among them), «Ваши страницы»; no stubs', async () => {
     await renderRouter(APP_DIR, { initialUrl: '/more' });
-    const rows = ['more-profile', 'more-documents', 'more-history', 'more-records', 'more-import', 'more-settings', 'more-add_page', 'more-my_pages'];
+    const rows = ['more-profile', 'more-tasks', 'more-documents', 'more-history', 'more-records', 'more-import', 'more-settings', 'more-add_page', 'more-my_pages'];
     for (const id of rows) expect(screen.getByTestId(id)).toBeTruthy();
     const ids = new Set<string>();
     const walk = (n: unknown): void => {
@@ -124,7 +124,7 @@ describe('«Сегодня» and the beta switches (Ф-42)', () => {
     expect(screen.getByTestId('tile-pin')).toBeTruthy();
   });
 
-  it('v2: today’s to-dos are «Без времени» rows with circles; the tile counts them', async () => {
+  it('v4: today’s to-dos are «Дела» rows with circles; «Все дела · N» counts the open ones', async () => {
     const d = new Date();
     const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const iso = new Date().toISOString();
@@ -133,7 +133,7 @@ describe('«Сегодня» and the beta switches (Ф-42)', () => {
     await renderRouter(APP_DIR, { initialUrl: '/' });
     expect(screen.getByTestId('task-a')).toHaveTextContent(/Позвонить в банк/);
     expect(screen.getByTestId('task-b')).toHaveTextContent(/Оплатить интернет/);
-    expect(screen.getByTestId('tile-tasks')).toHaveTextContent(/из 2/);
+    expect(screen.getByTestId('today-all-tasks')).toHaveTextContent(/Все дела · 2/);
     await fireEvent.press(screen.getByTestId('task-check-b'));
     await settle(() => screen.getByTestId('task-check-b').props.accessibilityState.checked === true);
   });

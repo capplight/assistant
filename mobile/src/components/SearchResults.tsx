@@ -16,6 +16,7 @@ import { AppText } from './AppText';
 import { Card } from './ui/Card';
 import { Icon } from './ui/Icon';
 import { pressedStyle } from './ui/motion';
+import { getFeatures } from '@/store/features';
 
 /** S10: the find field at the top of a page and of the results screen — tonal, no outline. */
 export function FindField({
@@ -188,7 +189,7 @@ export function ServerResultRow({ result, pageId, q, last = true }: { result: Se
       snippet={hit.title ? hit.snippet : null}
       snippetRanges={hit.highlights}
       meta={hit.occurred_at ? formatShortDate(hit.occurred_at, i18n.language) : null}
-      aiLabel={hit.ai_label}
+      aiLabel={getFeatures().ai_label ? hit.ai_label : null}
       last={last}
       onPress={() => {
         void fetchRecord(hit.item_id)

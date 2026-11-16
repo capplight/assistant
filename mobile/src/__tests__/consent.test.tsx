@@ -48,7 +48,7 @@ describe('consent texts', () => {
     for (const t of BUNDLED_CONSENT_TEXTS) expect(t.textHash).toBe(sha(t.text));
     const kk = await bundledConsentTexts('kk');
     expect(kk.terms.textHash).toBe(sha('Пайдалану шарттарын қабылдаймын. Маған 18 жас толды.'));
-    expect(kk.ai_cross_border.providers).toEqual(['Anthropic', 'OpenAI', 'Google', 'Groq']);
+    expect(kk.ai_cross_border.providers).toEqual(['Anthropic', 'OpenAI', 'Google', 'Groq', 'DeepInfra']);
   });
 
   it('uses the server text/version/hash when reachable; ignores a text whose hash does not match', async () => {

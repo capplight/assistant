@@ -25,6 +25,7 @@ question about spending is answered with the `aggregate` tool: the totals are co
 """
 
 import asyncio
+import dataclasses
 import logging
 import re
 import uuid
@@ -53,7 +54,7 @@ from assistant.ai.prompting import TaskInputs, ToolRound
 from assistant.ai.router import Router
 from assistant.ai.store import period_starts
 from assistant.ai.types import ToolResult
-from assistant.chat import jobs, kp_line, limits, store
+from assistant.chat import jobs, kp_line, limits, store, undo_line
 from assistant.chat.context import (
     PROMPT_VERSION,
     Assembled,
@@ -66,12 +67,14 @@ from assistant.chat.intent import (
     Intent,
     IntentReply,
     Reading,
+    UndoPhrase,
     fast_path,
     from_model,
     is_comparison,
     note_by_code,
     rules_first,
     save_text,
+    undo_phrase,
 )
 from assistant.chat.mutate import (
     MUTATING_NAMES,
@@ -549,6 +552,9 @@ class ChatService:
                 turn = await self._choice(run, turn, choice)  # type: ignore[assignment]
                 if turn is None:
                     return
+            if turn.input_kind != "share" and (undo := undo_phrase(turn.text)) is not None:
+                await self._undo_by_phrase(run, turn, undo)  # «верни как было» (Ф-73)
+                return
             if turn.input_kind != "share" and is_reminder_phrase(turn.text):
                 if background:  # nothing is set up later behind the person's back
                     await self._fail(run, "not_done", text=TEXT_NOT_DONE[lang], retry=True)
@@ -577,8 +583,9 @@ class ChatService:
                 if list_page or listy or tasks_parse.mentions_list(save or turn.text):
                     if await self._save_tasks(run, turn, save or turn.text, list_page):
                         return
-                if not listy:
-                    await self._save_note(run, turn, save or turn.text)
+                if not listy:  # «ai_down» (Ф-69): a note that is read once the model is back
+                    await self._save_note(run, turn, save or turn.text,
+                                          later=reading.source == "ai_down")
                     return
             # Founder 2026-11-09: a change the person asked for finishes in the background too
             # (server restart, provider back after `deferred`): its action has «Отменить» and
@@ -655,6 +662,9 @@ class ChatService:
         try:
             result = await self.router.run(LLMTask.INTENT, IntentReply, inputs,
                                            user_id=turn.user_id)  # fmt: skip
+        except (AIUnavailable, StreamInterrupted) as exc:  # Ф-69: kept, read when it is back
+            log.info("chat: intent check unavailable: %s", type(exc).__name__)
+            return dataclasses.replace(note_by_code(turn.text, base), source="ai_down")
         except Exception as exc:  # unsure: code decides, never a change
             log.info("chat: intent check unavailable: %s", type(exc).__name__)
             return note_by_code(turn.text, base)
@@ -717,7 +727,8 @@ class ChatService:
                                     "error": False, "by": "code"}])  # fmt: skip
         return True
 
-    async def _save_note(self, run: ReplyRun, turn: TurnInput, body: str) -> None:
+    async def _save_note(self, run: ReplyRun, turn: TurnInput, body: str, *,
+                         later: bool = False) -> None:  # fmt: skip
         """A plain note («купить хлеб», a phone number): saved by code in the person's own
         words on the current page, with «Отменить». No model writes it."""
         book = await book_for(self.sessionmaker, turn.user_id, turn.page_pk)
@@ -727,12 +738,60 @@ class ChatService:
                       counts=set(), mut=m)  # fmt: skip
         run.emit("tool_activity", {"tool": "create", "text": "Записываю…",
                                    "page_id": str(book.current.id) if book.current else None})
-        res = await tool_create(env, CreateArgs(page=None, text=body, title=None), by_code=True)
+        res = await tool_create(env, CreateArgs(page=None, text=body, title=None), by_code=True,
+                                later=later and self.router is not None)  # fmt: skip
         if res.is_error and m.action_out is None:
             m.note = TEXT_NOT_CHANGED[turn.lang]
         await self._finish_change(run, turn, m, Decimal(0),
                                   [{"name": "create", "arguments": {}, "error": res.is_error,
                                     "by": "code"}])  # fmt: skip
+
+    async def _undo_by_phrase(self, run: ReplyRun, turn: TurnInput, phrase: UndoPhrase) -> None:
+        """«верни как было», «отмени», «верни запись про хлеб» (undo_line.py): the same undo as
+        «Отменить», for any action; the answer says what was undone. Code only."""
+        from assistant.actions import actions_dicts
+        from assistant.actions.patch import page_patches
+
+        book = await book_for(self.sessionmaker, turn.user_id, turn.page_pk)
+        m = self._mutation(run, turn, book, True, False)
+        now = self.clock()
+        run.emit("tool_activity", {"tool": "undo", "text": "Возвращаю…",
+                                   "page_id": str(book.current.id) if book.current else None})
+        async with self.sessionmaker() as s:
+            targets = await undo_line.find_targets(s, turn.user_id, phrase, now)
+            done = await undo_line.undo_targets(s, turn.user_id, targets, reply_id=run.reply_id,
+                                                now=now)  # fmt: skip
+            outs: list[dict[str, Any]] = []
+            undone: list[dict[str, Any]] = []
+            patches: list[dict[str, Any]] = []
+            if done.results:
+                await s.flush()
+                outs = await actions_dicts(s, [r.undo for r in done.results], now)
+                undone = await actions_dicts(s, [r.action for r in done.results], now)
+                patches = await page_patches(s, turn.user_id, done.pages, done.items)
+                await s.execute(text("UPDATE conversation_messages SET action_ids = :ids, "
+                                     "updated_at = now() WHERE id = :r"),
+                                {"ids": [r.undo.id for r in done.results],
+                                 "r": run.reply_pk})  # fmt: skip
+            await s.commit()
+        said = undo_line.answer_text(done, phrase, turn.lang)
+        if done.results:
+            first = done.results[0].undo
+            m.action_pk, m.action_public, m.action_out = first.id, str(first.public_id), outs[0]
+            m.more_action_pks = [r.undo.id for r in done.results[1:]]
+            m.sentences.append(said)
+            for out, was in zip(outs, undone, strict=True):
+                m.emit("action", {"reply_id": None, "action": out, "undone": was,
+                                  "changed_item_ids": out["changed_item_ids"],
+                                  "page_id": str(book.current.id) if book.current else None})
+            for patch in patches:
+                m.emit("page_patch", patch)
+        else:
+            m.note = said
+        await self._finish_change(run, turn, m, Decimal(0),
+                                  [{"name": "undo", "arguments": {"all": phrase.all,
+                                                                  "about": list(phrase.about)},
+                                    "error": not done.results, "by": "code"}])  # fmt: skip
 
     async def _list_of_page(self, turn: TurnInput) -> str | None:
         """`todo` / `shopping` when the line is on «Дела» / «Покупки»."""
@@ -1177,7 +1236,8 @@ class ChatService:
             delivery = await self._save(run, text=m.summary, citations=[], checked=None,
                                         tools=tool_log, seen_refs=[], cost=Decimal(cost),
                                         ai_generated=False, answer_kind=AnswerKind.ACTION,
-                                        action_ids=[m.action_pk])  # type: ignore[list-item]
+                                        action_ids=[m.action_pk,  # type: ignore[list-item]
+                                                    *m.more_action_pks])
             if delivery is None:
                 return
             run.emit("done", {"reply_id": str(run.reply_id), "state": MessageState.DONE,

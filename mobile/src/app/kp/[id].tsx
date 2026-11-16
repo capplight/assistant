@@ -1,4 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import { AiLabel } from '@/components/AiLabel';
 import { Ellipsis, Eye, FileDown, FileText, History, MessageSquareText, PencilLine, Plus, Send } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -243,9 +244,7 @@ export default function KpScreen() {
         </AppText>
       ) : null}
       {doc.ai_generated ? (
-        <AppText testID="kp-ai-label" variant="footnote">
-          {t('ai.label')}
-        </AppText>
+        <AiLabel testID="kp-ai-label" variant="footnote" />
       ) : null}
     </View>
   );

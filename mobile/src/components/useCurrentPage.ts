@@ -8,6 +8,8 @@ export type CurrentPage =
   | { kind: 'today'; id: 'today'; title: string; hintKey: string }
   | { kind: 'page'; id: string; title: string; hintKey: string; page: Page }
   | { kind: 'more'; id: 'more'; title: string; hintKey: string }
+  /** Ф-58: the assistant's conversation (the centre tab). */
+  | { kind: 'assistant'; id: 'assistant'; title: string; hintKey: string }
   | { kind: 'other'; id: string; title: string; hintKey: string };
 
 /** Which page the user is on — drives the active tab and the hidden page context of the line («это / здесь», Ф-47). */
@@ -44,6 +46,9 @@ export function useCurrentPage(): CurrentPage {
   }
   if (pathname === '/chat') {
     return { kind: 'other', id: 'today', title: t('chat.title'), hintKey: 'tpl.line_hint_now.today' };
+  }
+  if (pathname === '/assistant') {
+    return { kind: 'assistant', id: 'assistant', title: t('tabs.assistant'), hintKey: 'tpl.line_hint_now.today' };
   }
   if (pathname === '/history') {
     return { kind: 'more', id: 'more', title: t('history.title'), hintKey: 'tpl.line_hint_now.today' };

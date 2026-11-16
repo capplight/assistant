@@ -6,7 +6,8 @@ import type { ConsentsIn, Locale, ServerConsentKind } from '@/api/types';
 /**
  * Consent texts shown on S05. Normally fetched from GET /v1/consents/text; when the server is
  * unreachable on first launch, the app shows this bundled snapshot — byte-identical copies of the
- * server registry (`src/assistant/api/consent_texts.py`, version 2026-11-v1). The server accepts any
+ * server registry (`src/assistant/api/consent_texts.py`: 2026-11-v1, and `ai-2026-11-v2` — the AI text
+ * with DeepInfra for search by meaning, Ф-76). The server accepts any
  * registered version, so the hash of the text the person actually saw is always provable.
  * When the lawyer's wording lands (new version), update this snapshot in the same release.
  */
@@ -21,7 +22,9 @@ type Snapshot = {
 };
 
 const V = '2026-11-v1';
-const AI_PROVIDERS = ['Anthropic', 'OpenAI', 'Google', 'Groq'];
+/** `ai-2026-11-v2` (2026-11-16): + DeepInfra. A v1 grant keeps the rest; search by meaning waits for v2. */
+export const AI_CONSENT_VERSION = 'ai-2026-11-v2';
+const AI_PROVIDERS = ['Anthropic', 'OpenAI', 'Google', 'Groq', 'DeepInfra'];
 
 export const BUNDLED_CONSENT_TEXTS: readonly Snapshot[] = [
   { kind: 'pd_processing', version: `pd-${V}`, locale: 'ru', providers: [],
@@ -30,12 +33,12 @@ export const BUNDLED_CONSENT_TEXTS: readonly Snapshot[] = [
   { kind: 'pd_processing', version: `pd-${V}`, locale: 'kk', providers: [],
     text: 'Жазбаларым мен деректерімнің Қазақстандағы серверлерде өңделуіне келісемін.',
     textHash: 'f285d797395b6fea5da713d545a533e683e5f3e6d3f8c30bb00b3316ef700d34' },
-  { kind: 'ai_cross_border', version: `ai-${V}`, locale: 'ru', providers: AI_PROVIDERS,
-    text: 'Я соглашаюсь, что текст, записи голоса и фото передаются для распознавания и ответов сервисам: Anthropic, OpenAI, Google, Groq. Они не обучаются на ваших данных.',
-    textHash: 'a51ed0a4580eea9ffd42faba326225d4cf8b2be18db82637d5c0396ab9ee7825' },
-  { kind: 'ai_cross_border', version: `ai-${V}`, locale: 'kk', providers: AI_PROVIDERS,
-    text: 'Мәтін, дауыс жазбалары мен фотолар тану және жауап беру үшін мына сервистерге жіберілетініне келісемін: Anthropic, OpenAI, Google, Groq. Олар сіздің деректеріңізден үйренбейді.',
-    textHash: 'c5ecebeb2abc9e1c24a65ed3fb3500d21eef7711c9031c996e7e050e20ef2513' },
+  { kind: 'ai_cross_border', version: AI_CONSENT_VERSION, locale: 'ru', providers: AI_PROVIDERS,
+    text: 'Я соглашаюсь, что текст, записи голоса и фото передаются для распознавания, поиска и ответов сервисам: Anthropic, OpenAI, Google, Groq, DeepInfra. Они не обучаются на ваших данных.',
+    textHash: '3b2cd0de87b58e7726162e6ad3f8662e29b6a1776e7ea90361729ecf6c9b1bc0' },
+  { kind: 'ai_cross_border', version: AI_CONSENT_VERSION, locale: 'kk', providers: AI_PROVIDERS,
+    text: 'Мәтін, дауыс жазбалары мен фотолар тану, іздеу және жауап беру үшін мына сервистерге жіберілетініне келісемін: Anthropic, OpenAI, Google, Groq, DeepInfra. Олар сіздің деректеріңізден үйренбейді.',
+    textHash: 'ca02039150df3023e2a7bf4be4baa29c1c5f77d528daecbbbba1019cc1667004' },
   { kind: 'terms', version: `terms-${V}`, locale: 'ru', providers: [],
     text: 'Я принимаю условия использования. Мне есть 18 лет.',
     textHash: '89ca72d85012271e4c07ed60673a0b0cb45cb087c8a010042fe69ca9fe024064' },

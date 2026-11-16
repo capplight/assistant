@@ -21,7 +21,13 @@ from assistant.db.models_pages import Screen
 from assistant.db.models_tasks import ListKey, Task
 from assistant.db.models_v2 import RecordKind, RecordSource, RecordStatus
 from assistant.pages import first_use_page, lock_user, place_item
-from assistant.records import content_hash, detect_lang, enqueue_ingest, normalize_text
+from assistant.records import (
+    content_hash,
+    detect_lang,
+    enqueue_ingest,
+    mark_fields,
+    normalize_text,
+)
 from assistant.tasks.parse import QTY_MAX, TITLE_MAX, TaskSpec
 
 # The page a list shows on: «Покупки», else «Дела и напоминания» (US-10).
@@ -278,11 +284,15 @@ def done_sentence(task: Task, done: bool) -> str:
 
 async def tasks_dicts(session: AsyncSession, rows: Sequence[Task]) -> list[dict[str, Any]]:
     pids: dict[int, uuid.UUID] = {}
+    marks: dict[int, dict[str, Any]] = {}
     ids = {t.item_id for t in rows}
     if ids:
-        pids = dict((await session.execute(
-            select(Item.id, Item.public_id).where(Item.id.in_(ids)))).tuples().all())  # fmt: skip
-    return [task_dict(t, pids.get(t.item_id)) for t in rows]
+        for pk, pid, at, aid in await session.execute(
+                select(Item.id, Item.public_id, Item.assistant_changed_at,
+                       Item.assistant_action_id).where(Item.id.in_(ids))):  # fmt: skip
+            pids[pk], marks[pk] = pid, mark_fields(at, aid)
+    return [{**task_dict(t, pids.get(t.item_id)), **marks.get(t.item_id, mark_fields(None, None))}
+            for t in rows]  # fmt: skip
 
 
 def task_dict(t: Task, item_id: uuid.UUID | None) -> dict[str, Any]:

@@ -1,4 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import { AiLabel } from '@/components/AiLabel';
 import { Flag, Search } from 'lucide-react-native';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -265,7 +266,7 @@ function HistoryItem({
         </View>
         {notice ? <AppText variant="callout">{notice}</AppText> : null}
         {m?.sources && m.sources.length > 0 ? <SourceChips messageId={m.id} sources={m.sources} /> : null}
-        {m && m.status === 'done' && m.aiGenerated && !!m.text && !chatAction ? <AppText variant="footnote">{t('ai.label')}</AppText> : null}
+        {m && m.status === 'done' && m.aiGenerated && !!m.text && !chatAction ? <AiLabel variant="footnote" /> : null}
         <View style={[styles.row, { gap: theme.space[2], flexWrap: 'wrap' }]}>
           {meta && entry.kind !== 'question' ? (
             <AppText variant="footnote" style={styles.flex}>

@@ -353,3 +353,11 @@ model call); texts in `ru` and `kk` (kk until reviewed).
 | `waiting` | «Ждёт вас», ≤5: `missed` reminders (24 h; «Перенести» as `missed`), `overdue` to-dos (due before today), `question` (an answer waits for a tap: open `message_id`). |
 
 The older sections (`today`, `missed`, `done_for_you`, …) stay as they were.
+
+## «Изменил помощник» on tasks and expenses (2026-11-16, Ф-73)
+
+`TaskOut` (here, `/v1/tasks`, pages, `/v1/sync`) and `ExpenseOut` (`/v1/expenses`, pages, sync)
+have `assistant_changed_at` and `assistant_action_id`: the mark of the task's / expense's own
+record (`items.md`), set for 24 h after the assistant made or changed it, null otherwise. On the
+«Дела» row: the light `brandTint` background + «изменил помощник» (design-system §10.3). Ф-68:
+«Сегодня» still shows no cards about what the assistant did — only the data with this mark.

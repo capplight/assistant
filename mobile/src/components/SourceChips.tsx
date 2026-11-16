@@ -17,6 +17,7 @@ import { AppText } from './AppText';
 export function useReturnHref(messageId: string): string {
   const pathname = usePathname();
   const params = useGlobalSearchParams<{ id?: string }>();
+  if (pathname === '/assistant') return `/assistant?focus=${encodeURIComponent(messageId)}`;
   if (pathname === '/chat' || pathname === '/history') return `/history?focus=${encodeURIComponent(messageId)}`;
   if (pathname.startsWith('/page/') && params.id) return `/page/${encodeURIComponent(params.id)}`;
   return pathname || '/';

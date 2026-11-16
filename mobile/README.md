@@ -99,9 +99,18 @@ modules/alarms/              native Expo module: Android (Kotlin) AlarmManager +
 
 ## Structure v2 + mocks v2 (Ф-48…Ф-51, Ф-54, Ф-55)
 
-- **Tabs** (`pages/tabs.ts`, `BottomTabs`): «Сегодня · Заметки · Расходы · Дела · Ещё», «Расходы» the raised centre
-  circle, always there (made on the first tap, `ensureTemplatePage`); a second tap on open «Расходы» opens the keypad.
-  At ≥150 %: «Сегодня · Расходы · Дела · Ещё». Other pages are «Ещё → Ваши страницы».
+- **Tabs** (`pages/tabs.ts`, `BottomTabs`, VISION-2026-11 / Ф-58): «Сегодня · Заметки · Помощник · Расходы · Ещё»,
+  «Помощник» the raised centre circle (`app/(main)/assistant.tsx`); «Расходы» is made on the first tap
+  (`ensureTemplatePage`), a second tap opens the keypad. At ≥150 %: «Сегодня · Помощник · Ещё». «Дела» left the bar:
+  «Дела · Все дела · N ›» on «Сегодня», a tile in «Ещё», «‹ Сегодня» on their page. Other pages: «Ещё → Ваши страницы».
+- **«Помощник»** (v4): one conversation (`store/assistant`, SSE `chat/service`). Header: mark, «помню N записей» /
+  «слушаю…» / «нет связи» / «новый разговор», 🔍 and «История». Parts in `components/chat/ChatParts.tsx`: bubbles
+  (from another tab — «с вкладки «…»»), answers with sources and the AI label, action cards («Сделал 3 дела ·
+  Переложить · Отменить всё»), the offline banner, the empty state with the tagline and 4 examples. The small line
+  on other tabs writes into the same conversation; its banner says «Продолжить в чате ›»; «составь план…» goes to the
+  chat. Pushes, «Ответ готов» and `/chat` open it on the answer.
+- **AI consent v2** (`consent/texts.ts`, `consent/AiConsentUpdate.tsx`): the bundled snapshot is `ai-2026-11-v2`
+  (+ DeepInfra). A person whose local grant is v1 gets a small sheet once per launch (word search until «Согласен»).
 - **No shopping list** (Ф-49): feature `shopping` (default off, `GET /v1/features`): «Покупки», «Я в магазине» and
   «Купить: …» are hidden; things to buy are to-dos in «Дела». Code kept.
 - **«Сегодня»** = the briefing: BriefCard (status, headline, ≤3-line summary by part of the day — `today/brief.ts`),

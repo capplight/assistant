@@ -1,4 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import { AiLabel } from '@/components/AiLabel';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, TextInput, View } from 'react-native';
@@ -201,7 +202,7 @@ export default function NewKpScreen() {
               router.replace({ pathname: '/kp/[id]', params: { id: doc.id } });
             }}
           />
-          {doc.ai_generated ? <AppText variant="callout">{t('ai.label')}</AppText> : null}
+          {doc.ai_generated ? <AiLabel variant="callout" /> : null}
         </>
       );
     } else if (job.state === 'failed') {

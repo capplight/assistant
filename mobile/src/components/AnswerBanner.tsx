@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { AiLabel } from '@/components/AiLabel';
 import React, { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react-native';
@@ -43,11 +44,14 @@ export function AnswerBanner() {
   const localOnly = !!message && (message.status === 'queued' || (message.status === 'streaming' && !message.text && !message.sources?.length));
   const titles = useLocalHitTitles(localOnly ? message?.localHits : undefined, t);
   if (!banner || !message) return null;
+  // The chat shows the whole answer itself (VISION-2026-11): no small banner above its line.
+  if (current.kind === 'assistant') return null;
   if (current.kind === 'page' && current.id !== message.pageId) return null;
 
   const openAnswer = () => {
     markDelivery(message, 'opened');
-    router.push({ pathname: '/history', params: { focus: message.id } });
+    closeBanner();
+    router.navigate({ pathname: '/assistant', params: { focus: message.id } });
   };
   const close = () => {
     markDelivery(message, 'dismissed');
@@ -142,9 +146,7 @@ export function AnswerBanner() {
         <SourceChips messageId={message.id} sources={message.sources} max={2} onMore={openAnswer} />
       ) : null}
       {message.status === 'done' && message.aiGenerated && message.text ? (
-        <AppText testID="answer-ai-label" variant="footnote" /* the «ИИ» label is shown whole, never cut (2-design §8) */>
-          {t('ai.label_short')}
-        </AppText>
+        <AiLabel testID="answer-ai-label" variant="footnote" short />
       ) : null}
       {message.notice === 'maybe_done' ? (
         <Button testID="answer-did" label={t('more.did')} variant="text" onPress={() => router.push({ pathname: '/history', params: { tab: 'changes' } })} style={styles.start} />
@@ -160,7 +162,7 @@ export function AnswerBanner() {
         <Button testID="answer-ok" label={t('common.ok')} variant="secondary" size="small" onPress={close} style={styles.start} />
       ) : (
         <View style={buttonsRow}>
-          <Button testID="answer-open" label={t('answer.open')} variant="secondary" size="small" onPress={openAnswer} />
+          <Button testID="answer-open" label={t('answer.continue_chat')} variant="secondary" size="small" onPress={openAnswer} />
         </View>
       )}
     </View>

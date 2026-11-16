@@ -1,4 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import { AiLabel } from '@/components/AiLabel';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
@@ -129,9 +130,7 @@ export default function DraftScreen() {
             </View>
           ) : null}
           {draft.ai_generated ? (
-            <AppText testID="draft-ai-label" variant="callout">
-              {t('ai.label')}
-            </AppText>
+            <AiLabel testID="draft-ai-label" variant="callout" />
           ) : null}
 
           {email_ ? (

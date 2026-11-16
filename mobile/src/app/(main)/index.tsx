@@ -52,9 +52,10 @@ const bare = (money: string) => money.replace(/\s?₸$/, '');
 /**
  * S06 «Сегодня» v2 — the morning briefing (design-system v2 §6, p14). Four blocks, always in this order:
  * 1. BriefCard: the status line, the headline of the day and a ≤3-line summary (a template from the numbers);
- * 2. 2×2 MetricTiles: Дела · Потрачено · Напоминания (Завтра in the evening) · Новое — each opens its section;
+ * 2. two MetricTiles (v4): Потрачено · Новое — each opens its section;
  * 3. «План дня»: a Timeline of today's rings (missed in red, the next one within the hour is the one sun card with
- *    «Готово» / «+10 мин»), then «Без времени» — today's to-dos with a circle;
+ *    «Готово» / «+10 мин»), then «Дела» — the 3 nearest to-dos with a circle and «Все дела · N ›» (Дела left the tab
+ *    bar for the centre «Помощник», VISION-2026-11);
  * 4. «Ждёт вас»: an answer waiting, repeats to merge, the week-1 tip / proposals (with their switches, Ф-42).
  * Built from what the phone holds (offline, «Без ИИ»); `GET /today` adds suggestions and its reminders / tasks.
  */
@@ -185,13 +186,14 @@ export default function TodayScreen() {
   const ageDays = startedAt ? (now - Date.parse(startedAt)) / DAY : 0;
   const tipAllowed = !noAi && features.tips_per_day > 0 && (features.tips_days === 0 || ageDays < features.tips_days);
   const tip = tipAllowed ? shown.tip : null;
-  const firstOpen = todos.find((x) => !isDone(x, ticks));
   // Ф-49: «Купить: …» only while the shopping list is on (things to buy are to-dos in «Дела» otherwise).
   const shopping = useFeatures((f) => f.shopping);
   const toBuy = shopping ? liveTasks(tasks, 'shopping').filter((x) => !isDone(x, ticks)) : [];
   const shopPage = shopping ? pageForList('shopping') : undefined;
-  const nextRing = rings[0];
-  const tomorrowCount = tomorrowRings.length + tomorrowTodos.length;
+  // «Дела» (v4): the 3 nearest open to-dos (today and overdue, then tomorrow); «Все дела · N» counts the open ones.
+  const openTodos = liveTasks(tasks, 'todo').filter((x) => !isDone(x, ticks));
+  const nearest = [...todos, ...tomorrowTodos.filter((x) => !todos.some((y) => y.id === x.id))].slice(0, 3);
+  const tasksPage = pageOf('tasks');
 
   let dateLine: string;
   try {
@@ -223,26 +225,6 @@ export default function TodayScreen() {
 
         <TileGrid testID="today-tiles-grid">
           <MetricTile
-            testID="tile-tasks"
-            label={t('today.tile_tasks')}
-            value={String(done)}
-            unit={total > 0 ? t('today.of_total', { total }) : t('today.tasks_unit', { count: 0 })}
-            caption={
-              total === 0
-                ? t('today.nothing_planned')
-                : part === 'evening'
-                  ? firstOpen
-                    ? t('today.left_one', { title: firstOpen.title })
-                    : t('today.all_done')
-                  : nextRing
-                    ? t('today.next_at', { time: timeText(nextRing.fireAt) })
-                    : undefined
-            }
-            color={metricColors[theme.scheme].tasks}
-            progress={total > 0 ? done / total : null}
-            onPress={() => openPage('tasks')}
-          />
-          <MetricTile
             testID="tile-spent"
             label={t('today.tile_spent')}
             // QA v2 §1.3: the sum and its line come from one period — the month against the budget, or today.
@@ -262,26 +244,6 @@ export default function TodayScreen() {
             progress={budget !== null && budget > 0n ? Number((spentMinor * 1000n) / budget) / 1000 : null}
             onPress={openExpenses}
           />
-          {part === 'evening' ? (
-            <MetricTile
-              testID="tile-tomorrow"
-              label={t('today.tile_tomorrow')}
-              value={String(tomorrowCount)}
-              unit={t('today.tasks_unit', { count: tomorrowCount })}
-              caption={tomorrowRings[0] ? t('today.first_at', { time: timeText(tomorrowRings[0].fireAt) }) : undefined}
-              color={metricColors[theme.scheme].reminders}
-              onPress={() => openPage('tasks')}
-            />
-          ) : (
-            <MetricTile
-              testID="tile-reminders"
-              label={t('today.tile_reminders')}
-              value={String(rings.length)}
-              caption={nextRing ? t('today.nearest_at', { time: timeText(nextRing.fireAt) }) : t('today.no_rings')}
-              color={metricColors[theme.scheme].reminders}
-              onPress={() => openPage('tasks')}
-            />
-          )}
           <MetricTile
             testID="tile-new"
             label={t('today.tile_new')}
@@ -301,7 +263,7 @@ export default function TodayScreen() {
             />
           </ListGroup>
         ) : null}
-        {plan.length > 0 || todos.length > 0 ? (
+        {plan.length > 0 || nearest.length > 0 ? (
           <View testID="today-list">
             {plan.length > 0 ? (
               <>
@@ -309,19 +271,23 @@ export default function TodayScreen() {
                 <Timeline testID="today-plan" items={plan} doneLabel={t('today.done_btn')} snoozeLabel={t('today.snooze_10')} />
               </>
             ) : null}
-            {todos.length > 0 ? (
-              <>
-                <SectionLabel title={t('today.no_time')} value={done > 0 ? t('today.done_of', { done, total: todos.length }) : undefined} />
+            {nearest.length > 0 ? (
+              <View testID="today-tasks">
+                <SectionLabel
+                  title={t('today.tile_tasks')}
+                  link={tasksPage ? { label: t('today.all_tasks', { count: openTodos.length }), onPress: () => openPage('tasks'), testID: 'today-all-tasks' } : undefined}
+                />
                 <ListGroup>
-                  {todos.map((x) => {
+                  {nearest.map((x) => {
                     const overdue = !!x.due_date && x.due_date < today;
+                    const tomorrow = x.due_date === addDays(today, 1);
                     const checked = isDone(x, ticks);
                     return (
                       <ListRow
                         key={x.id}
                         testID={`task-${x.id}`}
                         title={x.title}
-                        meta={overdue ? t('today.overdue') : undefined}
+                        meta={overdue ? t('today.overdue') : tomorrow ? t('today.tomorrow_meta') : undefined}
                         accessibilityRole="checkbox"
                         selected={checked}
                         left={<TodoCheck id={x.id} checked={checked} title={x.title} />}
@@ -330,7 +296,7 @@ export default function TodayScreen() {
                     );
                   })}
                 </ListGroup>
-              </>
+              </View>
             ) : null}
           </View>
         ) : (

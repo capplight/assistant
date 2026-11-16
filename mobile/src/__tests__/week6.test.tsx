@@ -409,7 +409,7 @@ describe('6.11: the answer waits on «Сегодня»; push «Ответ гот
     created_at: '2026-11-07T14:20:00Z',
   };
 
-  it('«Ответ готов» card: banner_shown, then «Открыть ответ» → Переписка on it, opened', async () => {
+  it('«Ответ готов» card: banner_shown, then «Открыть ответ» → the chat on it, opened', async () => {
     await setup();
     s.on('GET /chat/pending-banner', () => ({ status: 200, body: { message: waiting } }));
     const r = await renderRouter(APP_DIR, { initialUrl: '/' });
@@ -419,7 +419,7 @@ describe('6.11: the answer waits on «Сегодня»; push «Ответ гот
     await settle(() => s.callsTo('POST /chat/messages/r9/delivery').length > 0);
     expect(s.callsTo('POST /chat/messages/r9/delivery')[0]?.body).toEqual({ delivery: 'banner_shown' });
     await fireEvent.press(screen.getByTestId('pending-open'));
-    await settle(() => r.getPathname() === '/history');
+    await settle(() => r.getPathname() === '/assistant');
     await settle(() => s.callsTo('POST /chat/messages/r9/delivery').some((c) => (c.body as { delivery: string }).delivery === 'opened'));
   });
 
@@ -450,7 +450,7 @@ describe('6.11: the answer waits on «Сегодня»; push «Ответ гот
     expect(s.callsTo('POST /devices').at(-1)?.body).toMatchObject({ push_provider: 'fcm' });
     expect(testPush.quiet).toBe(true);
     testPush.open({ type: 'chat_reply', reply_id: 'r9' });
-    await settle(() => r.getPathname() === '/history');
+    await settle(() => r.getPathname() === '/assistant');
     expect(screen.getByText('120 000 ₸ до 20 ноября.')).toBeTruthy();
   });
 });

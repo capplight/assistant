@@ -200,7 +200,7 @@ export function ShoppingLine({ titles, onPress, hint }: { titles: string[]; onPr
 }
 
 /** The section label above a card («На сегодня · 3 из 4»): `sectionLabel`, no caps. */
-export function SectionLabel({ title, value }: { title: string; value?: string }) {
+export function SectionLabel({ title, value, link }: { title: string; value?: string; link?: { label: string; onPress: () => void; testID?: string } }) {
   const theme = useTheme();
   return (
     <View style={[styles.row, { paddingHorizontal: theme.space[1], marginTop: theme.space[4], marginBottom: theme.space[2], gap: theme.space[2] }]}>
@@ -208,6 +208,15 @@ export function SectionLabel({ title, value }: { title: string; value?: string }
         {title}
       </AppText>
       {value ? <AppText variant="callout">{value}</AppText> : null}
+      {link ? (
+        // «Все дела · 6 ›» (v4 «Сегодня»): a quiet brand link, a full touch target.
+        <Pressable testID={link.testID} accessibilityRole="link" onPress={link.onPress} hitSlop={12} style={({ pressed }) => [styles.row, { gap: 2, minHeight: 32 }, pressedStyle(pressed)]}>
+          <AppText variant="callout" color="brand">
+            {link.label}
+          </AppText>
+          <Icon icon={ChevronRight} size="sm" color="brand" />
+        </Pressable>
+      ) : null}
     </View>
   );
 }

@@ -13,7 +13,7 @@ describe('main navigation', () => {
     finishOnboarding();
   });
 
-  it('renders tabs (Ф-48): Сегодня · Заметки · Расходы · Дела · Ещё; other pages go to «Ещё»', async () => {
+  it('renders tabs (VISION-2026-11): Сегодня · Заметки · Помощник · Расходы · Ещё; other pages go to «Ещё»', async () => {
     usePages.getState().addPage('custom', 'Дача'); // not a tab → «Ещё»
     await renderRouter(APP_DIR, { initialUrl: '/' });
     const tabs = within(screen.getByTestId('bottom-tabs'));
@@ -21,8 +21,8 @@ describe('main navigation', () => {
     expect(labels).toEqual([
       'Сегодня, вкладка',
       'Заметки, вкладка',
+      'Помощник, вкладка',
       'Расходы, вкладка',
-      'Дела, вкладка',
       'Ещё, вкладка',
     ]);
     expect(tabs.getByText('Сегодня')).toBeTruthy();
@@ -45,13 +45,16 @@ describe('main navigation', () => {
     };
 
     check();
-    // Pages past the two tabs live in «Ещё».
-    for (const page of pages.slice(0, 2)) {
+    // «Заметки» is a tab; «Дела» live in «Ещё» and on «Сегодня» now.
+    for (const page of pages.filter((p) => p.templateKey === 'notes')) {
       await fireEvent.press(screen.getByTestId(`tab-${page.id}`));
       expect(r.getPathname()).toBe(`/page/${page.id}`);
       expect(screen.getByTestId(`tab-${page.id}`)).toBeSelected();
       check();
     }
+    await fireEvent.press(screen.getByTestId('tab-assistant'));
+    expect(r.getPathname()).toBe('/assistant');
+    check();
     await fireEvent.press(screen.getByTestId('tab-more'));
     expect(r.getPathname()).toBe('/more');
     check();
@@ -87,7 +90,7 @@ describe('main navigation', () => {
 
     expect(screen.getByTestId('undo-strip-text')).toHaveTextContent(/^Сохранил в «Заметки»: Купить хлеб/);
     expect(screen.getByTestId('undo-strip-replace')).toBeTruthy();
-    await act(async () => router.push('/chat'));
+    await act(async () => router.push('/history'));
     expect(r.getPathname()).toBe('/history');
     expect(screen.getByText('История')).toBeTruthy();
     expect(screen.getByText('Вы: «Купить хлеб»')).toBeTruthy();
@@ -119,14 +122,14 @@ describe('main navigation', () => {
     expect(screen.getByTestId('assistant-write')).toBeTruthy();
   });
 
-  it('large font (≥150%): «Сегодня · Расходы · Дела · Ещё», «Заметки» move to «Ещё» (Ф-48)', async () => {
+  it('large font (≥150%): «Сегодня · Помощник · Ещё» (VISION-2026-11)', async () => {
     const spy = jest
       .spyOn(Dimensions, 'get')
       .mockImplementation(() => ({ width: 360, height: 640, scale: 2, fontScale: 1.6 }));
     try {
       await renderRouter(APP_DIR, { initialUrl: '/' });
       const tabs = within(screen.getByTestId('bottom-tabs')).getAllByRole('tab');
-      expect(tabs).toHaveLength(4);
+      expect(tabs.map((x) => x.props.testID)).toEqual(['tab-today', 'tab-assistant', 'tab-more']);
     } finally {
       spy.mockRestore();
     }

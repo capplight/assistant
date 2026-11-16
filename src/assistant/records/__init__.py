@@ -8,6 +8,7 @@ Public surface for other modules (api, future router/enrichment):
 - enrich: `Envelope`, `enqueue_enrich`, `run_enrich`, `promote_if_waiting`, `apply_corrections`,
   `JOB_ENRICH`
 - batching: `flush_batches`, `poll_batches`, `batch_tick`
+- marks: `set_marks`, `clear_marks`, `mark_fields`, `MARK_HOURS` («изменил помощник», Ф-73)
 - voice: `enqueue_sweep`, `children`, `sweep_recording`
 - links: `LinkReader`, `LinkContent`, `WebLinkReader`, `FakeLinkReader`
 - adapters: `Ocr`, `Transcriber` (+ Tesseract / fakes), `make_ocr`, `make_transcriber`
@@ -42,6 +43,7 @@ from assistant.records.ingest import (
     run_ingest,
 )
 from assistant.records.links import FakeLinkReader, LinkContent, LinkReader, WebLinkReader
+from assistant.records.marks import MARK_HOURS, clear_marks, mark_fields, set_marks
 from assistant.records.store import (
     CROSS_BORDER_KINDS,
     ITEM_TRASH_DAYS,
@@ -59,7 +61,8 @@ from assistant.records.textnorm import content_hash, detect_lang, normalize_text
 from assistant.records.voice import children, enqueue_sweep, sweep_recording
 
 __all__ = [
-    "CROSS_BORDER_KINDS", "ITEM_TRASH_DAYS", "JOB_ENRICH", "JOB_PREFIX", "Envelope",
+    "CROSS_BORDER_KINDS", "ITEM_TRASH_DAYS", "MARK_HOURS", "clear_marks", "mark_fields",
+    "set_marks", "JOB_ENRICH", "JOB_PREFIX", "Envelope",
     "FakeLinkReader", "FakeOcr", "FakeTranscriber",
     "IngestDeps", "LinkContent", "LinkReader", "Ocr", "OcrResult", "TesseractOcr", "Transcriber",
     "Transcript", "WebLinkReader",

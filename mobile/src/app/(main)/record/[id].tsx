@@ -1,4 +1,5 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { AiLabel } from '@/components/AiLabel';
 import { Check, TriangleAlert } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -104,9 +105,7 @@ export default function RecordScreen() {
       ) : null}
       <SimilarNote serverId={record.serverId} />
       {record.aiGenerated ? (
-        <AppText testID="record-ai-label" variant="callout" style={{ marginBottom: theme.space[1] }}>
-          {t('ai.label')}
-        </AppText>
+        <AiLabel testID="record-ai-label" variant="callout" style={{ marginBottom: theme.space[1] }} />
       ) : null}
 
       {toCheck.length > 0 ? (

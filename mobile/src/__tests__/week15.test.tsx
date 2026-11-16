@@ -265,7 +265,7 @@ describe('S17: a change by a phrase', () => {
     expect(screen.queryByTestId('kp-phrase-input')).toBeNull();
     await openLine(0);
     expect(screen.getByTestId('kp-line-0-price')).toBeTruthy();
-    expect(screen.getAllByText(/ИИ/)).toHaveLength(1); // the single label of the КП
+    expect(screen.queryAllByText(/ИИ/)).toHaveLength(0); // Ф-63: no «ИИ» label in the beta
   });
 });
 
@@ -442,7 +442,7 @@ describe('drafts (F-15)', () => {
     await fireEvent.press(screen.getByTestId('draft-new-make'));
     await settle(() => screen.queryByTestId('draft-screen') !== null);
     expect(s.callsTo('POST /drafts')[0]!.body).toMatchObject({ request: 'что КП будет в пятницу', channel: 'whatsapp', document_id: 'doc-1', recipient_name: 'Ерлан' });
-    expect(screen.getAllByText('Подготовил помощник (ИИ) по вашим записям — проверьте')).toHaveLength(1);
+    expect(screen.queryByText('Подготовил помощник (ИИ) по вашим записям — проверьте')).toBeNull(); // Ф-63
     await fireEvent.changeText(screen.getByTestId('draft-phone'), '+7 701 000 00 00');
     await fireEvent.press(screen.getByTestId('draft-open'));
     await settle(() => log.urls.length === 1);

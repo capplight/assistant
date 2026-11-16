@@ -9,6 +9,10 @@ closed by the answer itself when it is saved. The worker finds the answers nobod
   delivered, not redone. A reminder phrase becomes `failed` (`not_done`).
 - still `deferred` after that: retried with the queue's backoff (5 attempts), then left as is.
 
+`chat:parse_later` (Ф-69, `parse_later.py`): a note saved while the model was down is read once it
+is back (code rules, then the model) and moved to «Расходы» / «Дела» with an action; while the
+model is down the job waits with the backoff, and the loop requeues notes whose job gave up.
+
 `chat:summarize` folds old messages into `conversations.summary` (CHAT_SUMMARIZE, light model,
 background budget): only the person's phrases and the answers' text, never record fragments or
 tool results; the newest messages stay word for word.
@@ -18,6 +22,7 @@ Worker: `python -m assistant.chat`.
 
 import asyncio
 import logging
+import time
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -38,6 +43,8 @@ log = logging.getLogger(__name__)
 
 JOB_COMPLETE = "chat:complete"
 JOB_SUMMARIZE = "chat:summarize"
+JOB_PARSE = "chat:parse_later"  # Ф-69: a note saved while the model was down (parse_later.py)
+REQUEUE_EVERY_S = 600.0
 SUMMARIZE_AFTER = 16  # unsummarized messages (about 8 phrases + answers) [proposal: spec "~10"]
 KEEP_RECENT = 6  # newest messages that stay word for word
 SUMMARY_CHARS = 1800  # ≈ 600 tokens (layer 5)
@@ -172,7 +179,7 @@ async def run_one(service: "ChatService") -> bool:
     """Claim and run one chat job. False when there was none."""
     maker = service.sessionmaker
     async with maker() as s:
-        job = await queue.claim(s, [JOB_COMPLETE, JOB_SUMMARIZE])
+        job = await queue.claim(s, [JOB_COMPLETE, JOB_SUMMARIZE, JOB_PARSE])
         await s.commit()
         if job is None:
             return False
@@ -181,6 +188,14 @@ async def run_one(service: "ChatService") -> bool:
     try:
         if kind == JOB_COMPLETE:
             await run_complete(service, int(payload["reply_id"]))
+        elif kind == JOB_PARSE:
+            from assistant.chat import parse_later
+
+            try:
+                await parse_later.run_parse(maker, service.router, int(payload["item_id"]),
+                                            service.clock())  # fmt: skip
+            except parse_later.Retry as r:
+                raise Retry(f"model not back: {r}") from r
         else:
             await run_summarize(maker, service.router, int(payload["conversation_id"]))
     except Retry as r:
@@ -200,9 +215,15 @@ async def run_one(service: "ChatService") -> bool:
 
 
 async def worker_loop(service: "ChatService", stop: asyncio.Event, poll: float) -> None:
+    from assistant.chat import parse_later
+
+    next_requeue = 0.0
     while not stop.is_set():
         busy = False
         try:
+            if time.monotonic() >= next_requeue:
+                next_requeue = time.monotonic() + REQUEUE_EVERY_S
+                await parse_later.requeue_waiting(service.sessionmaker)
             busy = await run_one(service)
         except Exception:
             log.exception("chat worker loop error")
@@ -215,4 +236,5 @@ async def worker_loop(service: "ChatService", stop: asyncio.Event, poll: float) 
 
 async def pending_jobs(session: AsyncSession) -> list[Job]:
     return list(await session.scalars(select(Job).where(
-        Job.kind.in_([JOB_COMPLETE, JOB_SUMMARIZE]), Job.status == JobStatus.QUEUED)))
+        Job.kind.in_([JOB_COMPLETE, JOB_SUMMARIZE, JOB_PARSE]),
+        Job.status == JobStatus.QUEUED)))

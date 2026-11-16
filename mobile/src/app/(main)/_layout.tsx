@@ -4,6 +4,7 @@ import { KeyboardAvoidingView } from 'react-native';
 
 import { useAccount } from '@/account/data';
 import { MainFooter } from '@/components/MainFooter';
+import { AiConsentUpdate } from '@/consent/AiConsentUpdate';
 import { KEYBOARD_BEHAVIOR } from '@/components/useKeyboard';
 import { finishWithDefaults } from '@/onboarding/service';
 import { useOnboarding } from '@/store/onboarding';
@@ -49,7 +50,9 @@ export default function MainLayout() {
         <Tabs.Screen name="duplicates" />
         <Tabs.Screen name="import" />
         <Tabs.Screen name="history" />
+        <Tabs.Screen name="assistant" />
       </Tabs>
+      <AiConsentUpdate />
     </KeyboardAvoidingView>
   );
 }
