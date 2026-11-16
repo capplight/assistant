@@ -185,18 +185,22 @@ class Settings(BaseSettings):
     # phrase goes to the model (`reminder_parse`, needs ai_cross_border consent; «Без ИИ» and
     # offline get the manual form). On = code reads simple phrases first (reminders.rules),
     # the model only gets what code did not understand. Env REMINDERS_RULES_FIRST=true.
-    reminders_rules_first: bool = False
+    reminders_rules_first: bool = True  # Ф-78 (2026-11-17): code first, the model only for the rest
     reminders_tick_seconds: float = 30.0  # backup push / missed / top-up loop
     # Tasks and shopping from the line (week 9). Ф-1 is open, so off: the light model reads the
     # phrase (`tasks_parse`, behind the consent gate). On = code reads simple lists first
     # («купить хлеб, молоко и сыр», «добавь в покупки …»). Env TASKS_RULES_FIRST=true.
-    tasks_rules_first: bool = False
+    tasks_rules_first: bool = True  # Ф-78 (2026-11-17): code first, the model only for the rest
     # Expenses from a phrase (week 12, «потратил 5000 на бензин»). Ф-1 is open, so off: the light
     # model reads the phrase (`expense_parse`, behind the consent gate) and code checks that the
     # amount is in the person's words. On = code reads the phrase first (expenses.parse, the
     # shared vectors docs/spec/vectors/amounts.json). The keypad sum is code always (arithmetic).
     # Env EXPENSES_RULES_FIRST=true.
-    expenses_rules_first: bool = False
+    expenses_rules_first: bool = True  # Ф-78 (2026-11-17): code first, the model only for the rest
+    # Ф-78 covers phrases only. Receipts, fiscal QR pages and bank statements (week 13) are
+    # documents: the model reads them (amounts checked by code against the document); code reads
+    # receipt text itself only when this is on. Env RECEIPTS_RULES_FIRST=true.
+    receipts_rules_first: bool = False
     # «Расходы 2» (week 13): fiscal receipt QR links are accepted only for these OFD hosts and
     # their subdomains (spec 5.7 rule 7) [проверить список ОФД на нед. 0]; the server fetches the
     # OFD page (SSRF-guarded) only when `expenses_ofd_fetch`. Env EXPENSES_OFD_DOMAINS='["..."]'.

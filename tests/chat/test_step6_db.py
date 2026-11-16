@@ -21,7 +21,7 @@ async def test_spends_and_a_reminder_from_one_phrase(env):  # noqa: F811
     # the model is down: code reads every part (rules), nothing waits for it
     async with client(env.make_app(_Stub(AIUnavailable("down")))) as c:
         h = await signed_in(c)
-        evs = await say(c, h, "купил хлеб за 400 и молоко за 600, и напомни завтра в 9 "
+        evs = await say(c, h, "купил хлеб за 400 и молоко за 600, и напомни завтра в 9 утра "
                               "оплатить свет")  # fmt: skip
         actions = [a["action"] for a in by_name(evs, "action")]
         assert [a["kind"] for a in actions] == ["create_expense", "create_expense"]

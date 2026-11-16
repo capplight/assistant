@@ -86,8 +86,9 @@ async def add(c, h, **body) -> dict:  # type: ignore[no-untyped-def]
 
 
 async def test_us31_spent_5000_on_petrol_month_total_by_code(env9):
-    script = Script12(expense=petrol())
-    async with client(env9.make_app(router9(env9.maker, script))) as c:
+    script = Script12(expense=petrol())  # the model path (Ф-78: code first by default)
+    app = env9.make_app(router9(env9.maker, script), expenses_rules_first=False)
+    async with client(app) as c:
         h = await signed_in(c)
         page = (await add_page(c, h, "expenses"))["page"]["id"]
         other = (await add_page(c, h, "custom", "Дача"))["page"]["id"]
@@ -124,7 +125,8 @@ async def test_us31_spent_5000_on_petrol_month_total_by_code(env9):
 
 async def test_a_number_the_person_did_not_say_is_never_saved(env9):
     script = Script12(expense=petrol("50000"))  # the model got it wrong
-    async with client(env9.make_app(router9(env9.maker, script))) as c:
+    app = env9.make_app(router9(env9.maker, script), expenses_rules_first=False)
+    async with client(app) as c:
         h = await signed_in(c)
         await add_page(c, h, "expenses")
         await say(c, h, "потратил 5000 на бензин")
@@ -132,6 +134,13 @@ async def test_a_number_the_person_did_not_say_is_never_saved(env9):
         assert (await month(c, h))["totals"] == []
         async with env9.maker() as s:
             assert await s.scalar(text("SELECT count(*) FROM expense_entries")) == 0
+    # Ф-78 code first: the person's own number, never the model's
+    async with client(env9.make_app(router9(env9.maker, script))) as c:
+        h = await signed_in(c)
+        await add_page(c, h, "expenses")
+        await say(c, h, "потратил 5000 на бензин")
+        assert [t["total"] for t in (await month(c, h))["totals"]] == ["5000.00"]
+        assert script.n("ExpenseReply") == 1  # still the one call above
 
 
 async def test_voice_amount_is_check_until_correct(env9):

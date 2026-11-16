@@ -494,7 +494,8 @@ async def test_create_refuses_invented_numbers(w6):
                                                "title": None})],
         ChatReply(answer="Записал.", citations=[], insufficient=False),
     ])  # fmt: skip
-    async with client(w6.make_app(router_with(w6.maker, script))) as c:
+    # the model's own `create` (Ф-78: code would read this list first)
+    async with client(w6.make_app(router_with(w6.maker, script), tasks_rules_first=False)) as c:
         h = await signed_in(c)
         pid = await page(c, h, "Покупки")
         evs = await say(c, h, "добавь в Покупки хлеб", page_id=pid)
@@ -799,7 +800,8 @@ async def test_plain_notes_are_saved_in_the_persons_words(w6, phrase, saved):
     script = Script()
     router = router_with(w6.maker, script) if "Ерлан" not in phrase else _Stub(
         AIUnavailable("down"))  # fmt: skip
-    async with client(w6.make_app(router)) as c:
+    # the model path for «купить хлеб» (Ф-78 code-first: test_code_first_buy_bread_is_a_to_do)
+    async with client(w6.make_app(router, tasks_rules_first=False)) as c:
         h = await signed_in(c)
         pid = await page(c, h, "Дом")
         evs = await say(c, h, phrase, page_id=pid)
@@ -893,3 +895,13 @@ async def test_explicit_move_of_a_hand_placed_row_needs_no_yes(w6):
         assert action["kind"] == "screen_move_items" and action["changed_item_ids"] == [ids[1]]
         there = {r["item"]: r for r in await rows(w6.maker, shop)}
         assert ids[1] in there
+
+
+async def test_code_first_buy_bread_is_a_to_do(w6):
+    """Ф-78 + Ф-49 (shopping hidden): «купить хлеб» is read by code as a to-do, no model."""
+    script = Script()
+    async with client(w6.make_app(router_with(w6.maker, script))) as c:
+        h = await signed_in(c)
+        ev = last(await say(c, h, "купить хлеб"), "action")
+        assert [(t["title"], t["list_key"]) for t in ev["tasks"]] == [("Купить хлеб", "todo")]
+        assert script.n("TasksReply") == 0 and script.n("ChatReply") == 0

@@ -90,8 +90,11 @@ async def test_off_provider_down_is_the_manual_form() -> None:
     assert (out.status, out.reason) == ("form", "ai_unavailable")
 
 
-def test_flag_is_off_by_default() -> None:
-    assert settings().reminders_rules_first is False
+def test_flag_is_on_by_default() -> None:
+    """Ф-78 (2026-11-17): code reads simple phrases first, the model only the rest."""
+    s = settings()
+    assert s.reminders_rules_first and s.tasks_rules_first and s.expenses_rules_first
+    assert s.receipts_rules_first is False  # documents: not phrases
 
 
 # --- Ф-1 on ---

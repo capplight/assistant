@@ -4,8 +4,8 @@ docs/api/expenses.md (week 13).
 
 Amounts: code checks every number the model gives against the document's own text; QR sums come
 from the link; statement rows from the bank's table and its own summary. No transaction stays open
-across a model call or the OFD page. Ф-1 (`expenses_rules_first`) is off by default: code then
-does not read receipt text itself.
+across a model call or the OFD page. Ф-78 (code first) is for phrases; documents have their own
+switch, `receipts_rules_first`, off by default: code then does not read receipt text itself.
 """
 
 import asyncio
@@ -187,7 +187,7 @@ async def from_item(body: FromItemIn, user: GatedUser, db: Db, ctx: Ctx, kinds: 
     await db.commit()  # no transaction stays open across the model call
 
     draft: receipts.ReceiptDraft | None = None
-    if text and ctx.settings.expenses_rules_first:
+    if text and ctx.settings.receipts_rules_first:
         draft = receipts.rules_read(text, today)
     if (draft is None or draft.amount is None) and text and router_ is not None:
         draft = await receipts.read_with_model(text, router=router_, user_id=user.id,
@@ -274,7 +274,7 @@ async def from_qr(body: FromQrIn, user: GatedUser, db: Db, ctx: Ctx, kinds: Kind
                                              known_total=fiscal.amount)  # fmt: skip
         if got is not None and got.amount is not None:
             draft = got
-    if draft.amount is None and page and ctx.settings.expenses_rules_first:
+    if draft.amount is None and page and ctx.settings.receipts_rules_first:
         draft = receipts.rules_read(page, today) or draft
     spent_on = fiscal.at.astimezone(tz).date() if fiscal.at else None
     if draft.amount is None:
@@ -384,7 +384,7 @@ async def create_statement(body: StatementIn, user: GatedUser, db: Db, ctx: Ctx,
     if item is None or item.deleted_at is not None:
         raise ApiError(404, "not_found")
     st, pending = await imports.plan(db, user.id, item, parsed, now=now, client_id=body.client_id,
-                                     rules_first=ctx.settings.expenses_rules_first)  # fmt: skip
+                                     rules_first=ctx.settings.receipts_rules_first)  # fmt: skip
     return {"statement": await imports.statement_dict(db, st),
             "pending_action": _pending_out(pending), "repeated": False}
 

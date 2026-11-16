@@ -2045,7 +2045,7 @@
     "waiting": "жазба ретінде сақтадым · кейін реттеймін"
   },
   "aichats": {
-    "title": "ЖИ чаттары",
+    "title": "ChatGPT-пен хат алмасу",
     "count_one": "{{count}} әңгіме",
     "count_few": "{{count}} әңгіме",
     "count_many": "{{count}} әңгіме",
@@ -2091,7 +2091,7 @@
     "can_close": "{{percent}}% · жабуға болады, өзім жалғастырамын",
     "done_title": "Дайын",
     "done": "{{name}} ішінен {{count}} әңгіме әкелдім.",
-    "open_chats": "«ЖИ чаттарын» ашу",
+    "open_chats": "«ChatGPT-пен хат алмасуды» ашу",
     "undo": "Импортты өшіру",
     "err_import_bad_file": "Файл бүлінген — экспортты қайта жүктеңіз.",
     "err_import_no_chats_file": "Мұрағатта хат алмасу жоқ. ChatGPT, Claude немесе Gemini экспорты керек.",

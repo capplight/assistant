@@ -380,8 +380,8 @@ async def test_receipt_without_consent_or_with_a_wrong_number_is_the_form(env9):
         r = await c.post("/v1/expenses/from-item", json={"client_id": str(uuid.uuid4()),
                                                          "item_id": photo["id"]}, headers=h)
         assert r.json()["status"] == "form" and script.n("ReceiptReply") == 0
-    # Ф-1 on: code reads the labelled total itself, no model
-    app = env9.make_app(router9(env9.maker, script), expenses_rules_first=True, **ON)
+    # documents' own switch on (Ф-78 is phrases only): code reads the labelled total, no model
+    app = env9.make_app(router9(env9.maker, script), receipts_rules_first=True, **ON)
     async with client(app) as c:
         h = await signed_in(c, BASE)
         photo = await upload_item(c, h, b"\xff\xd8receipt-four", "image/jpeg", "camera")

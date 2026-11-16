@@ -124,8 +124,9 @@ SHOPPING = TasksReply(list="shopping", items=[TaskLine(title="Хлеб", qty=Non
 
 
 async def test_shopping_by_voice_from_another_page_one_undo(env9):
-    script = Script9(tasks=SHOPPING)
-    async with client(env9.make_app(router9(env9.maker, script))) as c:
+    script = Script9(tasks=SHOPPING)  # the model path (Ф-78: code first otherwise)
+    app = env9.make_app(router9(env9.maker, script), tasks_rules_first=False)
+    async with client(app) as c:
         h = await signed_in(c)
         shop = (await add_page(c, h, "shopping"))["page"]["id"]
         other = (await add_page(c, h, "custom", "Дача"))["page"]["id"]
@@ -184,12 +185,24 @@ async def test_rules_first_reads_lists_without_the_model(env9):
 
 
 async def test_not_a_list_stays_a_note(env9):
-    script = Script9()  # the reader says «none»
-    async with client(env9.make_app(router9(env9.maker, script))) as c:
+    script = Script9()  # the model reader says «none» (the model path)
+    app = env9.make_app(router9(env9.maker, script), tasks_rules_first=False)
+    async with client(app) as c:
         h = await signed_in(c)
         evs = await say(c, h, "надо позвонить мастеру Ерлану")
         action = last(evs, "action")["action"]
         assert action["summary"]["ru"] == "Записал." and "tasks" not in last(evs, "action")
+
+
+async def test_code_first_reads_a_to_do_without_the_model(env9):
+    """Ф-78: «надо позвонить …» is a to-do by code; the model is not asked."""
+    script = Script9()
+    async with client(env9.make_app(router9(env9.maker, script))) as c:
+        h = await signed_in(c)
+        ev = last(await say(c, h, "надо позвонить мастеру Ерлану"), "action")
+        assert [(t["title"], t["list_key"]) for t in ev["tasks"]] == [
+            ("Позвонить мастеру Ерлану", "todo")]
+        assert script.n("TasksReply") == 0
 
 
 # --- tasks by hand ---

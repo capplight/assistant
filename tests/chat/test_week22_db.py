@@ -39,7 +39,9 @@ async def test_save_marks_the_record_and_undo_by_phrase_takes_it_back(env):  # n
         action = last(evs, "action")["action"]
         item_id = action["changed_item_ids"][0]
         assert action["notice"]["ms"] == 3000 and action["notice"]["text_ru"]
-        assert action["notice"]["target"]["id"] == item_id
+        # Ф-78: code reads «купить краску» as a to-do: the notice opens the task
+        first = action["changes"][0]
+        assert action["notice"]["target"]["id"] in (first.get("task_id"), item_id)
         item = await _item(c, h, item_id)
         assert item["assistant_changed_at"] is not None
         assert item["assistant_action_id"] == action["id"]
