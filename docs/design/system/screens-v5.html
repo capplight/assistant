@@ -1,0 +1,1103 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Листы · экраны v5</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geologica:wght@500;600;700;800&family=Onest:wght@400;500;600;700;800&family=Unbounded:wght@600&family=Manrope:wght@800&display=swap" rel="stylesheet">
+<style>
+/* =====================================================================
+   ТОКЕНЫ · страница (pg-*) и телефон (всё остальное). Тёмная — ниже.
+   ===================================================================== */
+:root{
+  color-scheme:light;
+  /* страница */
+  --pg:#F2EFE9;--pg-card:#FFFFFF;--pg-ink:#1A191E;--pg-ink2:#55525C;--pg-line:#DEDAD1;--pg-tab:#E6E1D7;--bezel:#0B0B0D;
+  /* телефон: основа */
+  --tray:#1A191E;--trayInk:#F4F1EA;--trayInk2:#B9B4AA;
+  --paper:#FBF8F2;--paper2:#F1ECE2;--line:#E6DFD3;--line2:#CFC8BB;
+  --ink:#1A191E;--ink2:#55525C;--ink3:#6B6774;
+  /* листы мест */
+  --today:#F6D35B;--notes:#A9CCF4;--asst:#E0592C;--exp:#B6D89C;--tasks:#CDBFF5;--stone:#D8D2C6;
+  --onSheet:#1A191E;--onSheet2:#3D3A42;--onStone:#1A191E;--onStone2:#3D3A42;
+  /* помощник */
+  --asstText:#B23E14;--hl:#F7D9CC;
+  /* действия */
+  --btn:#1A191E;--onBtn:#FBF8F2;--danger:#B42335;--onDanger:#FFFFFF;
+  --noticeBg:#1A191E;--noticeInk:#F4F1EA;--noticeUndo:#FF8A5C;
+  --scrim:rgba(26,25,30,.38);--a4:#FFFFFF;--a4Ink:#1A191E;
+  /* категории расходов */
+  --k-food:#2F7F70;--k-trans:#4F5D86;--k-home:#8C6A43;--k-cafe:#B05A78;--k-health:#9B3F4C;--k-kids:#737A35;--k-other:#8A857B;
+  /* стикеры заметок */
+  --st-paper:#FFFFFF;--st-sand:#EFE4CF;--st-rose:#F3D6DC;--st-mist:#D4E8E2;--st-graph:#E2DFD8;--stInk:#1A191E;--stInk2:#4D4A52;
+  /* форма */
+  --sheetB:44px;--phrase:27px;--peekF:none;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark;
+  --pg:#121114;--pg-card:#1C1B20;--pg-ink:#F1EEE8;--pg-ink2:#B4AFBA;--pg-line:#2E2C33;--pg-tab:#26252B;--bezel:#000;
+  --tray:#0F0E12;--trayInk:#F1EEE8;--trayInk2:#9A95A2;
+  --paper:#1E1D23;--paper2:#2A2930;--line:#34323A;--line2:#4A4752;
+  --ink:#F1EEE8;--ink2:#C2BDC8;--ink3:#A29DAA;
+  --today:#C9A23A;--notes:#5E93DC;--asst:#E0592C;--exp:#6FA35C;--tasks:#9683E6;--stone:#42404A;
+  --onSheet:#16151A;--onSheet2:#1F1D24;--onStone:#F1EEE8;--onStone2:#C2BDC8;
+  --asstText:#FF8A5C;--hl:#5A2E20;
+  --btn:#F1EEE8;--onBtn:#16151A;--danger:#FF6B78;--onDanger:#16151A;
+  --noticeBg:#F1EEE8;--noticeInk:#16151A;--noticeUndo:#B23E14;
+  --scrim:rgba(0,0,0,.55);--a4:#FFFFFF;--a4Ink:#1A191E;
+  --k-food:#5FB3A3;--k-trans:#8E9BC8;--k-home:#C29C70;--k-cafe:#DB8CA8;--k-health:#D97A86;--k-kids:#AEB65E;--k-other:#A8A397;
+  --st-paper:#2A2930;--st-sand:#4A4232;--st-rose:#4E3439;--st-mist:#2E4640;--st-graph:#36353C;--stInk:#F1EEE8;--stInk2:#C9C4CE;
+  --sheetB:38px;--phrase:25px;--peekF:brightness(.62);
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --pg:#121114;--pg-card:#1C1B20;--pg-ink:#F1EEE8;--pg-ink2:#B4AFBA;--pg-line:#2E2C33;--pg-tab:#26252B;--bezel:#000;
+  --tray:#0F0E12;--trayInk:#F1EEE8;--trayInk2:#9A95A2;
+  --paper:#1E1D23;--paper2:#2A2930;--line:#34323A;--line2:#4A4752;
+  --ink:#F1EEE8;--ink2:#C2BDC8;--ink3:#A29DAA;
+  --today:#C9A23A;--notes:#5E93DC;--asst:#E0592C;--exp:#6FA35C;--tasks:#9683E6;--stone:#42404A;
+  --onSheet:#16151A;--onSheet2:#1F1D24;--onStone:#F1EEE8;--onStone2:#C2BDC8;
+  --asstText:#FF8A5C;--hl:#5A2E20;
+  --btn:#F1EEE8;--onBtn:#16151A;--danger:#FF6B78;--onDanger:#16151A;
+  --noticeBg:#F1EEE8;--noticeInk:#16151A;--noticeUndo:#B23E14;
+  --scrim:rgba(0,0,0,.55);--a4:#FFFFFF;--a4Ink:#1A191E;
+  --k-food:#5FB3A3;--k-trans:#8E9BC8;--k-home:#C29C70;--k-cafe:#DB8CA8;--k-health:#D97A86;--k-kids:#AEB65E;--k-other:#A8A397;
+  --st-paper:#2A2930;--st-sand:#4A4232;--st-rose:#4E3439;--st-mist:#2E4640;--st-graph:#36353C;--stInk:#F1EEE8;--stInk2:#C9C4CE;
+  --sheetB:38px;--phrase:25px;--peekF:brightness(.62);
+}
+
+/* ---------- страница ---------- */
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--pg);color:var(--pg-ink);font:16px/1.5 Onest,-apple-system,'Segoe UI',Roboto,sans-serif;overflow-x:hidden}
+.wrap{max-width:1680px;margin:0 auto;padding:28px 16px 72px}
+.top h1{font:800 30px/1.15 Onest;letter-spacing:-.6px;margin:0 0 8px}
+.top p{margin:0 0 6px;color:var(--pg-ink2);max-width:860px}
+.bar{position:sticky;top:0;z-index:50;background:var(--pg);padding:12px 0;margin-top:16px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-bottom:1px solid var(--pg-line)}
+.seg{display:inline-flex;background:var(--pg-tab);border-radius:999px;padding:3px;margin-right:6px}
+.seg button{font:600 14px Onest;border:0;background:transparent;color:var(--pg-ink);padding:8px 16px;border-radius:999px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--pg-ink);color:var(--pg)}
+.bar a{text-decoration:none;color:var(--pg-ink);background:var(--pg-tab);padding:8px 13px;border-radius:999px;font:500 14px Onest;white-space:nowrap}
+@media (max-width:600px){.bar{position:static}}
+section.grp{padding-top:30px}
+section.grp>h2{font:800 24px/1.2 Onest;margin:0 0 6px;letter-spacing:-.3px}
+section.grp>p.lead{margin:0 0 18px;color:var(--pg-ink2);max-width:860px}
+.phones{display:flex;flex-wrap:wrap;gap:34px 28px;align-items:flex-start}
+figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:12px}
+figcaption{font-size:14px;line-height:1.45;color:var(--pg-ink2);max-width:340px;text-align:center}
+figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
+.frame{padding:6px;border-radius:50px;background:var(--bezel);box-shadow:0 22px 46px -22px rgba(0,0,0,.45)}
+@media (max-width:440px){.frame{zoom:.84}.frame.fw430{zoom:.75}}
+@media (max-width:380px){.frame{zoom:.78}.frame.fw430{zoom:.68}.frame.fw390{zoom:.75}}
+@media (max-width:340px){.frame{zoom:.72}.frame.fw430{zoom:.63}.frame.fw390{zoom:.7}}
+.facts{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:12px;margin:0 0 24px}
+.fact{background:var(--pg-card);border:1px solid var(--pg-line);border-radius:16px;padding:14px 16px;font-size:15px;line-height:1.5}
+.fact h3{margin:0 0 6px;font:700 16px Onest}
+.fact p,.fact ul{margin:0}.fact ul{padding-left:18px}
+.fact code,.tok code{font:500 13px ui-monospace,Consolas,monospace;background:var(--pg-tab);padding:1px 5px;border-radius:5px}
+
+/* =====================================================================
+   ТЕЛЕФОН
+   ===================================================================== */
+.ph{--w:375px;--h:780px;--gut:20px;width:var(--w);height:var(--h);position:relative;overflow:hidden;border-radius:44px;background:var(--tray);color:var(--ink);font:400 16px/1.38 Onest,sans-serif;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased;text-align:left}
+.ph *{box-sizing:border-box}
+.ph p{margin:0}
+.ph.w320{--w:320px;--h:640px;--gut:16px;--phrase:23px}
+.ph.w390{--w:390px;--h:844px}
+.ph.w430{--w:430px;--h:932px;--gut:24px;--phrase:30px}
+.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none;display:block}
+.i.s{width:18px;height:18px}.i.xs{width:15px;height:15px}.i.l{width:26px;height:26px}.i.xl{width:30px;height:30px}
+.tn{font-variant-numeric:tabular-nums}
+.ell{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.f1{flex:1;min-width:0}
+.row{display:flex;align-items:center;gap:10px}
+.cur{font-size:.56em;margin-left:.12em;font-weight:inherit}
+
+/* статус-бар и стопка */
+.sb{flex:none;height:46px;display:flex;align-items:center;justify-content:space-between;padding:4px 28px 0 34px;color:var(--trayInk);font:600 15px/1 Onest;letter-spacing:-.2px}
+.sbs{width:66px;height:12px;display:block}
+.peek{flex:none;height:14px;position:relative;filter:var(--peekF)}
+.peek i{position:absolute;height:30px;border-radius:18px 18px 0 0;background:var(--c)}
+.peek i:first-child{left:40px;right:40px;top:0}
+.peek i+i{left:22px;right:22px;top:7px;filter:brightness(.94)}
+
+/* цвета мест */
+.c-today{--c:var(--today);--on:var(--onSheet);--on2:var(--onSheet2)}
+.c-notes{--c:var(--notes);--on:var(--onSheet);--on2:var(--onSheet2)}
+.c-asst{--c:var(--asst);--on:var(--onSheet);--on2:var(--onSheet)}
+.c-exp{--c:var(--exp);--on:var(--onSheet);--on2:var(--onSheet2)}
+.c-tasks{--c:var(--tasks);--on:var(--onSheet);--on2:var(--onSheet2)}
+.c-stone{--c:var(--stone);--on:var(--onStone);--on2:var(--onStone2)}
+
+/* цветной лист */
+.sheet{flex:none;position:relative;z-index:1;background:var(--c);color:var(--on);border-radius:28px 28px 0 0;padding:10px var(--gut) var(--sheetB)}
+.sh-top{display:flex;align-items:center;gap:6px;min-height:40px;font:600 15px/1.2 Onest;color:var(--on2)}
+.sh-top .sp{flex:1;min-width:0}
+.ib{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;color:var(--on);flex:none}
+.ib.ring{box-shadow:inset 0 0 0 1.5px currentColor}
+.back{display:inline-flex;align-items:center;gap:2px;font:600 16px Onest;color:var(--on);margin-left:-8px;height:40px}
+.phrase{font:700 var(--phrase)/1.12 Geologica,Onest,sans-serif;letter-spacing:-.025em;margin:4px 0 0;max-width:13.5em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ttl{font:800 30px/1.12 Onest;letter-spacing:-.6px;margin:2px 0 0}
+.ttl-only{display:none}
+.sub{font:600 15px/1.3 Onest;color:var(--on2);margin-top:4px}
+/* свёрнутый лист */
+.sheet.min{padding:6px 10px calc(var(--sheetB) - 12px)}
+.strip{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;height:44px;gap:6px}
+.strip .t{font:750 18px/1 Onest;text-align:center;white-space:nowrap}
+.strip .l{display:flex;align-items:center;justify-content:flex-start;min-width:0}
+.strip .r{display:flex;align-items:center;justify-content:flex-end}
+.strip .back{margin-left:0;font-size:15px}
+
+/* светлый лист с подробностями */
+.pap{flex:1;min-height:0;position:relative;z-index:2;margin-top:-28px;background:var(--paper);border-radius:28px;overflow:hidden;padding:18px var(--gut) 0}
+.pap.flat{border-radius:28px 28px 0 0}
+
+/* вкладки: цвет + слово у всех пяти */
+.tabs{flex:none;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));padding:9px 4px 0;height:68px}
+.tab{display:flex;flex-direction:column;align-items:center;gap:5px;font:600 12px/1.1 Onest;color:var(--trayInk2);min-width:0;white-space:nowrap;letter-spacing:-.1px}
+.tab b{display:grid;place-items:center;width:46px;height:30px;border-radius:15px;background:var(--c);color:var(--on)}
+.tab b .i{width:20px;height:20px}
+.tab.on{color:var(--trayInk);font-weight:800}
+.tab.on b{width:58px;box-shadow:0 0 0 2px var(--tray),0 0 0 3.5px var(--trayInk)}
+.home{flex:none;height:24px;position:relative}
+.home::after{content:"";position:absolute;left:50%;bottom:8px;width:134px;margin-left:-67px;height:5px;border-radius:3px;background:var(--trayInk);opacity:.85}
+
+/* строки и разделы */
+.ln{display:flex;align-items:center;gap:12px;min-height:54px;border-top:1px solid var(--line);font-size:16px}
+.ln.f0{border-top:0}
+.m{margin-left:auto;color:var(--ink3);font-size:14px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.am{font:700 16px Onest;font-variant-numeric:tabular-nums;white-space:nowrap}
+.sec{display:flex;align-items:baseline;justify-content:space-between;gap:8px;font:750 17px/1.2 Onest;margin:18px 0 6px}
+.sec:first-child{margin-top:0}
+.sec .lk{font:600 15px Onest;color:var(--ink);display:inline-flex;align-items:center;gap:2px;white-space:nowrap}
+.cap{font-size:13px;line-height:1.35;color:var(--ink3)}
+.small{font-size:14px;line-height:1.4;color:var(--ink2)}
+.big{font:700 46px/1 Geologica,Onest,sans-serif;letter-spacing:-.035em;font-variant-numeric:tabular-nums}
+.ph h4{margin:0;font:700 16px/1.25 Onest}
+
+/* кнопки */
+.btn{height:52px;border-radius:26px;background:var(--btn);color:var(--onBtn);font:700 17px/1 Onest;display:flex;align-items:center;justify-content:center;gap:8px;padding:0 22px;border:0}
+.btn.sm{height:42px;border-radius:21px;font-size:15px;padding:0 16px}
+.btn.ghost{background:transparent;color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.btn.danger{background:var(--danger);color:var(--onDanger)}
+.rb{width:42px;height:42px;border-radius:50%;background:var(--btn);color:var(--onBtn);display:grid;place-items:center;flex:none}
+.lnk{font-weight:700;color:var(--ink);text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1.5px}
+.undo{font-weight:750;color:var(--asstText)}
+.chip{height:38px;border-radius:19px;padding:0 15px;box-shadow:inset 0 0 0 1.5px var(--line2);font:600 15px/1 Onest;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;color:var(--ink)}
+.chip.on{background:var(--btn);color:var(--onBtn);box-shadow:none}
+.chips{display:flex;gap:8px;flex-wrap:nowrap;overflow:hidden}
+
+/* строка помощника */
+.ask{position:absolute;left:12px;right:12px;bottom:12px;height:56px;border-radius:28px;background:var(--paper);box-shadow:inset 0 0 0 1.5px var(--ink);display:flex;align-items:center;gap:6px;padding:0 7px 0 18px;color:var(--ink3);font-size:16px;z-index:5}
+.ask .plus{width:36px;height:36px;display:grid;place-items:center;color:var(--ink);margin-left:-10px}
+
+/* уведомление сверху */
+.notice{position:absolute;left:10px;right:10px;top:50px;z-index:30;min-height:54px;border-radius:18px;background:var(--noticeBg);color:var(--noticeInk);display:flex;align-items:center;gap:12px;padding:8px 16px;font:600 15px/1.25 Onest;box-shadow:0 14px 30px -10px rgba(0,0,0,.5)}
+.notice .f1{white-space:normal}
+.notice .act{margin-left:auto;font-weight:800;white-space:nowrap;color:var(--noticeInk);text-decoration:underline;text-underline-offset:3px}
+.notice .act.asst{color:var(--noticeUndo);text-decoration:none}
+.tm{display:flex;gap:3px;flex:none}.tm i{width:6px;height:6px;border-radius:50%;background:currentColor}.tm i.o{opacity:.25}
+
+/* «изменил помощник», правка в тексте */
+.chg{display:inline-flex;align-items:center;gap:6px;font:700 13px/1.1 Onest;color:var(--asstText);white-space:nowrap}
+.chg::before{content:"";width:9px;height:9px;border-radius:50%;background:var(--asst);flex:none}
+.ph mark{background:var(--hl);color:var(--ink);border-radius:4px;padding:0 3px;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.ph s{color:var(--ink3);text-decoration-thickness:1.5px}
+.fold{position:absolute;right:0;top:0;width:24px;height:24px;border-radius:0 20px 0 8px;background:linear-gradient(225deg,var(--paper) 50%,var(--asst) 50%)}
+
+/* отметки дел */
+.ck{width:26px;height:26px;border-radius:50%;box-shadow:inset 0 0 0 2px var(--ink);flex:none;display:grid;place-items:center;color:var(--paper)}
+.ck.ok{background:var(--ink)}
+.ck.wait{box-shadow:inset 0 0 0 2px var(--ink3);background:repeating-conic-gradient(var(--paper) 0 10deg,transparent 10deg 20deg)}
+
+/* стикеры, категории */
+.stk{border-radius:20px;padding:14px 14px 13px;background:var(--st);color:var(--stInk);position:relative;overflow:hidden}
+.stk .cap{color:var(--stInk2)}
+.stk .chg{font-size:12.5px}
+.st-paper{--st:var(--st-paper);box-shadow:inset 0 0 0 1px var(--line)}
+.st-sand{--st:var(--st-sand)}.st-rose{--st:var(--st-rose)}.st-mist{--st:var(--st-mist)}.st-graph{--st:var(--st-graph)}
+.kq{width:12px;height:12px;border-radius:4px;background:var(--k);flex:none}
+.k-food{--k:var(--k-food)}.k-trans{--k:var(--k-trans)}.k-home{--k:var(--k-home)}.k-cafe{--k:var(--k-cafe)}.k-health{--k:var(--k-health)}.k-kids{--k:var(--k-kids)}.k-other{--k:var(--k-other)}
+.ptab{width:16px;height:22px;border-radius:5px 5px 2px 2px;background:var(--c);flex:none}
+
+/* шторка, затемнение, компактное подтверждение */
+.scrim{position:absolute;inset:0;background:var(--scrim);z-index:40}
+.bsheet{position:absolute;left:0;right:0;bottom:0;z-index:41;background:var(--paper);border-radius:28px 28px 0 0;padding:0 var(--gut) 30px;overflow:hidden;box-shadow:0 -10px 30px rgba(0,0,0,.25)}
+.bsheet .strip-c{height:6px;background:var(--c);margin:0 calc(var(--gut) * -1)}
+.grab{width:40px;height:5px;border-radius:3px;background:var(--line2);margin:8px auto 12px}
+.confirm{position:absolute;left:10px;right:10px;bottom:12px;z-index:41;background:var(--paper);border-radius:26px;padding:18px 18px 16px;box-shadow:0 18px 40px rgba(0,0,0,.35)}
+
+/* план дня: высота = длительность (1 dp = 1 мин, минимум 40) */
+.plan{position:relative;padding-left:56px}
+.plan .blk{position:relative;border-radius:14px;padding:6px 12px;display:flex;flex-direction:column;justify-content:center;min-height:40px;background:var(--paper2);margin-bottom:4px}
+.plan .blk h4{font-size:15.5px}
+.plan .blk .cap{margin-top:2px}
+.plan .blk.done{background:transparent;box-shadow:inset 0 0 0 1px var(--line)}
+.plan .blk.done h4{text-decoration:line-through;color:var(--ink3);font-weight:600}
+.plan .blk.main{background:var(--ink);color:var(--paper)}
+.plan .blk.main .cap{color:var(--paper);opacity:.85}
+.plan .free{border-radius:14px;box-shadow:inset 0 0 0 1.5px var(--line2);border:0;background:repeating-linear-gradient(135deg,transparent 0 7px,var(--line) 7px 8px);display:flex;align-items:center;justify-content:center;font:600 14px Onest;color:var(--ink2);margin-bottom:4px}
+.plan .free span{background:var(--paper);padding:2px 10px;border-radius:10px}
+.plan .t{position:absolute;left:-56px;top:10px;width:48px;font:700 14px Onest;font-variant-numeric:tabular-nums;color:var(--ink)}
+.plan .now{position:relative;height:0;margin:2px 0 6px;border-top:2px solid var(--ink)}
+.plan .now span{position:absolute;left:-56px;top:-11px;font:800 12px/1 Onest;background:var(--ink);color:var(--paper);padding:4px 7px;border-radius:9px;font-variant-numeric:tabular-nums}
+
+/* чат */
+.me{display:flex;justify-content:flex-end;margin-bottom:12px}
+.me p{max-width:82%;background:var(--btn);color:var(--onBtn);padding:11px 15px;border-radius:20px 20px 6px 20px;font-size:16px;line-height:1.35}
+.bot{font-size:16.5px;line-height:1.45;font-weight:500;margin:0 0 10px}
+.res{border-radius:18px;padding:12px 14px;background:var(--c);color:var(--on);display:flex;align-items:center;gap:10px}
+.res+.res{margin-top:6px}
+.res small{display:block;font:600 13px/1.2 Onest;color:var(--on2);margin-bottom:2px}
+.res h4{font:700 16px Onest}
+
+/* A4 */
+.a4{aspect-ratio:210/297;background:var(--a4);color:var(--a4Ink);border-radius:4px;box-shadow:0 10px 30px -8px rgba(0,0,0,.35),0 0 0 1px rgba(0,0,0,.06);font-size:8.6px;line-height:1.45;padding:22px 20px}
+.a4 table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.a4 td,.a4 th{padding:4px 0;border-bottom:.5px solid #CFCAC0;text-align:left;font-weight:400}
+.a4 th{font-weight:700}
+.a4 .r{text-align:right}
+
+/* крупный шрифт (×1,35) */
+.ph.lg{font-size:21px}
+.ph.lg .ln{min-height:68px;font-size:21px}
+.ph.lg .m{font-size:18px}
+.ph.lg .sec{font-size:22px}
+.ph.lg .ttl{font-size:36px}
+.ph.lg .sh-top{font-size:19px}
+.ph.lg .tab{font-size:13px}
+.ph.lg .ck{width:32px;height:32px}
+.ph.w320 .phrase,.ph.lg .phrase{display:none}
+.ph.w320 .ttl-only,.ph.lg .ttl-only{display:block}
+.ph.w320 .tab{font-size:11.5px}
+.ph.w320 .plan .blk .cap{display:none}
+.ph.w320 .tab b{width:42px}
+.ph.w320 .tab.on b{width:52px}
+
+/* токены на странице */
+.tok{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,360px),1fr));gap:14px}
+.tok .fact{overflow:hidden}
+.sw{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.sw div{display:flex;align-items:center;gap:8px;font:500 13px/1.25 Onest;color:var(--pg-ink2);min-width:0}
+.sw div i{width:30px;height:30px;border-radius:8px;flex:none;box-shadow:inset 0 0 0 1px rgba(128,128,128,.35)}
+.sw div span{min-width:0}
+.sw div b{display:block;color:var(--pg-ink);font-weight:600}
+.tt{width:100%;border-collapse:collapse;font-size:14px}
+.tt td,.tt th{padding:7px 6px;border-top:1px solid var(--pg-line);text-align:left;vertical-align:top}
+.tt th{font-weight:700;color:var(--pg-ink2);font-size:13px}
+.scroll-x{overflow-x:auto}
+.kz{font-size:24px;line-height:1.35;margin:6px 0 2px;overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<symbol id="sbi" viewBox="0 0 66 12"><rect x="0" y="7" width="3" height="4" rx="1" fill="currentColor"/><rect x="4.5" y="5" width="3" height="6" rx="1" fill="currentColor"/><rect x="9" y="3" width="3" height="8" rx="1" fill="currentColor"/><rect x="13.5" y="1" width="3" height="10" rx="1" fill="currentColor"/><path d="M22 5a9 9 0 0 1 12 0M24.5 7.8a5.4 5.4 0 0 1 7 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="28" cy="10.3" r=".9" fill="currentColor"/><rect x="40.5" y=".5" width="21" height="11" rx="3.2" fill="none" stroke="currentColor" stroke-opacity=".45"/><rect x="42" y="2" width="15" height="8" rx="2" fill="currentColor"/><rect x="63" y="4" width="1.6" height="4" rx=".8" fill="currentColor" fill-opacity=".45"/></symbol>
+<symbol id="sbo" viewBox="0 0 66 12"><rect x="0" y="7" width="3" height="4" rx="1" fill="currentColor" fill-opacity=".35"/><rect x="4.5" y="5" width="3" height="6" rx="1" fill="currentColor" fill-opacity=".35"/><rect x="9" y="3" width="3" height="8" rx="1" fill="currentColor" fill-opacity=".35"/><rect x="13.5" y="1" width="3" height="10" rx="1" fill="currentColor" fill-opacity=".35"/><path d="M23 3l10 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><rect x="40.5" y=".5" width="21" height="11" rx="3.2" fill="none" stroke="currentColor" stroke-opacity=".45"/><rect x="42" y="2" width="11" height="8" rx="2" fill="currentColor"/></symbol>
+<symbol id="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4"/></symbol>
+<symbol id="note" viewBox="0 0 24 24"><path d="M5 4h10l4 4v12H5z"/><path d="M15 4v4h4M8.5 12h7M8.5 16h5"/></symbol>
+<symbol id="asst" viewBox="0 0 24 24"><path d="M4.5 6.5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H11l-4.5 3.5v-3.5h0a2 2 0 0 1-2-2z"/><path d="M8.5 9.5h7M8.5 12.5h4.5"/></symbol>
+<symbol id="coin" viewBox="0 0 24 24"><rect x="3.5" y="6" width="17" height="13" rx="2.5"/><path d="M3.5 10.5h17M7.5 15h3"/></symbol>
+<symbol id="more" viewBox="0 0 24 24"><circle cx="5.5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18.5" cy="12" r="1.3"/></symbol>
+<symbol id="tasks" viewBox="0 0 24 24"><path d="M10 6.5h10M10 12h10M10 17.5h10"/><path d="M3.8 6.5l1.4 1.4L7.6 5.4M3.8 12l1.4 1.4 2.4-2.5M3.8 17.5l1.4 1.4 2.4-2.5"/></symbol>
+<symbol id="mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11.5" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></symbol>
+<symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></symbol>
+<symbol id="check" viewBox="0 0 24 24"><path d="M5.5 12.5l4 4L18.5 7.5"/></symbol>
+<symbol id="back" viewBox="0 0 24 24"><path d="M14.5 6l-6 6 6 6"/></symbol>
+<symbol id="chev" viewBox="0 0 24 24"><path d="M9.5 6l6 6-6 6"/></symbol>
+<symbol id="down" viewBox="0 0 24 24"><path d="M6 9.5l6 6 6-6"/></symbol>
+<symbol id="x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+<symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l2.8 1.8"/></symbol>
+<symbol id="trash" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 12.5h9l1-12.5M10 11v5M14 11v5"/></symbol>
+<symbol id="share" viewBox="0 0 24 24"><path d="M12 3.5v11M8 7.5l4-4 4 4"/><path d="M6 11.5v8h12v-8"/></symbol>
+<symbol id="cloud" viewBox="0 0 24 24"><path d="M7 18.5h10a4 4 0 0 0 .6-8A6 6 0 0 0 6.2 9 4.8 4.8 0 0 0 7 18.5z"/><path d="M4 4l16 16"/></symbol>
+<symbol id="gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></symbol>
+<symbol id="hist" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4.5v3.5h3.5M12 8v4l2.8 1.8"/></symbol>
+<symbol id="doc" viewBox="0 0 24 24"><path d="M6 3.5h8.5l3.5 3.5v13.5H6z"/><path d="M14.5 3.5V7H18M9 11.5h6M9 15h6"/></symbol>
+<symbol id="inbox" viewBox="0 0 24 24"><path d="M12 3.5v9M8.5 9l3.5 3.5L15.5 9"/><path d="M3.5 13.5h5l1.5 2.5h4l1.5-2.5h5v6h-17z"/></symbol>
+<symbol id="all" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></symbol>
+<symbol id="receipt" viewBox="0 0 24 24"><path d="M6 3.5h12v17l-2-1.3-2 1.3-2-1.3-2 1.3-2-1.3-2 1.3z"/><path d="M9 8h6M9 11.5h6M9 15h3.5"/></symbol>
+<symbol id="lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
+<symbol id="stop" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2.5" fill="currentColor" stroke="none"/></symbol>
+<symbol id="pen" viewBox="0 0 24 24"><path d="M4.5 19.5l1-4L16 5l3 3L8.5 18.5z"/><path d="M14 7l3 3"/></symbol>
+<symbol id="cam" viewBox="0 0 24 24"><path d="M4 8h3.5L9 5.5h6L16.5 8H20v11H4z"/><circle cx="12" cy="13" r="3.5"/></symbol>
+<symbol id="bell" viewBox="0 0 24 24"><path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 1.5H5z"/><path d="M10 20.5h4"/></symbol>
+<symbol id="type" viewBox="0 0 24 24"><path d="M4 18.5L8.5 6.5h1L14 18.5M5.6 14.5h6.8M15 18.5l3-8h.6l3 8M15.8 16h5"/></symbol>
+<symbol id="moon" viewBox="0 0 24 24"><path d="M19 14.5A7.5 7.5 0 1 1 9.5 5a6 6 0 0 0 9.5 9.5z"/></symbol>
+<symbol id="globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 3.5 5.4 3.5 8.5s-1 5.9-3.5 8.5c-2.5-2.6-3.5-5.4-3.5-8.5s1-5.9 3.5-8.5z"/></symbol>
+<symbol id="pin" viewBox="0 0 24 24"><path d="M12 20.5s-6-5.3-6-10.5a6 6 0 0 1 12 0c0 5.2-6 10.5-6 10.5z"/><circle cx="12" cy="10" r="2"/></symbol>
+<symbol id="film" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 4v16M16 4v16M4 9h4M4 15h4M16 9h4M16 15h4"/></symbol>
+<symbol id="export" viewBox="0 0 24 24"><path d="M12 14V3.5M8.5 7L12 3.5 15.5 7"/><path d="M4.5 13v6.5h15V13"/></symbol>
+<symbol id="redo" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></symbol>
+</svg>
+<div class="wrap">
+<header class="top">
+<h1>Экраны v5 · «Листы»</h1>
+<p>Полный набор экранов в светлой и тёмной теме по решению Ф-79. У каждого места свой цвет листа: Сегодня — жёлтый, Заметки — голубой, Помощник — терракотовый, Расходы — зелёный, Дела — сиреневый. «Ещё» и служебные экраны — нейтральный камень. Наверху цветной лист, ниже светлый (в тёмной теме — тёмный) лист с подробностями.</p>
+<p>Все данные выдуманы. Телефоны показаны в настоящих размерах: 375 × 780 dp, в разделе «Размеры» — 320, 390 и 430 dp.</p>
+</header>
+<nav class="bar" aria-label="Разделы и тема">
+<div class="seg" role="group" aria-label="Тема"><button type="button" data-t="light">Светлая</button><button type="button" data-t="dark">Тёмная</button></div>
+<a href="#g-main">Вкладки</a><a href="#g-more">Ещё и служебные</a><a href="#g-states">Состояния</a><a href="#g-onb">Первый запуск</a><a href="#g-docs">Документы</a><a href="#g-adapt">Размеры</a><a href="#g-tokens">Токены</a><a href="#g-rules">Правила</a>
+</nav>
+
+<!-- ============================== ВКЛАДКИ ============================== -->
+<section class="grp" id="g-main">
+<h2>Вкладки</h2>
+<p class="lead">Сегодня · Заметки · Помощник · Расходы · Ещё. У каждой вкладки есть цвет и слово. Большая фраза есть только на «Сегодня» и «Расходах», на остальных экранах — обычный заголовок. При прокрутке цветной лист сворачивается в полоску с названием.</p>
+<div class="phones">
+
+<!-- Помощник · пусто -->
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-today"></i><i class="c-notes"></i></div>
+<div class="sheet min c-asst"><div class="strip"><div class="l"><span class="ib" aria-label="История"><svg class="i"><use href="#hist"/></svg></span></div><div class="t">Помощник</div><div class="r"><span class="ib" aria-label="Поиск"><svg class="i"><use href="#search"/></svg></span></div></div></div>
+<div class="pap">
+<p style="font:800 25px/1.22 Onest;letter-spacing:-.5px;margin-top:18px">Скажите или перешлите — я&nbsp;разложу по&nbsp;местам и&nbsp;найду, когда понадобится.</p>
+<p class="sec" style="margin-top:26px">Можно начать так</p>
+<div class="ln f0"><span class="ptab c-notes"></span><span class="f1 ell">«Запомни код домофона 4512»</span></div>
+<div class="ln"><span class="ptab c-exp"></span><span class="f1 ell">«Такси 2 400»</span></div>
+<div class="ln"><span class="ptab c-tasks"></span><span class="f1 ell">«Завтра в 10 позвонить в ЦОН»</span></div>
+<div class="ln"><span class="ptab c-stone"></span><span class="f1 ell">«Что советовали про Стамбул?»</span></div>
+<p class="cap row" style="margin-top:14px;gap:6px"><svg class="i xs"><use href="#lock"/></svg>Ваши записи видите только вы</p>
+<div class="ask"><span class="plus"><svg class="i"><use href="#plus"/></svg></span><span class="f1 ell">Спросите или запишите…</span><span class="rb"><svg class="i"><use href="#mic"/></svg></span></div>
+</div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst on"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>Помощник · первый раз</b>Терракотовый лист свёрнут в полоску с названием. Примеры — обычные строки, у каждой цвет места, куда ляжет запись.</figcaption></figure>
+
+<!-- Помощник · разговор -->
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-today"></i><i class="c-notes"></i></div>
+<div class="sheet min c-asst"><div class="strip"><div class="l"><span class="ib"><svg class="i"><use href="#hist"/></svg></span></div><div class="t">Помощник</div><div class="r"><span class="ib"><svg class="i"><use href="#search"/></svg></span></div></div></div>
+<div class="pap">
+<p class="cap" style="text-align:center;margin:0 0 12px">Сегодня, 9:38</p>
+<div class="me"><p>Завтра в 10 позвонить в ЦОН. И такси сегодня — 2 400</p></div>
+<p class="bot">Готово. Звонок — в «Дела», такси — в «Расходы».</p>
+<div class="res c-tasks"><svg class="i"><use href="#tasks"/></svg><div class="f1"><small>Дела · завтра, 10:00</small><h4 class="ell">Позвонить в ЦОН</h4></div><svg class="i s"><use href="#chev"/></svg></div>
+<div class="res c-exp"><svg class="i"><use href="#coin"/></svg><div class="f1"><small>Расходы · Транспорт</small><h4>Такси</h4></div><b class="am">2 400 ₸</b></div>
+<p class="small" style="margin-top:10px"><span class="lnk">Переложить</span> &nbsp;·&nbsp; <span class="undo">Отменить всё</span></p>
+<div class="me" style="margin-top:20px"><p>где мамин код от домофона?</p></div>
+<div class="row" style="align-items:flex-end;gap:12px"><span class="big">4512</span><span class="small" style="padding-bottom:5px">подъезд 3, кв. 47</span></div>
+<p class="cap" style="margin-top:6px">Заметки · «Код домофона» · 2 марта ›</p>
+<div class="ask"><span class="plus"><svg class="i"><use href="#plus"/></svg></span><span class="f1 ell">Спросите или запишите…</span><span class="rb"><svg class="i"><use href="#mic"/></svg></span></div>
+</div>
+<div class="notice"><span class="tm"><i></i><i></i><i class="o"></i></span><span class="f1">Записал 2: дело и трату</span><span class="act asst">Отменить</span></div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst on"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>Помощник · разговор</b>Созданное — маленькие листы цвета своего места. Сверху уведомление на 3 с, три точки показывают время. «Отменить» терракотовый: это действие помощника. «Переложить» — обычная чёрная ссылка. Одна крупная цифра на экран — ответ «4512».</figcaption></figure>
+
+<!-- Помощник · голос -->
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-today"></i><i class="c-notes"></i></div>
+<div class="sheet min c-asst"><div class="strip"><div class="l"></div><div class="t">Помощник</div><div class="r"></div></div></div>
+<div class="pap">
+<p class="row" style="justify-content:center;gap:8px;font:700 15px Onest;color:var(--ink2);margin-top:4px"><span style="width:9px;height:9px;border-radius:50%;background:var(--asst)"></span>Слушаю</p>
+<p style="font:600 25px/1.32 Onest;letter-spacing:-.3px;margin-top:34px">Завтра в&nbsp;десять позвонить в&nbsp;ЦОН, и&nbsp;такси сегодня <span style="color:var(--ink3)">две четыреста</span></p>
+<svg viewBox="0 0 300 64" style="width:100%;height:64px;margin-top:40px;color:var(--ink)" aria-hidden="true"><g fill="currentColor">
+<rect x="0" y="28" width="6" height="8" rx="3"/><rect x="12" y="22" width="6" height="20" rx="3"/><rect x="24" y="12" width="6" height="40" rx="3"/><rect x="36" y="18" width="6" height="28" rx="3"/><rect x="48" y="6" width="6" height="52" rx="3"/><rect x="60" y="16" width="6" height="32" rx="3"/><rect x="72" y="24" width="6" height="16" rx="3"/><rect x="84" y="10" width="6" height="44" rx="3"/><rect x="96" y="2" width="6" height="60" rx="3"/><rect x="108" y="14" width="6" height="36" rx="3"/><rect x="120" y="22" width="6" height="20" rx="3"/><rect x="132" y="8" width="6" height="48" rx="3"/><rect x="144" y="18" width="6" height="28" rx="3"/><rect x="156" y="26" width="6" height="12" rx="3"/><rect x="168" y="12" width="6" height="40" rx="3"/><rect x="180" y="20" width="6" height="24" rx="3"/>
+<g opacity=".3"><rect x="192" y="27" width="6" height="10" rx="3"/><rect x="204" y="28" width="6" height="8" rx="3"/><rect x="216" y="29" width="6" height="6" rx="3"/><rect x="228" y="29" width="6" height="6" rx="3"/><rect x="240" y="29" width="6" height="6" rx="3"/><rect x="252" y="29" width="6" height="6" rx="3"/><rect x="264" y="29" width="6" height="6" rx="3"/><rect x="276" y="29" width="6" height="6" rx="3"/><rect x="288" y="29" width="6" height="6" rx="3"/></g></g></svg>
+<p class="small" style="text-align:center;margin-top:18px">Говорите сколько нужно — паузы не страшны</p>
+<div class="row" style="position:absolute;left:0;right:0;bottom:30px;justify-content:center;gap:34px;align-items:flex-start">
+<div style="display:flex;flex-direction:column;align-items:center;gap:8px;font:600 14px Onest;color:var(--ink2)"><span style="width:56px;height:56px;border-radius:50%;box-shadow:inset 0 0 0 1.5px var(--ink);display:grid;place-items:center;color:var(--ink)"><svg class="i"><use href="#x"/></svg></span>Отмена</div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:8px;font:700 15px Onest"><span style="width:84px;height:84px;border-radius:50%;background:var(--btn);color:var(--onBtn);display:grid;place-items:center"><svg class="i xl"><use href="#check"/></svg></span>Готово</div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:8px;font:600 14px Onest;color:var(--ink2)"><span style="width:56px;height:56px;border-radius:50%;box-shadow:inset 0 0 0 1.5px var(--ink);display:grid;place-items:center;color:var(--ink)"><svg class="i"><use href="#pen"/></svg></span>Текстом</div>
+</div>
+</div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst on"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>Помощник · голос</b>Текст появляется по ходу речи, неуверенные слова светлее. Волна и кнопки — цвета текста, никакого свечения. Одна главная кнопка «Готово».</figcaption></figure>
+
+<!-- Сегодня · развёрнут -->
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-asst"></i><i class="c-notes"></i></div>
+<div class="sheet c-today"><div class="sh-top"><span class="sp">Вторник, 17 ноября</span><span class="ib"><svg class="i"><use href="#search"/></svg></span></div><p class="phrase">Спокойный день.<br>5&nbsp;дел, 1&nbsp;встреча.</p><p class="ttl ttl-only">Сегодня</p></div>
+<div class="pap"><div class="sec">План дня<span class="lk">Все дела<svg class="i xs"><use href="#chev"/></svg></span></div>
+<div class="plan">
+<div class="blk done"><span class="t">09:00</span><h4 class="ell">Таблетка от давления</h4></div>
+<div class="now"><span>9:41</span></div>
+<div class="blk main" style="height:40px"><span class="t" style="color:var(--ink)">10:30</span><div class="row"><h4 class="f1 ell">Созвон с бухгалтером</h4><span class="cap">30 мин</span></div></div>
+<div class="free" style="height:120px"><span>свободно 2 ч</span></div>
+<div class="blk" style="height:60px"><span class="t">13:00</span><div class="row"><h4 class="f1 ell">Обед с Ерланом</h4><span class="cap">1 ч</span></div></div>
+<div class="free" style="height:30px"><span>30 мин</span></div>
+<div class="blk" style="height:40px"><span class="t">14:30</span><div class="row"><h4 class="f1 ell">Забрать Алию из школы</h4><span class="cap">30 мин</span></div></div>
+</div>
+<div class="sec">Не забыть<span class="m">2</span></div>
+<div class="ln f0"><span class="ck"></span><span class="f1 ell">Оплатить интернет</span><span class="m">до пт</span></div>
+<div class="ln"><span class="ck"></span><span class="f1 ell">Купить корм коту</span><span class="m">вечером</span></div>
+<div class="sec">Потрачено сегодня<span class="lk tn">3 600 ₸<svg class="i xs"><use href="#chev"/></svg></span></div></div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>Сегодня · развёрнут</b>Большая фраза — две строки максимум. План дня из «Ритма»: высота блока равна длительности (1 dp на минуту, минимум 40), пустое время — «свободно 2 ч». Сейчас — чёрная линия.</figcaption></figure>
+
+<!-- Сегодня · свёрнут -->
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-asst"></i><i class="c-notes"></i></div>
+<div class="sheet min c-today"><div class="strip"><div class="l"><span class="cap" style="color:var(--on2);font-weight:600;padding-left:8px">вт, 17 нояб.</span></div><div class="t">Сегодня</div><div class="r"><span class="ib"><svg class="i"><use href="#search"/></svg></span></div></div></div>
+<div class="pap"><div style="margin-top:-244px"><div class="sec">План дня<span class="lk">Все дела<svg class="i xs"><use href="#chev"/></svg></span></div>
+<div class="plan">
+<div class="blk done"><span class="t">09:00</span><h4 class="ell">Таблетка от давления</h4></div>
+<div class="now"><span>9:41</span></div>
+<div class="blk main" style="height:40px"><span class="t" style="color:var(--ink)">10:30</span><div class="row"><h4 class="f1 ell">Созвон с бухгалтером</h4><span class="cap">30 мин</span></div></div>
+<div class="free" style="height:120px"><span>свободно 2 ч</span></div>
+<div class="blk" style="height:60px"><span class="t">13:00</span><div class="row"><h4 class="f1 ell">Обед с Ерланом</h4><span class="cap">1 ч</span></div></div>
+<div class="free" style="height:30px"><span>30 мин</span></div>
+<div class="blk" style="height:40px"><span class="t">14:30</span><div class="row"><h4 class="f1 ell">Забрать Алию из школы</h4><span class="cap">30 мин</span></div></div>
+</div>
+<div class="sec">Не забыть<span class="m">2</span></div>
+<div class="ln f0"><span class="ck"></span><span class="f1 ell">Оплатить интернет</span><span class="m">до пт</span></div>
+<div class="ln"><span class="ck"></span><span class="f1 ell">Купить корм коту</span><span class="m">вечером</span></div>
+<div class="sec">Потрачено сегодня<span class="lk tn">3 600 ₸<svg class="i xs"><use href="#chev"/></svg></span></div>
+<div class="sec">Завтра<span class="lk">Все дела<svg class="i xs"><use href="#chev"/></svg></span></div>
+<div class="ln f0"><span class="tn" style="width:48px;font:700 14px Onest">10:00</span><span class="f1 ell">Позвонить в ЦОН</span></div>
+<div class="ln"><span class="tn" style="width:48px;font:700 14px Onest">16:00</span><span class="f1 ell">Стоматолог</span><span class="m">ждёт ответа</span></div>
+</div></div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>Сегодня · после прокрутки</b>Лист свернулся в полоску 44 dp с названием, как большой заголовок в iOS. Фраза ушла, дата стала короткой. Прокрутка вверх раскрывает лист обратно.</figcaption></figure>
+
+<!-- Заметки · список -->
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-exp"></i><i class="c-today"></i></div>
+<div class="sheet c-notes"><div class="sh-top"><span class="sp">128 заметок</span><span class="ib"><svg class="i"><use href="#search"/></svg></span><span class="ib"><svg class="i"><use href="#plus"/></svg></span></div><p class="ttl">Заметки</p></div>
+<div class="pap" style="padding-left:14px;padding-right:14px">
+<div class="chips" style="margin-bottom:12px"><span class="chip on">Все</span><span class="chip">Важные</span><span class="chip"><svg class="i xs"><use href="#film"/></svg>Из материала</span></div>
+<div style="display:flex;gap:8px;align-items:flex-start">
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
+<div class="stk st-sand"><h4>Код домофона</h4><p class="tn" style="font:800 26px/1.15 Onest;margin-top:6px">4512</p><p class="cap">подъезд 3, кв. 47</p></div>
+<div class="stk st-paper"><span class="fold"></span><h4 style="padding-right:14px">Алматы: что посмотреть</h4><span class="chg" style="display:flex;margin-top:6px">изменил помощник</span><p class="small" style="margin-top:4px;color:var(--stInk2)">Медеу — после 16:00, Кок-Тобе, Зелёный базар</p></div>
+<div class="stk st-mist"><h4>Wi-Fi на даче</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Dacha_5G<br>sunflower2024</p><p class="cap" style="margin-top:6px">10 нояб.</p></div>
+</div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
+<div class="stk st-rose"><h4>Подарки на НГ</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Алие — коньки<br>Папе — термос</p><p class="cap" style="margin-top:6px">2 нояб.</p></div>
+<div class="stk st-graph"><h4>Размер шин</h4><p class="tn" style="font:800 20px/1.2 Onest;margin-top:6px">205/55 R16</p></div>
+<div class="stk st-paper"><h4>Стамбул</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">23 совета · кафе, музеи</p><p class="cap row" style="gap:5px;margin-top:6px"><svg class="i xs"><use href="#film"/></svg>из материала</p></div>
+<div class="stk st-sand"><h4>Мастер по стиралке</h4><p class="small tn" style="margin-top:4px;color:var(--stInk2)">Ержан<br>+7 701 455 12 90</p></div>
+</div>
+</div>
+</div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes on"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>Заметки · список</b>Обычный заголовок, без фразы. Стикеры — в своей приглушённой палитре (песок, роза, туман, графит, бумага): ни голубого «Заметок», ни жёлтого «Сегодня». Изменённая помощником — с терракотовым уголком.</figcaption></figure>
+
+<!-- Заметка · открыта -->
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div>
+<div class="sheet min c-notes"><div class="strip"><div class="l"><span class="back"><svg class="i"><use href="#back"/></svg>Заметки</span></div><div class="t"></div><div class="r"><span class="ib"><svg class="i"><use href="#share"/></svg></span><span class="ib"><svg class="i"><use href="#more"/></svg></span></div></div></div>
+<div class="pap">
+<div style="background:var(--paper2);border-radius:16px;padding:12px 14px">
+<div class="row"><span class="chg f1">изменил помощник · 12:40</span><span class="undo">Отменить</span></div>
+<p class="small" style="margin-top:6px">Медеу — на вечер, новая цена канатки, добавил озеро. Вы просили: «обнови по свежему рилсу».</p>
+</div>
+<h1 style="font:800 26px/1.2 Onest;letter-spacing:-.5px;margin:18px 0 4px">Алматы: что посмотреть</h1>
+<p class="cap row" style="gap:6px"><svg class="i xs"><use href="#film"/></svg>из материала · 3 окт. · стикер «бумага»</p>
+<ol style="margin:14px 0 0;padding-left:22px;font-size:17px;line-height:1.6">
+<li>Медеу — <s>утром</s> <mark>после 16:00, меньше людей</mark></li>
+<li>Кок-Тобе — на канатке, билет <s class="tn">2 500</s> <mark class="tn">3 000 ₸</mark></li>
+<li>Зелёный базар — сухофрукты и сладости</li>
+<li><mark>Большое Алматинское озеро — выезд в 7:00, взять тёплое</mark></li>
+</ol>
+<p class="cap" style="margin-top:14px">Зачёркнуто — что было, подсвечено — что стало. Через сутки пометка уйдёт, текст останется.</p>
+<div class="ask"><span class="plus"><svg class="i"><use href="#plus"/></svg></span><span class="f1 ell">Попросите что-то поменять…</span><span class="rb"><svg class="i"><use href="#mic"/></svg></span></div>
+</div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes on"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>Заметка · «изменил помощник»</b>Правка прямо в тексте, как в «Тетради»: старое зачёркнуто, новое подсвечено терракотовым маркером (не жёлтым — жёлтый занят «Сегодня»). Плашка сверху держится сутки.</figcaption></figure>
+
+<!-- Расходы · месяц -->
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-tasks"></i><i class="c-asst"></i></div>
+<div class="sheet c-exp"><div class="sh-top"><span class="sp row" style="gap:2px">Ноябрь<svg class="i s"><use href="#down"/></svg></span><span class="ib"><svg class="i"><use href="#search"/></svg></span></div>
+<p class="big" style="margin-top:4px">184 350<span class="cur">₸</span></p>
+<p class="phrase" style="font-size:calc(var(--phrase) - 4px);margin-top:10px">Успеваете: ещё 65&nbsp;650&nbsp;₸</p>
+<p class="sub">из 250 000 ₸ · до конца месяца 13 дней</p></div>
+<div class="pap">
+<div style="display:flex;gap:3px;height:30px"><i class="k-food" style="flex:62.4;background:var(--k);border-radius:6px"></i><i class="k-home" style="flex:41.2;background:var(--k);border-radius:6px"></i><i class="k-trans" style="flex:28.9;background:var(--k);border-radius:6px"></i><i class="k-cafe" style="flex:20.8;background:var(--k);border-radius:6px"></i><i class="k-health" style="flex:18.75;background:var(--k);border-radius:6px"></i><i class="k-kids" style="flex:12.3;background:var(--k);border-radius:6px"></i><i style="flex:65.65;border-radius:6px;box-shadow:inset 0 0 0 1.5px var(--line2);background:repeating-linear-gradient(135deg,transparent 0 6px,var(--line) 6px 7px)"></i></div>
+<p class="cap" style="margin:6px 0 4px">полоски — категории в масштабе, штриховка — ещё можно потратить</p>
+<div class="ln f0"><span class="kq k-food"></span><span class="f1">Продукты</span><b class="am">62 400</b></div>
+<div class="ln"><span class="kq k-home"></span><span class="f1">Дом</span><b class="am">41 200</b></div>
+<div class="ln"><span class="kq k-trans"></span><span class="f1">Транспорт</span><b class="am">28 900</b></div>
+<div class="ln"><span class="kq k-cafe"></span><span class="f1">Кафе</span><b class="am">20 800</b></div>
+<div class="ln"><span class="kq k-health"></span><span class="f1">Здоровье</span><b class="am">18 750</b></div>
+<div class="ln"><span class="kq k-kids"></span><span class="f1">Дети</span><b class="am">12 300</b></div>
+</div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp on"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>Расходы · месяц</b>Одна крупная цифра (из «Табло»), табличные цифры везде. Короткая фраза — второй и последний крупный текст. У категорий своя палитра: Транспорт — сланцевый, не терракотовый.</figcaption></figure>
+
+<!-- Расходы · категория -->
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div>
+<div class="sheet min c-exp"><div class="strip"><div class="l"><span class="back"><svg class="i"><use href="#back"/></svg>Расходы</span></div><div class="t">Транспорт</div><div class="r"><span class="ib"><svg class="i"><use href="#more"/></svg></span></div></div></div>
+<div class="pap">
+<p class="cap row" style="gap:8px"><span class="kq k-trans"></span>Транспорт · ноябрь</p>
+<p class="big" style="margin-top:8px">28 900<span class="cur">₸</span></p>
+<p class="small" style="margin-top:6px">из 35 000 ₸ на месяц · осталось <b class="tn" style="color:var(--ink)">6 100 ₸</b></p>
+<div style="height:10px;border-radius:5px;background:var(--paper2);margin-top:12px;overflow:hidden"><i class="k-trans" style="display:block;height:100%;width:82.6%;background:var(--k);border-radius:5px"></i></div>
+<div class="sec">Сегодня<span class="m">2 400</span></div>
+<div class="ln f0"><span class="f1 ell">Такси</span><span class="m">09:38</span><b class="am" style="width:70px;text-align:right">2 400</b></div>
+<div class="sec">Вчера<span class="m">3 800</span></div>
+<div class="ln f0"><span class="f1 ell">Такси домой</span><span class="m">22:10</span><b class="am" style="width:70px;text-align:right">2 600</b></div>
+<div class="ln"><span class="f1 ell">Парковка у ТРЦ</span><span class="m">18:05</span><b class="am" style="width:70px;text-align:right">1 200</b></div>
+<div class="sec">15 ноября<span class="m">21 500</span></div>
+<div class="ln f0"><span class="f1 ell">Бензин АИ-95</span><span class="m">10:20</span><b class="am" style="width:70px;text-align:right">18 000</b></div>
+<div class="ln"><span class="f1 ell">Мойка</span><span class="m">11:00</span><b class="am" style="width:70px;text-align:right">3 500</b></div>
+</div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp on"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>Расходы · категория</b>Зелёный лист свёрнут: это место «Расходы». Цвет категории — только маленький квадрат и полоска, не фон.</figcaption></figure>
+
+<!-- Расходы · чек -->
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div>
+<div class="sheet min c-exp"><div class="strip"><div class="l"><span class="back"><svg class="i"><use href="#back"/></svg>Расходы</span></div><div class="t">Чек</div><div class="r"><span class="ib"><svg class="i"><use href="#share"/></svg></span></div></div></div>
+<div class="pap">
+<div class="row" style="align-items:flex-end"><p class="big f1">9 540<span class="cur">₸</span></p><span class="chip" style="height:34px"><span class="kq k-food"></span>Продукты</span></div>
+<p class="cap" style="margin-top:6px">Вчера, 19:20 · из фото чека · 7 позиций</p>
+<div style="margin-top:14px;background:var(--paper2);border-radius:14px 14px 0 0;padding:14px 16px 6px;font-size:14.5px;line-height:1.3">
+<p style="font-weight:700">Супермаркет «Береке»</p>
+<p class="cap">касса 3 · чек № 004217</p>
+<table class="tn" style="width:100%;border-collapse:collapse;margin-top:8px;font-size:14.5px">
+<tr><td style="padding:5px 0">Молоко 2,5% × 2</td><td style="text-align:right">1 180</td></tr>
+<tr><td style="padding:5px 0">Хлеб ржаной</td><td style="text-align:right">420</td></tr>
+<tr><td style="padding:5px 0">Яблоки, 1,2 кг</td><td style="text-align:right">1 560</td></tr>
+<tr><td style="padding:5px 0">Курица, филе</td><td style="text-align:right">3 290</td></tr>
+<tr><td style="padding:5px 0">Рис, 1 кг</td><td style="text-align:right">890</td></tr>
+<tr><td style="padding:5px 0">Сыр</td><td style="text-align:right">2 140</td></tr>
+<tr><td style="padding:5px 0">Пакет</td><td style="text-align:right">60</td></tr>
+<tr><td style="padding:8px 0 4px;font-weight:800;border-top:1.5px dashed var(--line2)">Итого</td><td style="text-align:right;font-weight:800;border-top:1.5px dashed var(--line2)">9 540</td></tr>
+</table>
+</div>
+<div style="height:10px;background:linear-gradient(135deg,var(--paper2) 33%,transparent 33%) 0 0/14px 10px repeat-x,linear-gradient(225deg,var(--paper2) 33%,transparent 33%) 0 0/14px 10px repeat-x"></div>
+<div class="row" style="gap:10px;margin-top:14px"><span class="btn ghost sm" style="flex:1">Разбить по категориям</span></div>
+</div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp on"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>Расходы · чек</b>Чек — бумажная лента на светлом листе, цифры табличные. Итог — единственная крупная цифра. Категория выбирается чипом, его цвет из палитры категорий.</figcaption></figure>
+
+<!-- Дела -->
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div>
+<div class="sheet c-tasks"><div class="sh-top"><span class="back"><svg class="i"><use href="#back"/></svg>Сегодня</span><span class="sp"></span><span class="ib"><svg class="i"><use href="#plus"/></svg></span></div><p class="ttl">Дела</p><p class="sub">Вторник, 17 ноября · 4 на сегодня</p></div>
+<div class="pap">
+<div class="sec">Сегодня<span class="m">1 из 4</span></div>
+<div class="ln f0"><span class="ck ok"><svg class="i xs" style="stroke-width:3"><use href="#check"/></svg></span><span class="f1 ell" style="color:var(--ink3);text-decoration:line-through">Таблетка от давления</span><span class="m">09:00</span></div>
+<div class="ln"><span class="ck"></span><span class="f1 ell">Созвон с бухгалтером</span><span class="m">10:30</span></div>
+<div class="ln" style="padding:8px 0"><span class="ck"></span><span class="f1"><span style="display:block">Оплатить интернет</span><span class="chg" style="margin-top:4px">изменил помощник · срок</span></span><span class="m">до пт</span></div>
+<div class="ln"><span class="ck"></span><span class="f1 ell">Забрать Алию из школы</span><span class="m">14:30</span></div>
+<div class="sec">Завтра<span class="m">2</span></div>
+<div class="ln f0"><span class="ck"></span><span class="f1 ell">Позвонить в ЦОН</span><span class="m">10:00</span></div>
+<div class="ln"><span class="ck wait"></span><span class="f1 ell">Записаться к стоматологу</span><span class="m">ждёт ответа</span></div>
+<div class="sec">Без срока</div>
+<div class="ln f0"><span class="ck"></span><span class="f1 ell">Поменять масло в машине</span></div>
+</div>
+<div class="notice"><span class="tm"><i></i><i class="o"></i><i class="o"></i></span><span class="f1">Удалено: «Купить корм коту»</span><span class="act">Восстановить</span></div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>Дела · «Удалено · Восстановить»</b>Открыты из «Сегодня» и остаются сиреневыми. Удаление без «Да»: сверху уведомление на 3 с, «Восстановить» — обычная ссылка, не терракотовая (это действие человека).</figcaption></figure>
+
+</div>
+</section>
+
+<!-- ============================== ЕЩЁ И СЛУЖЕБНЫЕ ============================== -->
+<section class="grp" id="g-more">
+<h2>Ещё и служебные экраны</h2>
+<p class="lead">«Ещё», поиск, настройки, переписки и документы — на нейтральном камне. «История» — терракотовая, потому что это журнал помощника.</p>
+<div class="phones">
+
+<!-- Ещё -->
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-exp"></i><i class="c-asst"></i></div>
+<div class="sheet c-stone"><div class="sh-top"><span class="sp"></span><span class="ib"><svg class="i"><use href="#search"/></svg></span></div><p class="ttl">Ещё</p></div>
+<div class="pap">
+<div class="ln f0" style="min-height:64px"><span style="width:48px;height:48px;border-radius:50%;background:var(--paper2);display:grid;place-items:center;font:800 16px Onest;flex:none">АН</span><span class="f1"><b style="display:block;font-weight:700">Айдар Нурланов</b><span class="cap tn">+7 701 ••• 12 90</span></span><svg class="i s" style="color:var(--ink3)"><use href="#chev"/></svg></div>
+<div class="ln"><span class="ptab c-tasks"></span><span class="f1">Дела</span><span class="m">4 на сегодня</span><svg class="i s" style="color:var(--ink3)"><use href="#chev"/></svg></div>
+<div class="ln"><svg class="i"><use href="#doc"/></svg><span class="f1">Документы</span><span class="m">3 черновика</span><svg class="i s" style="color:var(--ink3)"><use href="#chev"/></svg></div>
+<div class="ln"><svg class="i"><use href="#inbox"/></svg><span class="f1 ell">Переписки с ChatGPT</span><span class="m">1 240</span><svg class="i s" style="color:var(--ink3)"><use href="#chev"/></svg></div>
+<div class="ln"><span class="ptab c-asst"></span><span class="f1">История</span><span class="m">сегодня 6</span><svg class="i s" style="color:var(--ink3)"><use href="#chev"/></svg></div>
+<div class="ln"><svg class="i"><use href="#all"/></svg><span class="f1">Все записи</span><span class="m">412</span><svg class="i s" style="color:var(--ink3)"><use href="#chev"/></svg></div>
+<div class="ln"><svg class="i"><use href="#trash"/></svg><span class="f1">Корзина</span><span class="m">3</span><svg class="i s" style="color:var(--ink3)"><use href="#chev"/></svg></div>
+<div class="ln"><svg class="i"><use href="#gear"/></svg><span class="f1">Настройки</span><svg class="i s" style="color:var(--ink3)"><use href="#chev"/></svg></div>
+</div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone on"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>Ещё</b>Нейтральный тёплый камень (#D8D2C6, в тёмной — графит). Простые строки без плиток. У «Дел» и «Истории» — маленький язычок цвета их листа.</figcaption></figure>
+
+<!-- Поиск -->
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div>
+<div class="sheet c-stone" style="padding-bottom:calc(var(--sheetB) + 2px)"><div class="sh-top"><span class="back"><svg class="i"><use href="#back"/></svg>Назад</span></div>
+<div class="row" style="height:52px;border-radius:26px;background:var(--paper);color:var(--ink);padding:0 8px 0 16px;margin-top:6px"><svg class="i"><use href="#search"/></svg><span class="f1" style="font-size:17px">код домофона<span style="display:inline-block;width:2px;height:20px;background:var(--ink);vertical-align:-4px;margin-left:1px"></span></span><span class="ib" style="color:var(--ink3)"><svg class="i s"><use href="#x"/></svg></span></div></div>
+<div class="pap">
+<div class="sec">Коротко</div>
+<div class="row" style="align-items:flex-end;gap:12px"><span class="big">4512</span><span class="small" style="padding-bottom:5px">подъезд 3, кв. 47 · у мамы</span></div>
+<p class="small" style="margin-top:10px"><span class="lnk">Открыть заметку</span> &nbsp;·&nbsp; <span class="lnk">Спросить помощника</span></p>
+<div class="sec">Заметки<span class="m">2</span></div>
+<div class="ln f0"><span class="ptab c-notes"></span><span class="f1 ell">Код домофона</span><span class="m">2 марта</span></div>
+<div class="ln"><span class="ptab c-notes"></span><span class="f1 ell">Мама: адрес и коды</span><span class="m">январь</span></div>
+<div class="sec">Разговор с помощником<span class="m">1</span></div>
+<div class="ln f0"><span class="ptab c-asst"></span><span class="f1 ell">«где мамин код от домофона?»</span><span class="m">сегодня</span></div>
+<div class="sec">Переписки с ChatGPT<span class="m">1</span></div>
+<div class="ln f0"><svg class="i s"><use href="#inbox"/></svg><span class="f1 ell">Переезд мамы: чек-лист</span><span class="m">2025</span></div>
+</div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone on"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>Поиск</b>Один поиск по всему. Ответ сразу значением — крупная цифра, ниже группы с язычками цвета мест.</figcaption></figure>
+
+<!-- История -->
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div>
+<div class="sheet c-asst"><div class="sh-top"><span class="back" style="font-size:17px;font-weight:700"><svg class="i"><use href="#back"/></svg>Ещё</span></div><p class="ttl">История</p></div>
+<div class="pap">
+<p class="small">Что вы сказали и что я сделал. Любое действие можно отменить.</p>
+<div class="chips" style="margin:12px 0 4px"><span class="chip on">Всё</span><span class="chip">Изменения</span><span class="chip">Ждут ответа</span></div>
+<div class="sec" style="margin-top:14px">Сегодня</div>
+<div style="padding:10px 0;border-top:1px solid var(--line)"><p class="cap"><span class="tn">12:41</span> · Вы: «номер окулиста Сеитова 333 10 10»</p><div class="row" style="margin-top:6px"><span class="ptab c-notes"></span><span class="f1 ell" style="font-weight:600">Заметка «Окулист»</span><span class="undo">Отменить</span></div></div>
+<div style="padding:10px 0;border-top:1px solid var(--line)"><p class="cap"><span class="tn">12:40</span> · Вы: «кофе тысяча двести»</p><div class="row" style="margin-top:6px"><span class="ptab c-exp"></span><span class="f1 ell" style="font-weight:600">Трата 1 200 ₸ · Кафе</span><span class="undo">Отменить</span></div></div>
+<div style="padding:10px 0;border-top:1px solid var(--line)"><p class="cap"><span class="tn">11:02</span> · Вы: «склей одинаковые заметки»</p><div class="row" style="margin-top:6px"><span class="ptab c-notes"></span><span class="f1"><span style="font-weight:600;display:block">Склеить 37 заметок</span><span class="cap">ждёт вашего ответа</span></span><span class="btn sm" style="height:38px">Ответить</span></div></div>
+<div style="padding:10px 0;border-top:1px solid var(--line)"><p class="cap"><span class="tn">09:15</span> · Вы: «купи молоко»</p><div class="row" style="margin-top:6px"><span class="ptab c-tasks"></span><span class="f1"><s style="font-weight:600">Купить молоко</s><span class="cap" style="display:block">вы отменили</span></span><span class="lnk">Вернуть</span></div></div>
+</div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone on"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>История</b>Терракотовый лист — журнал помощника. На терракоте только крупный заголовок и «‹ Ещё» 17 полужирным, мелкого текста нет.</figcaption></figure>
+
+<!-- Переписки с ChatGPT -->
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div>
+<div class="sheet c-stone"><div class="sh-top"><span class="back"><svg class="i"><use href="#back"/></svg>Ещё</span><span class="sp"></span><span class="ib"><svg class="i"><use href="#search"/></svg></span></div><p class="ttl" style="font-size:28px">Переписки с ChatGPT</p><p class="sub">1 240 разговоров · ищу в них, когда спросите</p></div>
+<div class="pap">
+<div style="background:var(--paper2);border-radius:18px;padding:14px 16px">
+<div class="row"><h4 class="f1">Разбираю второй архив</h4><span class="am">65%</span></div>
+<div style="height:8px;border-radius:4px;background:var(--line);margin:10px 0 8px;overflow:hidden"><i style="display:block;height:100%;width:65%;background:var(--ink);border-radius:4px"></i></div>
+<p class="small tn">312 из 480 · уже нашёл 41 совет и 9 планов</p>
+<p class="cap" style="margin-top:2px">можно закрыть — продолжу сам</p>
+</div>
+<div class="sec">Недавние</div>
+<div class="ln f0"><span class="f1 ell">Отпуск в Турции: маршрут</span><span class="m">авг. 2025</span></div>
+<div class="ln"><span class="f1 ell">Смета на ремонт кухни</span><span class="m">июль 2025</span></div>
+<div class="ln"><span class="f1 ell">Английский: план на 30 дней</span><span class="m">май 2025</span></div>
+<div class="ln"><span class="f1 ell">Что подарить маме на 60 лет</span><span class="m">март 2025</span></div>
+<div style="position:absolute;left:var(--gut);right:var(--gut);bottom:14px"><span class="btn ghost"><svg class="i"><use href="#inbox"/></svg>Принести ещё архив</span></div>
+</div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone on"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>Переписки с ChatGPT</b>Отдельно от «Заметок» (Ф-77, Ф-78). Ход разбора — простая полоса цвета текста. Новый архив — обычная кнопка с обводкой.</figcaption></figure>
+
+<!-- Настройки -->
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div>
+<div class="sheet min c-stone"><div class="strip"><div class="l"><span class="back"><svg class="i"><use href="#back"/></svg>Ещё</span></div><div class="t">Настройки</div><div class="r"></div></div></div>
+<div class="pap">
+<div class="sec">Вид</div>
+<div class="ln f0"><svg class="i"><use href="#moon"/></svg><span class="f1">Тема</span><span class="m">как в телефоне</span><svg class="i s" style="color:var(--ink3)"><use href="#chev"/></svg></div>
+<div class="ln"><svg class="i"><use href="#type"/></svg><span class="f1">Размер текста</span><span class="m">как в телефоне</span><svg class="i s" style="color:var(--ink3)"><use href="#chev"/></svg></div>
+<div class="ln"><svg class="i"><use href="#globe"/></svg><span class="f1">Язык</span><span class="m">Русский</span><svg class="i s" style="color:var(--ink3)"><use href="#chev"/></svg></div>
+<div class="sec">Помощник</div>
+<div class="ln f0"><svg class="i"><use href="#bell"/></svg><span class="f1">Напоминания</span><span style="width:50px;height:30px;border-radius:15px;background:var(--btn);position:relative;flex:none"><i style="position:absolute;right:3px;top:3px;width:24px;height:24px;border-radius:50%;background:var(--onBtn)"></i></span></div>
+<div class="ln"><svg class="i"><use href="#mic"/></svg><span class="f1 ell">Записывать голос сразу</span><span style="width:50px;height:30px;border-radius:15px;box-shadow:inset 0 0 0 2px var(--ink3);position:relative;flex:none"><i style="position:absolute;left:5px;top:5px;width:20px;height:20px;border-radius:50%;background:var(--ink3)"></i></span></div>
+<div class="sec">Данные</div>
+<div class="ln f0"><svg class="i"><use href="#lock"/></svg><span class="f1">Кто видит записи</span><span class="m">только вы</span></div>
+<div class="ln"><svg class="i"><use href="#export"/></svg><span class="f1">Скачать все записи</span><svg class="i s" style="color:var(--ink3)"><use href="#chev"/></svg></div>
+<div class="ln" style="color:var(--danger)"><svg class="i"><use href="#trash"/></svg><span class="f1" style="font-weight:600">Удалить все данные</span></div>
+</div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone on"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>Настройки</b>Нейтральный лист, свёрнут сразу: заголовок обычный. Включатели — чёрные, как все обычные кнопки. Красный — только у необратимого.</figcaption></figure>
+
+</div>
+</section>
+
+<!-- ============================== СОСТОЯНИЯ ============================== -->
+<section class="grp" id="g-states">
+<h2>Шторка, подтверждение, без связи</h2>
+<p class="lead">Шторка — светлый лист с тонкой полоской цвета места, откуда её открыли. Подтверждение — только для необратимого, компактная панель снизу. Без связи помощник сохраняет фразы и разбирает позже.</p>
+<div class="phones">
+
+<!-- Шторка -->
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-tasks"></i><i class="c-asst"></i></div>
+<div class="sheet c-exp"><div class="sh-top"><span class="sp">Ноябрь</span></div><p class="big" style="margin-top:4px">184 350<span class="cur">₸</span></p><p class="phrase" style="font-size:calc(var(--phrase) - 4px);margin-top:10px">Успеваете: ещё 65&nbsp;650&nbsp;₸</p></div>
+<div class="pap"><div class="ln f0"><span class="f1">Такси</span><b class="am">2 400</b></div><div class="ln"><span class="f1">Кофе</span><b class="am">1 200</b></div></div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp on"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+<div class="scrim"></div>
+<div class="bsheet c-exp"><div class="strip-c"></div><div class="grab"></div>
+<div class="row" style="align-items:flex-end"><div class="f1"><h4 style="font-size:21px">Такси</h4><p class="cap" style="margin-top:2px">сегодня, 09:38 · из разговора</p></div><span class="tn" style="font:800 30px/1 Onest;letter-spacing:-.6px">2 400 ₸</span></div>
+<div class="sec">Категория</div>
+<div style="display:flex;flex-wrap:wrap;gap:8px"><span class="chip"><span class="kq k-food"></span>Продукты</span><span class="chip on"><span class="kq k-trans" style="box-shadow:0 0 0 1.5px var(--onBtn)"></span>Транспорт</span><span class="chip"><span class="kq k-home"></span>Дом</span><span class="chip"><span class="kq k-cafe"></span>Кафе</span><span class="chip"><span class="kq k-health"></span>Здоровье</span><span class="chip"><span class="kq k-kids"></span>Дети</span><span class="chip"><span class="kq k-other"></span>Другое</span></div>
+<div class="ln" style="margin-top:12px"><svg class="i"><use href="#clock"/></svg><span class="f1">Когда</span><span class="m">сегодня, 09:38</span></div>
+<div class="ln"><svg class="i"><use href="#pen"/></svg><span class="f1">Заметка</span><span class="m">до ЦОНа</span></div>
+<div class="row" style="gap:10px;margin-top:14px"><span class="btn ghost" style="flex:1">Удалить</span><span class="btn" style="flex:1.6">Готово</span></div>
+</div>
+</div></div><figcaption><b>Шторка из «Расходов»</b>Светлый лист, сверху полоска 6 dp зелёного — видно, откуда открыли. «Удалить» здесь без «Да»: трата уйдёт в корзину, придёт «Удалено · Восстановить».</figcaption></figure>
+
+<!-- Подтверждение -->
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div>
+<div class="sheet c-stone"><div class="sh-top"><span class="back"><svg class="i"><use href="#back"/></svg>Ещё</span></div><p class="ttl">Корзина</p><p class="sub">Через 30 дней удаляется само</p></div>
+<div class="pap">
+<div class="ln f0"><span class="ptab c-tasks"></span><span class="f1 ell">Купить корм коту</span><span class="m">сегодня</span></div>
+<div class="ln"><span class="ptab c-notes"></span><span class="f1 ell">Шины: летние, 4 шт.</span><span class="m">вчера</span></div>
+<div class="ln"><span class="ptab c-exp"></span><span class="f1 ell">Кофе · 1 200 ₸</span><span class="m">12 нояб.</span></div>
+</div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone on"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+<div class="scrim" style="background:var(--scrim);opacity:.7"></div>
+<div class="confirm">
+<div class="row" style="align-items:flex-start;gap:12px"><span style="width:40px;height:40px;border-radius:50%;background:var(--paper2);display:grid;place-items:center;flex:none;color:var(--danger)"><svg class="i"><use href="#trash"/></svg></span><div class="f1"><h4 style="font-size:18px">Удалить навсегда 3 записи?</h4><p class="small" style="margin-top:2px">Вернуть уже не получится.</p></div></div>
+<div class="row" style="gap:10px;margin-top:16px"><span class="btn ghost sm" style="flex:1">Не удалять</span><span class="btn danger sm" style="flex:1.3">Удалить навсегда</span></div>
+</div>
+</div></div><figcaption><b>Необратимое · компактно</b>Только «удалить навсегда» и «отправить клиенту». Панель снизу, экран под ней виден. Красный есть только здесь и в «Удалить все данные».</figcaption></figure>
+
+<!-- Без связи -->
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbo"/></svg></div><div class="peek"><i class="c-today"></i><i class="c-notes"></i></div>
+<div class="sheet min c-asst"><div class="strip"><div class="l"><span class="ib"><svg class="i"><use href="#hist"/></svg></span></div><div class="t">Помощник</div><div class="r"><span class="ib"><svg class="i"><use href="#cloud"/></svg></span></div></div></div>
+<div class="pap">
+<div class="row" style="background:var(--paper2);border-radius:16px;padding:12px 14px;align-items:flex-start;gap:12px"><svg class="i"><use href="#cloud"/></svg><p style="font-size:15.5px;line-height:1.4"><b>Нет связи.</b> Всё, что скажете, сохраню и&nbsp;разберу позже.</p></div>
+<div class="me" style="margin:18px 0 4px"><p>такси до аэропорта 4 500</p></div>
+<p class="cap row" style="justify-content:flex-end;gap:5px;margin-bottom:14px"><svg class="i xs"><use href="#clock"/></svg>сохранил заметкой · разберу позже</p>
+<div class="me" style="margin-bottom:4px"><p>напомни в субботу оплатить садик</p></div>
+<p class="cap row" style="justify-content:flex-end;gap:5px"><svg class="i xs"><use href="#clock"/></svg>сохранил заметкой · разберу позже</p>
+<div class="row" style="margin-top:22px;gap:12px;align-items:flex-start"><span class="ptab c-notes" style="margin-top:2px"></span><p><b>2 фразы ждут разбора</b><br><span class="small">лежат в «Заметках», ничего не потеряно</span></p></div>
+<div class="ask"><span class="plus"><svg class="i"><use href="#plus"/></svg></span><span class="f1 ell">Скажите — сохраню</span><span class="rb"><svg class="i"><use href="#mic"/></svg></span></div>
+</div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst on"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>Без связи</b>Значок облака в полоске вместо мелкой подписи на терракоте. Плашка на светлом листе, под каждой фразой — что с ней будет.</figcaption></figure>
+
+</div>
+</section>
+
+<!-- ============================== ПЕРВЫЙ ЗАПУСК ============================== -->
+<section class="grp" id="g-onb">
+<h2>Первый запуск</h2>
+<p class="lead">Стопка из всех пяти листов — заставка и сразу знакомство с цветами. Три экрана, без регистрации на первом шаге.</p>
+<div class="phones">
+
+<!-- Онбординг 1 -->
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div>
+<div style="position:relative;flex:1">
+<div class="c-today" style="position:absolute;left:0;right:0;top:14px;height:340px;border-radius:28px 28px 0 0;background:var(--c);color:var(--on);padding:13px 22px;font:750 17px Onest;display:flex;gap:10px"><svg class="i"><use href="#sun"/></svg>Сегодня</div>
+<div class="c-notes" style="position:absolute;left:0;right:0;top:74px;height:340px;border-radius:28px 28px 0 0;background:var(--c);color:var(--on);padding:13px 22px;font:750 17px Onest;display:flex;gap:10px"><svg class="i"><use href="#note"/></svg>Заметки</div>
+<div class="c-asst" style="position:absolute;left:0;right:0;top:134px;height:340px;border-radius:28px 28px 0 0;background:var(--c);color:var(--on);padding:13px 22px;font:750 17px Onest;display:flex;gap:10px"><svg class="i"><use href="#asst"/></svg>Помощник</div>
+<div class="c-exp" style="position:absolute;left:0;right:0;top:194px;height:340px;border-radius:28px 28px 0 0;background:var(--c);color:var(--on);padding:13px 22px;font:750 17px Onest;display:flex;gap:10px"><svg class="i"><use href="#coin"/></svg>Расходы</div>
+<div class="c-tasks" style="position:absolute;left:0;right:0;top:254px;height:340px;border-radius:28px 28px 0 0;background:var(--c);color:var(--on);padding:13px 22px;font:750 17px Onest;display:flex;gap:10px"><svg class="i"><use href="#tasks"/></svg>Дела</div>
+<div style="position:absolute;left:0;right:0;top:314px;bottom:0;border-radius:28px 28px 0 0;background:var(--paper);padding:26px 22px 0">
+<p style="font:800 30px/1.14 Onest;letter-spacing:-.6px">Наведу порядок во&nbsp;всём, что вы сохраняете</p>
+<p style="font-size:17px;line-height:1.45;color:var(--ink2);margin-top:12px">Скажите или перешлите — я разложу по местам и найду, когда понадобится.</p>
+<div class="row" style="gap:8px;margin-top:20px"><span class="chip on">Русский</span><span class="chip">Қазақша</span></div>
+<span class="btn" style="margin-top:20px">Начать</span>
+<p class="cap" style="margin-top:12px;text-align:center">Нажимая «Начать», вы принимаете <span style="text-decoration:underline">Политику конфиденциальности</span> и <span style="text-decoration:underline">Условия</span></p>
+<div style="position:absolute;left:50%;bottom:8px;width:134px;margin-left:-67px;height:5px;border-radius:3px;background:var(--ink);opacity:.85"></div>
+</div>
+</div>
+</div></div><figcaption><b>Приветствие</b>Пять листов стопкой, сверху светлый лист с одной строкой о продукте. Язык выбирается здесь же. Казахские буквы набраны Onest — они в нём есть.</figcaption></figure>
+
+<!-- Онбординг 2 -->
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div>
+<div style="flex:1;display:flex;flex-direction:column;min-height:0">
+<div class="c-today" style="background:var(--c);color:var(--on);border-radius:28px 28px 0 0;padding:18px 22px 42px"><p style="font:800 20px Onest">Сегодня</p><p style="font:600 15px/1.3 Onest;color:var(--on2)">что важно сейчас: план и сроки</p></div>
+<div class="c-notes" style="background:var(--c);color:var(--on);border-radius:28px 28px 0 0;padding:18px 22px 42px;margin-top:-22px"><p style="font:800 20px Onest">Заметки</p><p style="font:600 15px/1.3 Onest;color:var(--on2)">коды, адреса, советы, рецепты</p></div>
+<div class="c-asst" style="background:var(--c);color:var(--on);border-radius:28px 28px 0 0;padding:18px 22px 42px;margin-top:-22px"><p style="font:800 20px Onest">Помощник</p><p style="font:700 17px/1.3 Onest">говорите сюда — разложу сам</p></div>
+<div class="c-exp" style="background:var(--c);color:var(--on);border-radius:28px 28px 0 0;padding:18px 22px 42px;margin-top:-22px"><p style="font:800 20px Onest">Расходы</p><p style="font:600 15px/1.3 Onest;color:var(--on2)">траты и сколько ещё можно</p></div>
+<div class="c-tasks" style="background:var(--c);color:var(--on);border-radius:28px 28px 0 0;padding:18px 22px 42px;margin-top:-22px"><p style="font:800 20px Onest">Дела</p><p style="font:600 15px/1.3 Onest;color:var(--on2)">открываются из «Сегодня» и «Ещё»</p></div>
+<div class="c-stone" style="background:var(--c);color:var(--on);border-radius:28px 28px 0 0;padding:18px 22px 42px;margin-top:-22px"><p style="font:800 20px Onest">Ещё</p><p style="font:600 15px/1.3 Onest;color:var(--on2)">документы, история, настройки</p></div>
+<div style="flex:1;background:var(--paper);border-radius:28px 28px 0 0;margin-top:-22px;padding:22px 22px 0;position:relative">
+<p style="font:800 24px/1.2 Onest;letter-spacing:-.4px">Цвет — это место</p>
+<p class="small" style="margin-top:6px;font-size:16px">По цвету листа сразу видно, где вы.</p>
+<div class="row" style="margin-top:18px"><span class="row" style="gap:6px"><i style="width:22px;height:6px;border-radius:3px;background:var(--ink)"></i><i style="width:6px;height:6px;border-radius:3px;background:var(--ink)"></i><i style="width:6px;height:6px;border-radius:3px;background:var(--line2)"></i></span><span class="f1"></span><span class="btn sm">Дальше</span></div>
+<div style="position:absolute;left:50%;bottom:8px;width:134px;margin-left:-67px;height:5px;border-radius:3px;background:var(--ink);opacity:.85"></div>
+</div>
+</div>
+</div></div><figcaption><b>Цвета мест</b>Та же стопка, листы раздвинуты: у каждого — слово и одна строка. Шестой, нейтральный камень — «Ещё». На терракоте строка крупнее и жирнее.</figcaption></figure>
+
+<!-- Онбординг 3 -->
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div>
+<div class="sheet min c-asst"><div class="strip"><div class="l"></div><div class="t"></div><div class="r"><span style="font:700 17px Onest;padding-right:8px;white-space:nowrap">Пропустить</span></div></div></div>
+<div class="pap" style="border-radius:28px 28px 0 0;padding-bottom:0">
+<p style="font:800 27px/1.18 Onest;letter-spacing:-.5px;margin-top:10px">Скажите первое, что нельзя забыть</p>
+<p class="small" style="font-size:16px;margin-top:8px">Например:</p>
+<div class="ln f0" style="margin-top:4px"><span class="ptab c-notes"></span><span class="f1 ell">«Код домофона 4512»</span></div>
+<div class="ln"><span class="ptab c-tasks"></span><span class="f1 ell">«Таблетка каждый день в 9»</span></div>
+<div class="ln"><span class="ptab c-exp"></span><span class="f1 ell">«Кофе 1 200»</span></div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:44px"><span style="width:88px;height:88px;border-radius:50%;background:var(--btn);color:var(--onBtn);display:grid;place-items:center"><svg class="i xl"><use href="#mic"/></svg></span><b style="font-size:16px">Нажмите и говорите</b><span class="lnk" style="font-size:15px">или напишите</span></div>
+<p class="cap row" style="justify-content:center;gap:6px;margin-top:18px"><svg class="i xs"><use href="#lock"/></svg>Ваши записи видите только вы</p>
+<div style="position:absolute;left:50%;bottom:8px;width:134px;margin-left:-67px;height:5px;border-radius:3px;background:var(--ink);opacity:.85"></div>
+</div>
+</div></div><figcaption><b>Первая фраза</b>Сразу в дело: одна большая чёрная кнопка микрофона. «Пропустить» — крупно, 17 полужирным: на терракоте мелкого нет.</figcaption></figure>
+
+</div>
+</section>
+
+<!-- ============================== ДОКУМЕНТЫ ============================== -->
+<section class="grp" id="g-docs">
+<h2>Документы</h2>
+<p class="lead">Список — на нейтральном камне. Сам документ — белый лист A4 в обеих темах: так он будет выглядеть на печати и в PDF.</p>
+<div class="phones">
+
+<!-- Документы · список -->
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div>
+<div class="sheet c-stone"><div class="sh-top"><span class="back"><svg class="i"><use href="#back"/></svg>Ещё</span><span class="sp"></span><span class="ib"><svg class="i"><use href="#search"/></svg></span></div><p class="ttl">Документы</p><p class="sub">КП, счета, акты и ваши файлы</p></div>
+<div class="pap">
+<div style="background:var(--paper2);border-radius:16px;padding:12px 14px"><p style="font-size:15.5px;line-height:1.4">Скажите помощнику: <b>«сделай счёт АлмаСтрою на&nbsp;519&nbsp;400»</b></p></div>
+<div class="sec">Черновики<span class="m">3</span></div>
+<div class="ln f0"><svg class="i"><use href="#doc"/></svg><span class="f1 ell">КП № 14 · АлмаСтрой</span><span class="m">сегодня</span></div>
+<div class="ln"><svg class="i"><use href="#doc"/></svg><span class="f1 ell">Счёт № 7 · АлмаСтрой</span><span class="m">вчера</span></div>
+<div class="ln"><svg class="i"><use href="#doc"/></svg><span class="f1 ell">Акт № 3 · Дом-Сервис</span><span class="m">12 нояб.</span></div>
+<div class="sec">Файлы</div>
+<div class="ln f0"><svg class="i"><use href="#doc"/></svg><span class="f1 ell">Договор аренды.pdf</span><span class="m">2,1 МБ</span></div>
+<div style="position:absolute;left:var(--gut);right:var(--gut);bottom:14px"><span class="btn"><svg class="i"><use href="#plus"/></svg>Новый документ</span></div>
+</div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone on"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>Документы · список</b>Подсказка, как сделать документ фразой, и одна чёрная кнопка. Без слова «КП» в названии экрана (Ф-51).</figcaption></figure>
+
+<!-- Документ · A4 -->
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div>
+<div class="sheet min c-stone"><div class="strip"><div class="l"><span class="back"><svg class="i"><use href="#back"/></svg>Документы</span></div><div class="t">Счёт № 7</div><div class="r"><span class="ib"><svg class="i"><use href="#share"/></svg></span></div></div></div>
+<div class="pap" style="background:var(--paper2);padding:16px 16px 0">
+<div class="a4">
+<p style="font-size:13px;font-weight:800;line-height:1.25">Счёт на оплату № 7</p>
+<p style="color:#55525C">от 17 ноября 2026 г.</p>
+<table style="margin-top:10px"><tr><td style="width:30%;color:#55525C">Поставщик</td><td>ИП Нурланов Н. Б., ИИН 850101300123</td></tr><tr><td style="color:#55525C">Банк</td><td>АО «Пример Банк», ИИК KZ00 0000 0000 0000 0007</td></tr><tr><td style="color:#55525C">Покупатель</td><td>ТОО «АлмаСтрой», БИН 210840012345</td></tr></table>
+<table style="margin-top:12px"><tr><th>Наименование</th><th class="r">Кол-во</th><th class="r">Цена</th><th class="r">Сумма, ₸</th></tr>
+<tr><td>Монтаж гипсокартона</td><td class="r">48 м²</td><td class="r">4 500</td><td class="r">216 000</td></tr>
+<tr><td>Шпаклёвка, 2 слоя</td><td class="r">48 м²</td><td class="r">1 800</td><td class="r">86 400</td></tr>
+<tr><td>Покраска</td><td class="r">48 м²</td><td class="r">1 500</td><td class="r">72 000</td></tr>
+<tr><td>Материалы</td><td class="r">1</td><td class="r">145 000</td><td class="r">145 000</td></tr>
+<tr><td colspan="3" style="font-weight:800;border-bottom:0">Итого, без НДС</td><td class="r" style="font-weight:800;border-bottom:0">519 400</td></tr></table>
+<p style="margin-top:8px">Всего к оплате: пятьсот девятнадцать тысяч четыреста тенге 00 тиын.</p>
+<p style="margin-top:4px;color:#55525C">Оплата в течение 5 банковских дней.</p>
+<p style="margin-top:22px">Исполнитель ____________ Нурланов Н. Б.</p>
+</div>
+<div class="row" style="gap:10px;margin-top:14px"><span class="btn ghost sm" style="flex:1">Изменить</span><span class="btn sm" style="flex:1.4">Отправить</span></div>
+</div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone on"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>Документ · A4</b>Белый лист A4 и в тёмной теме. Подписи «ИИ» на документе нет (Ф-63). «Отправить» спросит компактно: отправленное не вернуть.</figcaption></figure>
+
+</div>
+</section>
+
+<!-- ============================== РАЗМЕРЫ ============================== -->
+<section class="grp" id="g-adapt">
+<h2>Размеры экранов и крупный шрифт</h2>
+<p class="lead">«Сегодня» на трёх ширинах: маленький 320 dp, обычный 390 dp, большой 430 dp. На маленьком экране и при крупном системном шрифте фраза уходит, остаётся заголовок. Подписи вкладок не растут больше 13 — иначе «Помощник» не помещается.</p>
+<div class="phones">
+
+<figure><div class="frame"><div class="ph w320">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-asst"></i><i class="c-notes"></i></div>
+<div class="sheet c-today"><div class="sh-top"><span class="sp">Вторник, 17 ноября</span><span class="ib"><svg class="i"><use href="#search"/></svg></span></div><p class="phrase">Спокойный день.<br>5&nbsp;дел, 1&nbsp;встреча.</p><p class="ttl ttl-only">Сегодня</p></div>
+<div class="pap"><div class="sec">План дня<span class="lk">Все дела<svg class="i xs"><use href="#chev"/></svg></span></div>
+<div class="plan">
+<div class="blk done"><span class="t">09:00</span><h4 class="ell">Таблетка от давления</h4></div>
+<div class="now"><span>9:41</span></div>
+<div class="blk main" style="height:40px"><span class="t" style="color:var(--ink)">10:30</span><div class="row"><h4 class="f1 ell">Созвон с бухгалтером</h4><span class="cap">30 мин</span></div></div>
+<div class="free" style="height:120px"><span>свободно 2 ч</span></div>
+<div class="blk" style="height:60px"><span class="t">13:00</span><div class="row"><h4 class="f1 ell">Обед с Ерланом</h4><span class="cap">1 ч</span></div></div>
+<div class="free" style="height:30px"><span>30 мин</span></div>
+<div class="blk" style="height:40px"><span class="t">14:30</span><div class="row"><h4 class="f1 ell">Забрать Алию из школы</h4><span class="cap">30 мин</span></div></div>
+</div>
+<div class="sec">Не забыть<span class="m">2</span></div>
+<div class="ln f0"><span class="ck"></span><span class="f1 ell">Оплатить интернет</span><span class="m">до пт</span></div>
+<div class="ln"><span class="ck"></span><span class="f1 ell">Купить корм коту</span><span class="m">вечером</span></div>
+<div class="sec">Потрачено сегодня<span class="lk tn">3 600 ₸<svg class="i xs"><use href="#chev"/></svg></span></div></div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>320 × 640 dp</b>Маленький телефон: только заголовок «Сегодня» и дата. Поля 16, подписи вкладок 11,5.</figcaption></figure>
+
+<figure><div class="frame fw390"><div class="ph w390">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-asst"></i><i class="c-notes"></i></div>
+<div class="sheet c-today"><div class="sh-top"><span class="sp">Вторник, 17 ноября</span><span class="ib"><svg class="i"><use href="#search"/></svg></span></div><p class="phrase">Спокойный день.<br>5&nbsp;дел, 1&nbsp;встреча.</p><p class="ttl ttl-only">Сегодня</p></div>
+<div class="pap"><div class="sec">План дня<span class="lk">Все дела<svg class="i xs"><use href="#chev"/></svg></span></div>
+<div class="plan">
+<div class="blk done"><span class="t">09:00</span><h4 class="ell">Таблетка от давления</h4></div>
+<div class="now"><span>9:41</span></div>
+<div class="blk main" style="height:40px"><span class="t" style="color:var(--ink)">10:30</span><div class="row"><h4 class="f1 ell">Созвон с бухгалтером</h4><span class="cap">30 мин</span></div></div>
+<div class="free" style="height:120px"><span>свободно 2 ч</span></div>
+<div class="blk" style="height:60px"><span class="t">13:00</span><div class="row"><h4 class="f1 ell">Обед с Ерланом</h4><span class="cap">1 ч</span></div></div>
+<div class="free" style="height:30px"><span>30 мин</span></div>
+<div class="blk" style="height:40px"><span class="t">14:30</span><div class="row"><h4 class="f1 ell">Забрать Алию из школы</h4><span class="cap">30 мин</span></div></div>
+</div>
+<div class="sec">Не забыть<span class="m">2</span></div>
+<div class="ln f0"><span class="ck"></span><span class="f1 ell">Оплатить интернет</span><span class="m">до пт</span></div>
+<div class="ln"><span class="ck"></span><span class="f1 ell">Купить корм коту</span><span class="m">вечером</span></div>
+<div class="sec">Потрачено сегодня<span class="lk tn">3 600 ₸<svg class="i xs"><use href="#chev"/></svg></span></div>
+<div class="sec">Завтра</div>
+<div class="ln f0"><span class="tn" style="width:48px;font:700 14px Onest">10:00</span><span class="f1 ell">Позвонить в ЦОН</span></div></div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>390 × 844 dp</b>Обычный размер: фраза в две строки, поля 20.</figcaption></figure>
+
+<figure><div class="frame fw430"><div class="ph w430">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-asst"></i><i class="c-notes"></i></div>
+<div class="sheet c-today"><div class="sh-top"><span class="sp">Вторник, 17 ноября</span><span class="ib"><svg class="i"><use href="#search"/></svg></span></div><p class="phrase">Спокойный день.<br>5&nbsp;дел, 1&nbsp;встреча.</p><p class="ttl ttl-only">Сегодня</p></div>
+<div class="pap"><div class="sec">План дня<span class="lk">Все дела<svg class="i xs"><use href="#chev"/></svg></span></div>
+<div class="plan">
+<div class="blk done"><span class="t">09:00</span><h4 class="ell">Таблетка от давления</h4></div>
+<div class="now"><span>9:41</span></div>
+<div class="blk main" style="height:40px"><span class="t" style="color:var(--ink)">10:30</span><div class="row"><h4 class="f1 ell">Созвон с бухгалтером</h4><span class="cap">30 мин</span></div></div>
+<div class="free" style="height:120px"><span>свободно 2 ч</span></div>
+<div class="blk" style="height:60px"><span class="t">13:00</span><div class="row"><h4 class="f1 ell">Обед с Ерланом</h4><span class="cap">1 ч</span></div></div>
+<div class="free" style="height:30px"><span>30 мин</span></div>
+<div class="blk" style="height:40px"><span class="t">14:30</span><div class="row"><h4 class="f1 ell">Забрать Алию из школы</h4><span class="cap">30 мин</span></div></div>
+</div>
+<div class="sec">Не забыть<span class="m">2</span></div>
+<div class="ln f0"><span class="ck"></span><span class="f1 ell">Оплатить интернет</span><span class="m">до пт</span></div>
+<div class="ln"><span class="ck"></span><span class="f1 ell">Купить корм коту</span><span class="m">вечером</span></div>
+<div class="sec">Потрачено сегодня<span class="lk tn">3 600 ₸<svg class="i xs"><use href="#chev"/></svg></span></div>
+<div class="sec">Завтра</div>
+<div class="ln f0"><span class="tn" style="width:48px;font:700 14px Onest">10:00</span><span class="f1 ell">Позвонить в ЦОН</span></div>
+<div class="ln"><span class="tn" style="width:48px;font:700 14px Onest">16:00</span><span class="f1 ell">Стоматолог</span><span class="m">ждёт ответа</span></div></div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>430 × 932 dp</b>Большой телефон: фраза 30, поля 24. Лишнее место уходит в список, а не в пустоту.</figcaption></figure>
+
+<figure><div class="frame"><div class="ph lg">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-asst"></i><i class="c-notes"></i></div>
+<div class="sheet c-today"><div class="sh-top"><span class="sp">Вторник, 17 ноября</span><span class="ib"><svg class="i"><use href="#search"/></svg></span></div><p class="ttl">Сегодня</p></div>
+<div class="pap">
+<div class="sec">План дня</div>
+<div class="ln f0"><span class="tn" style="width:66px;font-weight:700">10:30</span><span class="f1 ell">Созвон с бухгалтером</span></div>
+<div class="ln"><span class="tn" style="width:66px;font-weight:700;color:var(--ink2)">11:00</span><span class="f1 ell" style="color:var(--ink2)">свободно 2 ч</span></div>
+<div class="ln"><span class="tn" style="width:66px;font-weight:700">13:00</span><span class="f1 ell">Обед с Ерланом</span></div>
+<div class="ln"><span class="tn" style="width:66px;font-weight:700">14:30</span><span class="f1 ell">Забрать Алию</span></div>
+<div class="sec">Не забыть</div>
+<div class="ln f0"><span class="ck"></span><span class="f1 ell">Оплатить интернет</span></div>
+<div class="ln"><span class="ck"></span><span class="f1 ell">Купить корм коту</span></div>
+</div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>Крупный шрифт · ×1,35</b>Фразы нет, только заголовок. План дня из блоков становится строками: время + дело, свободное время — строкой. Вкладки те же пять, подписи 13.</figcaption></figure>
+
+</div>
+</section>
+
+<!-- ============================== ТОКЕНЫ ============================== -->
+<section class="grp" id="g-tokens">
+<h2>Токены v5</h2>
+<p class="lead">То же в коде — <code>tokens-v5.ts</code>. Все пары «текст на фоне» проверены по WCAG: серый текст не ниже 4,5 : 1.</p>
+<div class="tok">
+
+<div class="fact"><h3>Листы мест · светлая</h3><div class="sw">
+<div><i style="background:#F6D35B"></i><span><b>Сегодня</b>#F6D35B</span></div>
+<div><i style="background:#A9CCF4"></i><span><b>Заметки</b>#A9CCF4</span></div>
+<div><i style="background:#E0592C"></i><span><b>Помощник</b>#E0592C</span></div>
+<div><i style="background:#B6D89C"></i><span><b>Расходы</b>#B6D89C</span></div>
+<div><i style="background:#CDBFF5"></i><span><b>Дела</b>#CDBFF5</span></div>
+<div><i style="background:#D8D2C6"></i><span><b>Камень · Ещё</b>#D8D2C6</span></div>
+</div></div>
+
+<div class="fact"><h3>Листы мест · тёмная</h3><div class="sw">
+<div><i style="background:#C9A23A"></i><span><b>Сегодня</b>#C9A23A</span></div>
+<div><i style="background:#5E93DC"></i><span><b>Заметки</b>#5E93DC</span></div>
+<div><i style="background:#E0592C"></i><span><b>Помощник</b>#E0592C</span></div>
+<div><i style="background:#6FA35C"></i><span><b>Расходы</b>#6FA35C</span></div>
+<div><i style="background:#9683E6"></i><span><b>Дела</b>#9683E6</span></div>
+<div><i style="background:#42404A"></i><span><b>Графит · Ещё</b>#42404A</span></div>
+</div><p class="cap" style="color:var(--pg-ink2);margin-top:8px;font-size:13px">Жёлтый и зелёный приглушены сильнее, чем в концепте (#D9AE32 → #C9A23A, #7DB866 → #6FA35C). Лист в тёмной теме на 6 dp ниже, фраза 25 вместо 27.</p></div>
+
+<div class="fact"><h3>Основа · светлая</h3><div class="sw">
+<div><i style="background:#1A191E"></i><span><b>tray · лоток</b>#1A191E</span></div>
+<div><i style="background:#FBF8F2"></i><span><b>paper · лист</b>#FBF8F2</span></div>
+<div><i style="background:#F1ECE2"></i><span><b>paper2</b>#F1ECE2</span></div>
+<div><i style="background:#E6DFD3"></i><span><b>line</b>#E6DFD3</span></div>
+<div><i style="background:#1A191E"></i><span><b>ink</b>#1A191E · 16,5</span></div>
+<div><i style="background:#55525C"></i><span><b>ink2</b>#55525C · 7,2</span></div>
+<div><i style="background:#6B6774"></i><span><b>ink3</b>#6B6774 · 5,2</span></div>
+<div><i style="background:#B23E14"></i><span><b>asstText</b>#B23E14 · 5,5</span></div>
+<div><i style="background:#F7D9CC"></i><span><b>hl · маркер</b>#F7D9CC</span></div>
+<div><i style="background:#B42335"></i><span><b>danger</b>#B42335 · 6,1</span></div>
+</div></div>
+
+<div class="fact"><h3>Основа · тёмная</h3><div class="sw">
+<div><i style="background:#0F0E12"></i><span><b>tray</b>#0F0E12</span></div>
+<div><i style="background:#1E1D23"></i><span><b>paper</b>#1E1D23</span></div>
+<div><i style="background:#2A2930"></i><span><b>paper2</b>#2A2930</span></div>
+<div><i style="background:#34323A"></i><span><b>line</b>#34323A</span></div>
+<div><i style="background:#F1EEE8"></i><span><b>ink</b>#F1EEE8 · 14,5</span></div>
+<div><i style="background:#C2BDC8"></i><span><b>ink2</b>#C2BDC8 · 9,1</span></div>
+<div><i style="background:#A29DAA"></i><span><b>ink3</b>#A29DAA · 6,3</span></div>
+<div><i style="background:#FF8A5C"></i><span><b>asstText</b>#FF8A5C · 7,2</span></div>
+<div><i style="background:#5A2E20"></i><span><b>hl · маркер</b>#5A2E20</span></div>
+<div><i style="background:#FF6B78"></i><span><b>danger</b>#FF6B78 · 6,1</span></div>
+</div><p class="cap" style="color:var(--pg-ink2);margin-top:8px;font-size:13px">Числа после hex — контраст с листом (paper).</p></div>
+
+<div class="fact"><h3>Категории расходов</h3><div class="sw">
+<div><i style="background:#2F7F70"></i><span><b>Продукты</b>#2F7F70 · #5FB3A3</span></div>
+<div><i style="background:#4F5D86"></i><span><b>Транспорт</b>#4F5D86 · #8E9BC8</span></div>
+<div><i style="background:#8C6A43"></i><span><b>Дом</b>#8C6A43 · #C29C70</span></div>
+<div><i style="background:#B05A78"></i><span><b>Кафе</b>#B05A78 · #DB8CA8</span></div>
+<div><i style="background:#9B3F4C"></i><span><b>Здоровье</b>#9B3F4C · #D97A86</span></div>
+<div><i style="background:#737A35"></i><span><b>Дети</b>#737A35 · #AEB65E</span></div>
+<div><i style="background:#8A857B"></i><span><b>Другое</b>#8A857B · #A8A397</span></div>
+</div><p class="cap" style="color:var(--pg-ink2);margin-top:8px;font-size:13px">Светлая · тёмная. Глубокие приглушённые тона: бирюза, сланец, орех, роза, клюква, олива. Ни один не похож на светлые листы мест и на терракоту.</p></div>
+
+<div class="fact"><h3>Стикеры заметок</h3><div class="sw">
+<div><i style="background:#FFFFFF"></i><span><b>Бумага</b>#FFFFFF · #2A2930</span></div>
+<div><i style="background:#EFE4CF"></i><span><b>Песок</b>#EFE4CF · #4A4232</span></div>
+<div><i style="background:#F3D6DC"></i><span><b>Роза</b>#F3D6DC · #4E3439</span></div>
+<div><i style="background:#D4E8E2"></i><span><b>Туман</b>#D4E8E2 · #2E4640</span></div>
+<div><i style="background:#E2DFD8"></i><span><b>Графит</b>#E2DFD8 · #36353C</span></div>
+</div><p class="cap" style="color:var(--pg-ink2);margin-top:8px;font-size:13px">Нет жёлтого, голубого, зелёного, сиреневого и персикового — они заняты местами и помощником. Старые ключи стикеров переводятся: yellow → sand, peach/pink → rose, green/blue → mist, lilac → graphite.</p></div>
+
+<div class="fact"><h3>Шрифты</h3>
+<p><b>Geologica 700</b> — только большая фраза (3–4 слова и числа) и одна крупная цифра на экран. <b>Onest</b> — весь интерфейс. Цифры везде табличные (<code>tnum</code>).</p>
+<table class="tt" style="margin-top:10px"><tr><th>Роль</th><th>Шрифт</th><th>Размер / строка</th></tr>
+<tr><td>Фраза</td><td>Geologica 700</td><td>27/30 · 23 (320) · 30 (430) · 25 тёмная</td></tr>
+<tr><td>Крупная цифра</td><td>Geologica 700 tnum</td><td>46/46, −3,5 %</td></tr>
+<tr><td>Заголовок</td><td>Onest 800</td><td>30/34</td></tr>
+<tr><td>Полоска</td><td>Onest 750</td><td>18/22</td></tr>
+<tr><td>Раздел</td><td>Onest 750</td><td>17/20</td></tr>
+<tr><td>План дня</td><td>блок</td><td>1 dp = 1 мин, минимум 40</td></tr>
+<tr><td>Строка</td><td>Onest 400</td><td>16/22</td></tr>
+<tr><td>Текст заметки</td><td>Onest 400</td><td>17/27</td></tr>
+<tr><td>Мелкий</td><td>Onest 400</td><td>14/20</td></tr>
+<tr><td>Подпись</td><td>Onest 400</td><td>13/18 — минимум</td></tr>
+<tr><td>Вкладка</td><td>Onest 600 / 800</td><td>12/13, не больше 13</td></tr>
+<tr><td>Кнопка</td><td>Onest 700</td><td>17 · 15 малая</td></tr></table></div>
+
+<div class="fact"><h3>Проверка казахских букв</h3>
+<p class="kz" style="font-family:Unbounded;font-weight:600">Қаңтар · Әже · Ғұмыр · Өнер · Үміт · Һ</p><p class="cap" style="color:var(--pg-ink2);font-size:13px">Unbounded 600 — Ә Ғ Қ Ң Ө Ұ Ү Һ подставляются из запасного шрифта</p>
+<p class="kz" style="font-family:Manrope;font-weight:800">Қаңтар · Әже · Ғұмыр · Өнер · Үміт · Һ</p><p class="cap" style="color:var(--pg-ink2);font-size:13px">Manrope 800 — нет Ә Ғ Қ Ң Ұ</p>
+<p class="kz" style="font-family:Geologica;font-weight:700">Қаңтар · Әже · Ғұмыр · Өнер · Үміт · Һ</p><p class="cap" style="color:var(--pg-ink2);font-size:13px">Geologica 700 — все 18 букв на месте</p>
+<p class="kz" style="font-family:Onest;font-weight:500;font-size:20px">Қаңтар · Әже · Ғұмыр · Өнер · Үміт · Һ</p><p class="cap" style="color:var(--pg-ink2);font-size:13px">Onest — все 18 букв на месте</p></div>
+
+<div class="fact"><h3>Радиусы и отступы</h3>
+<table class="tt"><tr><th>Радиус</th><th>dp</th></tr>
+<tr><td>Цветной лист, светлый лист</td><td>28</td></tr>
+<tr><td>Кнопка (капсула)</td><td>26 · малая 21</td></tr>
+<tr><td>Компактное подтверждение</td><td>26</td></tr>
+<tr><td>Стикер</td><td>20</td></tr>
+<tr><td>Карточка результата, уведомление</td><td>18</td></tr>
+<tr><td>Плашка на листе</td><td>16</td></tr>
+<tr><td>Язычок места · квадрат категории</td><td>5 · 4</td></tr></table>
+<table class="tt" style="margin-top:10px"><tr><th>Отступ</th><th>dp</th></tr>
+<tr><td>Шаг</td><td>4 · 8 · 12 · 16 · 20 · 24 · 32</td></tr>
+<tr><td>Поля экрана</td><td>16 (≤ 340) · 20 · 24 (≥ 420)</td></tr>
+<tr><td>Строка списка</td><td>54 · крупный шрифт 68</td></tr>
+<tr><td>Нажатие, минимум</td><td>44 × 44</td></tr>
+<tr><td>Вкладки</td><td>68 + 24 полоска «домой»</td></tr>
+<tr><td>Свёрнутый лист</td><td>44 полоска</td></tr></table></div>
+
+<div class="fact"><h3>Движение</h3>
+<table class="tt"><tr><th>Что</th><th>Время</th><th>Кривая</th></tr>
+<tr><td>Нажатие</td><td>100 мс</td><td>0.2, 0, 0, 1</td></tr>
+<tr><td>Лист сворачивается</td><td>за пальцем, доводка 200 мс</td><td>0.2, 0, 0, 1</td></tr>
+<tr><td>Смена вкладки: лист выезжает из стопки</td><td>320 мс</td><td>пружина 26 / 260</td></tr>
+<tr><td>Уведомление: въезд · держится · уход</td><td>220 · 3000 · 180 мс</td><td>пружина · 0.3, 0, 1, 1</td></tr>
+<tr><td>Шторка</td><td>320 мс</td><td>пружина 24 / 240</td></tr>
+<tr><td>Подтверждение</td><td>220 мс</td><td>0.2, 0, 0, 1</td></tr>
+<tr><td>Удалённое уходит вниз стопки</td><td>240 мс</td><td>0.3, 0, 1, 1</td></tr>
+<tr><td>Галочка</td><td>300 мс</td><td>0.2, 0, 0, 1</td></tr>
+<tr><td>Меньше движения</td><td>затухание 150 мс</td><td>линейно</td></tr></table></div>
+
+</div>
+</section>
+
+<!-- ============================== ПРАВИЛА ============================== -->
+<section class="grp" id="g-rules">
+<h2>Правила v5 · коротко</h2>
+<div class="facts">
+<div class="fact"><h3>Цвет = место</h3><ul><li>Пять цветов — только у мест: Сегодня, Заметки, Помощник, Расходы, Дела.</li><li>«Ещё», поиск, настройки, импорт, документы, корзина — камень (графит в тёмной).</li><li>«История» — терракотовая. Документ — белый A4.</li><li>Категории и стикеры — своя приглушённая палитра.</li></ul></div>
+<div class="fact"><h3>Терракота — только помощник</h3><ul><li>Его лист, метка «изменил помощник», «Отменить», маркер правки.</li><li>Обычные кнопки, ссылки, включатели — чёрные (в тёмной — светлые).</li><li>«Восстановить» после удаления — обычная ссылка.</li><li>На терракоте нет текста мельче 17 полужирного.</li></ul></div>
+<div class="fact"><h3>Лист и заголовок</h3><ul><li>Большая фраза — только на «Сегодня» и «Расходах», до двух строк.</li><li>Остальные — заголовок 30.</li><li>При прокрутке лист сворачивается в полоску 44 с названием.</li><li>320 dp или шрифт ≥ ×1,3 — фразы нет, только заголовок.</li></ul></div>
+<div class="fact"><h3>Вкладки</h3><ul><li>У всех пяти — цветная капсула и слово.</li><li>Активная: шире, обведена, слово жирное.</li><li>Подпись 12, на 320 — 11,5, при крупном шрифте не больше 13.</li></ul></div>
+<div class="fact"><h3>Цифры и правки</h3><ul><li>Одна крупная цифра на экран, табличные цифры везде.</li><li>План дня: высота блока = длительность (1 dp на минуту, минимум 40), пустое — «свободно 2 ч».</li><li>Правка помощника в тексте: старое зачёркнуто, новое подсвечено маркером.</li></ul></div>
+<div class="fact"><h3>Уведомления и удаление</h3><ul><li>Уведомление сверху, 3 с, три точки показывают время.</li><li>Удаление — «Удалено · Восстановить», без «Да».</li><li>Компактное подтверждение — только для необратимого.</li><li>Метки «ИИ» нет нигде. Без заглавных букв.</li></ul></div>
+</div>
+</section>
+</div>
+<script>
+(function(){
+  var d=document.documentElement,btns=document.querySelectorAll('.seg button');
+  function set(t){d.setAttribute('data-theme',t);btns.forEach(function(b){b.setAttribute('aria-pressed',String(b.getAttribute('data-t')===t))});try{localStorage.setItem('v5-theme',t)}catch(e){}}
+  var m=location.search.match(/theme=(light|dark)/),s=null;try{s=localStorage.getItem('v5-theme')}catch(e){}
+  set(m?m[1]:(s||(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')));
+  btns.forEach(function(b){b.addEventListener('click',function(){set(b.getAttribute('data-t'))})});
+})();
+</script>
+</body>
+</html>
