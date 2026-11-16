@@ -293,6 +293,7 @@ class RecordKind(enum.StrEnum):
     LINK = "link"
     EMAIL = "email"
     TG_MESSAGE = "tg_message"
+    AI_CHAT = "ai_chat"  # 0031: a conversation brought from a ChatGPT / Claude / Gemini export
     KP = "kp"
     FILE_OTHER = "file_other"
 
@@ -304,6 +305,7 @@ class RecordSource(enum.StrEnum):
     CAMERA = "camera"
     FILES = "files"
     IMPORT_TELEGRAM = "import_telegram"
+    IMPORT_AI_CHAT = "import_ai_chat"  # 0031
     BOT_FORWARD = "bot_forward"
     SYSTEM = "system"
 

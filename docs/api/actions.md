@@ -120,6 +120,51 @@ see `chat.md`. It runs this same undo; the new action has `undo_of` set, the und
 (one phrase = one action today; step 6 keeps several actions of a phrase under one `message_id`,
 and the phrase undo already takes all actions of the last phrase together).
 
+## Groups: several actions from one phrase (step 6, 2026-11-16)
+
+One phrase may now make several actions («купил хлеб за 400 и молоко за 600, и напомни
+оплатить свет» → two `create_expense` + a reminder draft; «сделай страницу Ремонт и перенеси туда
+плитку» → `create_screen` + `screen_move_items`). **Each change is its own action** (its own
+`summary`, `notice`, «Что изменилось», «Отменить» in «История»); all of them carry the same
+`message_id` (the phrase's answer). This replaces «one phrase = one action» (week 6).
+
+`group` on Action (null when the phrase made only one action):
+
+```json
+"group": {"id": "<the answer's message id>", "size": 3, "index": 0,
+          "action_ids": ["0194...", "0194...", "0194..."],
+          "notice": {"text_ru": "Сделал 3 дела", "text_kk": null, "target": null,
+                     "undo_label_ru": "Отменить всё", "undo_label_kk": null, "ms": 3000}}
+```
+
+- Show **one** notice for the phrase: `group.notice` (not each action's own). Its button
+  «Отменить всё» = `POST /v1/actions/groups/{group.id}/undo`. When everything is undone the text is
+  «Отменено: 3 дела» and `undo_label_ru` is null.
+- In «История» each action stays a row with its own «Отменить».
+- At most 8 actions per phrase (`MAX_ACTIONS_PER_PHRASE`); the rest is said, not done.
+
+### `POST /v1/actions/groups/{group_id}/undo`
+
+`{"client_id": "0194..."}` (optional; a repeat with the same one changes nothing). Undoes every
+action of the phrase, **newest first**, in one transaction; each action in a savepoint, so one
+that cannot be undone any more (30 days, nothing left) does not stop the others. An action already
+undone alone counts as done (`repeated: true`).
+
+`200`:
+
+```json
+{"undone": [UndoOut], "failed": [Action], "partial": false,
+ "message_ru": null, "page_patches": [PagePatch]}
+```
+
+- `undone`: one `{action, undo, partial, repeated, message_ru: null, page_patches: []}` per action
+  (as `POST /v1/actions/{id}/undo`), newest first; `page_patches` of all of them are at the top.
+- `failed`: actions that could not be undone; then `message_ru` = «Вернул 2 из 3: остальное уже
+  нельзя отменить.». `partial`: some records were changed by the person since (they keep theirs;
+  `message_ru` «Часть уже изменена вами — вернул остальное.»).
+- Errors: `404 not_found` (not this person's phrase / no actions), `410 undo_expired` (nothing
+  could be undone).
+
 ## Action
 
 ```json

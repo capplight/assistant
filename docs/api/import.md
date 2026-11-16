@@ -1,4 +1,4 @@
-# Import API: Telegram «Избранное» from an export file (week 10)
+# Import API: Telegram «Избранное» from an export file (week 10); AI-chat exports (step 7)
 
 Spec: `docs/spec/final/3-engineering.md` 3.7 `imports`, 4.9, 6.10; decision №5, R-28. Base path
 `/v1`. Needs `Authorization: Bearer` and the base consents; starting an import also needs the
@@ -85,6 +85,91 @@ Stops after the batch in progress. What was brought stays, with its summary and 
   Message text is data for the model, never instructions.
 - Events (with the `analytics` consent): the server writes `import_completed`
   (`method: file`, `items`, `skipped`).
+
+## AI-chat exports: ChatGPT, Claude, Gemini (step 7)
+
+The person's own chats with ChatGPT, Claude or Gemini, brought from the provider's export file, so
+«что мне советовали про кафе в Стамбуле?» is found here. One import for all three: the server
+recognises the format. No login to their accounts, no OAuth (providers have none for chats).
+
+### What the person does
+
+| Provider | Where the file comes from | What to upload |
+|---|---|---|
+| ChatGPT | Settings → Data controls → Export data → link in the e-mail | the `.zip` (or `conversations.json` from it) |
+| Claude | Settings → Privacy → Export data → link in the e-mail | the `.zip` (or `conversations.json`) |
+| Gemini | Google Takeout → only «My Activity», filter «Gemini Apps» (JSON or the default HTML) | the Takeout `.zip` (or `MyActivity.json` / `.html`) |
+
+Upload through `/v1/uploads` as usual (`mime`: `application/zip`, `application/x-zip-compressed`,
+`application/json`, `text/html`, `text/plain` or `application/octet-stream`; ≤ 50 MB). A ChatGPT
+zip with many pictures can be over 50 MB: then upload `conversations.json` alone (pictures are not
+carried anyway). Then:
+
+`POST /v1/imports/ai-chats/file` `{"client_id": "...", "upload_id": "..."}` → `202 {"import": Import,
+"created": true}` (same `client_id` again: `200`, `created: false`). Base consents only: the file
+is the person's own, like any upload. Errors as for Telegram (`404 upload_not_found`,
+`409 upload_not_ready` / `upload_in_use` / `import_running`), and `422 import_not_chats_file`
+(wrong file type). Poll `GET /v1/imports/{id}` every 2–3 s.
+
+### Import fields for AI chats
+
+Same `Import` object, `source: "ai_chat_export_file"`, plus:
+
+| Field | Notes |
+|---|---|
+| `provider` | `chatgpt` · `claude` · `gemini` (known once the file is read; `null` before). |
+| `total` / `processed` | Conversations to bring / done: «Перенёс 120 из 312 разговоров». |
+| `conversations` | Conversations brought (the number in the summary). |
+| `created` | Records made (a long conversation is several records). |
+| `skipped_dups` | Exact repeats of a record already here, not brought. |
+| `seen_before` | Already brought by an earlier import: re-importing the same export is safe. |
+| `skipped_media` | Not carried: `image`, `file`, `audio` (counts). Only text is. |
+| `failed` | Conversations that could not be read (the others still are). |
+| `summary_ru` | «Принёс 312 разговоров из ChatGPT. Повторов не взял: 3. Старые (40) не перенёс: за раз беру 5 000 самых новых.» |
+| `action_id` | «Удалить импорт» = `POST /v1/actions/{action_id}/undo`: every brought record goes to «Удалённые записи» (30 days, restorable). |
+
+`error` codes: `import_bad_file` (broken JSON / zip), `import_no_chats_file` (a zip without
+`conversations*.json` or a Gemini activity file), `import_unknown_format` (JSON or HTML, but not a
+chats export), `import_too_large` (chats files over 128 MB unpacked, or packed suspiciously
+tightly), `import_file_missing`. `POST /v1/imports/{id}/cancel` works the same.
+
+### The records
+
+- One conversation = one record: `kind: "ai_chat"`, `source: "import_ai_chat"`, `title` = the
+  chat's title (or its first question), `occurred_at` = when the chat started, `text` compact:
+  ```
+  Я: Посоветуй кафе в Стамбуле с видом на Босфор
+
+  ChatGPT: Попробуйте кафе «Чайка» у набережной.
+  ```
+  Only the person's questions and the answers shown: edited/regenerated branches, tool calls,
+  hidden context and reasoning are left out; one turn is cut at 6 000 characters (« …»). A chat
+  over 30 000 characters is split into parts («Название (часть 2)»), at most 10 per chat.
+  Gemini has no conversations in Takeout: turns less than 30 minutes apart make one.
+- `source_meta`: `{"tag": "из ChatGPT", "title_source": "import", "import_id": …, "ai_chat":
+  {"provider", "provider_name", "conversation_id", "part", "parts", "turns", "updated_at"}}`.
+  The app shows `source_meta.tag` as the chip «из ChatGPT / Claude / Gemini».
+- **Page: «Заметки», by the page rules** — no new page. «Заметки» takes every record (its rule),
+  so the chats land there without the person choosing (Ф-47), and no extra page appears beside the
+  default ones (Ф-35). A filter is `GET /v1/search?q=…&kind=ai_chat` or `source_meta.tag`. A page
+  «Чаты ИИ» can be added later as a template with rule `{"kinds": ["ai_chat"]}` if the founder
+  wants one.
+- Search: by words at once (`GET /v1/search`, the assistant's search); by meaning when embeddings
+  are on and allowed (`ai_cross_border`), chunked like any long record.
+- Limits: at most 5 000 conversations per import, the newest; the older ones are counted in the
+  summary (import again later is not a way to get them: the newest are taken again). 128 MB of
+  chats JSON/HTML unpacked.
+- Repeats: a conversation part already brought (same chat, same text) is never brought again.
+  A chat continued since the last export comes as a new record; the repeat scan then proposes
+  «Объединить?» with the older one (`origin: "import"`).
+- **No model reads them here**: enrichment is not run (`enrich_state: "skipped"`): the export has
+  titles already, and reading thousands of chats would cost and could file the assistant's advice
+  as the person's tasks or expenses. Memory facts «из материала» from imported chats are
+  **deferred**: the background memory reader (`chat:memory`) reads shares only; adding
+  `import_ai_chat` there would need a per-day cap of a few chats.
+- Privacy: the uploaded file goes to storage purge right after reading (only the text stays);
+  links in chats are never opened; chat text is data for a model, never instructions.
+- Events: `import_completed` with `method: "ai_chats"`.
 
 ## Bank statements
 

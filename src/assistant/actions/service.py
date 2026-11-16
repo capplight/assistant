@@ -285,6 +285,88 @@ def notice(a: Action, where: list[dict[str, Any]], *, undoable: bool,
             "ms": NOTICE_MS}  # fmt: skip
 
 
+_RU_DEEDS = ("дело", "дела", "дел")
+
+
+async def _groups(session: AsyncSession, mids: set[int],
+                  now: datetime) -> dict[int, list[Action]]:  # fmt: skip
+    """Step 6: the actions of one phrase (same `message_id`), oldest first."""
+    if not mids:
+        return {}
+    rows = await session.scalars(select(Action).where(
+        Action.message_id.in_(mids), Action.undo_of_action_id.is_(None)).order_by(Action.id))
+    out: dict[int, list[Action]] = {}
+    for a in rows:
+        out.setdefault(a.message_id, []).append(a)  # type: ignore[arg-type]
+    return out
+
+
+def group_notice(members: list[Action], now: datetime) -> dict[str, Any]:
+    """«Сделал 3 дела · Отменить всё» (one notice for one phrase, design-system §10.1)."""
+    n = len(members)
+    live = [a for a in members if a.undone_at is None]
+    text_ = (f"Сделал {n} {_plural(n, _RU_DEEDS)}" if live
+             else f"Отменено: {n} {_plural(n, _RU_DEEDS)}")  # fmt: skip
+    any_undo = any(is_undoable(a, now) for a in members)
+    return {"text_ru": text_, "text_kk": None, "target": None,
+            "undo_label_ru": "Отменить всё" if any_undo else None, "undo_label_kk": None,
+            "ms": NOTICE_MS}  # fmt: skip
+
+
+def _group_of(members: list[Action] | None, message_id: uuid.UUID | None,
+              a: Action, now: datetime) -> dict[str, Any] | None:  # fmt: skip
+    """Null unless the phrase made more than one action."""
+    if not members or len(members) < 2 or message_id is None:
+        return None
+    ids = [m.id for m in members]
+    return {"id": str(message_id), "size": len(members),
+            "index": ids.index(a.id) if a.id in ids else None,
+            "action_ids": [str(m.public_id) for m in members],
+            "notice": group_notice(members, now)}  # fmt: skip
+
+
+@dataclass
+class GroupUndo:
+    results: list[UndoResult]
+    failed: list[Action]
+    partial: bool
+    pages: set[int]
+    items: set[str]
+
+
+TEXT_GROUP_FAILED = "Вернул {done} из {n}: остальное уже нельзя отменить."
+
+
+async def undo_group(session: AsyncSession, user_id: int, group_id: uuid.UUID, *,
+                     now: datetime, client_id: uuid.UUID | None = None) -> GroupUndo:
+    """«Отменить всё» of one phrase (step 6): every action of the phrase, newest first, in one
+    transaction; each in a savepoint, so one that cannot be undone any more (30 days, nothing
+    left) is reported and the others still go back. Idempotent like `undo`."""
+    msg = await session.scalar(select(ConversationMessage.id).where(
+        ConversationMessage.user_id == user_id, ConversationMessage.public_id == group_id))
+    if msg is None:
+        raise ActionNotFound(str(group_id))
+    members = list(await session.scalars(select(Action).where(
+        Action.user_id == user_id, Action.message_id == msg,
+        Action.undo_of_action_id.is_(None)).order_by(Action.id.desc())))  # fmt: skip
+    if not members:
+        raise ActionNotFound(str(group_id))
+    out = GroupUndo([], [], False, set(), set())
+    for a in members:
+        cid = uuid.uuid5(client_id, str(a.public_id)) if client_id else None
+        try:
+            async with session.begin_nested():
+                res = await undo(session, user_id, a.public_id, now=now, client_id=cid)
+        except (ActionNotFound, UndoExpired):
+            out.failed.append(a)
+            continue
+        out.results.append(res)
+        out.partial |= res.partial
+        out.pages |= res.pages
+        out.items |= res.items
+    return out
+
+
 async def actions_dicts(session: AsyncSession, rows: list[Action],
                         now: datetime) -> list[dict[str, Any]]:  # fmt: skip
     screens = {s for a in rows for s in (a.screen_id,) if s}
@@ -306,6 +388,7 @@ async def actions_dicts(session: AsyncSession, rows: list[Action],
         undo_of = dict((await session.execute(
             select(Action.id, Action.public_id).where(Action.id.in_(oids)))).all())  # type: ignore[arg-type]  # fmt: skip
     where = await saved_to(session, rows)
+    groups = await _groups(session, mids, now)
     out = []
     for a in rows:
         reverted = set(a.payload.get("reverted") or [])
@@ -334,6 +417,8 @@ async def actions_dicts(session: AsyncSession, rows: list[Action],
             "undo_of": str(undo_of[a.undo_of_action_id]) if a.undo_of_action_id in undo_of
             else None,
             "message_id": str(msgs[a.message_id]) if a.message_id in msgs else None,
+            "group": _group_of(groups.get(a.message_id or 0), msgs.get(a.message_id or 0), a,
+                               now),
             "seq": a.seq,
             "created_at": a.created_at.isoformat(),
         })  # fmt: skip

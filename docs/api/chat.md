@@ -368,6 +368,23 @@ By words now, by meaning when the embedder is on (`search.md`). Shared text is n
 the person's words. These turns are not records: no citation chips for them; the answer says the
 date («вы писали 3 марта»).
 
+**Step 6: several things in one phrase (2026-11-16).**
+- Code first: a phrase is split at «,» / «;» / «и» before an order word («напомни», «запиши»,
+  «купи», «потратил», «переложи»…), and a spend with several amounts at «и» / «,» («купил хлеб за
+  400 и молоко за 600» → two spends). Every part code reads (a spend, a to-do / shopping list, a
+  «запиши …» note, a «напомни …» reminder) is done by code; a reminder part sends its
+  `reminder_draft` (set only after «Сохранить»). Parts code cannot read go to the model in the
+  same turn, which may call several change tools; the intent rule still decides on the person's
+  own phrase. If the model cannot be reached, the answer says «Не успел: «…» — скажите это ещё
+  раз чуть позже.»; a part nobody understood: «Не понял: «…».». A phrase mixing a reminder with a
+  part for the model is not split. Not split either: questions, more than 8 parts.
+- Each change is its own `action` event (replace by `action.id` as before); from the second one on,
+  `action.group` is set (`actions.md` «Groups»). `done` has **`action_ids`** (all of them) and
+  **`group`** (null for one action): show `group.notice` («Сделал 3 дела · Отменить всё») once,
+  instead of one notice per action. The ChatMessage's `action` is the first one, with `group`.
+- «отмени» / «верни как было» without words undoes the whole last phrase (all its actions).
+- Irreversible things still ask: «Да» rules are unchanged.
+
 **Week 20 (Ф-50).**
 - Every save from the line carries `action.saved_to` (`actions.md`): «Сохранил в «…» · Переложить
   · Отменить».

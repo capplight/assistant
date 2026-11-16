@@ -63,7 +63,11 @@ MAX_FACTS = 150
 BUDGET_MEMORY = 500  # tokens of the chat layer (est. chars / 3)
 FACT_CHARS = 160
 EXPIRED_KEEP_DAYS = 30
-MATERIAL_SOURCES = ("share", "bot_forward")
+# Ф-70: forwarded / shared records; step 7: imported ChatGPT / Claude / Gemini chats (an import
+# brings hundreds at once: they are read MAX_IMPORTED a run, so the daily cap of runs is also the
+# cost cap — at most MEMORY_RUNS_PER_DAY × MAX_IMPORTED imported chats a day).
+MATERIAL_SOURCES = ("share", "bot_forward", "import_ai_chat")
+MAX_IMPORTED = 2
 KIND_RU = {"person": "люди", "place": "места", "preference": "предпочтения",
            "routine": "распорядок", "project": "текущие дела", "agreement": "договорённости",
            "other": "разное"}  # fmt: skip
@@ -405,13 +409,20 @@ async def run_memory(maker: async_sessionmaker[AsyncSession], router: Any, embed
               AND input_kind IS DISTINCT FROM 'share' AND deleted_at IS NULL
             ORDER BY id DESC LIMIT :n
         """), {"c": conversation_id, "upto": conv.upto, "n": MAX_PHRASES})).all()[::-1]
-        mats = (await s.execute(text("""
-            SELECT id, title, left(coalesce(summary, text, raw_text, ''), :ch) AS body
+        found = (await s.execute(text("""
+            SELECT id, source, title, left(coalesce(summary, text, raw_text, ''), :ch) AS body
             FROM items WHERE user_id = :u AND id > :upto AND source = ANY(:src)
               AND deleted_at IS NULL AND hidden_reason IS NULL
             ORDER BY id LIMIT :n
         """), {"u": conv.user_id, "upto": conv.upto_item, "src": list(MATERIAL_SOURCES),
                "n": MAX_MATERIALS, "ch": MATERIAL_CHARS})).all()  # fmt: skip
+        mats, imported = [], 0
+        for row in found:  # in id order, so `memory_upto_item_id` never skips one
+            if row.source == "import_ai_chat":
+                if imported >= MAX_IMPORTED:
+                    break
+                imported += 1
+            mats.append(row)
         today = now.date()
         known = (await active(s, conv.user_id, today))[:KNOWN_SHOWN]
         await s.commit()

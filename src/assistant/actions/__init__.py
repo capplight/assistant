@@ -11,8 +11,10 @@ Week 6 writes the kinds the assistant line needs; week 9 adds the rest on the sa
 
 from assistant.actions import engine, manual
 from assistant.actions.service import (
+    TEXT_GROUP_FAILED,
     TEXT_PARTIAL,
     ActionNotFound,
+    GroupUndo,
     UndoExpired,
     UndoResult,
     actions_dicts,
@@ -20,7 +22,9 @@ from assistant.actions.service import (
     is_undoable,
     record,
     undo,
+    undo_group,
 )
 
-__all__ = ["TEXT_PARTIAL", "ActionNotFound", "UndoExpired", "UndoResult", "actions_dicts",
+__all__ = ["TEXT_GROUP_FAILED", "TEXT_PARTIAL", "GroupUndo", "undo_group",
+           "ActionNotFound", "UndoExpired", "UndoResult", "actions_dicts",
            "engine", "extend", "is_undoable", "manual", "record", "undo"]  # fmt: skip

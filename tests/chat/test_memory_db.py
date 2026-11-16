@@ -192,3 +192,38 @@ async def test_whole_conversation_is_searchable_by_words_and_meaning(env):  # no
         async with env.maker() as s:
             turns = await recall.search_history(s, uid, "реклама")
         assert turns == []
+
+
+async def test_imported_chats_feed_memory_two_a_read(env):  # noqa: F811
+    """Step 7 hook: imported ChatGPT / Claude / Gemini chats are materials («из материала»), read
+    at most MAX_IMPORTED a run, in id order (nothing skipped)."""
+    reader = _Reader([_f("Отель в Стамбуле у Галатской башни", kind="project",
+                         source="material", material="d1")])
+    async with client(env.make_app(router_with(env.maker, reader))) as c:
+        h = await signed_in(c)
+        uid = await user_pk(c, h, env.maker)
+        await say(c, h, "привет")
+        async with env.maker() as s:
+            conv = await s.scalar(text("SELECT id FROM conversations WHERE user_id = :u"),
+                                  {"u": uid})
+            for i in range(3):
+                await s.execute(text("""
+                    INSERT INTO items (user_id, kind, source, status, title, text, source_meta,
+                                       public_id, client_id)
+                    VALUES (:u, 'ai_chat', 'import_ai_chat', 'ready', :t, :x,
+                            '{"tag": "из ChatGPT"}', gen_random_uuid(), gen_random_uuid())
+                """), {"u": uid, "t": f"Поездка {i}",
+                       "x": "Отель в Стамбуле у Галатской башни, план на 5 дней"})
+            await s.commit()
+        out = await memory.run_memory(env.maker, router_with(env.maker, reader), None, conv)
+        assert out.added == ["Отель в Стамбуле у Галатской башни"]
+        body = _all_text(reader.calls["MemoryReply"][0])
+        assert "Поездка 0" in body and "Поездка 1" in body and "Поездка 2" not in body
+        facts = await _facts(env.maker, uid)
+        assert [f.source for f in facts] == ["material"]
+        async with env.maker() as s:
+            upto = await s.scalar(text("SELECT memory_upto_item_id FROM conversations "
+                                       "WHERE id = :c"), {"c": conv})
+            third = await s.scalar(text("SELECT max(id) FROM items WHERE user_id = :u"),
+                                   {"u": uid})
+        assert upto < third  # the third imported chat waits for the next read

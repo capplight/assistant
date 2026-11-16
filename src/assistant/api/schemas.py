@@ -822,6 +822,14 @@ class NoticeOut(BaseModel):
     ms: int
 
 
+class ActionGroupOut(BaseModel):
+    id: uuid.UUID  # the phrase's chat answer; «Отменить всё» = POST /actions/groups/{id}/undo
+    size: int
+    index: int | None
+    action_ids: list[uuid.UUID]
+    notice: NoticeOut
+
+
 class ActionOut(BaseModel):
     id: uuid.UUID
     kind: str
@@ -835,6 +843,7 @@ class ActionOut(BaseModel):
     saved_to: list[SavedToOut] = Field(default_factory=list)
     parsed_later: bool = False  # Ф-69: made in the background from a «разберу позже» note
     notice: NoticeOut | None = None  # Ф-65: the 3-second notice (actions.md)
+    group: ActionGroupOut | None = None  # step 6: the phrase made several actions
     undoable: bool
     undoable_until: datetime | None
     undone_at: datetime | None
@@ -881,6 +890,20 @@ class UndoOut(BaseModel):
     undo: ActionOut
     partial: bool
     repeated: bool
+    message_ru: str | None
+    page_patches: list[dict[str, Any]]
+
+
+class GroupUndoIn(BaseModel):
+    client_id: uuid.UUID | None = None
+
+
+class GroupUndoOut(BaseModel):
+    """«Отменить всё» of one phrase (step 6, actions.md «Groups»)."""
+
+    undone: list[UndoOut]  # newest first: each undone action and its undo
+    failed: list[ActionOut]  # could not be undone any more (30 days, nothing left)
+    partial: bool  # some records were changed by the person since: they keep theirs
     message_ru: str | None
     page_patches: list[dict[str, Any]]
 

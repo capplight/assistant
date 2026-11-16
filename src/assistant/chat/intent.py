@@ -40,7 +40,8 @@ _E = r"(?=$|[\s,.;:!?»\")])"  # a whole word: «удалил» is not «уда�
 _CHANGE = re.compile(_W + r"(?:"
     r"разлож(?:и|ите|ить)|сгруппир(?:уй|уйте|овать)|рассортир(?:уй|уйте|овать)|"
     r"отсортир(?:уй|уйте|овать)|упорядоч(?:ь|ьте|ить)|перестав(?:ь|ьте|ить)|"
-    r"перенес(?:и|ите|ти)|перемест(?:и|ите|ить)|полож(?:и|ите|ить)|постав(?:ь|ьте|ить)|"
+    r"перенес(?:и|ите|ти)|перемест(?:и|ите|ить)|полож(?:и|ите|ить)|перелож(?:и|ите|ить)|"
+    r"постав(?:ь|ьте|ить)|"
     r"добав(?:ь|ьте|ить)|запиш(?:и|ите)|записать|сохран(?:и|ите|ить)|"
     r"созда(?:й|йте|ть)|сдела(?:й|йте|ть)\s+страниц\w*|заведи|удал(?:и|ите|ить)|"
     r"убер(?:и|ите)|убрать|выброс(?:и|ите|ить)|переимен(?:уй|уйте|овать)|назов(?:и|ите)|"
@@ -277,3 +278,36 @@ def names_page(text: str) -> bool:
 
 def is_comparison(text: str) -> bool:
     return bool(_COMPARE.search(_norm(text)))
+
+
+# Step 6: several things in one phrase («купил хлеб за 400 и молоко за 600, и напомни оплатить
+# свет»). Code only splits where it is cheap and safe: at «,» / «;» / «и» before an order word,
+# and a spend with several amounts at «и» / «,» (the verb carried over: «молоко за 600» →
+# «купил молоко за 600»). The caller uses the parts only when every part is read by code.
+MAX_PARTS = 8
+_ORDER = (r"(?:напомн|запиш|запомн|добав|купи|потрат|заплат|оплат|перелож|перенеси|сохрани|"
+          r"удали|разбуд|поставь)")
+_SPLIT = re.compile(r"\s*[;,]\s*(?:(?:и|а\s+ещ[её]|потом|также|ещ[её])\s+)?(?=" + _ORDER + r")"
+                    r"|\s+(?:и|а\s+также|потом)\s+(?:ещ[её]\s+)?(?=" + _ORDER + r")",
+                    re.IGNORECASE)  # fmt: skip
+_AMOUNT = re.compile(r"\d[\d\s]*(?:[.,]\d+)?", re.IGNORECASE)
+_SPEND_VERB = re.compile(r"^(купил[аи]?|потратил[аи]?|заплатил[аи]?|оплатил[аи]?)\s",
+                         re.IGNORECASE)  # fmt: skip
+
+
+def split_parts(text: str) -> list[str]:
+    """The parts of a phrase, or [text] when it is one thing (or more than MAX_PARTS)."""
+    flat = " ".join(text.split()).strip(" .!")
+    if not flat or "?" in flat or len(flat) > 400:
+        return [flat] if flat else []
+    parts = [p.strip(" ,.;") for p in _SPLIT.split(flat) if p and p.strip(" ,.;")]
+    out: list[str] = []
+    for part in parts:
+        verb = _SPEND_VERB.match(part)
+        if verb and len(_AMOUNT.findall(part)) >= 2:
+            subs = [x.strip(" ,") for x in re.split(r"\s+и\s+|,\s*", part) if x.strip(" ,")]
+            if len(subs) >= 2 and all(_AMOUNT.search(x) for x in subs):
+                out += [x if _SPEND_VERB.match(x) else f"{verb.group(1)} {x}" for x in subs]
+                continue
+        out.append(part)
+    return out if len(out) <= MAX_PARTS else [flat]

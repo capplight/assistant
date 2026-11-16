@@ -9,7 +9,8 @@ anything even if a model tried.
 
 Rules held here, in code:
 - Records are named by refs the turn issued (what the model was shown), never by ids.
-- One action per phrase: the first change of a turn writes it, later ones join it.
+- Step 6: each change of a phrase is its own action (≤ MAX_ACTIONS_PER_PHRASE), grouped under the
+  phrase's answer: one «Отменить всё» undoes them all, newest first; each is undoable alone.
 - Each change is one short transaction, committed before its `action` / `page_patch` events.
   No transaction is open during PAGE_GROUP.
 - Records placed by hand (`manual_order`) or pinned are not moved without «Да» (`confirm_manual`);
@@ -33,7 +34,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from assistant.actions import actions_dicts, engine, extend, record
+from assistant.actions import actions_dicts, engine, record
 from assistant.actions.patch import page_patches
 from assistant.ai import LLMTask, Masker, TaskInputs, ToolSpec, UntrustedPart
 from assistant.ai.adapters import strict_json_schema
@@ -73,6 +74,7 @@ from assistant.records import (
 log = logging.getLogger(__name__)
 
 MAX_RECORDS_PER_CALL = 50
+MAX_ACTIONS_PER_PHRASE = 8  # step 6: changes one phrase may make
 # Spec 5.10 rule 5 asked «Да» above 5 records; the founder made it every delete (2026-11-09),
 # then none (Ф-66, 2026-11-16): a trash goes at once with «Восстановить»; at most
 # MAX_RECORDS_PER_CALL records per call, and only when the person's phrase asks to delete.
@@ -351,7 +353,9 @@ class MutationState:
     action_pk: int | None = None
     action_public: str | None = None
     action_out: dict[str, Any] | None = None
-    more_action_pks: list[int] = field(default_factory=list)  # «отмени всё»: one per undo
+    more_action_pks: list[int] = field(default_factory=list)  # step 6: the phrase's other actions
+    rest: str | None = None  # step 6: the part of the phrase left to the model after code's
+    prior_n: int = 0  # how many actions code made before the model got `rest`
     sentences: list[str] = field(default_factory=list)
     changed: set[str] = field(default_factory=set)
     proposal: dict[str, Any] | None = None  # set: the turn stops and asks
@@ -362,6 +366,17 @@ class MutationState:
     @property
     def summary(self) -> str:
         return " ".join(self.sentences).strip()
+
+    @property
+    def action_pks(self) -> list[int]:
+        return [self.action_pk, *self.more_action_pks] if self.action_pk is not None else []
+
+    def took(self, pk: int, public: str) -> None:
+        """One more action of this phrase (step 6): the first one names the answer."""
+        if self.action_pk is None:
+            self.action_pk, self.action_public = pk, public
+        elif pk != self.action_pk and pk not in self.more_action_pks:
+            self.more_action_pks.append(pk)
 
 
 def _json(obj: object) -> str:
@@ -410,9 +425,10 @@ async def _commit(env: Any, *, kind: str, ops: list[dict[str, Any]], sentence: s
                   changes: list[dict[str, Any]], screen_pk: int | None, source_pks: list[int],
                   prepare: Callable[[AsyncSession], Any] | None = None
                   ) -> dict[str, Any]:  # fmt: skip
-    """Apply the ops in one transaction, write or extend the turn's action, commit, then send
-    `action` + `page_patch`. `prepare(session) -> Prepared` may do non-op work in the same
-    transaction first (create a record or a page)."""
+    """Apply the ops in one transaction, write their action, commit, then send `action` +
+    `page_patch`. `prepare(session) -> Prepared` may do non-op work in the same transaction
+    first (create a record or a page). Step 6: every change of a phrase is its own action, all
+    under the phrase's answer (`message_id`): one «Отменить всё», each also alone."""
     m: MutationState = env.mut
     now = m.clock()
     async with env.sessionmaker() as s:
@@ -425,27 +441,21 @@ async def _commit(env: Any, *, kind: str, ops: list[dict[str, Any]], sentence: s
         changes = [*prep.changes, *changes]
         pages = out.pages | prep.pages
         items = out.items | prep.items | {c["item_id"] for c in changes if c.get("item_id")}
-        m.sentences.append(prep.sentence or sentence)
-        summary = {"ru": m.summary, "kk": None}
-        if m.action_pk is None:
-            action = await record(
-                s, user_id=m.user_id, kind=kind, initiated_by=Initiator.AGENT, summary=summary,
-                changes=changes, inverse=inverse, now=now, screen_id=screen_pk,
-                message_id=m.reply_pk, source_item_ids=source_pks, extra=prep.extra,
-            )  # fmt: skip
-        else:
-            action = await extend(s, m.action_pk, summary=summary, changes=changes,
-                                  inverse=inverse, source_item_ids=source_pks,
-                                  now=now)  # fmt: skip
-            if prep.extra:
-                action.payload = {**action.payload, **prep.extra}
+        said = prep.sentence or sentence
+        m.sentences.append(said)
+        action = await record(
+            s, user_id=m.user_id, kind=kind, initiated_by=Initiator.AGENT,
+            summary={"ru": said, "kk": None}, changes=changes, inverse=inverse, now=now,
+            screen_id=screen_pk, message_id=m.reply_pk, source_item_ids=source_pks,
+            extra=prep.extra,
+        )  # fmt: skip
         await s.flush()
         patches = await page_patches(s, m.user_id, pages, items)
         out_action = (await actions_dicts(s, [action], now))[0]
-        m.action_pk, m.action_public = action.id, str(action.public_id)
+        m.took(action.id, str(action.public_id))
         await s.execute(text("UPDATE conversation_messages SET action_ids = :ids, "
                              "updated_at = now() WHERE id = :r"),
-                        {"ids": [action.id], "r": m.reply_pk})  # fmt: skip
+                        {"ids": m.action_pks, "r": m.reply_pk})  # fmt: skip
         await s.commit()
     m.action_out = out_action
     m.changed |= set(out_action["changed_item_ids"])

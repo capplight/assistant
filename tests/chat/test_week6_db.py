@@ -432,10 +432,10 @@ async def test_big_reorder_asks_with_the_number(w6):
         assert script.n("ChatReply") == 0
 
 
-# --- tools through the model: a page and a move, one action ---
+# --- tools through the model: a page and a move, one group (step 6) ---
 
 
-async def test_make_page_and_move_one_action_undo_all(w6):
+async def test_make_page_and_move_two_actions_undo_all(w6):
     def make_page(req: AdapterRequest) -> list[ToolCall]:
         return [ToolCall("c1", "create_page_from_template",
                          {"template": "custom", "title": "Ремонт"})]
@@ -454,12 +454,17 @@ async def test_make_page_and_move_one_action_undo_all(w6):
         evs = await say(c, h, "Сделай страницу Ремонт и перенеси туда плитку", page_id=pid,
                         visible_item_ids=ids)
         actions = by_name(evs, "action")
-        assert len({a["action"]["id"] for a in actions}) == 1  # one phrase, one action
-        action = actions[-1]["action"]
-        assert action["summary"]["ru"] == ("Сделал страницу «Ремонт». Перенёс «Плитка для ванной, "
-                                           "замер» в «Ремонт».")  # fmt: skip
-        assert action["created_page_id"]
-        new_page = action["created_page_id"]
+        # step 6: one action per change, both under the phrase's answer (one «Отменить всё»)
+        assert len({a["action"]["id"] for a in actions}) == 2
+        made, moved = actions[0]["action"], actions[-1]["action"]
+        assert made["summary"]["ru"] == "Сделал страницу «Ремонт»."
+        assert moved["summary"]["ru"] == "Перенёс «Плитка для ванной, замер» в «Ремонт»."
+        assert moved["group"]["id"] == last(evs, "done")["reply_id"]
+        assert moved["group"]["size"] == 2
+        assert moved["group"]["notice"]["text_ru"] == "Сделал 2 дела"
+        assert last(evs, "done")["group"]["action_ids"] == [made["id"], moved["id"]]
+        new_page = made["created_page_id"]
+        assert new_page
         # A planned multi-step change may use the stronger model (ai/policy.py rule).
         strong = make_settings().model_strong
         assert all(r.model == strong for r in script.calls["ChatReply"])
@@ -468,8 +473,10 @@ async def test_make_page_and_move_one_action_undo_all(w6):
         assert here[ids[0]]["removed_by_user_at"] is not None and ids[0] in there
         assert last(evs, "done")["answer_kind"] == "action"
 
-        r = (await c.post(f"/v1/actions/{action['id']}/undo", headers=h)).json()
-        assert r["partial"] is False
+        group = moved["group"]["id"]
+        r = (await c.post(f"/v1/actions/groups/{group}/undo", headers=h)).json()
+        assert r["partial"] is False and r["failed"] == [] and r["message_ru"] is None
+        assert [u["action"]["id"] for u in r["undone"]] == [moved["id"], made["id"]]  # newest 1st
         here = {r_["item"]: r_ for r_ in await rows(w6.maker, pid)}
         assert here[ids[0]]["removed_by_user_at"] is None
         pages = [p["id"] for p in (await c.get("/v1/pages", headers=h)).json()["pages"]]

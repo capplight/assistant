@@ -34,7 +34,8 @@ FRAGMENT_CHARS = 700
 LIST_ITEM_CHARS = 160
 
 RecordKindArg = Literal["note", "voice", "image", "screenshot", "pdf", "docx", "xlsx", "link",
-                        "email", "tg_message", "kp", "file_other"]  # fmt: skip
+                        "email", "tg_message", "kp", "file_other",
+                        "ai_chat"]  # fmt: skip  # step 7: an imported ChatGPT/Claude/Gemini chat
 
 
 class SearchArgs(BaseModel):
@@ -469,6 +470,9 @@ async def execute(env: ToolEnv, call: ToolCall, *, allowed: set[str]) -> ToolOut
                           "change")  # fmt: skip
         if m.proposal is not None:
             return _error("a question to the person is pending: answer with text now")
+        if len(m.action_pks) >= mutate.MAX_ACTIONS_PER_PHRASE:  # step 6
+            return _error(f"at most {mutate.MAX_ACTIONS_PER_PHRASE} changes per phrase: stop "
+                          "and tell the person what is left to do")  # fmt: skip
         args_type, runner, activity = mutate.RUNNERS[call.name]
         try:
             margs = args_type.model_validate(call.arguments)

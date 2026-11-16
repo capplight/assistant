@@ -11,17 +11,26 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 
 from assistant.actions import (
+    TEXT_GROUP_FAILED,
     TEXT_PARTIAL,
     ActionNotFound,
     UndoExpired,
     actions_dicts,
     undo,
+    undo_group,
 )
 from assistant.actions.patch import page_patches
 from assistant.api.consent_gate import require_base_consent
 from assistant.api.deps import CurrentUser, Db
 from assistant.api.errors import ApiError
-from assistant.api.schemas import ActionOut, ActionsOut, UndoIn, UndoOut
+from assistant.api.schemas import (
+    ActionOut,
+    ActionsOut,
+    GroupUndoIn,
+    GroupUndoOut,
+    UndoIn,
+    UndoOut,
+)
 from assistant.db.models_actions import Action
 
 router = APIRouter(prefix="/actions", tags=["actions"])
@@ -46,6 +55,34 @@ async def list_actions(user: BaseUser, db: Db, before: uuid.UUID | None = None,
     out = await actions_dicts(db, rows[:limit], datetime.now(UTC))
     return ActionsOut(actions=[ActionOut.model_validate(d) for d in out],
                       has_more=len(rows) > limit)  # fmt: skip
+
+
+@router.post("/groups/{group_id}/undo", response_model=GroupUndoOut)
+async def undo_group_route(group_id: uuid.UUID, user: BaseUser, db: Db,
+                           body: GroupUndoIn | None = None) -> GroupUndoOut:  # fmt: skip
+    """«Отменить всё» of one phrase: its actions, newest first, in one transaction."""
+    body = body or GroupUndoIn()
+    now = datetime.now(UTC)
+    try:
+        res = await undo_group(db, user.id, group_id, now=now, client_id=body.client_id)
+    except ActionNotFound as exc:
+        raise ApiError(404, "not_found") from exc
+    if not res.results:
+        raise ApiError(410, "undo_expired")
+    await db.flush()
+    patches = await page_patches(db, user.id, res.pages, res.items)
+    undone = []
+    for r in res.results:
+        action, made = await actions_dicts(db, [r.action, r.undo], now)
+        undone.append(UndoOut(action=ActionOut.model_validate(action),
+                              undo=ActionOut.model_validate(made), partial=r.partial,
+                              repeated=r.repeated, message_ru=None, page_patches=[]))
+    failed = [ActionOut.model_validate(d) for d in await actions_dicts(db, res.failed, now)]
+    n = len(res.results) + len(res.failed)
+    message = (TEXT_GROUP_FAILED.format(done=len(res.results), n=n) if res.failed
+               else TEXT_PARTIAL if res.partial else None)  # fmt: skip
+    return GroupUndoOut(undone=undone, failed=failed, partial=res.partial, message_ru=message,
+                        page_patches=patches)  # fmt: skip
 
 
 @router.get("/{action_id}", response_model=ActionOut)

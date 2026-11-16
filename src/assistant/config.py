@@ -228,6 +228,10 @@ class Settings(BaseSettings):
     import_max_zip_ratio: int = 100  # result.json packed more tightly than 1:100: refused
     import_max_messages: int = 50000
     import_enrich_wave: int = 50  # records sent to enrichment at a time (IMPORT_SUMMARIZE)
+    # AI-chat exports (ChatGPT / Claude / Gemini, step 7): the chats files read out of the upload
+    # (all of them together) and how many conversations one import brings (the newest first).
+    import_ai_max_json_bytes: int = 128 * 1024 * 1024
+    import_ai_max_conversations: int = 5000
     # Sync tombstones are kept this long (founder 2026-11-09; the spec gives no number). A phone
     # that last synced before the oldest one kept gets `full_resync` (docs/api/sync.md).
     sync_tombstone_days: int = 90

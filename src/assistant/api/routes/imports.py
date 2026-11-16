@@ -1,7 +1,8 @@
-"""/v1/imports: Telegram Desktop export file → records (spec 4.9, 6.10). Contract:
-docs/api/import.md.
+"""/v1/imports: Telegram Desktop export file, and AI-chat exports (ChatGPT / Claude / Gemini,
+step 7) → records (spec 4.9, 6.10). Contract: docs/api/import.md.
 
-Needs the base consents and `telegram_import` (spec 3.2: without it the import is not available).
+Telegram needs the base consents and `telegram_import` (spec 3.2: without it the import is not
+available); AI-chat exports need the base consents only.
 The file comes through /v1/uploads; the work runs in `python -m assistant.imports`."""
 
 import uuid
@@ -27,7 +28,7 @@ from assistant.db.models_v2 import (
     Upload,
     UploadState,
 )
-from assistant.imports import enqueue_import
+from assistant.imports import enqueue_ai_import, enqueue_import
 
 router = APIRouter(prefix="/imports", tags=["imports"])
 ImportUser = Annotated[CurrentUser, Depends(require_consents(*BASE_CONSENTS,
@@ -35,6 +36,8 @@ ImportUser = Annotated[CurrentUser, Depends(require_consents(*BASE_CONSENTS,
 BaseUser = Annotated[CurrentUser, Depends(require_consents(*BASE_CONSENTS))]
 MIMES = {"application/json", "application/zip", "application/x-zip-compressed",
          "application/octet-stream", "text/plain"}  # fmt: skip
+AI_MIMES = MIMES | {"text/html"}  # Gemini Takeout: MyActivity.html is its default
+AI_SOURCE = "ai_chat_export_file"
 OPEN = (ImportStatus.CREATED, ImportStatus.RUNNING)
 
 
@@ -54,7 +57,10 @@ async def import_out(db: Db, imp: Import) -> dict[str, Any]:
         "skipped_dups": imp.skipped_dups,
         "seen_before": s.get("seen_before", (imp.cursor or {}).get("seen_before", 0)),
         "skipped_media": imp.skipped_media or {}, "failed": imp.failed,
-        "summary_ru": s.get("text_ru"), "action_id": str(action_id) if action_id else None,
+        "summary_ru": s.get("text_ru"),
+        "provider": s.get("provider", (imp.cursor or {}).get("provider")),
+        "conversations": s.get("conversations", (imp.cursor or {}).get("conversations")),
+        "action_id": str(action_id) if action_id else None,
         "seq": imp.seq, "created_at": imp.created_at.isoformat(),
         "started_at": imp.started_at.isoformat() if imp.started_at else None,
         "finished_at": imp.finished_at.isoformat() if imp.finished_at else None,
@@ -64,6 +70,20 @@ async def import_out(db: Db, imp: Import) -> dict[str, Any]:
 @router.post("/telegram/file", status_code=202)
 async def telegram_file(body: TelegramFileIn, user: ImportUser, db: Db,
                         response: Response) -> dict[str, Any]:  # fmt: skip
+    return await _start(body, user, db, response, "telegram_export_file")
+
+
+@router.post("/ai-chats/file", status_code=202)
+async def ai_chats_file(body: TelegramFileIn, user: BaseUser, db: Db,
+                        response: Response) -> dict[str, Any]:  # fmt: skip
+    """The person's own ChatGPT / Claude / Gemini export (step 7). Base consents only: the file is
+    theirs, like any upload; its text reaches a model only under the usual rules (embeddings with
+    `ai_cross_border`); nothing logs into their accounts."""
+    return await _start(body, user, db, response, AI_SOURCE)
+
+
+async def _start(body: TelegramFileIn, user: CurrentUser, db: Db, response: Response,
+                 source: str) -> dict[str, Any]:  # fmt: skip
     same = await db.scalar(select(Import).where(Import.user_id == user.id,
                                                 Import.client_id == body.client_id))
     if same is not None:
@@ -81,15 +101,17 @@ async def telegram_file(body: TelegramFileIn, user: ImportUser, db: Db,
     used = await db.scalar(select(Import.id).where(Import.file_id == file.id))
     if file.item_id is not None or used:
         raise ApiError(409, "upload_in_use")
-    if file.mime.lower() not in MIMES:
-        raise ApiError(422, "import_bad_file")
+    if file.mime.lower() not in (AI_MIMES if source == AI_SOURCE else MIMES):
+        raise ApiError(422, "import_not_chats_file" if source == AI_SOURCE else "import_bad_file")
     if await db.scalar(select(Import.id).where(Import.user_id == user.id,
                                                Import.status.in_(OPEN)).limit(1)):
         raise ApiError(409, "import_running")
-    consent = await db.scalar(select(Consent.id).where(
-        Consent.user_id == user.id, Consent.kind == ConsentKind.TELEGRAM_IMPORT,
-        Consent.revoked_at.is_(None)).order_by(Consent.granted_at.desc()).limit(1))  # fmt: skip
-    imp = Import(user_id=user.id, client_id=body.client_id, source="telegram_export_file",
+    consent = None
+    if source != AI_SOURCE:
+        consent = await db.scalar(select(Consent.id).where(
+            Consent.user_id == user.id, Consent.kind == ConsentKind.TELEGRAM_IMPORT,
+            Consent.revoked_at.is_(None)).order_by(Consent.granted_at.desc()).limit(1))  # fmt: skip
+    imp = Import(user_id=user.id, client_id=body.client_id, source=source,
                  status=ImportStatus.CREATED, consent_id=consent, file_id=file.id)  # fmt: skip
     try:
         async with db.begin_nested():
@@ -102,7 +124,7 @@ async def telegram_file(body: TelegramFileIn, user: ImportUser, db: Db,
             raise
         response.status_code = 200
         return {"import": await import_out(db, again), "created": False}
-    await enqueue_import(db, imp)
+    await (enqueue_ai_import if source == AI_SOURCE else enqueue_import)(db, imp)
     await db.flush()
     return {"import": await import_out(db, imp), "created": True}
 

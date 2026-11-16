@@ -74,6 +74,7 @@ from assistant.chat.intent import (
     note_by_code,
     rules_first,
     save_text,
+    split_parts,
     undo_phrase,
 )
 from assistant.chat.mutate import (
@@ -559,20 +560,33 @@ class ChatService:
             if turn.input_kind != "share" and (ask := memory.memory_phrase(turn.text)):
                 await self._memory_phrase(run, turn, ask)  # «что ты обо мне помнишь?», «забудь»
                 return
-            if turn.input_kind != "share" and is_reminder_phrase(turn.text):
+            prior: MutationState | None = None
+            if turn.input_kind != "share":
+                finished, prior, rest = await self._several(run, turn, background=background)
+                if finished:
+                    return  # «купил хлеб за 400, молоко за 600 и напомни оплатить свет» (step 6)
+                if prior is not None and rest:  # code did its parts; the model gets the rest
+                    turn = dataclasses.replace(turn, text=rest)
+                    if rules_first(rest).intent != Intent.CHANGE:
+                        prior.sentences.append(f"Не понял: «{rest}».")
+                        await self._finish_change(run, turn, prior, Decimal(str(prior.cost or 0)),
+                                                  [])  # fmt: skip
+                        return
+            if prior is None and turn.input_kind != "share" and is_reminder_phrase(turn.text):
                 if background:  # nothing is set up later behind the person's back
                     await self._fail(run, "not_done", text=TEXT_NOT_DONE[lang], retry=True)
                 else:
                     await self._reminder_draft(run, turn)
                 return
-            if turn.input_kind != "share" and (order := kp_line.read(turn.text)) is not None:
+            if prior is None and turn.input_kind != "share" \
+                    and (order := kp_line.read(turn.text)) is not None:  # fmt: skip
                 await self._start_kp(run, turn, order)  # «сделай КП для …» (Ф-50)
                 return
-            if turn.input_kind != "share" and await self._save_expense(run, turn):
+            if prior is None and turn.input_kind != "share" and await self._save_expense(run, turn):
                 return  # «потратил 5000 на бензин» → «Расходы», one action (US-31)
             reading = rules_first(turn.text, input_kind=turn.input_kind)
             list_page = await self._list_of_page(turn)
-            if reading.intent == Intent.UNCLEAR and list_page:
+            if reading.intent == Intent.UNCLEAR and list_page and prior is None:
                 if await self._save_tasks(run, turn, turn.text, list_page):
                     return  # «хлеб» on «Покупки» is a thing to buy, not a search
             if reading.intent == Intent.UNCLEAR:
@@ -583,7 +597,7 @@ class ChatService:
             save = save_text(turn.text) if reading.intent == Intent.CHANGE else None
             listy = (reading.intent == Intent.CHANGE and save is None
                      and tasks_parse.adds_to_list(turn.text))  # «добавь в покупки молоко»
-            if reading.intent == Intent.NOTE or save is not None or listy:
+            if prior is None and (reading.intent == Intent.NOTE or save is not None or listy):
                 if list_page or listy or tasks_parse.mentions_list(save or turn.text):
                     if await self._save_tasks(run, turn, save or turn.text, list_page):
                         return
@@ -604,6 +618,12 @@ class ChatService:
                 min_similarity=self.s.search_vector_min_similarity, tools=tools,
             )  # fmt: skip
             env.mut = self._mutation(run, turn, env.book, change, reading.deictic)
+            if prior is not None:  # step 6: the code's parts and the model's are one group
+                env.mut.action_pk, env.mut.action_public = prior.action_pk, prior.action_public
+                env.mut.more_action_pks = list(prior.more_action_pks)
+                env.mut.action_out, env.mut.sentences = prior.action_out, list(prior.sentences)
+                env.mut.cost, env.mut.rest = prior.cost, turn.text
+                env.mut.prior_n = len(prior.action_pks)
             try:
                 if change and await self._by_code(run, turn, ctx, env):
                     return
@@ -750,6 +770,73 @@ class ChatService:
                                   [{"name": "create", "arguments": {}, "error": res.is_error,
                                     "by": "code"}])  # fmt: skip
 
+    async def _several(self, run: ReplyRun, turn: TurnInput, *, background: bool
+                       ) -> tuple[bool, MutationState | None, str | None]:  # fmt: skip
+        """Step 6, code first: a phrase of several simple parts (spends, to-dos, «запиши …»,
+        «напомни …»), each read by the same code readers as alone. Each part is its own action,
+        all under this answer (one «Отменить всё»). Only when *every* part is one code reads;
+        else the parts code reads are done here and the rest goes to the model (`(False, m,
+        rest)`, the same group); no part code reads: `(False, None, None)`, the usual way.
+        A reminder part gets its S13 draft (`reminder_draft`), nothing is set without «Сохранить»;
+        in the background (nobody sees a draft) such a phrase is not split."""
+        parts = split_parts(turn.text)
+        if len(parts) < 2:
+            return False, None, None
+        kinds: list[str] = []
+        on_expenses = await self._page_template(turn) == expenses_service.PAGE_TEMPLATE
+        for part in parts:
+            if is_reminder_phrase(part):
+                kinds.append("reminder")
+            elif expenses_parse.mentions_expense(part, on_page=on_expenses):
+                kinds.append("expense")
+            elif tasks_parse.adds_to_list(part) or (
+                    tasks_parse.mentions_list(part)
+                    and rules_first(part).intent != Intent.CHANGE):  # «переложи … в Дела»: model
+                kinds.append("tasks")
+            elif save_text(part) is not None:
+                kinds.append("note")
+            else:
+                kinds.append("model")
+        if (background and "reminder" in kinds) or all(k == "model" for k in kinds) \
+                or ("model" in kinds and "reminder" in kinds):  # fmt: skip
+            return False, None, None
+        rest = ", ".join(p for p, k in zip(parts, kinds, strict=True) if k == "model") or None
+        book = await book_for(self.sessionmaker, turn.user_id, turn.page_pk)
+        m = self._mutation(run, turn, book, True, False)
+        list_page = await self._list_of_page(turn)
+        done: list[str] = []
+        for part, kind in zip(parts, kinds, strict=True):
+            ok = True
+            if kind == "model":
+                continue
+            if kind == "reminder":
+                await self._reminder_draft(run, turn, text_=part, m=m)
+            elif kind == "expense":
+                ok = await self._save_expense(run, turn, text_=part, m=m)
+            elif kind == "tasks":
+                ok = await self._save_tasks(run, turn, save_text(part) or part, list_page, m=m)
+            else:
+                env = ToolEnv(self.sessionmaker, self.embedder, turn.user_id, book,
+                              self.s.search_embed_timeout_seconds,
+                              self.s.search_vector_min_similarity, counts=set(),
+                              mut=m)  # fmt: skip
+                res = await tool_create(env, CreateArgs(page=None, text=save_text(part) or part,
+                                                        title=None), by_code=True)  # fmt: skip
+                ok = not res.is_error
+            if not ok:  # honest: a part code could not do is said, never guessed
+                m.sentences.append(f"Не понял: «{part}».")
+            done.append(kind if ok else "none")
+        if rest is not None and m.action_out is not None:
+            return False, m, rest
+        if rest is not None:  # code made nothing: the whole phrase goes the usual way
+            return False, None, None
+        if m.action_out is None and m.proposal is None:
+            m.note = m.summary or TEXT_NOT_CHANGED[turn.lang]
+        await self._finish_change(run, turn, m, Decimal(str(m.cost or 0)),
+                                  [{"name": "several", "arguments": {"parts": done},
+                                    "error": "none" in done, "by": "code"}])  # fmt: skip
+        return True, None, None
+
     async def _memory_phrase(self, run: ReplyRun, turn: TurnInput, ask: memory.MemoryAsk) -> None:
         """Step 5 (Ф-59: no screen): the memory is seen and changed by phrase, by code."""
         book = await book_for(self.sessionmaker, turn.user_id, turn.page_pk)
@@ -855,27 +942,31 @@ class ChatService:
             return await session.scalar(select(Screen.template_key).where(
                 Screen.id == turn.page_pk, Screen.user_id == turn.user_id))  # fmt: skip
 
-    async def _save_expense(self, run: ReplyRun, turn: TurnInput) -> bool:
+    async def _save_expense(self, run: ReplyRun, turn: TurnInput, *, text_: str | None = None,
+                            m: MutationState | None = None) -> bool:  # fmt: skip
         """An expense phrase → an expense on «Расходы», one action (US-31). False: not one (the
         caller goes on). The reader sees the person's phrase (and their category names) only;
         the amount is checked by code against the words; totals are code (`expenses.calc`)."""
         from assistant.actions import actions_dicts, record
         from assistant.actions.patch import page_patches
 
+        phrase = text_ or turn.text
+        own = m is None  # step 6: one clause of a longer phrase shares the turn's state
         on_page = await self._page_template(turn) == expenses_service.PAGE_TEMPLATE
-        if not expenses_parse.mentions_expense(turn.text, on_page=on_page):
+        if not expenses_parse.mentions_expense(phrase, on_page=on_page):
             return False
         _, today = await self._local_today(turn.user_id)
         async with self.sessionmaker() as s:
             cats = await expenses_service.reader_categories(s, turn.user_id)
             await s.commit()
         draft = await expenses_parse.read_phrase(
-            turn.text, today=today, rules_first=self.s.expenses_rules_first, router=self.router,
+            phrase, today=today, rules_first=self.s.expenses_rules_first, router=self.router,
             user_id=turn.user_id, categories=cats, on_page=on_page)  # fmt: skip
         if draft is None:
             return False
         book = await book_for(self.sessionmaker, turn.user_id, turn.page_pk)
-        m = self._mutation(run, turn, book, True, False)
+        if m is None:
+            m = self._mutation(run, turn, book, True, False)
         now = self.clock()
         voice = turn.input_kind == "voice"
         async with self.sessionmaker() as s:
@@ -884,7 +975,7 @@ class ChatService:
                 amount=draft.amount, currency=draft.currency, spent_on=draft.spent_on,
                 category=cat, note=draft.note, payee=draft.payee, method=draft.method,
                 direction=draft.direction, source="voice" if voice else "typed",
-                parse_source=draft.source, phrase=turn.text)  # fmt: skip
+                parse_source=draft.source, phrase=phrase)  # fmt: skip
             created = await expenses_service.create(s, turn.user_id, spec, by=Initiator.AGENT,
                                                     now=now, today=today)  # fmt: skip
             action = await record(
@@ -900,9 +991,10 @@ class ChatService:
             rows = _jsonable(await expenses_service.expenses_dicts(s, [created.entry]))
             await s.execute(text("UPDATE conversation_messages SET action_ids = :ids, "
                                  "updated_at = now() WHERE id = :r"),
-                            {"ids": [action.id], "r": run.reply_pk})  # fmt: skip
+                            {"ids": [*m.action_pks, action.id], "r": run.reply_pk})  # fmt: skip
             await s.commit()
-        m.action_pk, m.action_public, m.action_out = action.id, str(action.public_id), out_action
+        m.took(action.id, str(action.public_id))
+        m.action_out = out_action
         m.sentences.append(created.sentence)
         page_id = str(created.page.public_id) if created.page else None
         run.emit("tool_activity", {"tool": "create", "text": "Записываю…", "page_id": page_id})
@@ -912,9 +1004,11 @@ class ChatService:
                           "expenses": rows})  # fmt: skip
         for patch in patches:
             m.emit("page_patch", patch)
-        await self._finish_change(run, turn, m, Decimal(str(draft.cost_usd)),
-                                  [{"name": "expense", "arguments": {}, "error": False,
-                                    "by": draft.source}])  # fmt: skip
+        m.cost = Decimal(str(m.cost or 0)) + Decimal(str(draft.cost_usd))
+        if own:
+            await self._finish_change(run, turn, m, Decimal(str(draft.cost_usd)),
+                                      [{"name": "expense", "arguments": {}, "error": False,
+                                        "by": draft.source}])  # fmt: skip
         return True
 
     async def _start_kp(self, run: ReplyRun, turn: TurnInput, order: kp_line.KpPhrase) -> None:
@@ -973,7 +1067,8 @@ class ChatService:
         return tz, self.clock().astimezone(ZoneInfo(tz)).date()
 
     async def _save_tasks(self, run: ReplyRun, turn: TurnInput, text_: str,
-                          default_list: str | None) -> bool:  # fmt: skip
+                          default_list: str | None, *,
+                          m: MutationState | None = None) -> bool:  # fmt: skip
         """A list phrase → tasks on the list page, one action (US-10). False: not a list (the
         caller saves a note or goes on). The reader sees the person's phrase only."""
         from assistant.actions import actions_dicts, record
@@ -985,8 +1080,10 @@ class ChatService:
             user_id=turn.user_id, default_list=default_list)  # fmt: skip
         if reading is None or not reading.specs:
             return False
+        own = m is None
         book = await book_for(self.sessionmaker, turn.user_id, turn.page_pk)
-        m = self._mutation(run, turn, book, True, False)
+        if m is None:
+            m = self._mutation(run, turn, book, True, False)
         now = self.clock()
         async with self.sessionmaker() as s:
             added = await tasks_service.add(s, turn.user_id, reading.specs, by=Initiator.AGENT,
@@ -1003,9 +1100,10 @@ class ChatService:
             task_rows = _jsonable(await tasks_service.tasks_dicts(s, added.tasks))
             await s.execute(text("UPDATE conversation_messages SET action_ids = :ids, "
                                  "updated_at = now() WHERE id = :r"),
-                            {"ids": [action.id], "r": run.reply_pk})  # fmt: skip
+                            {"ids": [*m.action_pks, action.id], "r": run.reply_pk})  # fmt: skip
             await s.commit()
-        m.action_pk, m.action_public, m.action_out = action.id, str(action.public_id), out_action
+        m.took(action.id, str(action.public_id))
+        m.action_out = out_action
         m.sentences.append(added.sentence)
         run.emit("tool_activity", {"tool": "create", "text": "Записываю…",
                                    "page_id": str(added.page.public_id) if added.page else None})
@@ -1015,12 +1113,15 @@ class ChatService:
                           "tasks": task_rows})  # fmt: skip
         for patch in patches:
             m.emit("page_patch", patch)
-        await self._finish_change(run, turn, m, Decimal(str(reading.cost_usd)),
-                                  [{"name": "tasks", "arguments": {"list": reading.list_key},
-                                    "error": False, "by": reading.source}])  # fmt: skip
+        m.cost = Decimal(str(m.cost or 0)) + Decimal(str(reading.cost_usd))
+        if own:
+            await self._finish_change(run, turn, m, Decimal(str(reading.cost_usd)),
+                                      [{"name": "tasks", "arguments": {"list": reading.list_key},
+                                        "error": False, "by": reading.source}])  # fmt: skip
         return True
 
-    async def _reminder_draft(self, run: ReplyRun, turn: TurnInput) -> None:
+    async def _reminder_draft(self, run: ReplyRun, turn: TurnInput, *, text_: str | None = None,
+                              m: MutationState | None = None) -> None:  # fmt: skip
         """«Напомни завтра в 7 …» (week 8 gap): «как понял» for S13, nothing saved. Same reader
         and Ф-1 switch as /reminders/parse; the model only behind the consent gate (the line
         already needs `ai_cross_border`, the router checks it again)."""
@@ -1030,7 +1131,7 @@ class ChatService:
         tz, _ = await self._local_today(turn.user_id)
         now = self.clock().replace(microsecond=0)
         created_via = "voice" if turn.input_kind == "voice" else "typed"
-        outcome = await parse_phrase(turn.text, now=now, tz=tz, created_via=created_via,
+        outcome = await parse_phrase(text_ or turn.text, now=now, tz=tz, created_via=created_via,
                                      rules_first=self.s.reminders_rules_first,
                                      ai_allowed=self.router is not None, router=self.router,
                                      user_id=turn.user_id)  # fmt: skip
@@ -1047,6 +1148,10 @@ class ChatService:
             note = f"Понял так: {one['when_text']} — {one['title']}. Сохранить?"
         else:
             note = outcome.message or "Укажите время вручную."
+        if m is not None:  # step 6: one part of a longer phrase
+            m.sentences.append(note)
+            m.cost = Decimal(str(m.cost or 0)) + Decimal(str(outcome.cost_usd))
+            return
         book = await book_for(self.sessionmaker, turn.user_id, turn.page_pk)
         m = self._mutation(run, turn, book, False, False)
         m.note = note
@@ -1272,7 +1377,7 @@ class ChatService:
                                         tools=tool_log, seen_refs=[], cost=Decimal(cost),
                                         ai_generated=False, answer_kind=AnswerKind.CHOICE,
                                         proposal=prop,
-                                        action_ids=[m.action_pk] if m.action_pk else None)
+                                        action_ids=m.action_pks or None)
             if delivery is None:
                 return
             event = {"choice": "needs_choice", "count": "confirm",
@@ -1284,6 +1389,8 @@ class ChatService:
             await self._after(run, delivery)
             return
         if m.action_out is not None:
+            if m.rest is not None and len(m.action_pks) == m.prior_n:  # the model did nothing
+                m.sentences.append(f"Не успел: «{m.rest}» — скажите это ещё раз чуть позже.")
             delivery = await self._save(run, text=m.summary, citations=[], checked=None,
                                         tools=tool_log, seen_refs=[], cost=Decimal(cost),
                                         ai_generated=False, answer_kind=AnswerKind.ACTION,
@@ -1291,8 +1398,11 @@ class ChatService:
                                                     *m.more_action_pks])
             if delivery is None:
                 return
+            group = await self._group(run, m)
             run.emit("done", {"reply_id": str(run.reply_id), "state": MessageState.DONE,
                               "answer_kind": AnswerKind.ACTION, "action_id": m.action_public,
+                              "action_ids": group["action_ids"] if group else
+                              [m.action_public], "group": group,
                               "delivery": delivery, "limited": False})  # fmt: skip
             await self._after(run, delivery)
             return
@@ -1308,6 +1418,19 @@ class ChatService:
                           "answer_kind": AnswerKind.TEXT, "action_id": None,
                           "delivery": delivery, "limited": False})  # fmt: skip
         await self._after(run, delivery)
+
+    async def _group(self, run: ReplyRun, m: MutationState) -> dict[str, Any] | None:
+        """Step 6: the phrase made several actions → their group (one notice, «Отменить всё»)."""
+        if not m.more_action_pks:
+            return None
+        from assistant.actions import actions_dicts
+
+        async with self.sessionmaker() as s:
+            rows = list(await s.scalars(select(Action).where(Action.id.in_(m.action_pks))
+                                        .order_by(Action.id)))
+            out = await actions_dicts(s, rows[:1], self.clock())
+            await s.commit()
+        return out[0]["group"] if out else None
 
     async def _after(self, run: ReplyRun, delivery: str) -> None:
         """After the answer is committed and sent: push «Ответ готов», fold old messages.

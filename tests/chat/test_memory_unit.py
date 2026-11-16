@@ -85,3 +85,14 @@ def test_recall_helpers():
     assert not recall.points_to_past("сколько стоила плитка")
     assert recall.query_words("Что мне советовали про кафе в Стамбуле?") == ["кафе", "стамбуле"]
     assert recall._rrf([1, 2, 3], [3, 4]) [0] == 3
+
+
+def test_imported_ai_chats_are_searchable_and_a_memory_source():
+    from typing import get_args
+
+    from assistant.chat.tools import RecordKindArg, SearchArgs
+
+    assert "ai_chat" in get_args(RecordKindArg)
+    assert SearchArgs.model_validate({"query": "Стамбул", "page": None, "kind": "ai_chat",
+                                      "date_from": None, "date_to": None}).kind == "ai_chat"
+    assert "import_ai_chat" in memory.MATERIAL_SOURCES and memory.MAX_IMPORTED == 2
