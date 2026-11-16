@@ -33,8 +33,10 @@ describe('i18n', () => {
 
   it('the word «ИИ» appears only in consent/disclosure strings (R-06)', () => {
     const allowed = /^(consent|ai)\./;
+    // Ф-77 (founder, 2026-11-17): the «Ещё» row is named «Чаты ИИ» — its name and the link to it, nothing else.
+    const named = new Set(['aichats.title', 'aiimp.open_chats']);
     const offenders = Object.entries(ruFlat)
-      .filter(([k, v]) => /(^|[^А-Яа-яЁё])ИИ([^А-Яа-яЁё]|$)/.test(v) && !allowed.test(k))
+      .filter(([k, v]) => /(^|[^А-Яа-яЁё])ИИ([^А-Яа-яЁё]|$)/.test(v) && !allowed.test(k) && !named.has(k))
       .map(([k]) => k);
     expect(offenders).toEqual([]);
   });

@@ -126,10 +126,12 @@ export const dedupSink: DedupSink = {
     const s = dedupState();
     putImport(out);
     if (s.importRow?.clientId === clientId) s.set({ importRow: { ...s.importRow, importId: out.id, error: null } });
+    if (s.aiImportRow?.clientId === clientId) s.set({ aiImportRow: { ...s.aiImportRow, importId: out.id, error: null } });
   },
   importFailed: (clientId, code) => {
     const s = dedupState();
     if (s.importRow?.clientId === clientId) s.set({ importRow: { ...s.importRow, error: code } });
+    if (s.aiImportRow?.clientId === clientId) s.set({ aiImportRow: { ...s.aiImportRow, error: code } });
   },
 };
 
@@ -412,6 +414,41 @@ export async function startImport(f: { uri: string; name: string; mime: string |
   dedupState().set({ importRow });
   kickSync();
   return importRow;
+}
+
+/** import.md step 7: the server takes ≤ 50 MB through /v1/uploads. */
+export const AI_IMPORT_MAX_BYTES = 50 * 1024 * 1024;
+const AI_NAME = /\.(zip|json|html?)$/i;
+
+/** A ChatGPT / Claude / Gemini export: the zip, `conversations.json`, `MyActivity.json` / `.html`. */
+export function isAiExportFile(name: string): boolean {
+  return AI_NAME.test(name.trim());
+}
+
+/**
+ * Step 7 «Принести переписку»: the same path as the Telegram file (copied in, the outbox uploads it, then
+ * POST /imports/ai-chats/file). Base consents only — the file is the person's own, like any upload.
+ */
+export async function startAiImport(f: { uri: string; name: string; mime: string | null }): Promise<ImportRow> {
+  const clientId = newId();
+  const files = getFiles();
+  const safe = f.name.replace(/[^\w.\-]+/g, '_').slice(-80);
+  const uri = await files.persist(f.uri, `ai-import-${clientId}-${safe}`);
+  const [bytes, sha256] = await Promise.all([files.size(uri), files.sha256(uri)]);
+  const mime =
+    f.mime && f.mime !== 'application/octet-stream'
+      ? f.mime
+      : /\.zip$/i.test(f.name)
+        ? 'application/zip'
+        : /\.html?$/i.test(f.name)
+          ? 'text/html'
+          : 'application/json';
+  const payload: ImportPayload = { clientId, file: { uri, mime, bytes, sha256, name: f.name } };
+  const row = await (await getOutbox()).enqueue('import.ai_chats', payload);
+  const aiImportRow: ImportRow = { clientId, outboxId: row.id, fileName: f.name, importId: null, error: null, at: new Date().toISOString() };
+  dedupState().set({ aiImportRow });
+  kickSync();
+  return aiImportRow;
 }
 
 const RUNNING = new Set(['created', 'running', 'paused_budget', 'awaiting_code']);

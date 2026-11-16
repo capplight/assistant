@@ -643,6 +643,7 @@ export class SyncEngine {
       case 'page.item_place':
         return (e) => this.sendItemPlace(e);
       case 'import.telegram':
+      case 'import.ai_chats':
         return (e) => this.sendImport(e);
       case 'expense.create':
       case 'expense.patch':
@@ -1459,7 +1460,8 @@ export class SyncEngine {
         });
         await this.d.outbox.updatePayload(e.id, { ...p, uploadId } satisfies ImportPayload);
       }
-      const out = await this.d.api.importTelegramFile({ client_id: p.clientId, upload_id: uploadId });
+      const body = { client_id: p.clientId, upload_id: uploadId };
+      const out = e.kind === 'import.ai_chats' ? await this.d.api.importAiChatsFile(body) : await this.d.api.importTelegramFile(body);
       this.d.dedup?.importStarted(p.clientId, out);
     } catch (err) {
       if (!isRetryable(err)) this.d.dedup?.importFailed(p.clientId, err instanceof ApiError ? err.code : 'failed');

@@ -34,6 +34,8 @@ type State = {
   imports: Record<string, ImportOut>;
   /** The last file the person chose on S21 (one at a time). */
   importRow: ImportRow | null;
+  /** Step 7 «Принести переписку»: the last ChatGPT / Claude / Gemini export chosen. */
+  aiImportRow: ImportRow | null;
   /** The `telegram_import` consent was given on this account (S21 asks once). */
   telegramConsent: boolean;
   set: (p: Partial<Omit<State, 'set' | 'reset'>>) => void;
@@ -48,6 +50,7 @@ const initial = {
   goneCollections: [],
   imports: {},
   importRow: null,
+  aiImportRow: null,
   telegramConsent: false,
 };
 

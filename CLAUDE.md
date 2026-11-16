@@ -29,7 +29,7 @@ AI-generated content (e.g. a КП); never in marketing copy or ordinary UI.
 | `src/assistant/suggestions/`, `api/routes/today.py` | api | «Сегодня», tips and data proposals with the R-35 limits (contract: `docs/api/today.md`) |
 | `src/assistant/dedup/`, `api/routes/duplicates.py`, `db/models_dedup.py`, `tests/dedup/` | api | repeats: similar groups (SimHash/trgm/cosine + DUP_JUDGE), «Объединить?», cleanup «37 → 1», pending «Да»; worker `python -m assistant.dedup` (scans + stacks) (contract: `docs/api/duplicates.md`) |
 | `src/assistant/stacks/`, `api/routes/collections.py` | api | stacks as groups inside pages (contract: `docs/api/stacks.md`) |
-| `src/assistant/imports/`, `api/routes/imports.py`, `tests/imports/` | api | Telegram export import; worker `python -m assistant.imports` (contract: `docs/api/import.md`) |
+| `src/assistant/imports/`, `api/routes/imports.py`, `tests/imports/` | api | Telegram export import, AI-chat exports (ChatGPT/Claude/Gemini); worker `python -m assistant.imports` (contract: `docs/api/import.md`) |
 | `src/assistant/analytics/`, `api/routes/events.py` | api | product events journal `analytics.events` (contract: `docs/api/events.md`) |
 | `src/assistant/ai/golden/`, `eval/golden/`, `scripts/golden_synthetic.py`, `tests/ai/test_golden.py` | ai | golden set (spec 5.8): cases + cassettes, runner `python -m assistant.ai.golden`, admission thresholds, metrics-only report; CI job `golden-synthetic` (contract: `docs/ops/golden.md`) |
 | `eval/injection/`, `tests/chat/test_injection_corpus*.py` | ai | injection corpus «документ → инструмент» (≥60, RU/KK/EN) against the code defences (contract: `docs/ops/golden.md`) |

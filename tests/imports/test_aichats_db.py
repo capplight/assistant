@@ -1,4 +1,4 @@
-"""AI-chat export import (step 7) against a real database: records on «Заметки», search by words,
+"""AI-chat export import (step 7) on a real database: records on no page (Ф-77), word search,
 the summary, re-import brings nothing, «удалить импорт» = undo, Gemini Takeout, bad files.
 Invented content only; nothing touches the network. Skipped without DATABASE_URL."""
 
@@ -58,7 +58,9 @@ async def test_chatgpt_import_search_reimport_and_undo(env):  # noqa: F811
         assert got["summary_ru"] == ("Принёс 1 разговор из ChatGPT. Повторов не взял: 1. "
                                      "Картинки (1) не перенёс — только текст. Не прочитал: 1.")
         rows = (await c.get(f"/v1/pages/{page}/items", headers=h)).json()["entries"]
-        brought = [e["item"] for e in rows if e["item"]["source"] == "import_ai_chat"]
+        assert not [e for e in rows if e["item"]["source"] == "import_ai_chat"]  # Ф-77: no page
+        listed = (await c.get("/v1/items?limit=200", headers=h)).json()["items"]
+        brought = [i for i in listed if i["source"] == "import_ai_chat"]
         assert len(brought) == 1
         it = brought[0]
         assert it["kind"] == "ai_chat" and it["title"] == "Кафе в Стамбуле"

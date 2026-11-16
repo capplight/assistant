@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { ChevronRight, CircleHelp, FolderInput, History, LayoutGrid, Plus, Search, Settings, ShieldAlert } from 'lucide-react-native';
+import { ChevronRight, CircleHelp, FolderInput, History, LayoutGrid, MessagesSquare, Plus, Search, Settings, ShieldAlert } from 'lucide-react-native';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
@@ -178,7 +178,10 @@ export default function MoreScreen() {
         </TileGrid>
 
         <ListGroup>
-          <ListRow testID="more-import" icon={FolderInput} title={t('more.import')} meta={t('more.import_hint')} chevron onPress={() => router.push('/import')} />
+          {/* v4 «Ещё»: «Принести переписку · ChatGPT, Claude, Gemini — всё в одном месте» (Telegram is inside). */}
+          <ListRow testID="more-import" icon={FolderInput} title={t('more.import_chats')} meta={t('more.import_chats_hint')} chevron onPress={() => router.push('/ai-import')} />
+          {/* Ф-77: the imported chats live apart from «Заметки». */}
+          <ListRow testID="more-ai-chats" icon={MessagesSquare} title={t('aichats.title')} chevron onPress={() => router.navigate('/ai-chats')} />
           <ListRow
             testID="more-history"
             icon={History}

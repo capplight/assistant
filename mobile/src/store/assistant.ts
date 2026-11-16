@@ -74,6 +74,10 @@ export type ChatAction = {
   undoOf?: string | null;
   /** The ids of what it undid in this reply (each marked «отменено» in the conversation). */
   undid?: string[];
+  /** Step 6: the phrase made several actions — its group («Сделал 3 дела · Отменить всё»). */
+  group?: { id: string; size: number; actionIds: string[]; notice: ActionNoticeOut | null } | null;
+  /** Step 6: every action of the phrase, in order (this one first); each stays its own row in «История». */
+  parts?: ChatAction[];
 };
 
 /**

@@ -116,6 +116,12 @@ modules/alarms/              native Expo module: Android (Kotlin) AlarmManager +
   included). «верни как было» in the chat: `UndoResultCard`, the undone action «отменено». «изменил помощник»
   (`ChangedMark`, 24 h) on records, stickers (ring), tasks (brandTint row) and expenses; a tap → «Что изменилось»
   + «Отменить». `parse_later.waiting` records say «сохранил как заметку · разберу позже». SQLite v10 keeps them.
+- **Steps 6–7**: a phrase with several actions keeps them all on its answer (`ChatAction.parts`, `group`): one
+  notice `group.notice` «Сделал 3 дела · Отменить всё» → `POST /v1/actions/groups/{id}/undo` (the server's
+  «Вернул 2 из 3…» as a toast, the failed ones stay). «Принести переписку» (`app/(main)/ai-import.tsx`, outbox
+  `import.ai_chats`): ChatGPT / Claude / Gemini how-to, ≤ 50 MB (a bigger ChatGPT zip → send `conversations.json`),
+  progress, `summary_ru`, «Удалить импорт». Ф-77: `ai_chat` records never show on «Заметки» (filtered in
+  `pageEntries`); «Ещё → Чаты ИИ» (`ai-chats.tsx`) lists and finds them with the «из ChatGPT» chip (`record.tag`, SQLite v11).
 - **AI consent v2** (`consent/texts.ts`, `consent/AiConsentUpdate.tsx`): the bundled snapshot is `ai-2026-11-v2`
   (+ DeepInfra). A person whose local grant is v1 gets a small sheet once per launch (word search until «Согласен»).
 - **No shopping list** (Ф-49): feature `shopping` (default off, `GET /v1/features`): «Покупки», «Я в магазине» and

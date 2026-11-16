@@ -121,6 +121,14 @@ export function RecordRow({
         <AppText numberOfLines={3}>{title}</AppText>
         {snippet && snippet !== title ? <AppText variant="callout">{snippet}</AppText> : null}
         <AppText variant="footnote">{source}</AppText>
+        {record.tag ? (
+          // import.md: `source_meta.tag` «из ChatGPT» of an imported chat.
+          <View testID={`record-tag-${record.id}`} style={[styles.badge, { backgroundColor: theme.colors.brandTint, borderRadius: theme.radius.round, paddingHorizontal: theme.space[2] }]}>
+            <AppText variant="caption" color="brand">
+              {record.tag}
+            </AppText>
+          </View>
+        ) : null}
         {status ? <AppText variant="footnote">{status}</AppText> : null}
         <ChangedMark at={record.assistantChangedAt} actionId={record.assistantActionId} testID={`changed-${record.id}`} />
         {record.aiGenerated ? <AiLabel variant="footnote" short /> : null}

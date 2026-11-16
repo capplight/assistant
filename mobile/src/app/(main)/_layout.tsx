@@ -51,6 +51,8 @@ export default function MainLayout() {
         <Tabs.Screen name="import" />
         <Tabs.Screen name="history" />
         <Tabs.Screen name="assistant" />
+        <Tabs.Screen name="ai-import" />
+        <Tabs.Screen name="ai-chats" />
       </Tabs>
       <AiConsentUpdate />
     </KeyboardAvoidingView>

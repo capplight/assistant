@@ -8,9 +8,9 @@ one `import_batch` action («Отменить» = «удалить импорт�
 «Удалённые записи»), the summary «Принёс 312 разговоров из ChatGPT», a repeat scan and stacks.
 
 Each conversation is one record (`kind = ai_chat`, `source = import_ai_chat`; a long one is split
-into parts), placed by the pages' `auto_rule` like any record: with the default pages that is
-«Заметки» (its rule takes every record), so no page is made (Ф-35: only the default pages and
-the ones that appear on first use; Ф-47: the person does not choose a page, search finds it).
+into parts), placed on NO page (Ф-77, 2026-11-17): imported chats would flood «Заметки»; the app
+lists them in «Чаты ИИ» in «Ещё» (`GET /v1/items` / search with kind `ai_chat`) and the
+assistant's search finds them.
 Found by words at once; chunks with embeddings (`embed:item`) only under the usual consent rule.
 
 Repeats: `import_seen` (family `ai_chat`) keys a conversation part by provider, conversation id,
@@ -46,7 +46,6 @@ from assistant.imports.aichats import PROVIDERS, ChatExport, ChatRecord, Limits,
 from assistant.imports.service import ObjectReader, _drop_file, _fail
 from assistant.imports.telegram import ExportError
 from assistant.memory import enqueue_embed
-from assistant.pages import place_item
 from assistant.records import content_hash, detect_lang, find_canonical
 from assistant.records.textnorm import detect_review_fields
 from assistant.stacks import schedule_rebuild
@@ -169,7 +168,7 @@ async def _write_batch(maker: async_sessionmaker[AsyncSession], import_id: int,
                     item = _new_item(uid, import_id, r, h)
                     s.add(item)
                     await s.flush()
-                    await place_item(s, item)
+                    # Ф-77: imported AI chats live on no page («Чаты ИИ» in «Ещё» + search).
                     await enqueue_embed(s, item)
                     item_id = item.id
                     created.append(item.id)

@@ -68,7 +68,8 @@ export function UndoStrip() {
     };
   }, []);
 
-  const notice = strip?.kind === 'server' ? (strip.action.notice ?? null) : (action?.notice ?? null);
+  // Step 6: a phrase with several actions shows ONE notice, the group's («Сделал 3 дела · Отменить всё»).
+  const notice = strip?.kind === 'server' ? (strip.action.notice ?? null) : (action?.group?.notice ?? action?.notice ?? null);
   const durationMs = screenReader ? SCREEN_READER_MS : (notice?.ms ?? NOTICE_MS);
 
   useEffect(() => {

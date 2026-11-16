@@ -167,8 +167,28 @@ export function ActionResultCard({ m, action }: { m: ChatMessage; action: ChatAc
   const pages = usePages((s) => s.pages);
   const showToast = useToast((s) => s.show);
   const [replace, setReplace] = useState<{ record: LocalRecord; what: string; from: Page | null } | null>(null);
-  const rows = action.changes.filter((c) => c.itemId || c.text);
+  // Step 6: a phrase with several actions — a row per action; else a row per record of the one action.
+  const parts = action.parts && action.parts.length > 1 ? action.parts : null;
+  const rows: { itemId: string | null; title: string | null; text: string; pageServerId: string | null; undone: boolean }[] = parts
+    ? parts.map((p) => ({
+        itemId: p.changes[0]?.itemId ?? p.changedItemIds[0] ?? null,
+        title: p.changes[0]?.title ?? null,
+        text: actionText(p, i18n.language),
+        pageServerId: p.savedTo?.[0]?.pageServerId ?? p.pageServerId,
+        undone: !!p.undone,
+      }))
+    : action.changes
+        .filter((c) => c.itemId || c.text)
+        .map((c) => ({
+          itemId: c.itemId,
+          title: c.title,
+          text: c.text,
+          pageServerId: action.savedTo?.find((st) => c.itemId && st.itemIds.includes(c.itemId))?.pageServerId ?? action.pageServerId,
+          undone: !!action.undone,
+        }));
   const many = rows.length > 1;
+  const groupNotice = action.group?.notice;
+  const canUndo = parts ? parts.some((p) => p.undoable && !p.undone) : action.undoable;
   const pageByServer = (id: string | null) => (id ? (pages.find((p) => p.serverId === id) ?? null) : null);
   const firstPage = pageByServer(action.savedTo?.[0]?.pageServerId ?? action.pageServerId);
   const done = !action.undone;
@@ -198,11 +218,11 @@ export function ActionResultCard({ m, action }: { m: ChatMessage; action: ChatAc
               <Check size={13} color={theme.colors.onBrand} strokeWidth={2.5} />
             </View>
             <AppText variant="bodyStrong" color="brand" style={done ? undefined : styles.struck}>
-              {t('assistant.did_many', { count: rows.length })}
+              {groupNotice ? (i18n.language === 'kk' && groupNotice.text_kk) || groupNotice.text_ru : t('assistant.did_many', { count: rows.length })}
             </AppText>
           </View>
           {rows.map((c, i) => {
-            const page = pageByServer(action.savedTo?.find((st) => c.itemId && st.itemIds.includes(c.itemId))?.pageServerId ?? action.pageServerId);
+            const page = pageByServer(c.pageServerId);
             return (
               <Pressable
                 key={`${c.itemId ?? 'x'}-${i}`}
@@ -217,7 +237,7 @@ export function ActionResultCard({ m, action }: { m: ChatMessage; action: ChatAc
               >
                 {square(StickyNote, page)}
                 <View style={styles.flex}>
-                  <AppText style={done ? undefined : styles.struck}>{c.title ?? c.text}</AppText>
+                  <AppText style={c.undone ? styles.struck : undefined}>{c.title ?? c.text}</AppText>
                   {page ? <AppText variant="footnote">{title(page)}</AppText> : null}
                 </View>
                 <Icon icon={ChevronRight} size="sm" color="iconSecondary" />
@@ -242,7 +262,7 @@ export function ActionResultCard({ m, action }: { m: ChatMessage; action: ChatAc
         </View>
       )}
       {done ? (
-        action.undoable ? (
+        canUndo ? (
           <View style={[styles.row, { justifyContent: 'flex-end', gap: theme.space[1], flexWrap: 'wrap' }]}>
             {(action.savedTo?.length ?? 0) > 0 || action.kind === 'save_item' ? (
               <Button testID={`chat-replace-${m.id}`} label={t('save.replace')} variant="text" onPress={() => void doReplace()} />

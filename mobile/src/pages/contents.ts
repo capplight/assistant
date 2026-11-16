@@ -98,6 +98,8 @@ export function pageEntries(page: Page, records: LocalRecord[], links: PageLink[
   const linked: PageEntry[] = [];
   const loose: PageEntry[] = [];
   for (const record of records) {
+    // Ф-77: imported AI chats are not notes — «Ещё → Чаты ИИ», even when the server links them to «Заметки».
+    if (record.kind === 'ai_chat' && page.templateKey === 'notes') continue;
     const link = linkOf(byItem, record);
     if (link) {
       if (!link.removedAt) linked.push({ record, link });

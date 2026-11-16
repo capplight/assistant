@@ -148,7 +148,9 @@ export type UploadOut = {
 // --- items (spec §3.3 / §4.3; aligned with the server's schemas.py as of 2026-11-07, still in progress) ---
 
 export type ItemKind =
-  'note' | 'voice' | 'image' | 'screenshot' | 'pdf' | 'docx' | 'xlsx' | 'link' | 'email' | 'file_other';
+  'note' | 'voice' | 'image' | 'screenshot' | 'pdf' | 'docx' | 'xlsx' | 'link' | 'email' | 'file_other'
+  /** Step 7: one conversation brought from a ChatGPT / Claude / Gemini export (`source_meta.tag` «из ChatGPT»). */
+  | 'ai_chat';
 
 export type ItemSource = 'typed' | 'mic' | 'share' | 'camera' | 'files';
 
@@ -724,7 +726,15 @@ export type ActionOut = {
   notice?: ActionNoticeOut | null;
   /** Ф-69: made in the background from a note saved while the model was down (arrives by /sync). */
   parsed_later?: boolean;
+  /** Step 6: one phrase made several actions — the phrase's group (null for one action). */
+  group?: ActionGroupOut | null;
 };
+
+/** actions.md «Groups»: show `notice` once («Сделал 3 дела · Отменить всё»). `id` = the answer's message id. */
+export type ActionGroupOut = { id: string; size: number; index: number; action_ids: string[]; notice: ActionNoticeOut | null };
+
+/** `POST /v1/actions/groups/{id}/undo`: every action of the phrase, newest first; `failed` could not be undone. */
+export type ActionGroupUndoOut = { undone: ActionUndoOut[]; failed: ActionOut[]; partial: boolean; message_ru: string | null; page_patches: PagePatchOut[] };
 
 export type ActionNoticeOut = {
   text_ru: string;
@@ -832,7 +842,7 @@ export type ChatEvent = (
   /** The full checked answer; `aiLabel` set when the assistant wrote it (R-06). */
   | { type: 'banner'; replyId: string | null; text: string; preview: string; short: boolean; aiLabel: string | null; citations: ChatCitationOut[]; value?: string | null }
   /** `limited`: monthly limit reached, the answer is search results without a written answer. */
-  | { type: 'done'; replyId: string | null; limited: boolean; answerKind: ChatAnswerKind | null; actionId: string | null }
+  | { type: 'done'; replyId: string | null; limited: boolean; answerKind: ChatAnswerKind | null; actionId: string | null; actionIds?: string[]; group?: ActionGroupOut | null }
   | { type: 'deferred'; replyId: string | null; text: string | null }
   /** `retry`: «Попробуйте ещё раз» with a NEW client_id. */
   | { type: 'error'; replyId: string | null; code: string; messageRu: string; messageKk: string; retry: boolean }
@@ -1295,6 +1305,10 @@ export type ImportOut = {
   seq: number;
   started_at: string | null;
   finished_at: string | null;
+  /** Step 7 (`ai_chat_export_file`): `chatgpt` · `claude` · `gemini`, once the file is read. */
+  provider?: string | null;
+  /** Conversations brought. */
+  conversations?: number;
 };
 
 // --- week 12: «Расходы» (docs/api/expenses.md, 3-engineering 3.12) ---

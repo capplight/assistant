@@ -127,7 +127,23 @@ export function fromAction(a: ActionOut): ChatAction {
     undone: !!a.undone_at,
     notice: a.notice ?? null,
     undoOf: a.undo_of,
+    group: a.group ? { id: a.group.id, size: a.group.size, actionIds: a.group.action_ids, notice: a.group.notice } : null,
   };
+}
+
+/**
+ * Step 6: one phrase, several actions — each `action` event is one of them (replaced by its id). The message keeps
+ * the first with the group and every part, so the card can say «Сделал 3 дела» with a row each.
+ */
+function withPart(prev: ChatAction | undefined, next: ChatAction): ChatAction {
+  if (!prev || prev.id === next.id) {
+    const parts = prev?.parts?.map((p) => (p.id === next.id ? next : p));
+    return { ...next, group: next.group ?? prev?.group ?? null, ...(parts ? { parts } : {}) };
+  }
+  const known = prev.parts ?? [{ ...prev, parts: undefined }];
+  const parts = known.some((p) => p.id === next.id) ? known.map((p) => (p.id === next.id ? next : p)) : [...known, next];
+  const first = parts[0]!;
+  return { ...first, group: next.group ?? prev.group ?? null, parts };
 }
 
 function fromProposal(p: ProposalOut): ChatProposal {
@@ -227,7 +243,8 @@ function apply(answerId: string, e: ChatEvent): void {
       // Several `action` events in one reply are the same action growing: replace it (an undo keeps what it undid).
       const prev = store().messages.find((m) => m.id === answerId)?.action;
       const undid = undone ? [...new Set([...(prev?.undid ?? []), undone.id])] : prev?.undid;
-      const action = { ...fromAction(e.action), changedItemIds: e.changedItemIds, ...(undid ? { undid, undoOf: e.action.undo_of ?? undone?.id ?? null } : {}) };
+      const incoming: ChatAction = { ...fromAction(e.action), changedItemIds: e.changedItemIds, ...(undid ? { undid, undoOf: e.action.undo_of ?? undone?.id ?? null } : {}) };
+      const action = undid ? incoming : withPart(prev, incoming);
       updateMessage(answerId, { action, answerKind: 'action', activity: null });
       // The result is on the page, not in a banner (R-52 п. 2); «Отменить» lives with the line.
       if (store().banner?.messageId === answerId) store().closeBanner();
@@ -257,6 +274,10 @@ function apply(answerId: string, e: ChatEvent): void {
         serverId: e.replyId ?? m.serverId ?? null,
         notice: e.limited ? 'limit' : m.notice,
         answerKind: e.answerKind ?? m.answerKind ?? null,
+        // Step 6: `done.group` names the phrase's group (the one notice «Сделал 3 дела»).
+        ...(e.group && m.action
+          ? { action: { ...m.action, group: { id: e.group.id, size: e.group.size, actionIds: e.group.action_ids, notice: e.group.notice } } }
+          : {}),
       }));
       return;
     case 'deferred':
@@ -774,12 +795,56 @@ async function runUndo(messageId: string, a: ChatAction, itemIds: string[] | nul
   }
 }
 
-/** «Отменить» the whole action of this answer. */
+/** «Отменить» the whole action of this answer («Отменить всё» of a phrase with several). */
 export async function undoAction(messageId: string): Promise<void> {
   const a = find(messageId)?.action;
-  if (!a || a.undone || !a.undoable || useOnboarding.getState().consent === null) return;
+  if (!a || a.undone || useOnboarding.getState().consent === null) return;
+  if (a.group && (a.parts?.length ?? 0) > 1) return undoGroup(messageId, a);
+  if (!a.undoable) return;
   store().updateMessage(messageId, { action: { ...a, undone: true } });
   await runUndo(messageId, a, null);
+}
+
+/**
+ * «Отменить всё» (actions.md «Groups»): `POST /v1/actions/groups/{id}/undo` — every action of the phrase, newest
+ * first. Honest about a part: «Вернул 2 из 3: остальное уже нельзя отменить.» (the server's words).
+ */
+async function undoGroup(messageId: string, a: ChatAction): Promise<void> {
+  const group = a.group!;
+  const parts = a.parts ?? [a];
+  const t = i18n.t.bind(i18n);
+  const mark = (ids: Set<string>, undone: boolean) =>
+    store().updateMessage(messageId, (m) => {
+      if (!m.action) return {};
+      const ps = (m.action.parts ?? parts).map((p) => (ids.has(p.id) ? { ...p, undone, undoable: !undone && p.undoable } : p));
+      return { action: { ...m.action, ...(ids.has(m.action.id) ? { undone, undoable: !undone && m.action.undoable } : {}), undone: ps.every((p) => p.undone), parts: ps } };
+    });
+  const all = new Set(parts.map((p) => p.id));
+  mark(all, true);
+  const clientId = newId();
+  try {
+    const out = await getApi().undoActionGroup(group.id, clientId);
+    for (const patch of out.page_patches) await applyPatch(patch);
+    const failed = new Set(out.failed.map((f) => f.id));
+    if (failed.size > 0) mark(failed, false);
+    rememberActions(out.undone.flatMap((u) => [u.action, u.undo].filter((x): x is ActionOut => !!x)));
+    if (out.message_ru) useToast.getState().show(out.message_ru, 5000);
+    kickSync();
+  } catch (e) {
+    if (e instanceof NetworkError || e instanceof SignInRequiredError) {
+      // Offline: each action's own undo waits in the outbox (the same result when it goes).
+      const outbox = await getOutbox();
+      for (const p of parts) await outbox.enqueue('action.undo', { actionId: p.id, clientId: newId() } satisfies ActionUndoPayload);
+      return;
+    }
+    mark(all, false);
+    if (e instanceof ApiError && e.status === 410) {
+      store().updateMessage(messageId, (m) => (m.action ? { action: { ...m.action, undoable: false } } : {}));
+      useToast.getState().show(t('changes.expired'));
+      return;
+    }
+    useToast.getState().show(t('errors.generic'));
+  }
 }
 
 /** «Что изменилось → Вернуть» on one row: only that record goes back. */

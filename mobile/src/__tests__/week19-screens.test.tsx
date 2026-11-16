@@ -23,7 +23,7 @@ beforeEach(() => {
 describe('«Ещё» (Ф-41)', () => {
   it('v4: the profile, the «Дела» / «Документы» tiles, the rows (История among them), «Ваши страницы»; no stubs', async () => {
     await renderRouter(APP_DIR, { initialUrl: '/more' });
-    const rows = ['more-profile', 'more-tasks', 'more-documents', 'more-history', 'more-records', 'more-import', 'more-settings', 'more-add_page', 'more-my_pages'];
+    const rows = ['more-profile', 'more-tasks', 'more-documents', 'more-history', 'more-records', 'more-import', 'more-ai-chats', 'more-settings', 'more-add_page', 'more-my_pages'];
     for (const id of rows) expect(screen.getByTestId(id)).toBeTruthy();
     const ids = new Set<string>();
     const walk = (n: unknown): void => {

@@ -69,6 +69,8 @@ export type OutboxKind =
   | 'task.clear_done'
   /** Week 10: a Telegram Desktop export (result.json / zip): upload, then POST /imports/telegram/file. */
   | 'import.telegram'
+  /** Step 7: a ChatGPT / Claude / Gemini export: upload, then POST /imports/ai-chats/file. */
+  | 'import.ai_chats'
   /** Week 12: «Записать» on «Расходы» (POST /expenses, idempotent by `client_id`). */
   | 'expense.create'
   /** A category, the amount, the date, «Верно» of a spending (PATCH /expenses/{id}). */
@@ -230,6 +232,8 @@ export const OUTBOX_MIGRATIONS: readonly string[] = [
   `ALTER TABLE records ADD COLUMN assistant_changed_at TEXT;
    ALTER TABLE records ADD COLUMN assistant_action_id TEXT;
    ALTER TABLE records ADD COLUMN parse_later TEXT;`,
+  // v11 (step 7): the «из ChatGPT» chip of an imported chat (`source_meta.tag`)
+  `ALTER TABLE records ADD COLUMN tag TEXT;`,
 ];
 
 type Row = {

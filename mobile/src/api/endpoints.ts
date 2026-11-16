@@ -42,6 +42,8 @@ import type {
   StatementRowOut,
   StatementStatus,
   StatementWithRowsOut,
+  ActionGroupOut,
+  ActionGroupUndoOut,
   ActionNoticeOut,
   ActionOut,
   BriefOut,
@@ -341,6 +343,7 @@ export function actionOut(v: unknown): ActionOut | null {
     }),
     notice: noticeOut(o.notice),
     parsed_later: o.parsed_later === true,
+    group: groupOut(o.group),
   };
 }
 
@@ -709,6 +712,8 @@ export function decodeChatEvent(m: SseMessage): ChatEvent | null {
           limited: d.limited === true,
           answerKind: (kind as ChatMessageOut['answer_kind']) ?? null,
           actionId: str(d.action_id),
+          actionIds: strs(d.action_ids),
+          group: groupOut(d.group),
         };
       }
       case 'action': {
@@ -919,6 +924,13 @@ export function taskOut(v: unknown): TaskOut | null {
 /** Ф-73 «изменил помощник» on a record / task / expense. */
 export function markOut(o: Record<string, unknown>): { assistant_changed_at: string | null; assistant_action_id: string | null } {
   return { assistant_changed_at: str(o.assistant_changed_at), assistant_action_id: str(o.assistant_action_id) };
+}
+
+export function groupOut(v: unknown): ActionGroupOut | null {
+  const o = obj(v);
+  const id = o && str(o.id);
+  if (!o || !id) return null;
+  return { id, size: num(o.size), index: num(o.index), action_ids: strs(o.action_ids), notice: noticeOut(o.notice) };
 }
 
 export function noticeOut(v: unknown): ActionNoticeOut | null {
@@ -1329,6 +1341,8 @@ export function importOut(v: unknown): ImportOut | null {
     seq: num(o.seq),
     started_at: str(o.started_at),
     finished_at: str(o.finished_at),
+    provider: str(o.provider),
+    conversations: num(pick('conversations')),
   };
 }
 
@@ -2293,6 +2307,34 @@ export class Api {
     return { message: chatMessageOut(out.message) };
   }
 
+  /** «Отменить всё» of a phrase that made several actions (actions.md «Groups»). */
+  async undoActionGroup(groupId: string, clientId: string): Promise<ActionGroupUndoOut> {
+    const out =
+      obj(
+        await this.client.request<unknown>('POST', `/actions/groups/${encodeURIComponent(groupId)}/undo`, {
+          body: { client_id: clientId },
+          idempotencyKey: clientId,
+        }),
+      ) ?? {};
+    return {
+      undone: arr(out.undone).map((u) => {
+        const x = obj(u) ?? {};
+        return {
+          action: actionOut(x.action),
+          undo: actionOut(x.undo),
+          partial: x.partial === true,
+          repeated: x.repeated === true,
+          message_ru: str(x.message_ru),
+          page_patches: [],
+        };
+      }),
+      failed: actionsOf(out.failed),
+      partial: out.partial === true,
+      message_ru: str(out.message_ru),
+      page_patches: arr(out.page_patches).map(pagePatchOut).filter((x): x is PagePatchOut => x !== null),
+    };
+  }
+
   /** «Отменить» an action (whole, or `item_ids` only). `410 undo_expired` after 30 days. */
   async undoAction(actionId: string, body: ActionUndoIn = {}): Promise<ActionUndoOut> {
     const out =
@@ -2610,6 +2652,14 @@ export class Api {
         idempotencyKey: clientId,
       }),
     );
+  }
+
+  /** Step 7: a ChatGPT / Claude / Gemini export, uploaded through POST /uploads first. Idempotent by `client_id`. */
+  async importAiChatsFile(body: ImportFileIn): Promise<ImportOut> {
+    const o = await this.client.request<unknown>('POST', '/imports/ai-chats/file', { body, idempotencyKey: body.client_id });
+    const out = importOut(obj(o)?.import ?? o);
+    if (!out) throw new ApiError(502, { code: 'bad_answer' });
+    return out;
   }
 
   /** The Telegram Desktop export, uploaded through POST /uploads first. Idempotent by `client_id`. */
