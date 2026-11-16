@@ -5,10 +5,14 @@ import pytest
 import respx
 
 from assistant.embeddings import (
+    DeepInfraEmbedder,
+    EmbedderUnavailable,
     FakeEmbedder,
     NullChunkEmbedder,
     TeiEmbedder,
+    embedder_available,
     make_chunk_embedder,
+    recipient_of,
 )
 from assistant.memory import OriginalFacts, OriginalFate, StorageFlags, embed_query, original_fate
 from assistant.memory.chunking import OVERLAP_CHARS, TARGET_CHARS, chunk_text
@@ -201,3 +205,114 @@ async def test_embed_query_gives_up_quietly():
     assert await embed_query(NullChunkEmbedder(), "молоко", 1.0) is None
     assert await embed_query(FakeEmbedder(), "  ", 1.0) is None
     assert await embed_query(FakeEmbedder(), "молоко", 1.0) is not None
+
+
+# --- DeepInfra (bge-m3 abroad, Ф-76) ---
+
+DI_URL = "https://api.deepinfra.com/v1/openai/embeddings"
+
+
+def _di_answer(request: httpx.Request) -> httpx.Response:
+    import json
+
+    body = json.loads(request.content)
+    assert body["model"] == "BAAI/bge-m3" and body["encoding_format"] == "float"
+    data = [{"index": i, "embedding": [3.0, 4.0, float(len(t))]}
+            for i, t in enumerate(body["input"])]  # fmt: skip
+    return httpx.Response(200, json={"data": list(reversed(data))})
+
+
+async def _no_sleep(_: float) -> None:
+    return None
+
+
+@respx.mock
+async def test_deepinfra_batches_masks_normalizes_and_keeps_order():
+    import json
+
+    route = respx.post(DI_URL).mock(side_effect=_di_answer)
+    e = DeepInfraEmbedder("k", dim=3, sleep=_no_sleep)
+    out = await e.embed([f"запись {n}" for n in range(70)] + ["звонить +7 701 123 45 67"],
+                        "document")  # fmt: skip
+    assert route.call_count == 2  # 64 + 7
+    assert len(out) == 71 and abs(sum(v * v for v in out[0]) - 1.0) < 1e-9
+    sent = json.loads(route.calls[-1].request.content)["input"]
+    assert "+7 701" not in sent[-1] and "⟨PHONE_1⟩" in sent[-1]  # masked before leaving (5.7)
+    assert route.calls[0].request.headers["authorization"] == "Bearer k"
+    assert e.recipient == "DeepInfra" and e.available()
+
+
+@respx.mock
+async def test_deepinfra_retries_429_and_5xx_then_works():
+    replies = iter([httpx.Response(429), httpx.Response(503)])
+    respx.post(DI_URL).mock(side_effect=lambda r: next(replies, None) or _di_answer(r))
+    e = DeepInfraEmbedder("k", dim=3, sleep=_no_sleep)
+    assert len(await e.embed(["a"], "query")) == 1
+
+
+@respx.mock
+async def test_deepinfra_no_balance_switches_off_without_network_and_warns_once(caplog):
+    route = respx.post(DI_URL).mock(return_value=httpx.Response(
+        402, json={"detail": {"error": "You need positive balance"}}))  # fmt: skip
+    now = [100.0]
+    e = DeepInfraEmbedder("k", dim=3, sleep=_no_sleep, clock=lambda: now[0])
+    with caplog.at_level("INFO", logger="assistant.embeddings"):
+        for _ in range(3):
+            with pytest.raises(EmbedderUnavailable) as exc:
+                await e.embed(["a"], "document")
+            assert exc.value.reason == "no_balance"
+        assert route.call_count == 1  # then it doesn't knock while switched off
+        assert not e.available() and not embedder_available(e)
+        assert await embed_query(e, "кафе", 1.0) is None  # search: words only, quietly
+        now[0] += 901  # the pause is over: one more try, still no balance -> no new warning
+        with pytest.raises(EmbedderUnavailable):
+            await e.embed(["a"], "document")
+        route.mock(side_effect=_di_answer)  # topped up
+        now[0] += 901
+        assert len(await e.embed(["a"], "document")) == 1
+    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warnings) == 1 and "no_balance" in warnings[0].getMessage()
+    assert any("works again" in r.getMessage() for r in caplog.records)
+
+
+@respx.mock
+async def test_deepinfra_bad_key_and_outage_are_unavailable():
+    respx.post(DI_URL).mock(return_value=httpx.Response(401))
+    with pytest.raises(EmbedderUnavailable, match="auth"):
+        await DeepInfraEmbedder("k", dim=3, sleep=_no_sleep).embed(["a"], "query")
+    respx.post(DI_URL).mock(side_effect=httpx.ConnectError("down"))
+    e = DeepInfraEmbedder("k", dim=3, sleep=_no_sleep)
+    with pytest.raises(EmbedderUnavailable, match="unreachable"):
+        await e.embed(["a"], "query")
+
+
+def test_chunk_embedder_deepinfra_needs_a_key():
+    made = make_chunk_embedder("deepinfra", url="", model="BAAI/bge-m3", dim=1024, api_key="k")
+    assert isinstance(made, DeepInfraEmbedder) and made.model == "BAAI/bge-m3"
+    assert recipient_of(made) == "DeepInfra" and recipient_of(FakeEmbedder()) is None
+    assert isinstance(make_chunk_embedder("deepinfra", url="", model="m", dim=1024),
+                      NullChunkEmbedder)  # fmt: skip
+
+
+async def test_embed_query_not_allowed_sends_nothing():
+    fake = FakeEmbedder()
+    assert await embed_query(fake, "молоко", 1.0, allowed=False) is None
+    assert fake.calls == []
+
+
+@respx.mock
+async def test_slow_remote_embedder_learns_no_balance_after_the_search_gave_up():
+    """The 0.5 s search deadline is shorter than a trip abroad: the call goes on in the
+    background, so a 402 still switches the embedder off and later searches don't knock."""
+    import asyncio
+
+    async def slow_402(request: httpx.Request) -> httpx.Response:
+        await asyncio.sleep(0.05)
+        return httpx.Response(402)
+
+    route = respx.post(DI_URL).mock(side_effect=slow_402)
+    e = DeepInfraEmbedder("k", dim=3, sleep=_no_sleep)
+    assert await embed_query(e, "кафе", 0.01) is None  # gave up waiting
+    await asyncio.sleep(0.1)
+    assert not e.available() and e.down_reason == "no_balance"
+    assert await embed_query(e, "кафе", 0.01) is None and route.call_count == 1

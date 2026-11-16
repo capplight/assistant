@@ -63,6 +63,25 @@ The search makes no AI provider calls and sends nothing abroad, so it works in �
 - `semantic`: `false` means the search by meaning did not run this time (service down or slow; the
   answer is words and typos only, spec 8.1). Not an error. Nothing to show the person.
 
+**Who computes «by meaning» (2026-11-16, Ф-76).** Always BAAI/bge-m3, 1024 dims (`chunks.embedding`).
+`CHUNK_EMBEDDER=tei` + `TEI_URL`: our own server, nothing leaves the country. `CHUNK_EMBEDDER=deepinfra`
++ `DEEPINFRA_API_KEY`: the same model on DeepInfra (US) until we host it; the vectors are the same,
+so moving to TEI later needs no re-embed. DeepInfra is a recipient abroad, so:
+- text (records and queries) goes there only for people whose active `ai_cross_border` grant lists
+  DeepInfra: consent text **`ai-2026-11-v2`** (`GET /v1/consents/text` now returns it). A person
+  with a v1 grant keeps everything else; their search stays on words (`semantic: false`) until
+  they accept v2. Phones that bundle the v1 text offline should refresh the snapshot;
+- text is masked first (phones, cards, IIN/BIN, IBAN, e-mails, IDs → placeholders, spec 5.7).
+
+**Degraded mode** (no balance → 402, bad key, outage): search answers by words (`semantic: false`),
+chunks wait in the queue (the attempt is not counted), one warning per process and one ops alert
+a day (`provider_off`, key `embedder:DeepInfra:<reason>:<day>`). The embedder retries by itself
+every 15 minutes (30 s after an outage); once it works, the worker's back-fill (every minute,
+200 records a pass) embeds every record still without chunks. A query that misses the
+`SEARCH_EMBED_TIMEOUT_SECONDS` deadline (0.5 s) is answered by words while its call finishes in the
+background. UNVERIFIED with a real balance: DeepInfra's latency from KZ; if most queries miss
+0.5 s, raise the setting.
+
 **What can be found:** title, summary, text, a file's caption. A record is found as soon as it has
 text, whatever its status, including `needs_review`.
 **What is never found:** records in the trash, merged duplicates, hidden voice fragments (the

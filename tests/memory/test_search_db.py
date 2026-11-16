@@ -968,3 +968,81 @@ async def test_deleting_an_account_leaves_nothing(env):
                 n = await s.scalar(text(f"SELECT count(*) FROM {table} WHERE user_id = :u"),
                                    {"u": user_id})  # fmt: skip
                 assert n == 0, table
+
+
+# --- an embedder abroad (DeepInfra, Ф-76): consent and degraded mode ---
+
+
+class Abroad(FakeEmbedder):
+    recipient = "DeepInfra"
+
+
+async def _grant_ai(c, h, version: str | None = None) -> None:
+    t = consent_texts.current(ConsentKind.AI_CROSS_BORDER, "ru")
+    if version is not None:
+        t = consent_texts.find(ConsentKind.AI_CROSS_BORDER, version, "ru")
+    assert t is not None
+    body = {"consents": [{"kind": "ai_cross_border", "version": t.version,
+                          "text_hash": t.text_hash, "locale": "ru"}],
+            "screen": "settings"}  # fmt: skip
+    r = await c.post("/v1/consents", json=body, headers=h)
+    assert r.status_code == 200, r.text
+
+
+async def test_embedder_abroad_gets_text_only_with_a_consent_listing_it(env, tmp_path):
+    _, maker, _, _ = env
+    abroad = Abroad(same_meaning={"туфли": "обувь", "ботинки": "обувь"})
+    app = create_app(make_settings(search_vector_min_similarity=0.5), sessionmaker=maker,
+                     sms=FakeSmsSender(), storage=make_storage(tmp_path),
+                     embedder=abroad)  # fmt: skip
+    async with client(app) as c:
+        h = await _signed_in(c)
+        await _grant_ai(c, h, "ai-2026-11-v1")  # the old list: no DeepInfra
+        note = await _ready(c, h, maker, "туфли")
+        item_id = await _internal(maker, note)
+        await _embed_all(maker, abroad)
+        assert abroad.calls == [] and await _chunks(maker, item_id) == []
+        async with maker() as s:
+            assert await enqueue_missing(s, abroad.model, recipient="DeepInfra") == 0
+            await s.commit()
+        out = await _find(c, h, "ботинки")  # the query doesn't leave either
+        assert out["semantic"] is False and abroad.calls == []
+        assert await _ids(c, h, "туфли") == [note]  # words still answer
+
+        await _grant_ai(c, h)  # v2 lists DeepInfra: the back-fill picks the record up
+        async with maker() as s:
+            assert await enqueue_missing(s, abroad.model, recipient="DeepInfra") == 1
+            await s.commit()
+        await _embed_all(maker, abroad)
+        assert len(await _chunks(maker, item_id)) == 1
+        out = await _find(c, h, "ботинки")
+        assert out["semantic"] is True and [x["item_id"] for x in out["results"]] == [note]
+
+
+async def test_embedder_down_puts_the_job_back_and_alerts_once_a_day(env):
+    from assistant.embeddings import EmbedderUnavailable
+
+    app, maker, _, _ = env
+
+    class NoBalance(FakeEmbedder):
+        async def embed(self, texts, input_type):
+            raise EmbedderUnavailable("no_balance")
+
+    async with client(app) as c:
+        h = await _signed_in(c)
+        public = await _ready(c, h, maker, "Купить молоко")
+        item_id = await _internal(maker, public)
+        for _ in range(2):
+            async with maker() as s:
+                await s.execute(update(Job).where(Job.kind == JOB_EMBED)
+                                .values(run_after=datetime.now(UTC) - timedelta(seconds=1)))
+                await s.commit()
+            assert await run_one(maker, NoBalance()) is False  # the loop waits, doesn't spin
+        async with maker() as s:
+            job = await s.scalar(select(Job).where(Job.idempotency_key == embed_key(item_id)))
+            assert job.status == JobStatus.QUEUED and job.attempts == 0
+            assert "no_balance" in job.last_error and job.run_after > datetime.now(UTC)
+            alerts = (await s.execute(text(
+                "SELECT kind, hits FROM ops_alerts WHERE dedup_key LIKE 'embedder:%'"))).all()
+        assert [tuple(a) for a in alerts] == [("provider_off", 2)]
+        assert await _ids(c, h, "молоко") == [public]

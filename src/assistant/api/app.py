@@ -47,7 +47,7 @@ from assistant.api.storage import LocalObjectStorage, ObjectStorage, make_storag
 from assistant.chat import ChatService
 from assistant.chat.push import PushSender
 from assistant.config import Settings, get_settings
-from assistant.embeddings import ChunkEmbedder, make_chunk_embedder
+from assistant.embeddings import ChunkEmbedder, chunk_embedder_from_settings
 
 log = logging.getLogger(__name__)
 
@@ -97,10 +97,8 @@ def create_app(
     ctx = ApiContext(settings=settings, sessionmaker=sessionmaker,
                      sms=sms or make_sms_sender(settings.sms_provider), storage=storage,
                      jwt_secret=jwt_secret, hash_key=hash_key,
-                     embedder=embedder or make_chunk_embedder(
-                         settings.chunk_embedder, url=settings.tei_url,
-                         model=settings.chunk_embedding_model, dim=settings.embeddings_dim,
-                         timeout=settings.search_embed_timeout_seconds))  # fmt: skip
+                     embedder=embedder or chunk_embedder_from_settings(
+                         settings, timeout=settings.search_embed_timeout_seconds))  # fmt: skip
     ctx.ai_router = ai_router if ai_router is not None else build_router(settings, sessionmaker)
     from assistant.expenses.ofd import HttpOfdReader
 

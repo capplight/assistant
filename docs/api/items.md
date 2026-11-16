@@ -87,4 +87,11 @@ were made). Migration 0028 cleared `ai_generated` on records made from the perso
 «Разбираю…»: without speech-to-text they fail at once (`stt_unavailable`); while the provider is
 down they are retried, and after 10 minutes in `pending` / `processing` they fail (`stt_timeout`).
 Both: «Не получилось разобрать запись. Запись сохранена — её можно прослушать.» The recording is
-kept.
+kept. A file the provider refuses (broken / unsupported audio) is `stt_unavailable` at once.
+
+**Speech-to-text** (2026-11-16): Groq Whisper `whisper-large-v3-turbo` (`STT_PROVIDER=groq`, key
+`STT_API_KEY` or `GROQ_API_KEY`; Groq is in the consent list). The language is detected by the
+model (`text_lang`: `ru` / `kk` / `en`). Checked live on Russian. **Kazakh stays «бета»**: Whisper
+is weak on Kazakh (WER 40–77% in published studies) and our own KK benchmark on real recordings
+is pending (`docs/spec/proposals/ai-providers-2026-11.md` §4). STT calls are not in
+`provider_usage` yet (≈ $0.04 per hour of audio).

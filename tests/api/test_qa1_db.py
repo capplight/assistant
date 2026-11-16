@@ -18,7 +18,11 @@ from sqlalchemy import select, text
 from assistant.ai import AIUnavailable
 from assistant.db.models import Item
 from assistant.records import IngestDeps, run_ingest
-from assistant.records.adapters import FakeTranscriber, UnavailableTranscriber
+from assistant.records.adapters import (
+    FakeTranscriber,
+    TranscriberRejected,
+    UnavailableTranscriber,
+)
 from assistant.records.store import fail_stuck_voice
 from tests.api.conftest import client
 from tests.api.test_items_db import _signed_in, _upload
@@ -199,3 +203,14 @@ async def test_voice_without_stt_fails_at_once_and_stuck_ones_time_out(env):  # 
         deps = IngestDeps(storage=app.state.ctx.storage,
                           transcriber=FakeTranscriber("Купить хлеб", 0.95))  # fmt: skip
         assert await run_ingest(env.maker, await _pk(env.maker, ok["id"]), deps) == "ready"
+
+        # the provider refuses this audio (broken file): failed at once, no retries
+        class Rejecting(FakeTranscriber):
+            async def transcribe(self, audio, *, mime, lang_hint):  # type: ignore[no-untyped-def]
+                raise TranscriberRejected("http 400")
+
+        bad = await _voice(c, h)
+        deps = IngestDeps(storage=app.state.ctx.storage, transcriber=Rejecting())
+        assert await run_ingest(env.maker, await _pk(env.maker, bad["id"]), deps) == "failed"
+        out = (await c.get(f"/v1/items/{bad['id']}", headers=h)).json()
+        assert out["error"] == "stt_unavailable"

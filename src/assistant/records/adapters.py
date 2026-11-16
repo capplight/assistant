@@ -5,14 +5,19 @@
   provider and belongs to the router (assistant.ai), not here.
 - Transcriber: speech-to-text. Every real provider (Groq, OpenAI) is abroad, so `recipient` names
   the provider and the job checks the ai_cross_border consent covers it before sending audio.
-  No real provider exists yet (no API keys): FakeTranscriber (STT_PROVIDER=fake) or
-  UnavailableTranscriber, which fails the job so the item is retried later.
+  GroqTranscriber (STT_PROVIDER=groq + GROQ_API_KEY or STT_API_KEY): Whisper large-v3-turbo,
+  checked live 2026-11-16 on RU. Kazakh stays beta: Whisper is weak on KK and our own KK
+  benchmark is pending (docs/spec/proposals/ai-providers-2026-11.md). FakeTranscriber
+  (STT_PROVIDER=fake); UnavailableTranscriber when nothing is configured (`stt_unavailable`).
 """
 
 import asyncio
+import math
 import shutil
 from dataclasses import dataclass, field
 from typing import Protocol
+
+import httpx
 
 
 @dataclass(frozen=True)
@@ -47,7 +52,11 @@ class OcrError(Exception):
 
 
 class TranscriberUnavailable(Exception):
-    pass
+    """An outage (network, 429, 5xx, timeout): the queue retries until the voice deadline."""
+
+
+class TranscriberRejected(Exception):
+    """The provider refused this audio (broken / unsupported / too big): retrying will not help."""
 
 
 # --- OCR ---
@@ -154,8 +163,85 @@ class UnavailableTranscriber:
         raise TranscriberUnavailable("no speech-to-text provider configured")
 
 
-def make_transcriber(provider: str) -> Transcriber:
+# Whisper's `language` comes back as an English name in verbose_json.
+_WHISPER_LANGS = {"russian": "ru", "kazakh": "kk", "english": "en", "ru": "ru", "kk": "kk",
+                  "en": "en"}  # fmt: skip
+_EXT_BY_MIME = {"audio/mp4": "m4a", "audio/m4a": "m4a", "audio/x-m4a": "m4a", "audio/aac": "m4a",
+                "audio/mpeg": "mp3", "audio/mp3": "mp3", "audio/ogg": "ogg", "audio/opus": "ogg",
+                "audio/webm": "webm", "audio/wav": "wav", "audio/x-wav": "wav",
+                "audio/wave": "wav", "audio/flac": "flac", "video/mp4": "mp4"}  # fmt: skip
+
+
+def whisper_confidence(segments: list[dict]) -> float:
+    """exp(avg_logprob) x (1 - no_speech_prob), weighted by segment length. 0..1."""
+    total = weight = 0.0
+    for seg in segments:
+        try:
+            lp = float(seg.get("avg_logprob", 0.0))
+            ns = float(seg.get("no_speech_prob", 0.0) or 0.0)
+            w = max(0.01, float(seg.get("end", 0.0)) - float(seg.get("start", 0.0)))
+        except (TypeError, ValueError):
+            continue
+        total += w * math.exp(min(0.0, lp)) * (1.0 - min(1.0, max(0.0, ns)))
+        weight += w
+    return round(total / weight, 3) if weight else 0.0
+
+
+class GroqTranscriber:
+    """Groq's OpenAI-compatible `POST /audio/transcriptions`, model whisper-large-v3-turbo.
+
+    429 / 5xx / 401-403 / network / timeout -> TranscriberUnavailable (the queue retries until the
+    voice deadline, then `stt_timeout`); 400 / 413 / 415 / 422 -> TranscriberRejected."""
+
+    name = "groq"
+    recipient = "Groq"
+    URL = "https://api.groq.com/openai/v1/audio/transcriptions"
+    MODEL = "whisper-large-v3-turbo"
+
+    def __init__(self, api_key: str, *, model: str = MODEL, timeout: float = 60.0,
+                 client: httpx.AsyncClient | None = None) -> None:  # fmt: skip
+        self._key, self.model = api_key, model
+        self._client = client or httpx.AsyncClient(timeout=timeout)
+
+    async def transcribe(self, audio: bytes, *, mime: str, lang_hint: str | None) -> Transcript:
+        mime = (mime or "").split(";")[0].strip().lower()
+        ext = _EXT_BY_MIME.get(mime, "m4a")
+        data = {"model": self.model, "response_format": "verbose_json", "temperature": "0"}
+        if lang_hint in ("ru", "kk", "en"):
+            data["language"] = lang_hint
+        try:
+            resp = await self._client.post(
+                self.URL, headers={"Authorization": f"Bearer {self._key}"}, data=data,
+                files={"file": (f"voice.{ext}", audio, mime or "application/octet-stream")},
+            )  # fmt: skip
+        except (httpx.TimeoutException, httpx.TransportError) as exc:
+            raise TranscriberUnavailable(f"groq stt: {type(exc).__name__}") from exc
+        if resp.status_code in (400, 413, 415, 422):
+            raise TranscriberRejected(f"groq stt: http {resp.status_code}")
+        if resp.status_code >= 300:
+            raise TranscriberUnavailable(f"groq stt: http {resp.status_code}")
+        try:
+            body = resp.json()
+        except ValueError as exc:
+            raise TranscriberUnavailable("groq stt: not json") from exc
+        segments = [s for s in body.get("segments") or [] if isinstance(s, dict)]
+        text = (body.get("text") or "").strip()
+        lang = _WHISPER_LANGS.get(str(body.get("language") or "").strip().lower())
+        if segments:
+            confidence = whisper_confidence(segments)
+        else:
+            confidence = 0.5 if text else 0.0
+        return Transcript(
+            text=text, confidence=confidence, lang=lang,
+            segments=[{"start": s.get("start"), "end": s.get("end"),
+                       "text": (s.get("text") or "").strip()} for s in segments],
+        )  # fmt: skip
+
+
+def make_transcriber(provider: str, *, api_key: str = "") -> Transcriber:
+    """fake | groq (needs a key) | anything else or no key -> unavailable."""
     if provider == "fake":
         return FakeTranscriber()
-    # groq / openai adapters come with the AI router (assistant.ai); no keys exist yet.
+    if provider == "groq" and api_key:
+        return GroqTranscriber(api_key)
     return UnavailableTranscriber()

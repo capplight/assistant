@@ -25,7 +25,7 @@ from assistant.ai.adapters import strict_json_schema
 from assistant.chat.sources import SourceBook
 from assistant.chat.verify import Facts, facts_of
 from assistant.embeddings import ChunkEmbedder
-from assistant.memory import embed_query, search_records
+from assistant.memory import embed_query, query_embedding_allowed, search_records
 
 log = logging.getLogger(__name__)
 
@@ -113,6 +113,8 @@ class ToolEnv:
     # from `aggregate` or any other calculation in code) are allowed in the answer. Only code
     # adds here, through `computed_by_code`; a number the model works out itself is removed.
     computed: Facts = field(default_factory=Facts)
+    # May queries go to the embedder (abroad: consent lists it)? None = not checked yet.
+    embed_allowed: bool | None = None
 
     def computed_by_code(self, *values: "int | float | Decimal | str | date | datetime") -> None:
         for v in values:
@@ -190,7 +192,11 @@ async def run_search(env: ToolEnv, query: str, *, page_pk: int | None = None,
                      boost_page_pk: int | None = None) -> list:  # fmt: skip
     """Hybrid search (spec 6.9) + the shown fragment of each hit, registered in the book.
     Returns the Source objects, best first. No transaction stays open across the embedder."""
-    vector = await embed_query(env.embedder, query, env.embed_timeout_s)
+    if env.embed_allowed is None:  # once per turn: the consent can't change mid-turn
+        async with env.sessionmaker() as session:
+            env.embed_allowed = await query_embedding_allowed(session, env.user_id, env.embedder)
+    vector = await embed_query(env.embedder, query, env.embed_timeout_s,
+                               allowed=env.embed_allowed)  # fmt: skip
     async with env.sessionmaker() as session:
         result = await search_records(
             session, env.user_id, query, query_vector=vector, model=env.embedder.model,

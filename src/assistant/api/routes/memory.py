@@ -33,6 +33,7 @@ from assistant.memory import (
     embed_query,
     find_value,
     original_fate,
+    query_embedding_allowed,
     search_records,
 )
 from assistant.records import original_file, trash_file
@@ -87,8 +88,10 @@ async def search(
 ) -> SearchOut:  # fmt: skip
     screen_id = await _page_id(db, user, page_id) if page_id is not None else None
     settings = ctx.settings
+    allowed = await query_embedding_allowed(db, user.id, ctx.embedder)
     await db.commit()  # no transaction stays open across the embedder call
-    vector = await embed_query(ctx.embedder, q, settings.search_embed_timeout_seconds)
+    vector = await embed_query(ctx.embedder, q, settings.search_embed_timeout_seconds,
+                               allowed=allowed)  # fmt: skip
     result = await search_records(
         db, user.id, q, query_vector=vector, model=ctx.embedder.model,
         min_similarity=settings.search_vector_min_similarity, screen_id=screen_id,

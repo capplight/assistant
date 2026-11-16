@@ -58,6 +58,16 @@ def build_router(settings: Settings, sessionmaker: async_sessionmaker[AsyncSessi
     )  # fmt: skip
 
 
+async def record_ops_alert(session: AsyncSession, kind: str, dedup_key: str, text: str,
+                           details: dict | None = None) -> int:  # fmt: skip
+    """One ops alert into `ops_alerts` (a known dedup key only bumps hits); delivered by
+    `python -m assistant.ai.costs alerts`. Returns 1 when new. Imported lazily: `costs` is also
+    run as `-m`."""
+    from assistant.ai.costs import AlertOut, record_alerts
+
+    return await record_alerts(session, [AlertOut(kind, dedup_key, text, details=details or {})])
+
+
 __all__ = [
     "AIConsentRequired", "AIError", "AIUnavailable", "BadOutput", "BatchEntry", "BatchMode",
     "BatchUnavailable", "BreakerState", "BudgetClass",
@@ -67,5 +77,5 @@ __all__ = [
     "StrongReason", "StrongRequest", "TaskInputs", "ToolCall", "ToolSpec", "UntrustedPart",
     "ai_consent_providers", "build_adapters", "build_router", "ensure_usage_partitions",
     "iban_ok", "iin_bin_ok",
-    "load_routes", "neutralize", "next_month_start", "period_starts",
+    "load_routes", "neutralize", "next_month_start", "period_starts", "record_ops_alert",
 ]  # fmt: skip

@@ -2,15 +2,21 @@
 
 import hashlib
 
+import httpx
 import pytest
+import respx
 
 from assistant.records.adapters import (
     FakeOcr,
     FakeTranscriber,
+    GroqTranscriber,
+    TranscriberRejected,
+    TranscriberUnavailable,
     UnavailableTranscriber,
     make_ocr,
     make_transcriber,
     parse_tesseract_tsv,
+    whisper_confidence,
 )
 from assistant.records.extract import ExtractError, extract_docx, extract_pdf, extract_xlsx
 from assistant.records.textnorm import (
@@ -101,7 +107,8 @@ def test_parse_tesseract_tsv():
 async def test_adapters_factories_and_fakes():
     assert isinstance(make_ocr("fake"), FakeOcr)
     assert isinstance(make_transcriber("fake"), FakeTranscriber)
-    assert isinstance(make_transcriber("groq"), UnavailableTranscriber)  # no keys yet
+    assert isinstance(make_transcriber("groq"), UnavailableTranscriber)  # no key
+    assert isinstance(make_transcriber("none", api_key="k"), UnavailableTranscriber)
     with pytest.raises(Exception, match="no speech-to-text"):
         await UnavailableTranscriber().transcribe(b"x", mime="audio/aac", lang_hint=None)
     ocr = FakeOcr("текст", 0.9)
@@ -160,3 +167,65 @@ def test_content_hash_shared_vectors():
     for case in json.loads(path.read_text(encoding="utf-8"))["cases"]:
         assert (hash_basis(case["text"]) or None) == case["basis"]
         assert content_hash(case["text"]) == case["content_hash"]
+
+
+# --- Groq Whisper (STT, RU live-checked 2026-11-16; KK beta) ---
+
+GROQ_STT = "https://api.groq.com/openai/v1/audio/transcriptions"
+
+
+@respx.mock
+async def test_groq_transcriber_sends_the_file_and_reads_verbose_json():
+    route = respx.post(GROQ_STT).mock(return_value=httpx.Response(200, json={
+        "text": " Напомни мне завтра купить хлеб. ", "language": "Russian",
+        "segments": [{"start": 0.0, "end": 2.0, "text": " Напомни мне", "avg_logprob": -0.05,
+                      "no_speech_prob": 0.01},
+                     {"start": 2.0, "end": 3.0, "text": " завтра купить хлеб.",
+                      "avg_logprob": -0.2, "no_speech_prob": 0.0}]}))  # fmt: skip
+    t = make_transcriber("groq", api_key="k")
+    assert isinstance(t, GroqTranscriber) and t.recipient == "Groq"
+    tr = await t.transcribe(b"RIFF....", mime="audio/wav; codecs=1", lang_hint=None)
+    assert tr.text == "Напомни мне завтра купить хлеб." and tr.lang == "ru"
+    assert 0.85 < tr.confidence < 0.95
+    assert tr.segments[0] == {"start": 0.0, "end": 2.0, "text": "Напомни мне"}
+    req = route.calls[0].request
+    assert req.headers["authorization"] == "Bearer k"
+    body = req.content.decode("latin-1")
+    assert "whisper-large-v3-turbo" in body and "verbose_json" in body
+    assert 'filename="voice.wav"' in body and 'name="language"' not in body
+
+
+@respx.mock
+async def test_groq_transcriber_passes_a_known_language_hint():
+    route = respx.post(GROQ_STT).mock(return_value=httpx.Response(
+        200, json={"text": "Сәлем", "language": "kazakh", "segments": []}))  # fmt: skip
+    tr = await GroqTranscriber("k").transcribe(b"x", mime="audio/mp4", lang_hint="kk")
+    assert tr.lang == "kk" and tr.confidence == 0.5  # no segments: middle confidence
+    assert 'name="language"' in route.calls[0].request.content.decode("latin-1")
+
+
+@respx.mock
+@pytest.mark.parametrize("status, error", [(429, TranscriberUnavailable),
+                                           (500, TranscriberUnavailable),
+                                           (401, TranscriberUnavailable),
+                                           (400, TranscriberRejected),
+                                           (413, TranscriberRejected)])  # fmt: skip
+async def test_groq_transcriber_errors(status, error):
+    respx.post(GROQ_STT).mock(return_value=httpx.Response(status, json={"error": {}}))
+    with pytest.raises(error):
+        await GroqTranscriber("k").transcribe(b"x", mime="audio/aac", lang_hint=None)
+
+
+@respx.mock
+async def test_groq_transcriber_network_error_is_an_outage():
+    respx.post(GROQ_STT).mock(side_effect=httpx.ConnectTimeout("slow"))
+    with pytest.raises(TranscriberUnavailable):
+        await GroqTranscriber("k").transcribe(b"x", mime="audio/aac", lang_hint=None)
+
+
+def test_whisper_confidence():
+    assert whisper_confidence([]) == 0.0
+    assert whisper_confidence([{"start": 0, "end": 1, "avg_logprob": 0.0,
+                                "no_speech_prob": 0.0}]) == 1.0  # fmt: skip
+    silent = [{"start": 0, "end": 1, "avg_logprob": -0.1, "no_speech_prob": 0.9}]
+    assert whisper_confidence(silent) < 0.1

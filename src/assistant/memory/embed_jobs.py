@@ -1,4 +1,8 @@
-"""Chunks: the job `embed:item` (spec 1, worker-embed). Text -> chunks -> embeddings, locally.
+"""Chunks: the job `embed:item` (spec 1, worker-embed). Text -> chunks -> embeddings.
+
+An embedder abroad (`recipient`, e.g. DeepInfra) gets a record's text only when the owner's active
+ai_cross_border grant lists it; otherwise the record gets no chunks (search finds it by words) and
+the back-fill leaves it alone until such a grant appears.
 
 One job row per record (`item:<id>:embed:v1`), put back in the queue whenever the record changes, so
 A -> B -> A embeds again and the jobs table doesn't grow with every edit. The job itself is safe to
@@ -12,13 +16,14 @@ them by FK cascade. Hidden ones (merged, voice fragments) have none.
 
 import hashlib
 
-from sqlalchemy import delete, exists, func, select
+from sqlalchemy import TextClause, delete, exists, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from assistant.ai import ai_consent_providers
 from assistant.db import queue
 from assistant.db.models import EMBEDDING_DIM, Item, JobStatus
 from assistant.db.models_search import Chunk
-from assistant.embeddings import ChunkEmbedder
+from assistant.embeddings import ChunkEmbedder, recipient_of
 from assistant.memory.chunking import TextChunk, chunk_text
 
 JOB_EMBED = "embed:item"
@@ -66,6 +71,12 @@ async def run_embed(maker: async_sessionmaker[AsyncSession], embedder: ChunkEmbe
                 await s.commit()
                 return None
             title, body, user_id = item.title, body_of(item), item.user_id
+            recipient = recipient_of(embedder)
+            if recipient is not None:
+                providers = await ai_consent_providers(s, user_id)
+                if providers is None or recipient.lower() not in providers:
+                    await s.commit()
+                    return None  # no consent for this provider: words-only search
             sha = fingerprint(title, body)
             current = await s.scalar(
                 select(exists().where(Chunk.item_id == item_id, Chunk.source_sha == sha,
@@ -101,21 +112,33 @@ async def run_embed(maker: async_sessionmaker[AsyncSession], embedder: ChunkEmbe
     raise RuntimeError("the record kept changing while being embedded")
 
 
-async def enqueue_missing(session: AsyncSession, model: str, *, limit: int = 200) -> int:
-    """Records with no chunks of the current model: saved before this existed, or a new model
-    (spec 3.3, "фоновый re-embed"). A job that is queued or running is left alone."""
+def consent_lists(recipient: str) -> TextClause:
+    """The owner's latest active ai_cross_border grant lists `recipient` (case-insensitive), the
+    same rule as `ai_consent_providers`. A condition on `items.user_id`."""
+    return text("""EXISTS (SELECT 1 FROM unnest((
+            SELECT c.providers FROM consents c
+            WHERE c.user_id = items.user_id AND c.kind = 'ai_cross_border'
+              AND c.revoked_at IS NULL
+            ORDER BY c.granted_at DESC, c.id DESC LIMIT 1)) AS p(name)
+        WHERE lower(p.name) = lower(:recipient))""").bindparams(recipient=recipient)
+
+
+async def enqueue_missing(session: AsyncSession, model: str, *, limit: int = 200,
+                          recipient: str | None = None) -> int:  # fmt: skip
+    """Records with no chunks of the current model: saved before this existed, a new model
+    (spec 3.3, "фоновый re-embed"), or the embedder was down. A job that is queued or running is
+    left alone. `recipient` (an embedder abroad): only owners whose consent lists it."""
     body = func.btrim(func.coalesce(Item.text, Item.raw_text,
                                     Item.source_meta["caption"].astext, ""))  # fmt: skip
     has_chunks = exists().where(Chunk.item_id == Item.id, Chunk.embedding_model == model)
-    ids = list(
-        await session.scalars(
-            select(Item.id)
+    stmt = (select(Item.id)
             .where(Item.deleted_at.is_(None), Item.hidden_reason.is_(None), body != "",
                    ~has_chunks)
             .order_by(Item.id.desc())
-            .limit(limit)
-        )
-    )  # fmt: skip
+            .limit(limit))  # fmt: skip
+    if recipient is not None:
+        stmt = stmt.where(consent_lists(recipient))
+    ids = list(await session.scalars(stmt))
     for item_id in ids:
         await queue.enqueue_again(session, JOB_EMBED, {"item_id": item_id}, embed_key(item_id),
                                   again_if=(JobStatus.DONE, JobStatus.FAILED))  # fmt: skip

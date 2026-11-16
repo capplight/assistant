@@ -489,3 +489,64 @@ def test_keys_never_surface_in_settings_repr_or_usage_rows():
     assert "sk-secret-123" not in repr(s) and "sk-ant-xyz" not in str(s.model_dump())
     adapters = build_adapters(s)
     assert all("sk-" not in repr(a) for a in adapters.values())
+
+
+# --- Anthropic structured-output limits (found live 2026-11-16) ---
+
+
+def test_anthropic_schema_drops_keywords_the_api_rejects():
+    from assistant.ai.adapters.anthropic_adapter import anthropic_schema
+
+    class Limited(BaseModel):
+        tags: list[str] = []
+        title: str
+        n: int
+
+    raw = strict_json_schema(Limited)
+    raw["properties"]["tags"].update(maxItems=5, minItems=2)
+    raw["properties"]["title"].update(minLength=1, maxLength=80)
+    raw["properties"]["n"].update(minimum=0, maximum=9)
+    kw = AnthropicAdapter(client=object()).request_kwargs(req(json_schema=raw))
+    sent = kw["output_config"]["format"]["schema"]
+    assert sent["properties"]["tags"] == {"items": {"type": "string"}, "type": "array"}
+    assert sent["properties"]["title"] == {"type": "string"}
+    assert sent["properties"]["n"] == {"type": "integer"}
+    assert raw["properties"]["tags"]["maxItems"] == 5  # the caller's schema is untouched
+    # a field *named* like a keyword is kept, and minItems 0/1 is allowed
+    kept = anthropic_schema({"type": "object", "properties": {"maximum": {"type": "array",
+                             "minItems": 1}}})  # fmt: skip
+    assert kept["properties"]["maximum"] == {"type": "array", "minItems": 1}
+
+
+def test_anthropic_strict_tools_stay_within_the_union_limit():
+    from assistant.ai.adapters.anthropic_adapter import MAX_STRICT_UNIONS, union_count
+
+    def nullable_tool(name: str, n: int) -> ToolSpec:
+        props = {f"f{i}": {"anyOf": [{"type": "string"}, {"type": "null"}]} for i in range(n)}
+        return ToolSpec(name, name, {"type": "object", "properties": props,
+                                     "required": list(props), "additionalProperties": False})
+
+    tools = (nullable_tool("big", 12), nullable_tool("a", 4), nullable_tool("b", 5), TOOL)
+    kw = AnthropicAdapter(client=object()).request_kwargs(req(tools=tools, json_schema=None))
+    sent = {t["name"]: t for t in kw["tools"]}
+    assert [t["name"] for t in kw["tools"]] == ["big", "a", "b", "lookup"]  # order kept (cache)
+    assert sent["lookup"]["strict"] and sent["a"]["strict"] and sent["b"]["strict"]
+    assert "strict" not in sent["big"]  # 12 more would pass the limit
+    strict_unions = sum(union_count(t["input_schema"]) for t in kw["tools"] if t.get("strict"))
+    assert strict_unions <= MAX_STRICT_UNIONS
+
+
+def test_anthropic_chat_tools_fit_the_union_limit():
+    """The real chat tool sets (read + mutating, with set_view) must not trip the 400."""
+    from assistant.ai.adapters.anthropic_adapter import MAX_STRICT_UNIONS, union_count
+    from assistant.chat.mutate import MUTATING_TOOLS, RENAME_PAGE
+    from assistant.chat.service import ChatReply
+    from assistant.chat.tools import READ_TOOLS
+
+    for tools in (READ_TOOLS, (*READ_TOOLS, *MUTATING_TOOLS), (*READ_TOOLS, RENAME_PAGE)):
+        kw = AnthropicAdapter(client=object()).request_kwargs(
+            req(tools=tools, json_schema=strict_json_schema(ChatReply)))  # fmt: skip
+        total = union_count(kw["output_config"]["format"]["schema"]) + sum(
+            union_count(t["input_schema"]) for t in kw["tools"] if t.get("strict"))
+        assert total <= MAX_STRICT_UNIONS
+        assert any(t.get("strict") for t in kw["tools"])

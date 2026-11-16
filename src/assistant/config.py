@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     escalate_below_confidence: float = 0.6
 
     # Speech-to-text (Claude has no audio input)
-    stt_provider: str = "groq"  # groq | openai | none
+    stt_provider: str = "groq"  # groq | fake | none
     stt_api_key: SecretStr = Field(default=SecretStr(""))
 
     # Embeddings (Anthropic has none). Dim must match items.embedding vector(1024).
@@ -40,10 +40,12 @@ class Settings(BaseSettings):
     embeddings_model: str = "voyage-3.5"
     embeddings_dim: int = 1024
 
-    # Embeddings for chunks and search: local TEI + bge-m3 (spec 5.5), never a foreign provider.
-    # Empty URL: no embeddings, search runs on words and typos.
-    chunk_embedder: str = "tei"  # tei | none
+    # Embeddings for chunks and search, always bge-m3 (spec 5.5): local TEI (tei + TEI_URL), or
+    # the same model on DeepInfra (deepinfra + DEEPINFRA_API_KEY; abroad, so only for people whose
+    # ai_cross_border grant lists DeepInfra, Ф-76). Not configured: search runs on words and typos.
+    chunk_embedder: str = "tei"  # tei | deepinfra | none
     tei_url: str = ""
+    deepinfra_api_key: SecretStr = Field(default=SecretStr(""))
     chunk_embedding_model: str = "BAAI/bge-m3"  # migration 0009's HNSW index is for this one
 
     # Search (docs/api/search.md). Both numbers are UNVERIFIED until tried on the real model.
@@ -102,8 +104,8 @@ class Settings(BaseSettings):
     # Ingest worker (python -m assistant.records). OCR runs locally (Tesseract) in KZ.
     ocr_provider: str = "auto"  # auto (tesseract if on PATH, else fake) | tesseract | fake
     ocr_langs: str = "rus+kaz+eng"
-    # STT for voice records uses stt_provider above: fake | groq | openai (only fake exists yet;
-    # anything else leaves voice jobs retrying until a provider is wired in the AI router).
+    # STT for voice records uses stt_provider above: groq (Whisper large-v3-turbo; key from
+    # STT_API_KEY or GROQ_API_KEY) | fake | none. No key / anything else: `stt_unavailable`.
 
     # --- AI layer (assistant.ai, spec 3-engineering 5) ---
     # Keys come only from env / local .env (never committed, never logged).

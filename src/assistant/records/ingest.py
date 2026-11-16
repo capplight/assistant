@@ -41,6 +41,7 @@ from assistant.records.adapters import (
     FakeTranscriber,
     Ocr,
     Transcriber,
+    TranscriberRejected,
     TranscriberUnavailable,
 )
 from assistant.records.extract import (
@@ -208,6 +209,8 @@ async def _extract(kind: str, data: bytes, mime: str, size: int, deps: IngestDep
             if deps.transcriber.name == "none":  # nothing configured: waiting will not help
                 raise ExtractError("stt_unavailable") from exc
             raise  # an outage: the queue retries until `stt_deadline` (store.fail_stuck_voice)
+        except TranscriberRejected as exc:  # broken / unsupported audio: no retry
+            raise ExtractError("stt_unavailable") from exc
         review = detect_review_fields(tr.text)  # a fragment's own fields; voice.py rebuilds them
         if tr.confidence < store.KEEP_BELOW_CONFIDENCE:
             review["transcript"] = {"kind": "transcript", "value": None, "state": "unverified"}

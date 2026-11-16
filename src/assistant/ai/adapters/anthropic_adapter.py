@@ -1,11 +1,18 @@
 """Anthropic adapter: Messages API, output_config.format json_schema, tools, streaming,
 prompt caching on the system block, Message Batches.
 
-UNVERIFIED against the live API (no key yet): request shape follows the installed SDK
-(anthropic 2.x: messages.create(output_config=...), messages.stream(...),
-messages.batches.create/retrieve/results/cancel). Check `cache_read_input_tokens` > 0 on the
-first real traffic: a prefix under the model's minimum (about 512 tokens) silently never caches.
-Batch results are kept by Anthropic for 29 days and batches are not eligible for zero retention.
+Checked live 2026-11-16 (claude-haiku-5-5, anthropic 2.3.0): streamed chat, tool loops with the
+replayed assistant turn, structured outputs, prompt caching (`cache_read_input_tokens` reported
+from the second call on). Batches stay unverified live (off by founder decision). Batch results
+are kept by Anthropic for 29 days and batches are not eligible for zero retention.
+
+Structured outputs, learned live: the grammar of a new schema (+ strict tools) compiles once
+(~7-20 s on the first call, then cached 24 h), so the first call of the day may miss a short
+first-token deadline and fall back. Schemas lose the keywords the API rejects (`maxItems`,
+`minLength`, `minimum`...; `UNSUPPORTED_KEYWORDS`): the router validates the answer against the
+Pydantic model anyway. At most `MAX_STRICT_UNIONS` nullable/union parameters per request across
+the strict schemas, or the API answers 400: tools with the fewest unions stay `strict` while the
+budget lasts, the rest go non-strict (their arguments are validated in code, chat/tools.py).
 
 Tool loops (skill `claude-api`, checked 2026-11-07): tools and output_config.format go in one
 request; tools are `strict`; forced tool_choice (any/tool) is rejected by current models, so only
@@ -41,6 +48,59 @@ from assistant.ai.types import (
     Usage,
 )
 
+UNSUPPORTED_KEYWORDS = frozenset({
+    "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "multipleOf",
+    "minLength", "maxLength", "maxItems", "uniqueItems", "minProperties", "maxProperties",
+})  # fmt: skip
+MAX_STRICT_UNIONS = 16  # the API's limit (400 "too many parameters with union types")
+
+
+def anthropic_schema(node: Any) -> Any:
+    """A copy without the keywords structured outputs reject. `minItems` stays only as 0 or 1."""
+    if isinstance(node, list):
+        return [anthropic_schema(n) for n in node]
+    if not isinstance(node, dict):
+        return node
+    out: dict[str, Any] = {}
+    for k, v in node.items():
+        if k in ("properties", "$defs", "definitions") and isinstance(v, dict):
+            out[k] = {name: anthropic_schema(sub) for name, sub in v.items()}
+        elif k in UNSUPPORTED_KEYWORDS:
+            continue
+        elif k == "minItems" and not (isinstance(v, int) and v in (0, 1)):
+            continue
+        else:
+            out[k] = anthropic_schema(v)
+    return out
+
+
+def union_count(node: Any) -> int:
+    """Parameters with `anyOf` or a type list (nullable optionals), as the API counts them."""
+    if isinstance(node, list):
+        return sum(union_count(n) for n in node)
+    if not isinstance(node, dict):
+        return 0
+    own = int("anyOf" in node or isinstance(node.get("type"), list))
+    return own + sum(union_count(v) for v in node.values())
+
+
+def _tool_params(tools: Any, budget: int) -> list[dict[str, Any]]:
+    """Fewest unions first get `strict` while the budget lasts; the list keeps its order."""
+    cost = [union_count(t.parameters) for t in tools]
+    strict: set[int] = set()
+    for i in sorted(range(len(cost)), key=lambda i: (cost[i], i)):
+        if cost[i] <= budget:
+            strict.add(i)
+            budget -= cost[i]
+    out = []
+    for i, t in enumerate(tools):
+        tool: dict[str, Any] = {"name": t.name, "description": t.description,
+                                "input_schema": anthropic_schema(t.parameters)}  # fmt: skip
+        if i in strict:
+            tool["strict"] = True
+        out.append(tool)
+    return out
+
 
 class AnthropicAdapter:
     name = "anthropic"
@@ -61,8 +121,11 @@ class AnthropicAdapter:
     def request_kwargs(self, req: AdapterRequest) -> dict[str, Any]:
         messages = [{"role": m.role, "content": _content(m)} for m in req.messages]
         output_config: dict[str, Any] = {}
+        budget = MAX_STRICT_UNIONS
         if req.json_schema is not None:
-            output_config["format"] = {"type": "json_schema", "schema": req.json_schema}
+            schema = anthropic_schema(req.json_schema)
+            budget -= union_count(schema)
+            output_config["format"] = {"type": "json_schema", "schema": schema}
         if req.effort:
             output_config["effort"] = req.effort
         kwargs: dict[str, Any] = {
@@ -75,9 +138,7 @@ class AnthropicAdapter:
         if output_config:
             kwargs["output_config"] = output_config
         if req.tools:
-            kwargs["tools"] = [{"name": t.name, "description": t.description,
-                                "input_schema": t.parameters, "strict": True}
-                               for t in req.tools]  # fmt: skip
+            kwargs["tools"] = _tool_params(req.tools, max(0, budget))
             if req.tool_choice == "none":
                 kwargs["tool_choice"] = {"type": "none"}
         return kwargs

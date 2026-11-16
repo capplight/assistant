@@ -1,10 +1,10 @@
-"""`python -m assistant.memory`: worker-embed (chunks + bge-m3 through local TEI, spec 1)."""
+"""`python -m assistant.memory`: worker-embed (chunks + bge-m3 via TEI or DeepInfra, spec 1)."""
 
 import asyncio
 
 from assistant.config import get_settings
 from assistant.db.session import get_engine, get_sessionmaker
-from assistant.embeddings import make_chunk_embedder
+from assistant.embeddings import chunk_embedder_from_settings
 from assistant.logs import configure_logging
 from assistant.memory.worker import worker_loop
 from assistant.records.worker import install_signal_handlers
@@ -13,9 +13,7 @@ from assistant.records.worker import install_signal_handlers
 async def main() -> None:
     settings = get_settings()
     configure_logging(settings.log_level)
-    embedder = make_chunk_embedder(settings.chunk_embedder, url=settings.tei_url,
-                                   model=settings.chunk_embedding_model,
-                                   dim=settings.embeddings_dim)  # fmt: skip
+    embedder = chunk_embedder_from_settings(settings)
     stop = asyncio.Event()
     install_signal_handlers(stop)
     try:

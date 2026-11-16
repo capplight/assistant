@@ -20,11 +20,13 @@ async def main() -> None:
     settings = get_settings()
     configure_logging(settings.log_level)
     maker = get_sessionmaker()
+    stt_key = (settings.stt_api_key.get_secret_value()
+               or settings.groq_api_key.get_secret_value())
     router = build_router(settings, maker)
     token = settings.instagram_oembed_token.get_secret_value() or None
     links = LinkMetadataClient(instagram_access_token=token)
     deps = IngestDeps(storage=storage_from_settings(settings), ocr=make_ocr(settings.ocr_provider),
-                      transcriber=make_transcriber(settings.stt_provider),
+                      transcriber=make_transcriber(settings.stt_provider, api_key=stt_key),
                       ocr_langs=settings.ocr_langs, links=WebLinkReader(links),
                       router=router if router.adapters else None, settings=settings)  # fmt: skip
     stop = asyncio.Event()

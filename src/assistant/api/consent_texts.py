@@ -11,7 +11,9 @@ from dataclasses import dataclass
 from assistant.api.security import sha256_hex
 from assistant.db.models_v2 import ConsentKind
 
-AI_PROVIDERS = ["Anthropic", "OpenAI", "Google", "Groq"]
+AI_PROVIDERS_V1 = ("Anthropic", "OpenAI", "Google", "Groq")
+# v2 (2026-11-16, Ф-76): + DeepInfra, which runs search by meaning (bge-m3) until we host it.
+AI_PROVIDERS = ["Anthropic", "OpenAI", "Google", "Groq", "DeepInfra"]
 
 
 @dataclass(frozen=True)
@@ -36,11 +38,21 @@ _TEXTS: list[ConsentText] = [
     ConsentText(ConsentKind.AI_CROSS_BORDER, f"ai-{_V}", "ru",
                 "Я соглашаюсь, что текст, записи голоса и фото передаются для распознавания и "
                 "ответов сервисам: Anthropic, OpenAI, Google, Groq. Они не обучаются на ваших "
-                "данных.", tuple(AI_PROVIDERS)),
+                "данных.", AI_PROVIDERS_V1),
     ConsentText(ConsentKind.AI_CROSS_BORDER, f"ai-{_V}", "kk",
                 "Мәтін, дауыс жазбалары мен фотолар тану және жауап беру үшін мына сервистерге "
                 "жіберілетініне келісемін: Anthropic, OpenAI, Google, Groq. Олар сіздің "
-                "деректеріңізден үйренбейді.", tuple(AI_PROVIDERS)),
+                "деректеріңізден үйренбейді.", AI_PROVIDERS_V1),
+    # v2: the same text + DeepInfra (search by meaning). v1 grants keep working for everything
+    # else; only search by meaning waits for a v2 grant. KK line awaits a native review (R-39).
+    ConsentText(ConsentKind.AI_CROSS_BORDER, "ai-2026-11-v2", "ru",
+                "Я соглашаюсь, что текст, записи голоса и фото передаются для распознавания, "
+                "поиска и ответов сервисам: Anthropic, OpenAI, Google, Groq, DeepInfra. Они не "
+                "обучаются на ваших данных.", tuple(AI_PROVIDERS)),
+    ConsentText(ConsentKind.AI_CROSS_BORDER, "ai-2026-11-v2", "kk",
+                "Мәтін, дауыс жазбалары мен фотолар тану, іздеу және жауап беру үшін мына "
+                "сервистерге жіберілетініне келісемін: Anthropic, OpenAI, Google, Groq, DeepInfra. "
+                "Олар сіздің деректеріңізден үйренбейді.", tuple(AI_PROVIDERS)),
     ConsentText(ConsentKind.TERMS, f"terms-{_V}", "ru",
                 "Я принимаю условия использования. Мне есть 18 лет."),
     ConsentText(ConsentKind.TERMS, f"terms-{_V}", "kk",

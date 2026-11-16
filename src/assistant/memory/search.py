@@ -28,6 +28,7 @@ only some of them; the more found, the higher it ranks.
 import asyncio
 import logging
 import re
+import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -35,8 +36,14 @@ from datetime import datetime
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from assistant.ai import ai_consent_providers
 from assistant.db.models_v2 import RecordKind
-from assistant.embeddings import ChunkEmbedder
+from assistant.embeddings import (
+    ChunkEmbedder,
+    EmbedderUnavailable,
+    embedder_available,
+    recipient_of,
+)
 from assistant.logs import error_text
 from assistant.memory.fold import fold, tokens, translit
 from assistant.qa.retrieval import rrf
@@ -95,17 +102,58 @@ class SearchResult:
     semantic: bool
 
 
-async def embed_query(embedder: ChunkEmbedder, query: str, seconds: float) -> list[float] | None:
-    """The query's vector, or None when search by meaning can't run now (spec 8.1). No DB here."""
-    if not embedder.dim or not query.strip():
+async def query_embedding_allowed(session: AsyncSession, user_id: int,
+                                  embedder: ChunkEmbedder) -> bool:  # fmt: skip
+    """May this person's query go to the embedder? Yes for one in KZ (TEI); for one abroad
+    (DeepInfra) only when their active ai_cross_border grant lists it (spec 5.1, R-02)."""
+    if not embedder_available(embedder):
+        return False
+    recipient = recipient_of(embedder)
+    if recipient is None:
+        return True
+    providers = await ai_consent_providers(session, user_id)
+    return providers is not None and recipient.lower() in providers
+
+
+async def embed_query(embedder: ChunkEmbedder, query: str, seconds: float, *,
+                      allowed: bool = True) -> list[float] | None:  # fmt: skip
+    """The query's vector, or None when search by meaning can't run now (spec 8.1). No DB here:
+    `allowed` comes from `query_embedding_allowed`, checked by the caller before."""
+    if not allowed or not embedder_available(embedder) or not query.strip():
         return None
+    call = asyncio.ensure_future(embedder.embed([query], "query"))
     try:
-        async with asyncio.timeout(seconds):
-            vectors = await embedder.embed([query], "query")
+        vectors = await asyncio.wait_for(asyncio.shield(call), seconds)
+    except EmbedderUnavailable:  # switched off (no balance...): logged once by the embedder
+        return None
     except Exception as exc:  # slow or down: words and typos still answer
-        log.warning("query embedding failed: %s", error_text(exc) or type(exc).__name__)
+        if isinstance(exc, TimeoutError) and hasattr(embedder, "available"):
+            # A remote embedder: let the call finish in the background, so a 402 still switches
+            # it off and the connection stays warm for the next query. Nobody waits for it.
+            call.add_done_callback(_drop_result)
+        else:
+            call.cancel()
+        _warn_query_failure(exc)
         return None
     return vectors[0] if vectors else None
+
+
+_last_query_warning = 0.0
+QUERY_WARNING_EVERY_S = 60.0
+
+
+def _drop_result(task: "asyncio.Future[list[list[float]]]") -> None:
+    if not task.cancelled():
+        task.exception()  # retrieved: no "exception was never retrieved"
+
+
+def _warn_query_failure(exc: BaseException) -> None:
+    """At most one warning a minute: a slow embedder must not flood the log with every search."""
+    global _last_query_warning
+    now = time.monotonic()
+    if now - _last_query_warning >= QUERY_WARNING_EVERY_S:
+        _last_query_warning = now
+        log.warning("query embedding failed: %s", error_text(exc) or type(exc).__name__)
 
 
 def tsquery_text(words: list[str]) -> str:
