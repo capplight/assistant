@@ -518,8 +518,8 @@ describe('copy', () => {
     await renderRouter(APP_DIR, { initialUrl: `/page/${doc.id}` });
     await settle(() => screen.queryByTestId('docs-empty') !== null);
     expect(screen.queryByText('Например: сделай КП по этому ТЗ')).toBeNull();
-    const input = screen.getByTestId('assistant-input');
-    expect(input.props.accessibilityHint).toBe('Например: что я обещал ТОО Арман?');
+    // Ф-82: no assistant strip on «Документы» (§11.12 «Нет: документ»).
+    expect(screen.queryByTestId('assistant-input')).toBeNull();
   });
 
   it('the top notice goes after 3 s (Ф-67, Ф-75)', async () => {

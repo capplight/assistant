@@ -5,7 +5,6 @@ import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'rea
 import { useTheme } from '@/theme';
 
 import { AppText } from '../AppText';
-import { Button } from './Button';
 import { Icon } from './Icon';
 
 export type ToastAction = { key: string; label: string; onPress: () => void; testID?: string; accessibilityLabel?: string };
@@ -25,7 +24,7 @@ type Props = {
 };
 
 /**
- * Toast v2 = SaveToast (design-system v2 §5): above the capsule, `surfaceRaised` + floating shadow, radius 22. With
+ * Toast v5: the same inverse capsule as the notice (`noticeBg`, radius 18, 600 15), above the assistant strip. With
  * actions it has two lines (min 72): ✓ text ✕ on top, the text buttons («Переложить · Отменить») bottom right; a plain
  * toast is one line (min 48). Timing (6 s, longer for a screen reader) belongs to the caller (`UndoStrip`, `ToastHost`).
  */
@@ -40,23 +39,23 @@ export function ToastBar({ text, success, actions = [], onClose, closeLabel, tex
       style={[
         styles.bar,
         {
-          minHeight: actions.length > 1 ? theme.size.toastMinHeight : theme.size.toastHeight + 4,
-          borderRadius: theme.radius.xl,
-          backgroundColor: theme.colors.surfaceRaised,
-          paddingLeft: theme.space[4],
+          minHeight: actions.length > 1 ? theme.size.toastMinHeight : 54,
+          borderRadius: 18,
+          backgroundColor: theme.colors.noticeBg,
+          paddingLeft: 16,
           paddingRight: onClose ? 0 : theme.space[2],
           paddingVertical: column ? theme.space[2] : theme.space[1],
           gap: column ? 0 : theme.space[2],
           flexDirection: column ? 'column' : 'row',
           alignItems: column ? 'stretch' : 'center',
         },
-        theme.elevation.floating,
+        { shadowColor: '#000000', shadowOffset: { width: 0, height: 14 }, shadowRadius: 30, shadowOpacity: 0.5, elevation: 12 },
         style,
       ]}
     >
       <View style={[styles.row, styles.grow, { gap: theme.space[2] }]}>
-        {success ? <Icon icon={CircleCheck} size="md" color="success" /> : null}
-        <AppText testID={textTestID} variant={column ? 'bodyStrong' : 'callout'} color="ink" style={[styles.grow, column ? { fontSize: 15, lineHeight: 20 } : null]}>
+        {success ? <Icon icon={CircleCheck} size="md" color={theme.colors.noticeInk} /> : null}
+        <AppText testID={textTestID} style={[styles.grow, { color: theme.colors.noticeInk, fontFamily: theme.type.sheetMeta.fontFamily, fontSize: 15, lineHeight: 19 }]}>
           {text}
         </AppText>
         {column && onClose ? <Close onPress={onClose} label={closeLabel} /> : column ? <View style={{ width: theme.space[2] }} /> : null}
@@ -64,14 +63,16 @@ export function ToastBar({ text, success, actions = [], onClose, closeLabel, tex
       {actions.length > 0 || (!column && onClose) ? (
         <View style={[styles.row, styles.wrap]}>
           {actions.map((a) => (
-            <Button
+            <Pressable
               key={a.key}
               testID={a.testID}
-              label={a.label}
-              accessibilityLabel={a.accessibilityLabel}
-              variant="text"
+              accessibilityRole="button"
+              accessibilityLabel={a.accessibilityLabel ?? a.label}
               onPress={a.onPress}
-            />
+              style={{ minHeight: theme.size.minTouch, justifyContent: 'center', paddingHorizontal: 10 }}
+            >
+              <AppText style={{ color: theme.colors.noticeInk, fontFamily: theme.type.title.fontFamily, fontSize: 15, lineHeight: 19, textDecorationLine: 'underline' }}>{a.label}</AppText>
+            </Pressable>
           ))}
           {!column && onClose ? <Close onPress={onClose} label={closeLabel} /> : null}
         </View>
@@ -90,7 +91,7 @@ function Close({ onPress, label }: { onPress: () => void; label?: string }) {
       onPress={onPress}
       style={[styles.close, { width: theme.size.minTouch, height: theme.size.minTouch }]}
     >
-      <Icon icon={X} size="sm" color="iconSecondary" />
+      <Icon icon={X} size="sm" color={theme.colors.noticeInk} />
     </Pressable>
   );
 }

@@ -1,14 +1,16 @@
 import { router } from 'expo-router';
-import { ArrowUp, Mic, PencilLine, Plus } from 'lucide-react-native';
+import { ArrowUp, MessageSquareText, Mic, PencilLine, Plus } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { AccessibilityInfo, Animated, Easing, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
 
 import { caught } from '@/chat/caught';
 import { chatAllowed, sendFromLine, showSavedToast } from '@/chat/service';
 import { kpFromPhrase, looksLikeKp } from '@/kp/start';
 import { getCapture } from '@/services';
-import { MAX_FONT_SCALE, useTheme } from '@/theme';
+import { askBar, MAX_FONT_SCALE, motionV5, reducedMotionFade, useTheme } from '@/theme';
+import { useChrome } from '@/store/chrome';
+import { useUndo } from '@/store/undo';
 import { useAssistant } from '@/store/assistant';
 import { useConnectivity } from '@/store/connectivity';
 import { selectNoAi, useOnboarding } from '@/store/onboarding';
@@ -40,12 +42,22 @@ import { VoiceListening } from './VoiceListening';
 /** «Составь план поездки…», «сделай план на неделю» — answered in the chat (VISION-2026-11 §5.4). */
 export const PLAN_PHRASE = /^\s*((составь|сделай|придумай|разложи)\s+(мне\s+)?(план|мои\s+дела)|жоспар\s+құр)/i;
 
+/**
+ * v5 (Ф-81, Ф-82 variant C, design-system §11.12): on the tab screens the line is the `strip` — 48 (56 large font),
+ * `paper` with a 1.5 `ink` border, the terracotta 9 dp dot, the place's own hint, the `btn` mic / «Записать»; it
+ * folds into a 48 circle on the right while the list scrolls down (`useChrome().askCollapsed`). On «Помощник» it is
+ * the `full` field 56 with «+» (as in the mocks).
+ */
 export function AssistantLine({
   scope,
   compact = false,
   keyboardHeight = 0,
-}: { scope?: 'all'; compact?: boolean; keyboardHeight?: number } = {}) {
+  variant = 'full',
+  placeholderText,
+  testID = 'assistant-line',
+}: { scope?: 'all'; compact?: boolean; keyboardHeight?: number; variant?: 'strip' | 'full'; placeholderText?: string; testID?: string } = {}) {
   const theme = useTheme();
+  const strip = variant === 'strip';
   const { height: windowHeight } = useWindowDimensions();
   const { t } = useTranslation();
   const current = useCurrentPage();
@@ -57,6 +69,13 @@ export function AssistantLine({
   const showToast = useToast((s) => s.show);
   const [text, setText] = useState('');
   const [addOpen, setAddOpen] = useState(false);
+  // v5: on the tabs «+» lives on the sheet of the page (the strip has only the dot and the mic).
+  const addRequest = useChrome((st) => st.addRequest);
+  const [seenAdd, setSeenAdd] = useState(addRequest);
+  if (seenAdd !== addRequest) {
+    setSeenAdd(addRequest);
+    setAddOpen(true);
+  }
   // v2 «ввод»: a brand ring while the field has the focus; the chips show while it is empty.
   const [focused, setFocused] = useState(false);
   // «Я в магазине»: only a «Написать» strip and the mic until the person starts writing.
@@ -120,7 +139,9 @@ export function AssistantLine({
   // v2 mocks: «Спросите или запишите что угодно»; on «Расходы» an example of a spending.
   const placeholder = noAi
     ? t('line.no_ai_hint')
-    : current.kind === 'assistant'
+    : placeholderText
+      ? placeholderText
+      : current.kind === 'assistant'
       ? t('line.placeholder_assistant')
       : current.kind === 'page' && current.page.templateKey === 'expenses'
         ? t('line.placeholder_expenses')
@@ -210,15 +231,18 @@ export function AssistantLine({
         styles.input,
         {
           color: theme.colors.ink,
-          minHeight: theme.size.minTouch,
+          fontFamily: theme.type.chat.fontFamily,
+          fontSize: theme.m.ask.fontSize,
+          minHeight: strip ? theme.m.ask.height - 4 : theme.size.minTouch,
           maxHeight: inputMax,
-          paddingHorizontal: theme.space[2],
+          paddingHorizontal: strip ? 0 : theme.space[1],
+          paddingVertical: strip ? 10 : 12,
         },
       ]}
     >
       {segments
         ? segments.map((sg, i) => (
-            <Text key={i} style={sg.lit ? { backgroundColor: theme.colors.brandTint, color: theme.colors.brand } : undefined}>
+            <Text key={i} style={sg.lit ? { backgroundColor: theme.colors.paper2, color: theme.colors.ink } : undefined}>
               {sg.text}
             </Text>
           ))
@@ -229,11 +253,11 @@ export function AssistantLine({
   // The Pressable is the 48 target; the visible circle inside is 40 (mic / send) or 36 («+»).
   const target = { width: theme.size.minTouch, height: theme.size.minTouch };
   const circle = (d: number, bg: string) => [styles.round, { width: d, height: d, borderRadius: d / 2, backgroundColor: bg }];
-  const mic = theme.size.assistantMic;
+  const mic = strip ? theme.m.ask.mic : 42;
   const iconPx = theme.size.iconSm;
   const stroke = theme.icon.strokeWidth;
 
-  const glow = { shadowColor: theme.colors.brand, shadowOffset: { width: 0, height: 3 }, shadowRadius: 10, shadowOpacity: 0.5, elevation: 4 };
+  const glow = null;
   // Right button: «Отправить» when typed; mic otherwise; «Написать» in «Без ИИ» (no voice, R-05).
   const right =
     text.trim().length > 0 ? (
@@ -259,8 +283,8 @@ export function AssistantLine({
         }}
         style={[styles.round, target]}
       >
-        <View style={circle(mic, theme.colors.brandTint)}>
-          <PencilLine size={iconPx} color={theme.colors.brand} strokeWidth={stroke} />
+        <View style={circle(mic, theme.colors.btn)}>
+          <PencilLine size={iconPx} color={theme.colors.onBtn} strokeWidth={stroke} />
         </View>
       </Pressable>
     ) : (
@@ -279,11 +303,30 @@ export function AssistantLine({
     );
 
   // design-system v2 §4: the mic (and send) carry the `brandGlow`; the capsule edge glows while listening.
-  const ring = listening
-    ? { borderWidth: 2, borderColor: theme.colors.brand, shadowColor: theme.colors.brand, shadowRadius: 26, shadowOpacity: 0.6, shadowOffset: { width: 0, height: 0 } }
-    : focused
-      ? { borderWidth: 2, borderColor: theme.colors.brand }
-      : { borderWidth: 2, borderColor: 'transparent' };
+  // v5: always the 1.5 `ink` outline (no glow), like the field of «Помощник».
+  const ring = { borderWidth: askBar.border, borderColor: theme.colors.ink };
+  // Ф-82: the strip never folds while focused, with a draft, during voice, with a notice or an answer on screen,
+  // or with a screen reader on.
+  const noticeShown = useUndo((st) => st.strip !== null);
+  const bannerShown = useAssistant((st) => st.banner !== null);
+  const [screenReader, setScreenReader] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void AccessibilityInfo.isScreenReaderEnabled?.()
+      .then((v) => {
+        if (alive) setScreenReader(v);
+      })
+      .catch(() => undefined);
+    const sub = AccessibilityInfo.addEventListener?.('screenReaderChanged', setScreenReader);
+    return () => {
+      alive = false;
+      sub?.remove();
+    };
+  }, []);
+  const pinned = focused || text.trim().length > 0 || listening || noticeShown || bannerShown || screenReader;
+  useEffect(() => {
+    if (strip) useChrome.getState().setAskPinned(pinned);
+  }, [strip, pinned]);
   const showChips = scope !== 'all' && focused && text.trim().length === 0 && !listening && consentGiven;
 
   const plus = (
@@ -294,89 +337,204 @@ export function AssistantLine({
       onPress={() => setAddOpen(true)}
       style={[styles.round, target]}
     >
-      <View style={circle(theme.size.assistantPlus, theme.colors.surfaceSunken)}>
-        <Plus size={iconPx} color={theme.colors.ink2} strokeWidth={stroke} />
+      <View style={circle(theme.size.assistantPlus, 'transparent')}>
+        <Plus size={22} color={theme.colors.ink} strokeWidth={stroke} />
       </View>
     </Pressable>
   );
 
-  return (
-    <>
-    {seen && (seen.day || seen.time) ? <CaughtCard c={seen} /> : null}
-    {showChips ? (
-      <LineChips
-        kind={current.kind === 'page' ? current.page.templateKey : current.kind === 'assistant' ? 'assistant' : 'today'}
-        onPick={(phrase) => {
-          setText(phrase);
-          inputRef.current?.focus();
-        }}
-      />
-    ) : null}
-    <View
-      testID="assistant-line"
-      style={[
-        {
-          backgroundColor: theme.colors.surfaceSolid,
-          // Round while one line high; a grown capsule (listening, 200 %, a long phrase) keeps soft corners.
-          borderRadius: theme.size.assistantCapsule / 2,
-          marginHorizontal: theme.size.tabBarInset,
-          padding: 2,
-          gap: theme.space[1],
-          minHeight: theme.size.assistantCapsule,
-        },
-        theme.elevation.floating,
-        ring,
-      ]}
-    >
-      {voice.status === 'denied' ? (
-        <View style={[styles.row, { gap: theme.space[2], paddingLeft: theme.space[3] }]} accessibilityLiveRegion="polite">
-          <AppText variant="callout" style={styles.flex}>
-            {t('voice.denied')}
-          </AppText>
-          <Button
-            testID="voice-denied-write"
-            label={t('line.write')}
-            variant="text"
-            onPress={() => {
-              voice.resetDenied();
-              setListening(false);
-              inputRef.current?.focus();
-            }}
-          />
-        </View>
-      ) : null}
-      {listening ? (
-        <VoiceListening
-          elapsedMs={voice.elapsedMs}
-          level={voice.level}
-          continuing={voice.continuing}
-          kkBeta={language === 'kk'}
-          onDone={() => void voice.finish()}
-          onCancel={() => {
+  const h = strip ? theme.m.ask.height : 56;
+  const dot = <View testID="assistant-dot" style={[styles.dot, { backgroundColor: theme.colors.place.assistant }]} />;
+  const denied =
+    voice.status === 'denied' ? (
+      <View style={[styles.row, { gap: theme.space[2], paddingLeft: theme.space[3] }]} accessibilityLiveRegion="polite">
+        <AppText variant="callout" style={styles.flex}>
+          {t('voice.denied')}
+        </AppText>
+        <Button
+          testID="voice-denied-write"
+          label={t('line.write')}
+          variant="text"
+          onPress={() => {
+            voice.resetDenied();
             setListening(false);
-            void voice.cancel();
+            inputRef.current?.focus();
           }}
         />
-      ) : folded ? (
-        <View testID="assistant-line-folded" style={[styles.row, { gap: theme.space[2], justifyContent: 'space-between', paddingLeft: theme.space[3] }]}>
-          <View style={styles.flex}>{openField}</View>
-          {right}
-        </View>
-      ) : (
-        // The field grows upwards (4 lines, 3 at ≥150 %); [+] and mic / send stay at its bottom edge.
-        <View testID="assistant-line-row" style={[styles.row, styles.end]}>
-          {plus}
-          <View style={styles.flex}>{field}</View>
-          {right}
-        </View>
-      )}
-      <AddSheet
-        visible={addOpen}
-        onClose={() => setAddOpen(false)}
-        expensesPageId={current.kind === 'page' && current.page.templateKey === 'expenses' ? current.page.id : null}
-      />
+      </View>
+    ) : null;
+  const content = listening ? (
+    <VoiceListening
+      elapsedMs={voice.elapsedMs}
+      level={voice.level}
+      continuing={voice.continuing}
+      kkBeta={language === 'kk'}
+      onDone={() => void voice.finish()}
+      onCancel={() => {
+        setListening(false);
+        void voice.cancel();
+      }}
+      variant={strip ? 'strip' : 'full'}
+      onText={() => {
+        setListening(false);
+        void voice.cancel();
+        inputRef.current?.focus();
+      }}
+    />
+  ) : folded ? (
+    <View testID="assistant-line-folded" style={[styles.row, { gap: theme.space[2], justifyContent: 'space-between', paddingLeft: theme.space[3] }]}>
+      <View style={styles.flex}>{openField}</View>
+      {right}
     </View>
+  ) : strip ? (
+    // v5 strip: dot · hint / field · mic or «Записать».
+    <View
+      testID="assistant-line-row"
+      style={[styles.row, styles.end, { minHeight: h - 2 * askBar.border, paddingLeft: theme.m.ask.padLeft - 2, paddingRight: askBar.padRight - 6, gap: theme.m.ask.gap - 2 }]}
+    >
+      <View style={{ height: h - 2 * askBar.border, justifyContent: 'center' }}>{dot}</View>
+      <View style={styles.flex}>{field}</View>
+      {right}
+    </View>
+  ) : (
+    // The field grows upwards; [+] and mic / send stay at its bottom edge.
+    <View testID="assistant-line-row" style={[styles.row, styles.end, { paddingLeft: 6 }]}>
+      {plus}
+      <View style={styles.flex}>{field}</View>
+      {right}
+    </View>
+  );
+
+  return (
+    <>
+      {seen && (seen.day || seen.time) ? <CaughtCard c={seen} /> : null}
+      {showChips ? (
+        <LineChips
+          kind={current.kind === 'page' ? current.page.templateKey : current.kind === 'assistant' ? 'assistant' : 'today'}
+          onPick={(phrase) => {
+            setText(phrase);
+            inputRef.current?.focus();
+          }}
+        />
+      ) : null}
+      <AskFold
+        testID={testID}
+        enabled={strip && !listening && voice.status !== 'denied'}
+        height={h}
+        inset={strip ? theme.m.ask.inset : 12}
+        bubbleLabel={t('ask.bubble_a11y', { hint: placeholder.replace(/…$/, '') })}
+        onOpen={() => inputRef.current?.focus()}
+        style={[{ backgroundColor: theme.colors.paper, borderRadius: listening ? 24 : h / 2, minHeight: h, gap: theme.space[1] }, listening && !strip ? null : askBar.elevation, listening && !strip ? null : ring]}
+      >
+        {denied}
+        {content}
+        <AddSheet
+          visible={addOpen}
+          onClose={() => setAddOpen(false)}
+          expensesPageId={current.kind === 'page' && current.page.templateKey === 'expenses' ? current.page.id : null}
+        />
+      </AskFold>
     </>
+  );
+}
+
+/**
+ * The strip ↔ circle of Ф-82: folds when `useChrome().askCollapsed` (the scroll rules), anchored right; 200 ms
+ * collapse / 240 ms expand, curve (0.2, 0, 0, 1), text out first and the icon in last. Reduced motion: a 150 ms
+ * linear cross-fade, no width change. A tap on the circle opens the strip and focuses the field.
+ */
+function AskFold({
+  enabled,
+  height,
+  inset,
+  bubbleLabel,
+  onOpen,
+  style,
+  testID,
+  children,
+}: {
+  enabled: boolean;
+  height: number;
+  inset: number;
+  bubbleLabel: string;
+  onOpen: () => void;
+  style: StyleProp<ViewStyle>;
+  testID: string;
+  children: React.ReactNode;
+}) {
+  const theme = useTheme();
+  const { t } = useTranslation();
+  const collapsed = useChrome((s) => s.askCollapsed) && enabled;
+  const [reduced, setReduced] = useState(false);
+  const [width, setWidth] = useState(0);
+  const [p] = useState(() => new Animated.Value(1));
+  useEffect(() => {
+    let alive = true;
+    void AccessibilityInfo.isReduceMotionEnabled?.()
+      .then((v) => {
+        if (alive) setReduced(v);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
+  useEffect(() => {
+    const a = Animated.timing(p, {
+      toValue: collapsed ? 0 : 1,
+      duration: reduced ? reducedMotionFade : collapsed ? motionV5.askCollapse : motionV5.askExpand,
+      easing: reduced ? Easing.linear : Easing.bezier(0.2, 0, 0, 1),
+      useNativeDriver: false,
+    });
+    a.start();
+    return () => a.stop();
+  }, [collapsed, reduced, p]);
+
+  if (!enabled)
+    return (
+      <View testID={testID} style={[{ marginHorizontal: inset }, style]}>
+        {children}
+      </View>
+    );
+
+  const textOpacity = p.interpolate({ inputRange: [0.55, 1], outputRange: [0, 1], extrapolate: 'clamp' });
+  const iconOpacity = reduced
+    ? p.interpolate({ inputRange: [0, 1], outputRange: [1, 0] })
+    : p.interpolate({ inputRange: [0, 0.4], outputRange: [1, 0], extrapolate: 'clamp' });
+  return (
+    <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)} pointerEvents="box-none" style={{ marginHorizontal: inset, alignItems: 'flex-end' }}>
+      <Animated.View
+        testID={testID}
+        pointerEvents={collapsed ? 'none' : 'auto'}
+        accessibilityElementsHidden={collapsed}
+        importantForAccessibility={collapsed ? 'no-hide-descendants' : 'auto'}
+        style={[
+          style,
+          styles.clip,
+          reduced || width === 0 ? { width: '100%', opacity: reduced ? p : 1 } : { width: p.interpolate({ inputRange: [0, 1], outputRange: [height, width] }) },
+        ]}
+      >
+        <Animated.View style={{ width: width > 0 ? width - 0 : '100%', alignSelf: 'flex-end', opacity: reduced ? 1 : textOpacity }}>{children}</Animated.View>
+      </Animated.View>
+      {collapsed ? (
+        <Animated.View style={[styles.bubbleWrap, { opacity: iconOpacity }]}>
+          <Pressable
+            testID={`${testID}-bubble`}
+            accessibilityRole="button"
+            accessibilityLabel={bubbleLabel}
+            accessibilityHint={t('ask.bubble_hint')}
+            onPress={() => {
+              useChrome.getState().setAskCollapsed(false);
+              onOpen();
+            }}
+            style={[styles.bubble, { width: height, height, borderRadius: height / 2, backgroundColor: theme.colors.paper, borderColor: theme.colors.ink }, askBar.elevation]}
+          >
+            <MessageSquareText size={22} color={theme.colors.ink} strokeWidth={theme.icon.strokeWidth} />
+            <View style={[styles.bubbleDot, { backgroundColor: theme.colors.place.assistant, borderColor: theme.colors.paper }]} />
+          </Pressable>
+        </Animated.View>
+      ) : null}
+    </View>
   );
 }
 
@@ -388,4 +546,9 @@ const styles = StyleSheet.create({
   open: { justifyContent: 'center' },
   input: { paddingVertical: 12 },
   round: { alignItems: 'center', justifyContent: 'center' },
+  dot: { width: askBar.dot, height: askBar.dot, borderRadius: askBar.dot / 2 },
+  clip: { overflow: 'hidden' },
+  bubbleWrap: { position: 'absolute', right: 0, bottom: 0 },
+  bubble: { alignItems: 'center', justifyContent: 'center', borderWidth: askBar.border },
+  bubbleDot: { position: 'absolute', right: 3, top: 3, borderWidth: 2, width: askBar.dot + 4, height: askBar.dot + 4, borderRadius: (askBar.dot + 4) / 2 },
 });

@@ -36,12 +36,13 @@ describe('main navigation', () => {
 
     const check = () => {
       expect(screen.getByTestId('assistant-line')).toBeTruthy();
-      expect(screen.getByTestId('assistant-plus')).toBeTruthy();
+      // v5 strip (Ф-82): the terracotta dot instead of «+» («+» is on the page sheet).
+      expect(screen.queryByTestId('assistant-dot') ?? screen.queryByTestId('assistant-plus')).toBeTruthy();
       expect(screen.getByTestId('assistant-input')).toBeTruthy();
       expect(screen.getByTestId('assistant-mic')).toBeTruthy();
       expect(screen.queryByTestId('context-chip')).toBeNull();
       expect(screen.queryByText(/^Про:/)).toBeNull();
-      expect(screen.getByTestId('assistant-input').props.accessibilityLabel).toBe('Помощник. Скажите или напишите');
+      expect(screen.getByTestId('assistant-input').props.accessibilityLabel).toBe('Строка помощника');
     };
 
     check();
@@ -94,8 +95,8 @@ describe('main navigation', () => {
     expect(r.getPathname()).toBe('/history');
     expect(screen.getByText('История')).toBeTruthy();
     expect(screen.getByText('Вы: «Купить хлеб»')).toBeTruthy();
-    // Same assistant line in «История», no scope label (Ф-47).
-    expect(screen.getByTestId('assistant-input')).toBeTruthy();
+    // Ф-82: no assistant strip on «История» (the journal); no scope label anywhere (Ф-47).
+    expect(screen.queryByTestId('assistant-input')).toBeNull();
     expect(screen.queryByTestId('context-chip')).toBeNull();
   });
 
@@ -122,14 +123,14 @@ describe('main navigation', () => {
     expect(screen.getByTestId('assistant-write')).toBeTruthy();
   });
 
-  it('large font (≥150%): «Сегодня · Помощник · Ещё» (VISION-2026-11)', async () => {
+  it('large font (≥150%): the same five tabs (v5 §11.5, labels capped at 13)', async () => {
     const spy = jest
       .spyOn(Dimensions, 'get')
       .mockImplementation(() => ({ width: 360, height: 640, scale: 2, fontScale: 1.6 }));
     try {
       await renderRouter(APP_DIR, { initialUrl: '/' });
       const tabs = within(screen.getByTestId('bottom-tabs')).getAllByRole('tab');
-      expect(tabs.map((x) => x.props.testID)).toEqual(['tab-today', 'tab-assistant', 'tab-more']);
+      expect(tabs.map((x) => x.props.testID)).toEqual(['tab-today', expect.stringMatching(/^tab-/), 'tab-assistant', 'tab-expenses', 'tab-more']);
     } finally {
       spy.mockRestore();
     }

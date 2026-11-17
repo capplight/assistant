@@ -7,20 +7,21 @@ import { AppText } from '../AppText';
 import { hitSlopFor, pressedStyle } from './motion';
 
 /**
- * - `primary`   brand fill, onBrand label — one per screen;
- * - `secondary` tonal: brandTint fill, brand label (replaces the old outline buttons);
- * - `text`      brand label only.
- * `tone="highlight"` is for buttons on the sun card «Дальше»: primary = dark `onHighlight` with sun text,
- * secondary = translucent white.
+ * v5 buttons (design-system §11.3, screens-v5 `.btn`): everything you press is `btn` — black in light, light in dark.
+ * - `primary`   `btn` fill, `onBtn` label, 52 / radius 26 (small 42 / 21) — one per screen;
+ * - `secondary` outline 1.5 `ink`, `ink` label («Не удалять», «Изменить»);
+ * - `text`      `ink` label 700 only («Закрыть»); `link` adds the underline («Восстановить», «Переложить»);
+ * - `danger`    `danger` fill — ONLY irreversible actions («Удалить навсегда»).
+ * `tone` is a v2 prop and is ignored.
  */
-export type ButtonVariant = 'primary' | 'secondary' | 'text';
+export type ButtonVariant = 'primary' | 'secondary' | 'text' | 'link' | 'danger';
 
 export type ButtonProps = Omit<PressableProps, 'children' | 'style'> & {
   label: string;
   variant?: ButtonVariant;
   icon?: ReactNode;
   style?: StyleProp<ViewStyle>;
-  /** Defaults: 50 (primary / secondary), 36 for `size="small"`, 48 for `text`. The hit area is ≥48 anyway. */
+  /** Defaults: 52, 42 for `size="small"`, 48 for `text`. The hit area is ≥ 48 anyway. */
   minHeight?: number;
   size?: 'regular' | 'small';
   /** «Удалить»: the label is `danger`. */
@@ -28,7 +29,7 @@ export type ButtonProps = Omit<PressableProps, 'children' | 'style'> & {
   tone?: 'default' | 'highlight';
 };
 
-/** Button with a visible label; wraps text instead of truncating; press = scale 0.97 + pressed colour. */
+/** Button with a visible label; wraps text instead of truncating; press = scale 0.97. */
 export function Button({
   label,
   variant = 'primary',
@@ -37,31 +38,24 @@ export function Button({
   minHeight,
   size = 'regular',
   labelColor,
-  tone = 'default',
   disabled,
   accessibilityLabel,
   hitSlop,
+  tone: _tone,
   ...rest
 }: ButtonProps) {
   const theme = useTheme();
   const { colors } = theme;
-  const onSun = tone === 'highlight';
+  const plain = variant === 'text' || variant === 'link';
   const fill = (pressed: boolean): string => {
-    if (variant === 'text') return pressed ? colors.surfaceSunken : 'transparent';
-    if (onSun) return variant === 'primary' ? colors.onHighlight : 'rgba(255,255,255,0.45)';
-    if (variant === 'primary') return pressed ? colors.brandPressed : colors.brand;
-    return colors.brandTint;
+    if (plain) return pressed ? colors.paper2 : 'transparent';
+    if (variant === 'primary') return pressed ? colors.ink2 : colors.btn;
+    if (variant === 'danger') return colors.danger;
+    return pressed ? colors.paper2 : 'transparent';
   };
-  const fg: keyof ColorTokens = labelColor
-    ? labelColor
-    : onSun
-      ? variant === 'primary'
-        ? 'highlight'
-        : 'onHighlight'
-      : variant === 'primary'
-        ? 'onBrand'
-        : 'brand';
-  const height = minHeight ?? (variant === 'text' ? theme.size.minTouch : size === 'small' ? theme.size.buttonHeightSmall : theme.size.buttonHeight);
+  const fg: keyof ColorTokens = labelColor ? labelColor : variant === 'primary' ? 'onBtn' : variant === 'danger' ? 'onDanger' : 'ink';
+  const small = size === 'small';
+  const height = minHeight ?? (plain ? theme.size.minTouch : small ? theme.size.buttonHeightSmall : theme.size.buttonHeight);
   return (
     <Pressable
       accessibilityRole="button"
@@ -74,18 +68,24 @@ export function Button({
         {
           minHeight: height,
           backgroundColor: fill(pressed),
-          borderRadius: theme.radius.round,
-          paddingHorizontal: variant === 'text' ? theme.space[3] : size === 'small' ? theme.space[4] : theme.space[5],
-          paddingVertical: size === 'small' ? theme.space[1] : theme.space[2],
+          borderRadius: plain ? theme.radius.round : height / 2,
+          paddingHorizontal: plain ? theme.space[2] : small ? theme.space[4] : 22,
+          paddingVertical: small ? theme.space[1] : theme.space[2],
           opacity: disabled ? 0.4 : 1,
+          gap: theme.space[2],
         },
+        variant === 'secondary' ? { borderWidth: 1.5, borderColor: labelColor ? colors.danger : colors.ink } : null,
         pressedStyle(pressed && !disabled),
         style,
       ]}
       {...rest}
     >
-      {icon ? <View style={{ marginRight: theme.space[2] }}>{icon}</View> : null}
-      <AppText variant="button" color={fg} style={styles.label}>
+      {icon ? <View>{icon}</View> : null}
+      <AppText
+        variant={small ? 'buttonSmall' : 'button'}
+        color={fg}
+        style={[styles.label, variant === 'link' ? styles.link : null, plain && !small ? { fontSize: 16 } : null]}
+      >
         {label}
       </AppText>
     </Pressable>
@@ -95,4 +95,5 @@ export function Button({
 const styles = StyleSheet.create({
   base: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   label: { textAlign: 'center', flexShrink: 1 },
+  link: { textDecorationLine: 'underline' },
 });

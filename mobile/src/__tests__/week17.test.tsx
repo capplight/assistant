@@ -74,7 +74,7 @@ describe('the assistant line above the keyboard at 200%, 320 × 568', () => {
     expect(style.height).toBeUndefined();
 
     // Mic, then send once there is text: 56 pt, at the bottom edge of a grown field.
-    for (const id of ['assistant-mic', 'assistant-plus']) {
+    for (const id of ['assistant-mic']) {
       const b = flat(id);
       expect(b.width).toBeGreaterThanOrEqual(48);
       expect(b.height).toBeGreaterThanOrEqual(48);
@@ -116,7 +116,7 @@ describe('the assistant line above the keyboard at 200%, 320 × 568', () => {
     // Order in the footer: what is above, then the line.
     const footer = screen.getByTestId('main-footer');
     const order = footer.children.filter((c): c is typeof footer => typeof c !== 'string').map((c) => c.props.testID);
-    expect(order.indexOf('footer-above-line')).toBeLessThan(order.indexOf('assistant-line'));
+    expect(order.indexOf('footer-above-line')).toBeLessThan(order.indexOf('assistant-strip-column'));
     // What the keyboard leaves: line + bounded strip still fit (chip 48 + field cap + paddings).
     const cap = StyleSheet.flatten(screen.getByTestId('assistant-input').props.style).maxHeight as number;
     expect(above.maxHeight + 48 + cap + 4 * 8).toBeLessThanOrEqual(NARROW.height - KB);

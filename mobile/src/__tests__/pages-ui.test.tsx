@@ -65,7 +65,8 @@ describe('S37 page', () => {
     await fireEvent.press(screen.getByTestId('more-records'));
     await settle(() => screen.queryByText('Нигде') !== null);
     expect(r.getPathname()).toBe('/records');
-    expect(screen.getByTestId('assistant-line')).toBeTruthy();
+    // Ф-82: the assistant strip is on the tabs and inside a place, not on the service lists.
+    expect(screen.queryByTestId('assistant-line')).toBeNull();
   });
 
   it('«Своя страница»: «Ещё» → name → the page opens; listed in «Ещё» (Ф-48 tabs are fixed); goes to the outbox; rename works', async () => {

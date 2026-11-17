@@ -1,19 +1,12 @@
-import { BlurView } from 'expo-blur';
 import type { ReactNode } from 'react';
-import { Platform, StyleSheet, View, type AccessibilityRole, type StyleProp, type ViewStyle } from 'react-native';
+import { Platform, View, type AccessibilityRole, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useTheme } from '@/theme';
 
-/**
- * Blur is cheap enough from Android 12 (API 31, RenderEffect) and on iOS; older / low-end Android gets the solid
- * `surfaceSolid` fill instead (design-system v2 §7 «Стекло и свечение на слабых Android»).
- */
+/** Kept for old imports: blur support of the device (v5 has no glass). */
 export const blurSupported = (): boolean => Platform.OS === 'ios' || (Platform.OS === 'android' && Number(Platform.Version) >= 31);
 
-/**
- * The glass of «Глубина» (design-system v2 §2 `surface`): a blur of what is behind + the 80 % tonal fill + a hairline.
- * In «Мята» it is just the given fill (cards are white there). Children sit above the blur.
- */
+/** v5: flat sheets — the given fill (default `paper2`), no blur, no hairline. */
 export function Glass({
   children,
   style,
@@ -28,30 +21,9 @@ export function Glass({
   accessibilityRole?: AccessibilityRole;
 }) {
   const theme = useTheme();
-  const dark = theme.scheme === 'dark';
-  const bg = fill ?? theme.colors.surface;
-  if (!dark) return (
-      <View testID={testID} accessibilityRole={accessibilityRole} style={[{ backgroundColor: bg }, style]}>
-        {children}
-      </View>
-    );
-  const edge = { borderWidth: 1, borderColor: theme.colors.glassBorder ?? 'transparent' };
-  if (!blurSupported()) return (
-      <View testID={testID} accessibilityRole={accessibilityRole} style={[style, { backgroundColor: theme.colors.surfaceSolid }, edge]}>
-        {children}
-      </View>
-    );
   return (
-    // The fill is drawn over the blur, not under it (an opaque parent would hide what the blur shows).
-    <View testID={testID} accessibilityRole={accessibilityRole} style={[styles.clip, style, styles.clear, edge]}>
-      <BlurView intensity={40} tint="dark" blurMethod="dimezisBlurViewSdk31Plus" style={StyleSheet.absoluteFill} />
-      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: bg }]} />
+    <View testID={testID} accessibilityRole={accessibilityRole} style={[{ backgroundColor: fill ?? theme.colors.surface }, style]}>
       {children}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  clip: { overflow: 'hidden' },
-  clear: { backgroundColor: 'transparent' },
-});

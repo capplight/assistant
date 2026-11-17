@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { AiLabel } from '@/components/AiLabel';
-import { Flag, Search } from 'lucide-react-native';
+import { Flag } from 'lucide-react-native';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AccessibilityInfo, findNodeHandle, ScrollView, StyleSheet, View } from 'react-native';
@@ -117,14 +117,11 @@ export default function HistoryScreen() {
 
   const days = shown.map((e) => dayTitle(e.at));
   return (
-    <Screen testID="history-screen" edges={['top']} scroll={false}>
-      <ScrollView ref={scrollRef} testID="chat-screen" contentContainerStyle={{ paddingTop: theme.space[4], paddingBottom: theme.size.contentEndGap, gap: theme.space[3] }} keyboardShouldPersistTaps="handled">
-        <Header
-          title={t('history.title')}
-          meta={t('history.meta')}
-          back={{ onPress: back, label: t('more.title'), testID: 'chat-collapse' }}
-          actions={[{ key: 'search', icon: Search, label: t('today.search'), onPress: () => router.navigate('/search'), testID: 'history-search' }]}
-        />
+    // v5: «История» is the assistant's journal — the terracotta sheet; only the title and «‹ Ещё» on it (no small text).
+    <Screen testID="history-screen" place="assistant" scrollRef={scrollRef}>
+        <Header title={t('history.title')} back={{ onPress: back, label: t('more.title'), testID: 'chat-collapse' }} />
+        <View testID="chat-screen" style={{ gap: theme.space[3] }}>
+        <AppText variant="small">{t('history.meta')}</AppText>
         <View accessibilityRole="tablist" style={[styles.chips, { gap: theme.space[2] }]}>
           {chips.map((c) => (
             <Chip
@@ -165,7 +162,7 @@ export default function HistoryScreen() {
             </View>
           );
         })}
-      </ScrollView>
+        </View>
 
       <Sheet testID="answer-menu" visible={menuFor !== null} onClose={() => setMenuFor(null)}>
         <ActionList

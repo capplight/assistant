@@ -69,7 +69,7 @@ export function ExpenseKeypad({
                   {
                     minHeight: theme.size.keypadKey,
                     borderRadius: theme.radius.md,
-                    backgroundColor: pressed ? theme.colors.surfaceSunken : theme.colors.surfaceRaised,
+                    backgroundColor: pressed ? theme.colors.line : theme.colors.paper2,
                     transform: pressed ? [{ scale: pressScale }] : undefined,
                   },
                   theme.elevation.card,

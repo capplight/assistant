@@ -16,10 +16,9 @@ function toneBg(theme: Theme, tone: CardTone): string {
   return { surface: c.surface, raised: c.surfaceRaised, sunken: c.surfaceSunken, brandTint: c.brandTint, highlight: c.highlight }[tone];
 }
 
-/** v2.1: the light card's 1 px green ring, the dark glass card's hairline (design-system v2 §4). */
-export function cardEdge(theme: Theme): ViewStyle | null {
-  if (theme.elevation.ring) return theme.elevation.ring;
-  return theme.colors.glassBorder ? { borderWidth: 1, borderColor: theme.colors.glassBorder } : null;
+/** v5: flat sheets — no rings or hairlines on cards. */
+export function cardEdge(_theme: Theme): ViewStyle | null {
+  return null;
 }
 
 type CardProps = {
@@ -33,20 +32,18 @@ type CardProps = {
   testID?: string;
 };
 
-/** `surface`, radius 18, the `card` shadow + green ring (light) or glass hairline (dark) (design-system v2 §4). */
+/** v5 inset block (`paper2`, radius 16, flat): banners, progress, the receipt. Other tones map to v5 roles. */
 export function Card({ children, tone = 'surface', padded = true, onPress, accessibilityLabel, style, testID }: CardProps) {
   const theme = useTheme();
   const base: StyleProp<ViewStyle> = [
     {
       backgroundColor: toneBg(theme, tone),
-      borderRadius: tone === 'highlight' ? theme.radius.xl : theme.radius.lg,
-      padding: padded ? theme.space[4] : 0,
+      borderRadius: 16,
+      paddingVertical: padded ? 12 : 0,
+      paddingHorizontal: padded ? 14 : 0,
     },
-    tone === 'surface' ? theme.elevation.card : null,
-    tone === 'surface' ? cardEdge(theme) : null,
   ];
-  // «Глубина»: a surface card is glass (blur + 80 % fill + hairline), design-system v2 §2.
-  const glass = tone === 'surface' && theme.scheme === 'dark';
+  const glass = false;
   if (!onPress)
     return glass ? (
       <Glass testID={testID} style={[base, style]}>
@@ -121,46 +118,41 @@ export function ListRow({
   testID,
 }: ListRowProps) {
   const theme = useTheme();
-  const lead =
-    left ??
-    (icon ? (
-      <View style={[styles.square, { backgroundColor: theme.colors.brandTint, borderRadius: theme.radius.sm }]}>
-        <Icon icon={icon} size="sm" color={danger ? 'danger' : 'brand'} />
-      </View>
-    ) : null);
+  // v5 `.ln`: a plain 22 icon in `ink` (no tinted square).
+  const lead = left ?? (icon ? <Icon icon={icon} size="md" color={danger ? 'danger' : 'ink'} /> : null);
   const body = (pressed: boolean) => (
     <View
       style={[
         styles.row,
         {
-          minHeight: meta ? theme.size.rowHeightMeta : theme.size.rowHeight,
-          paddingLeft: theme.space[3] + 2,
-          paddingRight: theme.space[3],
+          minHeight: meta ? theme.size.rowHeightMeta : theme.m.row,
           gap: theme.space[3],
-          backgroundColor: pressed ? withAlpha(theme.colors.surfaceSunken, 0.5) : 'transparent',
+          backgroundColor: pressed ? withAlpha(theme.colors.paper2, 0.8) : 'transparent',
           opacity: disabled ? 0.4 : 1,
         },
+        separator ? { borderBottomWidth: 1, borderBottomColor: theme.colors.line } : null,
       ]}
     >
       {lead}
       <View
         style={[
           styles.text,
-          { paddingVertical: theme.space[2] + 2 },
-          separator ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.separator } : null,
+          { paddingVertical: theme.space[2] },
         ]}
       >
         <View style={styles.flex}>
-          <AppText color={danger ? 'danger' : 'ink'}>{title}</AppText>
-          {meta ? <AppText variant="callout">{meta}</AppText> : null}
+          <AppText color={danger ? 'danger' : 'ink'} style={danger ? { fontFamily: theme.type.bodyStrong.fontFamily } : null}>
+            {title}
+          </AppText>
+          {meta ? <AppText variant="footnote">{meta}</AppText> : null}
         </View>
         {value !== undefined ? (
-          <AppText variant="number" color="ink2">
+          <AppText variant="small" color="ink3" style={{ fontVariant: ['tabular-nums'] }}>
             {value}
           </AppText>
         ) : null}
         {right}
-        {chevron ? <Icon icon={ChevronRight} size="sm" color="iconSecondary" /> : null}
+        {chevron ? <Icon icon={ChevronRight} size="sm" color="ink3" /> : null}
       </View>
     </View>
   );
@@ -187,20 +179,18 @@ export function ListRow({
 }
 
 
-/** A card of rows: inset dividers between rows, none after the last one. */
+/** v5: rows straight on the paper, a `line` between them; the title is a section head (17 bold). */
 export function ListGroup({ children, title, style, testID }: { children: ReactNode; title?: string; style?: StyleProp<ViewStyle>; testID?: string }) {
   const theme = useTheme();
   const rows = Children.toArray(children).filter(isValidElement) as ReactElement<ListRowProps>[];
   return (
-    <View style={[{ gap: theme.space[2] }, style]} testID={testID}>
+    <View style={[{ gap: 6 }, style]} testID={testID}>
       {title ? (
-        <AppText variant="sectionLabel" color="ink2" accessibilityRole="header" style={{ paddingHorizontal: theme.space[1] }}>
+        <AppText variant="section" accessibilityRole="header" style={{ marginTop: theme.space[3] }}>
           {title}
         </AppText>
       ) : null}
-      <Card padded={false} style={styles.clip}>
-        {rows.map((r, i) => (r.type === ListRow ? cloneElement(r, { separator: i < rows.length - 1 }) : r))}
-      </Card>
+      <View>{rows.map((r, i) => (r.type === ListRow ? cloneElement(r, { separator: i < rows.length - 1 }) : r))}</View>
     </View>
   );
 }

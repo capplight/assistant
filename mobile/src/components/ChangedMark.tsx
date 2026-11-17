@@ -1,4 +1,3 @@
-import { MessageCircleMore } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -12,7 +11,6 @@ import { useTasks } from '@/tasks/store';
 import { useTheme } from '@/theme';
 
 import { AppText } from './AppText';
-import { Button } from './ui/Button';
 import { hitSlopFor, pressedStyle } from './ui/motion';
 import { Sheet } from './ui/Sheet';
 
@@ -27,7 +25,8 @@ export function markFresh(at: string | null | undefined, now: number = Date.now(
 }
 
 /**
- * ChangedMark (design-system §10.3): a small emerald chat dot 14 with a glow and `caption` 600 «изменил помощник».
+ * ChangedMark v5 (design-system §11.3, `.chg`): the terracotta dot 9 and «изменил помощник» `mark` 13/700 in
+ * `assistantText`, no glow; lives 24 h.
  * A tap shows what changed and «Отменить» (`GET /v1/actions/{id}`, `POST …/undo`). Not a card on «Сегодня» (Ф-68).
  */
 export function ChangedMark({ at, actionId, testID }: { at: string | null | undefined; actionId: string | null | undefined; testID?: string }) {
@@ -46,15 +45,8 @@ export function ChangedMark({ at, actionId, testID }: { at: string | null | unde
         hitSlop={hitSlopFor(24)}
         style={({ pressed }) => [styles.row, { gap: 5, alignSelf: 'flex-start' }, pressedStyle(pressed)]}
       >
-        <View
-          style={[
-            styles.dot,
-            { backgroundColor: theme.colors.brand, shadowColor: theme.colors.brand, shadowOpacity: 0.6, shadowRadius: 5, shadowOffset: { width: 0, height: 0 }, elevation: 2 },
-          ]}
-        >
-          <MessageCircleMore size={9} color={theme.colors.onBrand} strokeWidth={2.4} />
-        </View>
-        <AppText variant="caption" color="brand" style={{ fontFamily: theme.type.eyebrow.fontFamily }}>
+        <View style={[styles.dot, { backgroundColor: theme.colors.place.assistant }]} />
+        <AppText variant="mark" color="assistantText">
           {t('changed.mark')}
         </AppText>
       </Pressable>
@@ -106,7 +98,9 @@ function ChangedSheet({ actionId, onClose }: { actionId: string; onClose: () => 
       ))}
       {action?.undoable && !action.undone_at ? (
         <View style={{ paddingTop: theme.space[2] }}>
-          <Button testID="changed-undo" label={t('common.undo')} variant="secondary" disabled={busy} onPress={() => void undo()} />
+          <Pressable testID="changed-undo" accessibilityRole="button" accessibilityLabel={t('common.undo')} disabled={busy} onPress={() => void undo()} style={({ pressed }) => [{ minHeight: theme.size.minTouch, justifyContent: 'center', opacity: busy ? 0.4 : 1 }, pressedStyle(pressed)]}>
+            <AppText style={{ color: theme.colors.assistantText, fontFamily: theme.type.headline.fontFamily, fontSize: 16 }}>{t('common.undo')}</AppText>
+          </Pressable>
         </View>
       ) : null}
     </Sheet>
@@ -115,5 +109,5 @@ function ChangedSheet({ actionId, onClose }: { actionId: string; onClose: () => 
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
-  dot: { width: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
+  dot: { width: 9, height: 9, borderRadius: 5 },
 });

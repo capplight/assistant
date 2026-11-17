@@ -42,27 +42,28 @@ afterEach(() => resetWindow());
 
 const pageOf = (k: string) => usePages.getState().pages.find((p) => p.templateKey === k)!;
 
-describe('tokens v2 (design-system v2 §2)', () => {
-  it('light: deeper mint page, white cards; dark: the one tonal scale and the lighter brand', () => {
-    expect(lightColors.bg).toBe('#D3ECDE');
-    expect(lightColors.surface).toBe('#FFFFFF');
-    expect(darkColors.bg).toBe('#051F20');
-    expect(darkColors.brand).toBe('#5FD6A8');
+describe('tokens v5 (Ф-79): stored sticker keys stay, they show as the v5 palette', () => {
+  it('old keys map through legacyStickerMap; the v5 sticker ink', () => {
+    expect(darkColors.paper).toBe('#1E1D23');
     expect(NOTE_COLOR_KEYS).toEqual(['white', 'yellow', 'peach', 'pink', 'lilac', 'blue', 'green']);
-    expect(lightNoteColors.lilac).toBe('#E6DDFB');
-    expect(noteInk.light.ink).toBe('#1F2B24');
+    expect(lightNoteColors.yellow).toBe('#EFE4CF'); // sand
+    expect(lightNoteColors.peach).toBe(lightNoteColors.pink); // rose
+    expect(lightNoteColors.green).toBe('#D4E8E2'); // mist
+    expect(lightNoteColors.lilac).toBe('#E2DFD8'); // graphite
+    expect(noteInk.light.ink).toBe('#1A191E');
+    expect(lightColors.paper).toBe('#FBF8F2');
   });
 });
 
 describe('Ф-48 tabs', () => {
-  it('«Сегодня · Заметки · Помощник · Расходы · Ещё»; at ≥150 % «Сегодня · Помощник · Ещё»; «Дела» are in «Ещё»', () => {
+  it('«Сегодня · Заметки · Помощник · Расходы · Ещё» at every font size; «Дела» are in «Ещё»', () => {
     const pages = usePages.getState().pages;
     const normal = mainTabs(pages, { largeFont: false, shopping: false });
     expect(normal.slots.map((s) => s.key)).toEqual(['notes', 'assistant', 'expenses']);
     expect(normal.overflow.map((p) => p.templateKey)).toContain('tasks');
+    // v5 (§11.5): the same five tabs at a large font — the labels are capped at 13 instead.
     const large = mainTabs(pages, { largeFont: true, shopping: false });
-    expect(large.slots.map((s) => s.key)).toEqual(['assistant']);
-    expect(large.overflow.map((p) => p.templateKey)).toContain('notes');
+    expect(large.slots.map((s) => s.key)).toEqual(['notes', 'assistant', 'expenses']);
   });
 
   it('«Расходы» is a tab even before the page exists; the first tap makes it and opens it', async () => {
@@ -80,26 +81,25 @@ describe('Ф-48 tabs', () => {
     await settle(() => screen.queryByTestId('exp-entry-sheet') !== null);
   });
 
-  it('the app shows 5 tabs, and 3 at font 200 %', async () => {
+  it('the app shows 5 tabs, also at font 200 % on 320 (v5: every tab keeps its word, capped at 13)', async () => {
     await renderRouter(APP_DIR, { initialUrl: '/' });
     expect(screen.getAllByRole('tab')).toHaveLength(5);
     expect(screen.getByTestId(`tab-${pageOf('notes').id}`)).toBeTruthy();
     resetWindow();
     setWindow({ fontScale: 2, width: 320, height: 568 });
     await renderRouter(APP_DIR, { initialUrl: '/' });
-    expect(screen.getAllByRole('tab')).toHaveLength(3);
-    expect(screen.queryByTestId(`tab-${pageOf('notes').id}`)).toBeNull();
+    expect(screen.getAllByRole('tab')).toHaveLength(5);
     expect(screen.getByTestId('tab-assistant')).toBeTruthy();
+    expect(screen.getByText('Помощник').props.maxFontSizeMultiplier * 11.5).toBeLessThanOrEqual(13.01);
   });
 
   it.each(AUDIT_MATRIX.map((w) => [`${w.width} @ ${w.fontScale}`, w] as const))('the bar fits %s', async (_n, w) => {
-    const count = w.fontScale >= 1.5 ? 3 : 5;
-    const m = tabBarMetrics({ windowWidth: w.width, count });
+    const m = tabBarMetrics({ windowWidth: w.width, count: 5, contentMaxWidth: 600 });
     expect(m.cell).toBeGreaterThanOrEqual(48);
     expect(m.pill).toBeLessThanOrEqual(m.cell);
-    expect(m.pill).toBeLessThanOrEqual(68);
-    // The widest label we have (KK «Шығындар», 8 letters at 11 pt ≈ 6.3 pt a letter) fits once shrunk to 0.7, ×1.5 cap.
-    expect(8 * 6.3 * Math.min(w.fontScale, 1.5) * 0.7).toBeLessThanOrEqual(m.label + 1);
+    expect(m.pill).toBeLessThanOrEqual(58);
+    // The widest label (KK «Шығындар», 8 letters, ≈ 7 dp a letter at 12) fits at the 13 dp cap once shrunk to 0.8.
+    expect(8 * 7 * (13 / 12) * 0.8).toBeLessThanOrEqual(m.label + 1);
     setWindow(w);
     await renderRouter(APP_DIR, { initialUrl: '/' });
     const v = auditLayout(screen.getByTestId('bottom-tabs').props ? screen.toJSON() : null).filter((x) => x.where.startsWith('tab'));
@@ -123,8 +123,9 @@ describe('Ф-49 no shopping list', () => {
 describe('«Сегодня» v2 — the briefing', () => {
   it('the brief, two tiles (v4: Потрачено · Новое); the headline follows the part of the day', async () => {
     await renderRouter(APP_DIR, { initialUrl: '/' });
-    expect(screen.getByTestId('today-brief')).toBeTruthy();
-    for (const id of ['tile-spent', 'tile-new']) expect(screen.getByTestId(id)).toBeTruthy();
+    // v5: the brief is the phrase on the yellow sheet; «Потрачено сегодня» is a section head (no metric tiles).
+    expect(screen.getByTestId('sheet-phrase')).toBeTruthy();
+    expect(screen.getByTestId('tile-spent')).toBeTruthy();
     expect(screen.queryByTestId('tile-tasks')).toBeNull();
     const t = (k: string, o?: Record<string, unknown>) => `${k}${o ? JSON.stringify(o) : ''}`;
     expect(dayPart(new Date(2026, 10, 13, 8).getTime())).toBe('morning');
@@ -148,12 +149,12 @@ describe('«Сегодня» v2 — the briefing', () => {
 describe('«+» and the statement leak (Ф-50, Ф-37)', () => {
   it('no «Появится позже»; on «Расходы» no statement while `statements_pdf` is off', async () => {
     await renderRouter(APP_DIR, { initialUrl: `/page/${pageOf('notes').id}` });
-    await fireEvent.press(screen.getByTestId('assistant-plus'));
+    await fireEvent.press(screen.getByTestId('page-add'));
     expect(screen.getByTestId('add-reminder')).toBeTruthy();
     expect(screen.queryByTestId('add-photo')).toBeNull();
     expect(screen.queryByText('Появится позже')).toBeNull();
     await renderRouter(APP_DIR, { initialUrl: `/page/${pageOf('expenses').id}` });
-    await fireEvent.press(screen.getByTestId('assistant-plus'));
+    await fireEvent.press(screen.getByTestId('page-add'));
     expect(screen.getByTestId('add-photo')).toBeTruthy();
     expect(screen.queryByTestId('add-file')).toBeNull();
     await act(async () => useFeatureStore.getState().set({ ...FEATURE_DEFAULTS, statements_pdf: true }));
@@ -392,8 +393,9 @@ describe('phone QA 1 (docs/design/qa/v2-phone-qa-1.md)', () => {
     expect(screen.getByTestId('today-waiting')).toBeTruthy();
     expect(within(screen.getByTestId('today-waiting')).getByTestId('alarm-risk-fix')).toBeTruthy();
     expect(screen.queryByTestId('today-tasks')).toBeNull();
-    expect(screen.getByTestId('tile-new')).toHaveTextContent(/пока ничего/);
-    expect(screen.getByTestId('tile-spent')).toHaveTextContent(/сегодня трат нет/);
+    // v5: no metric tiles; «Потрачено сегодня 0 ₸ ›» is one section head.
+    expect(screen.queryByTestId('tile-new')).toBeNull();
+    expect(screen.getByTestId('tile-spent')).toHaveTextContent(/Потрачено сегодня/);
   });
 
   it('§5.1: one profile card — not signed in asks to sign in there; signed in shows the masked number', async () => {

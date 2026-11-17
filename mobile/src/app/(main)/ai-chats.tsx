@@ -1,12 +1,13 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FlatList, View } from 'react-native';
+import { View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { PageEmpty } from '@/components/page/PageEmpty';
 import { RecordRow } from '@/components/RecordRow';
 import { Screen } from '@/components/Screen';
+import { PlaceFlatList } from '@/components/ui/PlaceScreen';
 import { FindField } from '@/components/SearchResults';
 import { Button } from '@/components/ui/Button';
 import { Header } from '@/components/ui/Header';
@@ -28,19 +29,15 @@ export default function AiChatsScreen() {
   const shown = useMemo(() => (q.trim() ? searchRecords(chats, q, 200) : chats), [chats, q]);
   const back = () => (router.canGoBack() ? router.back() : router.replace('/more'));
   return (
-    <Screen testID="page-ai-chats" edges={['top']} scroll={false}>
-      <FlatList
+    <Screen testID="page-ai-chats" scroll={false} sub={records ? t('aichats.count', { count: chats.length }) : undefined}>
+      <Header title={t('aichats.title')} back={{ onPress: back, label: t('more.title'), testID: 'aichats-back' }} />
+      <PlaceFlatList
         data={shown}
         keyExtractor={(r) => r.id}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingTop: theme.space[2], paddingBottom: theme.size.contentEndGap }}
         ListHeaderComponent={
           <View style={{ gap: theme.space[2], marginBottom: theme.space[2] }}>
-            <Header
-              title={t('aichats.title')}
-              meta={records ? t('aichats.count', { count: chats.length }) : undefined}
-              back={{ onPress: back, label: t('more.title'), testID: 'aichats-back' }}
-            />
             {chats.length > 0 ? <FindField testID="aichats-find" label={t('aichats.find')} value={q} onChange={setQ} /> : null}
           </View>
         }

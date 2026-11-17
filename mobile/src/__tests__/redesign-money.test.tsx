@@ -1,5 +1,7 @@
-import { act, fireEvent, renderRouter, screen } from 'expo-router/testing-library';
+import { act, fireEvent, renderRouter, screen, within } from 'expo-router/testing-library';
 import { StyleSheet } from 'react-native';
+
+import { lightColors } from '@/theme';
 
 import { expenseCategoryOut, expenseOut, FEATURE_DEFAULTS, kpFullOut } from '@/api/endpoints';
 import type { ExpenseCategoryOut, ExpenseOut } from '@/api/types';
@@ -40,10 +42,10 @@ const category = (key: string, i: number): ExpenseCategoryOut =>
   expenseCategoryOut({ id: `cat-${key}`, key, title: key, title_kk: null, system: true, service: false, position: String.fromCharCode(97 + i), manual: false, pinned: false, hidden: false, version: 1, seq: 1 })!;
 const categories = () => KEYS.map((k, i) => category(k, i));
 const expensesPage = () => usePages.getState().pages.find((p) => p.templateKey === 'expenses')!;
-const text = (id: string) => {
-  const c = screen.getByTestId(id).props.children;
-  return Array.isArray(c) ? c.join('') : String(c);
-};
+// v5: the big number keeps «₸» in a nested Text (0.56 of the size); read the text through it.
+const flatText = (c: unknown): string =>
+  Array.isArray(c) ? c.map(flatText).join('') : c && typeof c === 'object' && 'props' in c ? flatText((c as { props: { children?: unknown } }).props.children) : c == null || c === false ? '' : String(c);
+const text = (id: string) => flatText(screen.getByTestId(id).props.children);
 const flat = (id: string) => StyleSheet.flatten(screen.getByTestId(id).props.style);
 
 const KP_ROW = {
@@ -74,14 +76,14 @@ describe('«Расходы»: one total, the keys in a sheet, one «Требуе
     applyServer([expense('a', { amount: '3000.00', category_key: 'transport', category_id: 'cat-transport' })], categories());
     await renderRouter(APP_DIR, { initialUrl: `/page/${expensesPage().id}` });
     await settle(() => screen.queryByTestId('exp-board') !== null);
-    // v2: the month is a brief card (radius 26), the total inside it.
-    expect(flat('exp-board').borderRadius).toBe(26);
+    // v5: the month lives on the green sheet: «Ноябрь ▾», the one big number.
+    expect(within(screen.getByTestId('page-header')).getByTestId('exp-total')).toBeTruthy();
     expect(screen.queryByTestId('exp-keypad')).toBeNull();
     await fireEvent.press(screen.getByTestId('exp-enter'));
     await settle(() => screen.queryByTestId('exp-entry-sheet') !== null);
     const key = flat('exp-keypad-7');
     expect(key.minHeight).toBe(56);
-    expect(key.backgroundColor).toBe('#FFFFFF'); // v2 KeypadSheet: raised white keys with the green ring
+    expect(key.backgroundColor).toBe(lightColors.paper2); // v5: flat `paper2` keys on the paper sheet
     for (const k of ['4', '0', '0']) await fireEvent.press(screen.getByTestId(`exp-keypad-${k}`));
     await fireEvent.press(screen.getByTestId('exp-cat-cafe_gifts'));
     await fireEvent.press(screen.getByTestId('exp-keypad-save'));
@@ -123,7 +125,7 @@ describe('«Расходы»: one total, the keys in a sheet, one «Требуе
     await settle(() => screen.queryByTestId('exp-board') !== null);
     expect(screen.queryByTestId('exp-bring')).toBeNull();
     expect(screen.queryByTestId('exp-kaspi')).toBeNull();
-    await fireEvent.press(screen.getByTestId('assistant-plus'));
+    await fireEvent.press(screen.getByTestId('page-add'));
     expect(screen.getByTestId('add-camera')).toBeTruthy();
     expect(screen.getByTestId('add-photo')).toBeTruthy();
     expect(screen.queryByTestId('add-qr')).toBeNull();

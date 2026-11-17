@@ -245,7 +245,7 @@ describe('«Заметки» — the sticker wall «Ряды»', () => {
     expect(screen.getByTestId('color-white').props.accessibilityState).toEqual({ checked: true });
     await fireEvent.press(screen.getByTestId('color-yellow'));
     await settle(() => bg('record-n1') === lightNoteColors.yellow);
-    expect(stripText()).toBe('Жёлтый: Код домофона\n4512');
+    expect(stripText()).toBe('Песок: Код домофона\n4512');
     const row = outbox.all().find((r) => r.kind === 'page.item_look')!;
     expect(row.payload).toMatchObject({ color: 'yellow' });
     // «Отменить» while it waits: it never goes, the colour is back.
@@ -266,13 +266,15 @@ describe('«Заметки» — the sticker wall «Ряды»', () => {
     s.offline = false;
     await fireEvent(screen.getByTestId('record-n2'), 'longPress');
     await fireEvent.press(screen.getByTestId('menu-color'));
-    await settle(() => screen.queryByTestId('color-green') !== null);
-    await fireEvent.press(screen.getByTestId('color-green'));
+    // v5 picker: five stickers; «туман» is stored as `blue` (old `green` shows as the same mist).
+    await settle(() => screen.queryByTestId('color-blue') !== null);
+    expect(screen.queryByTestId('color-green')).toBeNull();
+    await fireEvent.press(screen.getByTestId('color-blue'));
     await act(async () => {
       await sync(outbox);
     });
     await settle(() => s.callsTo('PATCH /pages/srv-notes/items/srv-n2').length === 1);
-    expect(s.callsTo('PATCH /pages/srv-notes/items/srv-n2')[0]!.body).toMatchObject({ color: 'green' });
+    expect(s.callsTo('PATCH /pages/srv-notes/items/srv-n2')[0]!.body).toMatchObject({ color: 'blue' });
     await settle(() => bg('record-n2') === lightNoteColors.green);
     // Sent: «Отменить» is the undo of its action.
     await fireEvent.press(screen.getByTestId('undo-strip-undo'));

@@ -1,4 +1,4 @@
-/** The UI kit «Мята / Глубина» (docs/design/system/design-system.md §3). See README.md here. */
+/** The UI kit v5 «Листы» (docs/design/system/design-system.md §11; v2 names kept). See README.md here. */
 export { AppText, type AppTextProps } from '../AppText';
 export { AmountText } from '../AmountText';
 export { BottomFade } from './BottomFade';
@@ -19,3 +19,8 @@ export { TabBar, type TabItem } from './TabBar';
 export { ToastBar, type ToastAction } from './ToastBar';
 export { BriefCard, MetricTile, ProgressBar, StatusDot, TileGrid } from './Brief';
 export { Timeline, type TimelineItem } from './Timeline';
+// v5 «Листы» (design-system §11)
+export { PlaceScreen, SheetIcon, SheetBackButton, StackPeek, BottomPaperFade, type PlaceScreenProps, type SheetBack } from './PlaceScreen';
+export { PlaceTab, CategorySquare, BigNumber, SectionHead, Row, RowMeta, RowChevron, Inset, Toggle, Bar } from './Leaf';
+export { DayPlan, planPieces, type PlanItem } from './DayPlan';
+export { CompactConfirm, ResultCard, A4Page } from './Floating';

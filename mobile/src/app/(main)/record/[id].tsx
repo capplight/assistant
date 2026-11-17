@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
-import { BackButton, Button, Sheet } from '@/components/ui';
+import { Button, Header, Sheet } from '@/components/ui';
 import { Screen } from '@/components/Screen';
 import { isTrashed } from '@/db/records';
 import { recordTitle, sourceLine, statusLine } from '@/records/format';
@@ -16,7 +16,9 @@ import { getRecordActions, refreshRecord } from '@/services';
 import { useUndo } from '@/store/undo';
 import { useView } from '@/store/view';
 import { SimilarNote } from '@/components/SimilarNote';
-import { MAX_FONT_SCALE, useTheme } from '@/theme';
+import { MAX_FONT_SCALE, placeOfTemplate, useTheme } from '@/theme';
+import { usePageLabels } from '@/pages/usePageLabels';
+import { usePages } from '@/store/pages';
 
 /** The server's limit for one «Исправить». */
 const MAX_FIX = 500;
@@ -35,6 +37,8 @@ export default function RecordScreen() {
   const { t, i18n } = useTranslation();
   // `ret`: opened from a source chip of an answer → «‹ Назад к ответу» goes back there (2-design §4.4 п. 5).
   const { id, from, q, ret } = useLocalSearchParams<{ id: string; from?: string; q?: string; ret?: string }>();
+  const pages = usePages((s) => s.pages);
+  const { title: pageLabel } = usePageLabels();
   const record = useRecord(id);
   const showDeleted = useUndo((s) => s.showDeleted);
   const [asking, setAsking] = useState<ReviewRow | null>(null);
@@ -63,8 +67,11 @@ export default function RecordScreen() {
     else router.navigate('/records');
   };
 
-  // The one «‹ Назад» of stack screens (design-system §3 Header).
-  const backRow = <BackButton testID="record-back" label={ret ? t('record.back_answer') : t('common.back')} onPress={back} />;
+  // v5: the record opens with the sheet of its place already collapsed: «‹ Заметки» on the strip.
+  const fromPage = pages.find((p) => p.id === (from ?? record?.pageId));
+  const place = fromPage ? placeOfTemplate(fromPage.templateKey) : 'stone';
+  const backLabel = ret ? t('record.back_answer') : fromPage ? pageLabel(fromPage) : t('common.back');
+  const sheet = <Header title="" back={{ onPress: back, label: backLabel, testID: 'record-back' }} />;
 
   if (record === undefined) return <Screen testID="record-loading" edges={['top']}>{null}</Screen>;
   const closeSheet = () => {
@@ -74,8 +81,8 @@ export default function RecordScreen() {
 
   if (record === null || isTrashed(record)) {
     return (
-      <Screen testID="record-missing" edges={['top']}>
-        {backRow}
+      <Screen testID="record-missing" mode="strip" place={place}>
+        {sheet}
         <AppText variant="largeTitle">{t('record.not_found')}</AppText>
       </Screen>
     );
@@ -90,9 +97,9 @@ export default function RecordScreen() {
   const body = record.text && record.text !== title ? record.text : null;
 
   return (
-    <Screen testID="record-card" edges={['top']}>
-      {backRow}
-      <AppText variant="title2" accessibilityRole="header" style={{ marginBottom: theme.space[1] }}>
+    <Screen testID="record-card" mode="strip" place={place} askRoom>
+      {sheet}
+      <AppText variant="title1" accessibilityRole="header" style={{ marginBottom: 4, fontSize: 26, lineHeight: 31 }}>
         {title}
       </AppText>
       <AppText variant="footnote" style={{ marginBottom: theme.space[1] }}>
@@ -114,7 +121,7 @@ export default function RecordScreen() {
           style={[
             styles.banner,
             {
-              backgroundColor: theme.colors.highlightTint,
+              backgroundColor: theme.colors.paper2,
               borderRadius: theme.radius.lg,
               padding: theme.space[3],
               marginTop: theme.space[3],
@@ -122,8 +129,8 @@ export default function RecordScreen() {
             },
           ]}
         >
-          <TriangleAlert size={22} color={theme.colors.warning} />
-          <AppText color="warning" style={styles.flex}>
+          <TriangleAlert size={22} color={theme.colors.ink} />
+          <AppText style={styles.flex}>
             {t(`check.banner.${pluralForm(toCheck.length)}`, { n: toCheck.length })}
           </AppText>
           <Button

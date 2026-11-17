@@ -1,5 +1,4 @@
 import { router } from 'expo-router';
-import { Check, Trash2 } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AccessibilityInfo, Animated, Easing, PanResponder, Pressable, StyleSheet, View } from 'react-native';
@@ -18,13 +17,14 @@ import { useToast } from '@/store/toast';
 import { usePages, type Page } from '@/store/pages';
 import { undoServerAction } from '@/tasks/actions';
 import { NOTICE_MS, useUndo, type ManualStripText, type UndoStripState } from '@/store/undo';
-import { useLayout, useTheme } from '@/theme';
+import { askBar, noticeV5, useLayout, useTheme } from '@/theme';
+import { useChrome } from '@/store/chrome';
 
 import { AppText } from './AppText';
 import { ChangesSheet } from './ChangesSheet';
-import { Icon, PageIcon } from './ui/Icon';
 import { pressedStyle, useReducedMotion } from './ui/motion';
 import { useCurrentPage } from './useCurrentPage';
+import { useKeyboardHeight } from './useKeyboard';
 
 /** With a screen reader the notice waits longer (2-design 4.3): it cannot be read and pressed in 3 s. */
 const SCREEN_READER_MS = 30_000;
@@ -251,6 +251,9 @@ function NoticeBar({
     }),
   );
 
+  const dark = theme.colors.noticeInk;
+  // The undo of the assistant is terracotta («Отменить»); the person's own «Восстановить» is an underlined link.
+  const actColor = deleted ? dark : theme.colors.noticeUndo;
   return (
     <Animated.View
       testID="undo-strip"
@@ -259,13 +262,13 @@ function NoticeBar({
       style={[
         styles.bar,
         {
-          minHeight: theme.size.noticeHeight,
-          borderRadius: theme.radius.notice,
-          backgroundColor: theme.colors.surfaceRaised,
-          paddingLeft: theme.space[3],
+          minHeight: noticeV5.minHeight,
+          borderRadius: noticeV5.radius,
+          backgroundColor: theme.colors.noticeBg,
+          paddingLeft: 16,
           transform: [{ translateY: drag }],
         },
-        theme.elevation.floating,
+        { shadowColor: '#000000', shadowOffset: { width: 0, height: 14 }, shadowRadius: 30, shadowOpacity: 0.5, elevation: 12 },
       ]}
     >
       <Pressable
@@ -274,18 +277,28 @@ function NoticeBar({
         accessibilityLabel={text}
         accessibilityHint={t('notice.open_hint')}
         onPress={onOpen}
-        style={({ pressed }) => [styles.row, styles.grow, { gap: theme.space[3], paddingVertical: theme.space[2] }, pressedStyle(pressed)]}
+        style={({ pressed }) => [styles.row, styles.grow, { gap: 12, paddingVertical: 8 }, pressedStyle(pressed)]}
       >
-        <View style={[styles.square, { borderRadius: theme.radius.xs + 2, backgroundColor: deleted ? theme.colors.surfaceSunken : theme.colors.brandTint }]}>
-          {deleted ? (
-            <Icon icon={Trash2} size="sm" color="ink2" />
-          ) : page ? (
-            <PageIcon name={page.icon} size={16} color={theme.colors.brand} />
-          ) : (
-            <Check size={16} color={theme.colors.brand} strokeWidth={2.4} />
-          )}
+        {/* Three dots go out one by one over the 3 s (Ф-67). */}
+        <View testID="notice-dots" style={styles.dots} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+          {[2, 1, 0].map((k) => (
+            <Animated.View
+              key={k}
+              style={[
+                styles.dotTimer,
+                {
+                  backgroundColor: dark,
+                  opacity: reduced ? 1 : left.interpolate({ inputRange: [k / 3, k / 3 + 0.001], outputRange: [0.25, 1], extrapolate: 'clamp' }),
+                },
+              ]}
+            />
+          ))}
         </View>
-        <AppText testID="undo-strip-text" variant="callout" color="ink" numberOfLines={theme.largeFont ? 3 : 1} style={[styles.grow, { fontFamily: theme.type.headline.fontFamily }]}>
+        <AppText
+          testID="undo-strip-text"
+          numberOfLines={theme.largeFont ? 3 : noticeV5.maxLines}
+          style={[styles.grow, { color: dark, fontFamily: theme.type.sheetMeta.fontFamily, fontSize: 15, lineHeight: 19 }]}
+        >
           {text}
         </AppText>
       </Pressable>
@@ -295,35 +308,38 @@ function NoticeBar({
           accessibilityRole="button"
           accessibilityLabel={undoLabel}
           onPress={onUndo}
-          style={({ pressed }) => [styles.button, { minWidth: theme.size.minTouch, minHeight: theme.size.minTouch, paddingHorizontal: theme.space[3] }, pressedStyle(pressed)]}
+          style={({ pressed }) => [styles.button, { minWidth: theme.size.minTouch, minHeight: theme.size.minTouch, paddingHorizontal: 16 }, pressedStyle(pressed)]}
         >
-          <AppText variant="callout" color="brand" style={{ fontFamily: theme.type.largeTitle.fontFamily }}>
+          <AppText style={{ color: actColor, fontFamily: theme.type.title.fontFamily, fontSize: 15, lineHeight: 19, textDecorationLine: deleted ? 'underline' : 'none' }}>
             {undoLabel}
           </AppText>
         </Pressable>
       ) : (
-        <View style={{ width: theme.space[3] }} />
-      )}
-      {reduced ? null : (
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.progress,
-            { left: theme.radius.notice, right: theme.radius.notice, backgroundColor: theme.colors.brand, transform: [{ scaleX: left }] },
-          ]}
-        />
+        <View style={{ width: 16 }} />
       )}
     </Animated.View>
   );
 }
 
-/** The top place of the notice: under the status bar, in the ≤600 column, over every screen (root layout). */
+/**
+ * Where the notice lies: at the top, 10 from the edges, under the status bar; a result of the assistant line
+ * («Записал…») lies 8 above the strip instead while the strip is on screen (Ф-82, design-system §11.12).
+ */
 export function TopNoticeHost() {
-  const theme = useTheme();
   const layout = useLayout();
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
+  const kind = useUndo((s) => s.strip?.kind ?? null);
+  const askShown = useChrome((s) => s.askShown);
+  const tabBarHeight = useChrome((s) => s.tabBarHeight);
+  const keyboard = useKeyboardHeight();
+  const current = useCurrentPage();
+  const aboveAsk = askShown && current.kind !== 'assistant' && (kind === 'saved' || kind === 'action' || kind === 'server');
+  const place = aboveAsk
+    ? { bottom: (keyboard > 0 ? keyboard + askBar.aboveKeyboard : tabBarHeight + askBar.aboveTabBar) + theme.m.ask.height + askBar.noticeGap }
+    : { top: insets.top + 4 };
   return (
-    <View pointerEvents="box-none" style={[styles.host, { top: insets.top + theme.space[1], paddingHorizontal: theme.size.tabBarInset }]}>
+    <View pointerEvents="box-none" style={[styles.host, place, { paddingHorizontal: aboveAsk ? theme.m.ask.inset : noticeV5.inset }]}>
       <View pointerEvents="box-none" style={{ width: '100%', maxWidth: layout.contentMaxWidth }}>
         <UndoStrip />
       </View>
@@ -336,7 +352,7 @@ const styles = StyleSheet.create({
   bar: { flexDirection: 'row', alignItems: 'center', overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center' },
   grow: { flex: 1, flexShrink: 1 },
-  square: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
+  dots: { flexDirection: 'row', gap: 3 },
+  dotTimer: { width: 6, height: 6, borderRadius: 3 },
   button: { alignItems: 'center', justifyContent: 'center' },
-  progress: { position: 'absolute', bottom: 0, height: 2, borderRadius: 1 },
 });

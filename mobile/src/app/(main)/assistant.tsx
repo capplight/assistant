@@ -1,16 +1,12 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { History, Search } from 'lucide-react-native';
+import { CloudOff, History, Search } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { loadHistory, loadServerHistory } from '@/chat/service';
-import { AppText } from '@/components/AppText';
-import { AssistantMark, AssistantMessage, ChatEmpty, DaySeparator, OfflineBanner, UserBubble } from '@/components/chat/ChatParts';
-import { Screen } from '@/components/Screen';
-import { HeaderButton } from '@/components/ui/Header';
-import { getRecords } from '@/db';
-import { LIST_LIMIT, useLocalQuery } from '@/records/useRecords';
+import { AssistantMessage, ChatEmpty, DaySeparator, OfflineBanner, UserBubble } from '@/components/chat/ChatParts';
+import { PlaceScreen, SheetIcon } from '@/components/ui/PlaceScreen';
 import { useAssistant } from '@/store/assistant';
 import { useConnectivity } from '@/store/connectivity';
 import { useTheme } from '@/theme';
@@ -29,9 +25,9 @@ export default function AssistantScreen() {
   const { t, i18n } = useTranslation();
   const { focus } = useLocalSearchParams<{ focus?: string }>();
   const messages = useAssistant((s) => s.messages);
-  const listening = useAssistant((s) => s.listening);
   const online = useConnectivity((s) => s.online);
-  const records = useLocalQuery(async () => (await getRecords()).list(LIST_LIMIT), [messages.length]);
+  // «Помощник · голос»: while it listens the paper holds only the voice view (in the field below).
+  const listening = useAssistant((s) => s.listening);
   const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const [focusY, setFocusY] = useState<number | null>(null);
   const [now] = useState(() => Date.now());
@@ -58,39 +54,32 @@ export default function AssistantScreen() {
     }
   };
 
-  const subtitle = listening
-    ? t('assistant.listening')
-    : !online
-      ? t('assistant.offline_short')
-      : messages.length === 0 || !records
-        ? t('assistant.new')
-        : t('assistant.remember_count', { count: records.length });
-
   const days = messages.map((m) => dayTitle(m.at));
+  const ink = theme.colors.onSheet;
   return (
-    <Screen testID="assistant-screen" edges={['top']} scroll={false}>
-      <View style={[styles.row, { gap: theme.space[3], paddingTop: theme.space[3], paddingBottom: theme.space[2] }]}>
-        <AssistantMark size={36} />
-        <View style={styles.flex}>
-          <AppText variant="title2" accessibilityRole="header">
-            {t('tabs.assistant')}
-          </AppText>
-          <AppText testID="assistant-subtitle" variant="footnote">
-            {subtitle}
-          </AppText>
-        </View>
-        <HeaderButton icon={Search} label={t('today.search')} onPress={() => router.navigate('/search')} testID="assistant-search" />
-        <HeaderButton icon={History} label={t('more.history')} onPress={() => router.push('/history')} testID="assistant-history" />
-      </View>
-      <ScrollView
-        ref={scrollRef}
-        testID="assistant-chat"
-        contentContainerStyle={{ paddingTop: theme.space[2], paddingBottom: theme.size.contentEndGap, gap: theme.space[3] }}
-        keyboardShouldPersistTaps="handled"
-        onContentSizeChange={() => {
-          if (!focus) scrollRef.current?.scrollToEnd({ animated: false });
-        }}
-      >
+    <PlaceScreen
+      testID="assistant-screen"
+      place="assistant"
+      mode="strip"
+      peek={['today', 'notes']}
+      title={t('tabs.assistant')}
+      scrollRef={scrollRef}
+      onContentSizeChange={() => {
+        if (!focus) scrollRef.current?.scrollToEnd({ animated: false });
+      }}
+      contentContainerStyle={{ paddingBottom: theme.m.ask.listBottomPadding + 22, gap: theme.space[3] }}
+      stripLeft={<SheetIcon icon={History} label={t('more.history')} onPress={() => router.push('/history')} color={ink} testID="assistant-history" />}
+      stripRight={
+        online ? (
+          <SheetIcon icon={Search} label={t('today.search')} onPress={() => router.navigate('/search')} color={ink} testID="assistant-search" />
+        ) : (
+          <View testID="assistant-offline-icon" accessible accessibilityLabel={t('assistant.offline_short')} style={styles.icon}>
+            <CloudOff size={22} color={ink} strokeWidth={theme.icon.strokeWidth} />
+          </View>
+        )
+      }
+    >
+      <View testID="assistant-chat" style={{ gap: theme.space[3], display: listening ? 'none' : 'flex' }}>
         {!online ? <OfflineBanner /> : null}
         {messages.length === 0 ? <ChatEmpty /> : null}
         {messages.map((m, i) => {
@@ -103,12 +92,11 @@ export default function AssistantScreen() {
             </View>
           );
         })}
-      </ScrollView>
-    </Screen>
+      </View>
+    </PlaceScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center' },
-  flex: { flex: 1 },
+  icon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
 });

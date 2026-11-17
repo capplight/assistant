@@ -17,7 +17,7 @@ import { recordTitle, sourceLine, statusLine } from '@/records/format';
 import { unverifiedCount } from '@/records/review';
 import { useFeatures } from '@/store/features';
 import { useNotesLook } from '@/store/notesLook';
-import { NOTE_COLOR_KEYS, useLayout, useTheme } from '@/theme';
+import { STICKER_PICKER_KEYS, stickerOf, useLayout, useTheme } from '@/theme';
 import { ChangedMark, markFresh } from '@/components/ChangedMark';
 
 import { AppText } from '../AppText';
@@ -350,8 +350,9 @@ function ColorSheet({ title, current, onPick, onClose }: { title: string; curren
         {title}
       </AppText>
       <View accessibilityRole="radiogroup" style={[styles.row, { flexWrap: 'wrap', gap: theme.space[2] }]}>
-        {NOTE_COLOR_KEYS.map((c) => {
-          const on = c === selected;
+        {STICKER_PICKER_KEYS.map((c) => {
+          // An old stored key (peach, green) lights the v5 sticker it shows as.
+          const on = stickerOf(c) === stickerOf(selected);
           const name = t(`notes.colors.${c}`);
           return (
             <Pressable
@@ -369,7 +370,7 @@ function ColorSheet({ title, current, onPick, onClose }: { title: string; curren
               <View
                 style={[
                   { width: d, height: d, borderRadius: d / 2, backgroundColor: theme.notes[c], alignItems: 'center', justifyContent: 'center' },
-                  c === 'white' ? theme.elevation.card : null,
+                  { borderWidth: on ? 2 : c === 'white' ? 1 : 0, borderColor: on ? theme.colors.ink : theme.colors.line },
                 ]}
               >
                 {on ? <Icon icon={Check} color="brand" /> : null}

@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
-import { ArrowDown, ArrowUp } from 'lucide-react-native';
-import { useEffect, useMemo, useState } from 'react';
+import { ArrowDown, ArrowUp, ChevronDown } from 'lucide-react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
@@ -17,23 +17,24 @@ import { budgetMinor, useBudget } from '@/store/budget';
 import { useView } from '@/store/view';
 import { kickSync, syncBlocked } from '@/services';
 import { localDate } from '@/tasks/rows';
-import { categoryText, readableColumn, useLayout, useTheme } from '@/theme';
+import { readableColumn, useLayout, useTheme } from '@/theme';
 import { ChangedMark } from '@/components/ChangedMark';
 
-import { AmountText } from '../AmountText';
 import { AppText } from '../AppText';
 import { BudgetSheet } from '../BudgetSheet';
 import { RecordRow } from '../RecordRow';
 import { useMinuteClock } from '../ReminderLists';
 import { Button } from '../ui/Button';
 import { ActionList } from '../ui/Sheet';
-import { MetricTile, ProgressBar, StatusDot, TileGrid } from '../ui/Brief';
-import { Card, cardEdge } from '../ui/Card';
+import { Bar, BigNumber, CategorySquare, Row, RowMeta } from '../ui/Leaf';
+import { usePlaceList } from '../ui/PlaceScreen';
+import { useSheetSlot } from './PageFrame';
+import { Card } from '../ui/Card';
 import { Chip } from '../ui/Chip';
 import { Icon } from '../ui/Icon';
 import { pressedStyle } from '../ui/motion';
 import { SegmentedControl } from '../ui/SegmentedControl';
-import { categoryLook, colorKeyOf } from './expenseColors';
+import { categoryLook } from './expenseColors';
 import { AttentionCard, AttentionSheet, attentionItems, sourceWord, useBringKinds } from './ExpenseInbox';
 import { CategoryChips, CategoryDot, DayChip, EntryPanel, Sheet, SumDisplay, useSum } from './ExpenseParts';
 import { ExpenseKeypad } from './ExpenseKeypad';
@@ -154,6 +155,22 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
   const [budgetOpen, setBudgetOpen] = useState(false);
   const thisMonth = kind === 'month' && period.from === periodOf('month', today).from;
 
+  const ovProps: OverviewProps = {
+    onPeriod: () => setPeriodOpen(true),
+    title: periodTitle(period, lang),
+    board: b,
+    budget: thisMonth ? budget : null,
+    onSetBudget: thisMonth ? () => setBudgetOpen(true) : undefined,
+    today,
+    period,
+    onlyToCheck,
+    onToCheck: () => setOnlyToCheck((v) => !v),
+  };
+  const ovSheet = useOverviewSheet(ovProps);
+  useSheetSlot({ metaNode: ovSheet.metaNode, sheetExtra: ovSheet.sheetExtra, hideTitle: true }, ovSheet.key);
+  const listRef = useRef<FlatList<FeedDay>>(null);
+  const place = usePlaceList((y, animated) => listRef.current?.scrollToOffset({ offset: y, animated }));
+
   const pick = (k: Kind) => {
     setKind(k);
     setPeriod(periodOf(k, today));
@@ -171,17 +188,7 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
   const shownBars = allBars ? catBars : catBars.slice(0, TOP_CATEGORIES);
   const overview = (
     <View style={{ gap: theme.space[4] }}>
-      <Overview
-        onPeriod={() => setPeriodOpen(true)}
-        title={periodTitle(period, lang)}
-        board={b}
-        budget={thisMonth ? budget : null}
-        onSetBudget={thisMonth ? () => setBudgetOpen(true) : undefined}
-        today={today}
-        period={period}
-        onlyToCheck={onlyToCheck}
-        onToCheck={() => setOnlyToCheck((v) => !v)}
-      />
+      <OverviewPaper {...ovProps} />
       <AttentionCard items={queue} onOpen={() => setAttention(true)} />
       {ordering || ordering2 ? (
         <View style={{ gap: theme.space[2] }}>
@@ -211,31 +218,40 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
               </AppText>
             ) : null}
           </View>
-          <TileGrid testID="exp-tiles">
-            {shownBars.map((bar) => {
+          {/* The categories in scale (the colour is only the segment and the 12 dp square), the hatch = what is left. */}
+          <View testID="exp-tiles" style={{ flexDirection: 'row', gap: 3, height: 30 }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+            {catBars.map((bar) => (
+              <View key={bar.key || 'none'} style={{ flex: Math.max(0.5, bar.share), backgroundColor: categoryLook(theme, bar.key || null).color, borderRadius: 6 }} />
+            ))}
+            {thisMonth && budget !== null && b.main && budget > b.main.total && b.main.total > 0n ? (
+              <View style={{ flex: Number(((budget - b.main.total) * 1000n) / b.main.total) / 10, borderRadius: 6, borderWidth: 1.5, borderColor: theme.colors.line2, borderStyle: 'dashed' }} />
+            ) : null}
+          </View>
+          <AppText variant="footnote" style={{ marginTop: 6, marginBottom: 4 }}>
+            {budget !== null && thisMonth ? t('exp.bars_caption_budget') : t('exp.bars_caption')}
+          </AppText>
+          <View>
+            {shownBars.map((bar, i) => {
               const cat = categoryByKey(server, bar.key || null);
               const chip = cat ? (chips.find((c) => c.key === cat.key) ?? null) : null;
               const look = categoryLook(theme, bar.key || null);
-              const key = (bar.key || 'other') as keyof typeof categoryText;
-              const other = colorKeyOf(bar.key || null) === 'other';
-              const color = other ? theme.colors.ink : theme.scheme === 'light' ? (categoryText[key] ?? look.color) : look.color;
               return (
-                <MetricTile
+                <Row
                   key={bar.key || 'none'}
+                  first={i === 0}
                   testID={`exp-bar-${bar.key || 'none'}`}
-                  icon={look.icon}
-                  iconTint={look.tint}
-                  title={bar.title}
-                  value={formatMinor(bar.minor).replace(/\s?₸$/, '')}
-                  unit="₸"
-                  caption={t('exp.share_of_all', { n: Math.round(bar.share) })}
-                  color={color}
-                  progress={bar.share / 100}
+                  accessibilityLabel={`${bar.title}: ${formatMinor(bar.minor)}, ${t('exp.share_of_all', { n: Math.round(bar.share) })}`}
                   onPress={() => openEntry(chip)}
-                />
+                >
+                  <CategorySquare color={look.color} />
+                  <AppText numberOfLines={1} style={styles.flex}>
+                    {bar.title}
+                  </AppText>
+                  <AppText variant="number">{bareSum(formatMinor(bar.minor))}</AppText>
+                </Row>
               );
             })}
-          </TileGrid>
+          </View>
           {catBars.length > TOP_CATEGORIES ? (
             <Button
               testID="exp-bars-all"
@@ -260,27 +276,27 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
   );
 
   const renderDay = ({ item }: { item: FeedDay }) => (
-    <View style={{ gap: theme.space[2], paddingTop: theme.space[4] }}>
-      <View testID={`exp-day-${item.date}`} style={[styles.rowCenter, { gap: theme.space[2], paddingHorizontal: theme.space[1], flexWrap: 'wrap' }]}>
-        <AppText variant="sectionLabel" accessibilityRole="header" style={styles.flex}>
+    <View>
+      <View testID={`exp-day-${item.date}`} style={[styles.rowCenter, { gap: theme.space[2], marginTop: 18, marginBottom: 6, flexWrap: 'wrap' }]}>
+        <AppText variant="section" accessibilityRole="header" style={styles.flex}>
           {dayLabel(item.date, today, lang, t)}
         </AppText>
-        <AppText testID={`exp-day-total-${item.date}`} variant="callout" accessibilityLabel={t('exp.day_total', { amount: formatMinor(item.total) })} style={styles.tabular}>
-          {formatMinor(item.total)}
+        <AppText testID={`exp-day-total-${item.date}`} variant="small" color="ink3" accessibilityLabel={t('exp.day_total', { amount: formatMinor(item.total) })} style={styles.tabular}>
+          {bareSum(formatMinor(item.total))}
         </AppText>
       </View>
-      <Card padded={false}>
+      <View>
         {item.entries.map((e, i) => (
           <FeedLine
             key={e.id}
             e={e}
             today={today}
-            last={i === item.entries.length - 1}
+            first={i === 0}
             marked={marked === e.id || marked === `local:${e.client_id}`}
             onOpen={() => setMenu(e.id)}
           />
         ))}
-      </Card>
+      </View>
     </View>
   );
 
@@ -305,11 +321,12 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
 
   const menuEntry = menu ? live.find((e) => e.id === menu) : undefined;
   const recordOf = (e: ExpenseOut) => (entries ?? []).find((x) => x.record.serverId && x.record.serverId === e.item_id)?.record ?? null;
-  const column = { ...readableColumn(), paddingHorizontal: layout.gutter };
+  const column = { ...readableColumn() };
   const two = layout.twoPane;
 
   const list = (
     <FlatList
+      ref={listRef}
       testID="exp-list"
       data={days}
       keyExtractor={(d) => d.date}
@@ -326,7 +343,11 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
         </View>
       }
       ListFooterComponent={footer ?? undefined}
-      contentContainerStyle={[column, { paddingTop: theme.space[4], paddingBottom: theme.size.contentEndGap }]}
+      contentContainerStyle={[column, { paddingTop: place ? place.inset : theme.space[4], paddingBottom: theme.m.ask.listBottomPadding + theme.space[2] }]}
+      onScroll={place?.onScroll}
+      onScrollEndDrag={place?.onScrollEndDrag}
+      onMomentumScrollEnd={place?.onMomentumScrollEnd}
+      scrollEventThrottle={place?.scrollEventThrottle}
       keyboardShouldPersistTaps="handled"
     />
   );
@@ -441,18 +462,7 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
   );
 }
 
-/** Pattern 1: «‹ Ноябрь ›», the total 40 with no box, one context line «23 траты · ⚠ проверить 2». */
-function Overview({
-  onPeriod,
-  onSetBudget,
-  title,
-  board: b,
-  onlyToCheck,
-  onToCheck,
-  budget,
-  today,
-  period,
-}: {
+type OverviewProps = {
   onPeriod: () => void;
   onSetBudget?: () => void;
   title: string;
@@ -462,104 +472,124 @@ function Overview({
   period: Period;
   onlyToCheck: boolean;
   onToCheck: () => void;
-}) {
-  const theme = useTheme();
-  const { t } = useTranslation();
-  const main = b.main;
+};
+
+function overviewNumbers(o: OverviewProps) {
+  const main = o.board.main;
   const spent = main?.total ?? 0n;
   const currency = main?.currency ?? 'KZT';
-  const amount = formatMinor(spent, currency);
-  // v2 brief (design-system «Расходы»): «НОЯБРЬ · В ПРЕДЕЛАХ БЮДЖЕТА», the sum, «Осталось … из …», the budget bar.
-  const left = budget !== null ? budget - spent : null;
-  const share = budget !== null && budget > 0n ? Number((spent * 1000n) / budget) / 1000 : null;
-  const daysLeft = period.to ? Math.max(0, Math.round((Date.parse(`${period.to}T12:00:00`) - Date.parse(`${today}T12:00:00`)) / 86_400_000)) : null;
-  const status =
-    budget === null
-      ? onSetBudget
-        ? t('exp.status_no_budget', { period: title })
-        : title
-      : left !== null && left >= 0n
-        ? t('exp.status_in_budget', { period: title })
-        : t('exp.status_over', { period: title });
-  return (
-    <View
-      testID="exp-board"
-      style={[
-        { gap: theme.space[1], backgroundColor: theme.colors.surface, borderRadius: theme.radius.xxl, padding: theme.space[4] },
-        theme.elevation.card,
-        cardEdge(theme),
-      ]}
+  const left = o.budget !== null ? o.budget - spent : null;
+  const share = o.budget !== null && o.budget > 0n ? Number((spent * 1000n) / o.budget) / 1000 : null;
+  const daysLeft = o.period.to ? Math.max(0, Math.round((Date.parse(`${o.period.to}T12:00:00`) - Date.parse(`${o.today}T12:00:00`)) / 86_400_000)) : null;
+  return { main, spent, currency, left, share, daysLeft };
+}
+
+/**
+ * v5 «Расходы · месяц» sheet (screens-v5): «Ноябрь ▾» opens the period, the ONE big number of the screen, the short
+ * phrase «Успеваете: ещё 65 650 ₸» (Geologica, the phrase size − 4; hidden at ≤ 340 dp / large font) and
+ * «из 250 000 ₸ · до конца месяца 13 дней».
+ */
+function useOverviewSheet(o: OverviewProps) {
+  const theme = useTheme();
+  const { t } = useTranslation();
+  const n = overviewNumbers(o);
+  const ink = theme.colors.onSheet;
+  const ink2 = theme.colors.onSheet2;
+  const amount = formatMinor(n.spent, n.currency).replace(/\s?₸$/, '');
+  const phrase =
+    n.left === null ? null : n.left >= 0n ? t('exp.phrase_ok', { left: formatMinor(n.left) }) : t('exp.phrase_over', { over: formatMinor(-n.left) });
+  const sub =
+    o.budget !== null && n.left !== null
+      ? [t('exp.sub_of', { budget: formatMinor(o.budget) }), n.daysLeft !== null ? t('exp.days_left', { count: n.daysLeft }) : null].filter(Boolean).join(' · ')
+      : null;
+  const phraseSize = theme.m.phraseSize - 4;
+  const metaNode = (
+    <Pressable
+      testID="exp-period-open"
+      accessibilityRole="button"
+      accessibilityLabel={`${o.title}. ${t('exp.period_title')}`}
+      onPress={o.onPeriod}
+      hitSlop={8}
+      style={({ pressed }) => [styles.rowCenter, { gap: 2, alignSelf: 'flex-start', minHeight: 40 }, pressedStyle(pressed)]}
     >
-      <Pressable
-        testID="exp-period-open"
-        accessibilityRole="button"
-        accessibilityLabel={`${status}. ${t('exp.period_title')}`}
-        onPress={onPeriod}
-        style={({ pressed }) => [styles.rowCenter, { gap: theme.space[2], minHeight: theme.size.minTouch - 12 }, pressedStyle(pressed)]}
-      >
-        <StatusDot color={left !== null && left < 0n ? theme.colors.danger : undefined} />
-        <AppText testID="exp-status" variant="eyebrow" color={left !== null && left < 0n ? 'danger' : 'brand'} style={styles.flex}>
-          {status}
+      <AppText testID="exp-status" variant="sheetMeta" style={{ color: ink2 }}>
+        {o.title}
+      </AppText>
+      <ChevronDown size={18} color={ink2} strokeWidth={theme.icon.strokeWidth} />
+    </Pressable>
+  );
+  const sheetExtra = (
+    <View testID="exp-board">
+      <View style={{ marginTop: 4 }} accessibilityLiveRegion="polite" accessible accessibilityLabel={t('exp.total_a11y', { period: o.title, amount: spokenAmount(minorToDecimal(n.spent), n.currency) })}>
+        <BigNumber testID="exp-total" value={amount} currency={n.currency === 'KZT' ? '₸' : n.currency} color={ink} />
+      </View>
+      {phrase && !theme.m.titleOnly ? (
+        <AppText
+          testID="exp-phrase"
+          numberOfLines={2}
+          nativeID="v5-capped"
+          maxFontSizeMultiplier={theme.m.heroMaxScale}
+          style={[theme.type.phrase, { color: n.left !== null && n.left < 0n ? ink : ink, fontSize: phraseSize, lineHeight: Math.round(phraseSize * 1.12), letterSpacing: -0.025 * phraseSize, marginTop: 10 }]}
+        >
+          {phrase}
         </AppText>
-      </Pressable>
-      <AmountText
-        testID="exp-total"
-        variant="amount"
-        maxScale={1.6}
-        inset={theme.screenPadding * 2}
-        accessibilityLabel={t('exp.total_a11y', { period: title, amount: spokenAmount(minorToDecimal(spent), currency) })}
-        accessibilityLiveRegion="polite"
-      >
-        {amount}
-      </AmountText>
+      ) : null}
+      {sub ? (
+        <AppText testID="exp-budget-left" variant="sheetMeta" style={{ color: ink2, marginTop: 4, lineHeight: 20 }}>
+          {theme.m.titleOnly && phrase ? `${phrase} · ${sub}` : sub}
+        </AppText>
+      ) : null}
+    </View>
+  );
+  const key = [o.title, amount, phrase, sub, theme.m.titleOnly, theme.scheme, phraseSize].join('|');
+  return { metaNode, sheetExtra, key };
+}
+
+/** Under the sheet: the count, «проверить N», «Задать бюджет», income and other currencies — small, on the paper. */
+function OverviewPaper(o: OverviewProps) {
+  const theme = useTheme();
+  const { t } = useTranslation();
+  const n = overviewNumbers(o);
+  const main = n.main;
+  return (
+    <View style={{ gap: theme.space[1] }}>
       {!main || main.count === 0 ? (
-        <AppText testID="exp-empty-total" variant="callout" style={styles.center}>
+        <AppText testID="exp-empty-total" variant="callout">
           {t('exp.empty_total')}
         </AppText>
       ) : (
         <View style={[styles.rowCenter, { flexWrap: 'wrap', columnGap: theme.space[2] }]}>
-          <AppText testID="exp-count" variant="briefBody" color="ink2">
+          <AppText testID="exp-count" variant="small">
             {t('exp.count', { count: main.count })}
           </AppText>
-          {b.review > 0 || onlyToCheck ? (
+          {o.board.review > 0 || o.onlyToCheck ? (
             <Pressable
               testID="exp-to-check"
               accessibilityRole="button"
-              accessibilityLabel={onlyToCheck ? t('exp.to_check_all') : t('exp.to_check_a11y', { n: b.review })}
-              accessibilityState={{ selected: onlyToCheck }}
-              onPress={onToCheck}
+              accessibilityLabel={o.onlyToCheck ? t('exp.to_check_all') : t('exp.to_check_a11y', { n: o.board.review })}
+              accessibilityState={{ selected: o.onlyToCheck }}
+              onPress={o.onToCheck}
               style={{ minHeight: theme.size.minTouch, justifyContent: 'center' }}
             >
-              <AppText color="warning" variant="callout" style={{ fontFamily: theme.type.sectionLabel.fontFamily }}>
-                {onlyToCheck ? t('exp.to_check_all') : `· ${t('exp.to_check', { n: b.review })} ›`}
+              <AppText variant="small" color="ink" style={{ fontFamily: theme.type.headline.fontFamily, textDecorationLine: 'underline' }}>
+                {o.onlyToCheck ? t('exp.to_check_all') : t('exp.to_check', { n: o.board.review })}
               </AppText>
             </Pressable>
           ) : null}
         </View>
       )}
-      {budget !== null && left !== null ? (
-        <View testID="exp-budget-box" style={{ gap: theme.space[2], marginTop: theme.space[2] }}>
-          <AppText testID="exp-budget-left" variant="briefBody" color="ink2">
-            {left >= 0n ? t('exp.budget_left', { left: formatMinor(left), budget: formatMinor(budget) }) : t('exp.budget_over', { over: formatMinor(-left) })}
-          </AppText>
-          <ProgressBar testID="exp-budget-bar" value={share ?? 0} color={left >= 0n ? theme.colors.brand : theme.colors.danger} />
-          <View style={[styles.rowCenter, { justifyContent: 'space-between', flexWrap: 'wrap' }]}>
-            <AppText variant="footnote">{t('exp.spent_share', { n: Math.round((share ?? 0) * 100) })}</AppText>
-            {daysLeft !== null ? <AppText variant="footnote">{t('exp.days_left', { count: daysLeft })}</AppText> : null}
-          </View>
-        </View>
-      ) : null}
-      {budget === null && onSetBudget ? (
-        <Chip testID="exp-set-budget" label={t('budget.set')} onPress={onSetBudget} style={{ alignSelf: 'flex-start', marginTop: theme.space[2] }} />
+      {o.budget !== null && n.share !== null ? <Bar testID="exp-budget-bar" value={n.share} height={6} color={n.left !== null && n.left < 0n ? theme.colors.danger : theme.colors.ink} /> : null}
+      {o.budget === null && o.onSetBudget ? (
+        <Chip testID="exp-set-budget" label={t('budget.set')} onPress={o.onSetBudget} style={{ alignSelf: 'flex-start', marginTop: theme.space[1] }} />
       ) : null}
       {main && main.income > 0n ? (
-        <AppText testID="exp-income" variant="callout" style={styles.center}>
+        <AppText testID="exp-income" variant="small">
           {t('exp.income', { amount: formatMinor(main.income, main.currency) })}
         </AppText>
       ) : null}
-      {b.apart.length > 0 ? (
-        <AppText testID="exp-apart" variant="callout" style={styles.center}>
-          {t('exp.apart', { list: b.apart.map((x) => formatMinor(x.total, x.currency)).join(', ') })}
+      {o.board.apart.length > 0 ? (
+        <AppText testID="exp-apart" variant="small">
+          {t('exp.apart', { list: o.board.apart.map((x) => formatMinor(x.total, x.currency)).join(', ') })}
         </AppText>
       ) : null}
     </View>
@@ -608,7 +638,7 @@ function EntrySheet({
 }
 
 /** Pattern 5: one row of the feed (≥56): the category circle, what + category, the amount; a tap opens it. */
-function FeedLine({ e, today, last, marked, onOpen }: { e: ExpenseOut; today: string; last: boolean; marked: boolean; onOpen: () => void }) {
+function FeedLine({ e, today, first, marked, onOpen }: { e: ExpenseOut; today: string; first: boolean; marked: boolean; onOpen: () => void }) {
   const theme = useTheme();
   const { t, i18n } = useTranslation();
   const server = useExpenses((s) => s.categories);
@@ -624,6 +654,7 @@ function FeedLine({ e, today, last, marked, onOpen }: { e: ExpenseOut; today: st
   const waits = e.id.startsWith('local:');
   const from = sourceWord(e.source, t);
   const meta = [catTitle, from, waits ? t('exp.waits') : null].filter(Boolean).join(' · ');
+  const time = e.created_at ? e.created_at.slice(11, 16) : null;
   return (
     <Pressable
       testID={`exp-row-${e.id}`}
@@ -634,42 +665,33 @@ function FeedLine({ e, today, last, marked, onOpen }: { e: ExpenseOut; today: st
       style={({ pressed }) => [
         styles.rowCenter,
         {
-          gap: theme.space[3],
-          paddingLeft: theme.space[3] + 2,
-          minHeight: 56,
-          backgroundColor: marked ? theme.colors.highlightTint : pressed ? theme.colors.surfaceSunken : 'transparent',
+          gap: 12,
+          minHeight: theme.m.row,
+          paddingVertical: theme.space[1],
+          borderTopWidth: first ? 0 : 1,
+          borderTopColor: theme.colors.line,
+          backgroundColor: pressed ? theme.colors.paper2 : 'transparent',
         },
+        // A new spending is ringed in terracotta for a moment (the assistant put it here).
+        marked ? { borderRadius: 12, borderWidth: 2, borderColor: theme.colors.place.assistant, paddingHorizontal: 6 } : null,
       ]}
     >
-      <CategoryDot categoryKey={e.category_key} />
-      <View
-        style={[
-          styles.rowCenter,
-          styles.flex,
-          { gap: theme.space[2], paddingVertical: theme.space[2], paddingRight: theme.space[3], flexWrap: theme.largeFont ? 'wrap' : 'nowrap' },
-          last ? null : { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.separator },
-        ]}
-      >
-        <View style={[styles.flex, { minWidth: theme.largeFont ? '60%' : undefined }]}>
-          <AppText>{title}</AppText>
-          <AppText variant="callout">{meta}</AppText>
-          <ChangedMark at={e.assistant_changed_at} actionId={e.assistant_action_id} testID={`changed-exp-${e.id}`} />
-        </View>
-        <View style={{ alignItems: 'flex-end' }}>
-          <AppText
-            testID={`exp-row-amount-${e.id}`}
-            variant="number"
-            color={e.direction === 'refund' ? 'success' : 'ink'}
-            style={toCheck ? { backgroundColor: theme.colors.highlightTint, paddingHorizontal: theme.space[1], borderRadius: 4 } : undefined}
-          >
-            {formatMinor(signed, e.currency)}
-          </AppText>
-          {toCheck ? (
-            <AppText variant="footnote" color="warning">
-              {t('exp.check')}
-            </AppText>
-          ) : null}
-        </View>
+      <CategorySquare color={categoryLook(theme, e.category_key).color} />
+      <View style={[styles.flex, { minWidth: theme.largeFont ? '60%' : undefined }]}>
+        <AppText numberOfLines={2}>{title}</AppText>
+        {meta && meta !== catTitle ? <AppText variant="footnote">{meta}</AppText> : null}
+        <ChangedMark at={e.assistant_changed_at} actionId={e.assistant_action_id} testID={`changed-exp-${e.id}`} />
+      </View>
+      {time && !theme.largeFont ? <RowMeta>{time}</RowMeta> : null}
+      <View style={{ alignItems: 'flex-end', minWidth: 70 }}>
+        <AppText
+          testID={`exp-row-amount-${e.id}`}
+          variant="number"
+          style={toCheck ? { backgroundColor: theme.colors.marker, paddingHorizontal: theme.space[1], borderRadius: 4 } : undefined}
+        >
+          {bareSum(formatMinor(signed, e.currency))}
+        </AppText>
+        {toCheck ? <AppText variant="footnote">{t('exp.check')}</AppText> : null}
       </View>
     </Pressable>
   );
@@ -845,6 +867,9 @@ function CategoryOrder({ chips, pending }: { chips: Category[]; pending: string[
     </View>
   );
 }
+
+/** «18 400 ₸» → «18 400»: in rows the sign is implied (screens-v5 «Расходы»). */
+const bareSum = (money: string) => money.replace(/\s?₸$/, '');
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row' },

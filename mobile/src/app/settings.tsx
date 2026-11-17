@@ -50,11 +50,12 @@ export default function SettingsScreen() {
   const back = () => (router.canGoBack() ? router.back() : router.replace('/more'));
 
   return (
-    <Screen testID="settings-screen">
+    // screens-v5 «Настройки»: a second-level screen — the stone sheet opens collapsed.
+    <Screen testID="settings-screen" mode="strip">
       <Header title={t('more.settings')} back={{ onPress: back, label: t('more.title') }} />
-      <View style={{ gap: theme.space[5] }}>
+      <View style={{ gap: theme.space[2] }}>
         <View style={{ gap: theme.space[2] }}>
-          <AppText variant="eyebrow" color="ink2" accessibilityRole="header" style={{ paddingHorizontal: theme.space[1] }}>
+          <AppText variant="section" accessibilityRole="header">
             {t('settings.theme')}
           </AppText>
           <ThemePicker

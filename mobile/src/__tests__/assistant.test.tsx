@@ -60,11 +60,12 @@ describe('«Помощник» — the centre tab', () => {
     await fireEvent.press(screen.getByTestId('tab-assistant'));
     expect(r.getPathname()).toBe('/assistant');
     expect(screen.getByTestId('tab-assistant')).toBeSelected();
-    expect(screen.getByTestId('assistant-subtitle')).toHaveTextContent('новый разговор');
-    expect(screen.getByTestId('chat-tagline')).toHaveTextContent('Скажите или перешлите — я разложу по местам и найду, когда понадобится');
-    for (const k of ['remember', 'forward', 'find', 'plan']) expect(screen.getByTestId(`chat-example-${k}`)).toBeTruthy();
+    // v5 «Помощник · первый раз»: no small text on the terracotta strip; the big line and four example rows.
+    expect(screen.queryByTestId('assistant-subtitle')).toBeNull();
+    expect(screen.getByTestId('chat-tagline')).toHaveTextContent('Скажите или перешлите — я разложу по местам и найду, когда понадобится.');
+    for (const k of ['note', 'spend', 'task', 'find']) expect(screen.getByTestId(`chat-example-${k}`)).toBeTruthy();
     expect(screen.getByText('Ваши записи видите только вы')).toBeTruthy();
-    expect(screen.getByTestId('assistant-input').props.placeholder).toBe('Спросите, запишите или попросите план');
+    expect(screen.getByTestId('assistant-input').props.placeholder).toBe('Спросите или запишите…');
     await fireEvent.press(screen.getByTestId('chat-example-find'));
     await settle(() => screen.getByTestId('assistant-input').props.value === 'Что мне советовали про ');
   });
@@ -134,10 +135,11 @@ describe('«Помощник» — the centre tab', () => {
     useAssistant.setState({ messages: [said, saved] });
     await renderRouter(APP_DIR, { initialUrl: '/assistant' });
     await act(async () => useConnectivity.setState({ online: false }));
-    expect(screen.getByTestId('assistant-subtitle')).toHaveTextContent('нет связи');
+    // v5: «нет связи» is the cloud on the strip (no small text on terracotta), the words are on the paper.
+    expect(screen.getByLabelText('нет связи')).toBeTruthy();
     expect(screen.getByTestId('chat-offline')).toHaveTextContent(/Нет связи/);
     expect(screen.getByText('сохранил как заметку · разберу позже')).toBeTruthy();
-    expect(screen.getAllByText('Сегодня').length).toBeGreaterThan(1); // the day chip and the tab
+    expect(screen.getAllByText('Сегодня').length).toBeGreaterThan(1); // the day caption and the tab
     await act(async () => useConnectivity.setState({ online: true }));
   });
 

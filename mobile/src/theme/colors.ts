@@ -1,234 +1,305 @@
 /**
- * Colour tokens v2 — «Мята» (light) + «Глубина» (dark): Ф-46, Ф-55 (`docs/design/system/design-system.md` v2, `tokens.ts`).
+ * Colour tokens v5 — «Листы» (Ф-79, `docs/design/system/tokens-v5.ts`, design-system.md §11).
  *
- * Roles, same in both themes:
- *   brand      = emerald / mint: everything you press (primary button, mic, centre tab «Расходы», check, links, focus).
- *   highlight  = sun / amber: what matters now (the current item of the day, «Ждёт» badge). One sun fill per screen.
- *   Text on brand is `onBrand`; text on highlight is always dark `onHighlight`.
- *   Red (`danger`) only for «просрочено» and «удалить».
- * Contrast (WCAG 2.1): ink / ink2 ≥ 4.5:1 on bg and surface; ink3 ≥ 4.5:1 on `surface` only (on bg use ink2);
- * brand as text ≥ 4.5:1 on bg / surface; onBrand on brand ≥ 5.5:1. Checked by `__tests__/ui.test.tsx`.
- * Dark `surface` is glass (80 %): contrast is checked on it composited over `bg`.
+ * The screen is a stack of sheets on a dark «tray»: a coloured sheet of the PLACE on top, a light `paper` sheet with
+ * the details under it (dark in the dark theme).
+ *   place     = the 5 sheet colours belong ONLY to places: today · notes · assistant · expenses · tasks.
+ *               «Ещё», search, settings, import, documents, trash → `stone` (graphite in dark). «История» → assistant.
+ *   assistant = terracotta is the assistant's colour only (its sheet, «изменил помощник», «Отменить», the marker).
+ *   action    = buttons, links, toggles, the mic, checks → `btn` / `onBtn` (black in light, light in dark).
+ *   danger    = only irreversible actions («Удалить навсегда», «Удалить все данные»).
+ * Contrast (WCAG 2.1): ink / ink2 / ink3 ≥ 4.5:1 on paper AND paper2; onSheet / onSheet2 ≥ 4.5:1 on every sheet
+ * (onSheet on terracotta is large text only). Checked by `__tests__/ui.test.tsx` and `__tests__/v5.test.tsx`.
+ *
+ * Legacy names (v2 «Мята / Глубина»: bg, surface, brand, …) stay as aliases of the v5 roles, so every screen speaks
+ * the new palette; new code uses the v5 names.
  */
-export type ColorTokens = {
-  /** Screen background (solid fallback) + its vertical gradient (top → bottom). */
+export type PlaceKey = 'today' | 'notes' | 'assistant' | 'expenses' | 'tasks' | 'stone';
+export const PLACE_KEYS: readonly PlaceKey[] = ['today', 'notes', 'assistant', 'expenses', 'tasks', 'stone'];
+
+type V5Tokens = {
+  /** The dark «table» behind the sheets: status bar, tab bar, peeking stack. */
+  tray: string;
+  trayInk: string;
+  /** Inactive tab labels (≥ 4.5 on tray). */
+  trayInk2: string;
+  /** The details sheet under the coloured sheet. */
+  paper: string;
+  /** Inset blocks on paper: banners, progress card, receipt, plan blocks. */
+  paper2: string;
+  /** Row separators. */
+  line: string;
+  /** Chip outlines, the grabber, the dashed «free time». */
+  line2: string;
+  ink: string;
+  ink2: string;
+  /** Smallest grey text; ≥ 4.5 on paper AND paper2. */
+  ink3: string;
+  place: Record<PlaceKey, string>;
+  /** Text / icons on today · notes · assistant · expenses · tasks. */
+  onSheet: string;
+  /** Secondary text on those sheets (not on assistant: there use onSheet ≥ 17 semibold). */
+  onSheet2: string;
+  onStone: string;
+  onStone2: string;
+  /** Terracotta as text on paper («Отменить», «изменил помощник»). */
+  assistantText: string;
+  /** The highlighter behind text the assistant changed (tokens-v5 `highlight`; never yellow). */
+  marker: string;
+  btn: string;
+  onBtn: string;
+  danger: string;
+  onDanger: string;
+  /** The top notice capsule (inverse of paper). */
+  noticeBg: string;
+  noticeInk: string;
+  /** «Отменить» inside the notice (the assistant's action). */
+  noticeUndo: string;
+  scrim: string;
+  /** A document page: always white. */
+  a4: string;
+  a4Ink: string;
+};
+
+/** v2 names kept as aliases of v5 roles (see the mapping in `withLegacy`). */
+type LegacyTokens = {
   bg: string;
   bgGradient: readonly [string, string];
-  /** v2: the radial glow over the top ~40 % of the screen (alpha included). */
   bgGlow: string;
-  /** Cards, list groups, tiles. Dark: glass (semi-transparent) + `glassBorder`. */
   surface: string;
-  /** `surface` without translucency (the assistant capsule, sheets, low-end Android). */
   surfaceSolid: string;
-  /** Sheets, menus, toasts, confirmation cards — one step above surface. */
   surfaceRaised: string;
-  /** Inputs, segmented-control track, «+» circle, key caps. Brand text is not placed on it. */
   surfaceSunken: string;
-  /** 1 px hairline on dark glass cards; null in light (the light ring lives in `elevation.ring`). */
   glassBorder: string | null;
-  /** Text 1 — titles, body. */
-  ink: string;
-  /** Text 2 — secondary, meta on bg. */
-  ink2: string;
-  /** Text 3 — dates / disabled, ONLY on `surface`. */
-  ink3: string;
-  /** Inset row dividers (0.5–1 px). Cards have no borders. */
   separator: string;
-  /** ⋯, chevrons, inactive tab icons, checkbox outlines (≥3:1, non-text). */
   iconSecondary: string;
   brand: string;
   brandPressed: string;
-  /** Selected pill, tonal chips and buttons, icon squares in «Ещё». */
   brandTint: string;
   onBrand: string;
-  /** Coloured shadow: the centre tab, the mic, the voice edge, the status dot only. */
   brandGlow: string;
+  /** v2 «sun»: now the «Сегодня» sheet colour. */
   highlight: string;
   highlightTint: string;
   onHighlight: string;
-  /** Secondary text on highlight. */
   onHighlight2: string;
   success: string;
   successTint: string;
-  /** As text. */
   warning: string;
   warningTint: string;
-  /** Overdue, delete — text and fills. */
-  danger: string;
   dangerTint: string;
-  onDanger: string;
   focus: string;
-  /** Sheet scrim. */
-  scrim: string;
-  /** Bottom fade behind the floating tab bar / assistant capsule (= bgGradient[1]). */
   fade: string;
-  /** The floating tab capsule and its active pill (p14). */
   tabBar: string;
   tabPill: string;
-  /** Progress-bar track. */
   track: string;
-  /** The A4 document preview (always light). */
-  paper: string;
-  /** «‹ Назад» and links placed right on the page background. */
   linkOnBg: string;
 };
 
-/** «Глубина» is built on one tonal scale (design-system v2 §1 п. 4). */
-export const deepScale = {
-  0: '#051F20',
-  1: '#0B2B26',
-  2: '#163832',
-  3: '#235347',
-  4: '#3E6B5A',
-  5: '#8EB69B',
-  6: '#DAF1DE',
-} as const;
+export type ColorTokens = V5Tokens & LegacyTokens;
 
-/** v2.1: deeper mint page, pure white cards with a green ring and two green shadows. */
-export const lightColors: ColorTokens = {
-  bg: '#D3ECDE',
-  bgGradient: ['#D3ECDE', '#DEEFE5'],
-  bgGlow: 'rgba(196,232,211,1)',
-  surface: '#FFFFFF',
-  surfaceSolid: '#FFFFFF',
-  surfaceRaised: '#FFFFFF',
-  surfaceSunken: '#C5E1D1',
-  glassBorder: null,
-  ink: '#0E2A1F',
-  ink2: '#47665A',
-  ink3: '#587669',
-  separator: '#DAEAE1',
-  iconSecondary: '#728E81',
-  brand: '#0A7553',
-  brandPressed: '#06573D',
-  brandTint: '#D2EEDF',
-  onBrand: '#FFFFFF',
-  brandGlow: 'rgba(10,117,83,0.38)',
-  highlight: '#FFC845',
-  highlightTint: '#FFF2CC',
-  onHighlight: '#0E2A1F',
-  onHighlight2: '#3D4A2A',
-  success: '#0A7553',
-  successTint: '#D2EEDF',
-  warning: '#9A6400',
-  warningTint: '#FFF2CC',
-  danger: '#C4343D',
-  dangerTint: '#FBE3E4',
+const lightV5: V5Tokens = {
+  tray: '#1A191E',
+  trayInk: '#F4F1EA',
+  trayInk2: '#B9B4AA',
+  paper: '#FBF8F2',
+  paper2: '#F1ECE2',
+  line: '#E6DFD3',
+  line2: '#CFC8BB',
+  ink: '#1A191E',
+  ink2: '#55525C',
+  ink3: '#6B6774',
+  place: { today: '#F6D35B', notes: '#A9CCF4', assistant: '#E0592C', expenses: '#B6D89C', tasks: '#CDBFF5', stone: '#D8D2C6' },
+  onSheet: '#1A191E',
+  onSheet2: '#3D3A42',
+  onStone: '#1A191E',
+  onStone2: '#3D3A42',
+  assistantText: '#B23E14',
+  marker: '#F7D9CC',
+  btn: '#1A191E',
+  onBtn: '#FBF8F2',
+  danger: '#B42335',
   onDanger: '#FFFFFF',
-  focus: '#0A7553',
-  scrim: 'rgba(10,50,35,0.32)',
-  fade: '#DEEFE5',
-  tabBar: 'rgba(255,255,255,0.97)',
-  tabPill: '#D2EEDF',
-  track: '#E1EEE6',
-  paper: '#FFFFFF',
-  linkOnBg: '#06573D',
+  noticeBg: '#1A191E',
+  noticeInk: '#F4F1EA',
+  noticeUndo: '#FF8A5C',
+  scrim: 'rgba(26,25,30,0.38)',
+  a4: '#FFFFFF',
+  a4Ink: '#1A191E',
 };
 
-export const darkColors: ColorTokens = {
-  bg: deepScale[0],
-  bgGradient: [deepScale[1], deepScale[0]],
-  bgGlow: 'rgba(52,180,120,0.34)',
-  surface: 'rgba(22,56,50,0.80)',
-  surfaceSolid: deepScale[2],
-  surfaceRaised: '#1D4239',
-  surfaceSunken: deepScale[1],
-  glassBorder: 'rgba(218,241,222,0.09)',
-  ink: deepScale[6],
-  ink2: '#A9CDB4',
-  ink3: deepScale[5],
-  separator: 'rgba(218,241,222,0.10)',
-  iconSecondary: '#6F9A80',
-  brand: '#5FD6A8',
-  brandPressed: '#8BE3C1',
-  brandTint: deepScale[3],
-  onBrand: '#04241C',
-  brandGlow: 'rgba(95,214,168,0.50)',
-  highlight: '#FFB547',
-  highlightTint: '#4A3C22',
-  onHighlight: '#12262B',
-  onHighlight2: '#3A3420',
-  success: '#5FD6A8',
-  successTint: deepScale[3],
-  warning: '#FFB547',
-  warningTint: '#4A3C22',
-  danger: '#FF8C86',
-  dangerTint: '#4A2A2E',
-  onDanger: '#2A0D0F',
-  focus: '#8BE3C1',
+const darkV5: V5Tokens = {
+  tray: '#0F0E12',
+  trayInk: '#F1EEE8',
+  trayInk2: '#9A95A2',
+  paper: '#1E1D23',
+  paper2: '#2A2930',
+  line: '#34323A',
+  line2: '#4A4752',
+  ink: '#F1EEE8',
+  ink2: '#C2BDC8',
+  ink3: '#A29DAA',
+  place: { today: '#C9A23A', notes: '#5E93DC', assistant: '#E0592C', expenses: '#6FA35C', tasks: '#9683E6', stone: '#42404A' },
+  onSheet: '#16151A',
+  onSheet2: '#1F1D24',
+  onStone: '#F1EEE8',
+  onStone2: '#C2BDC8',
+  assistantText: '#FF8A5C',
+  marker: '#5A2E20',
+  btn: '#F1EEE8',
+  onBtn: '#16151A',
+  danger: '#FF6B78',
+  onDanger: '#16151A',
+  noticeBg: '#F1EEE8',
+  noticeInk: '#16151A',
+  noticeUndo: '#B23E14',
   scrim: 'rgba(0,0,0,0.55)',
-  fade: deepScale[0],
-  tabBar: 'rgba(17,48,42,0.94)',
-  tabPill: 'rgba(218,241,222,0.13)',
-  track: 'rgba(218,241,222,0.10)',
-  paper: '#F7FAF8',
-  linkOnBg: '#5FD6A8',
+  a4: '#FFFFFF',
+  a4Ink: '#1A191E',
 };
 
-/** Metric tiles (p14): the big coloured number of each tile, same meaning in both themes (≥4.5:1 on surface). */
+/** v2 roles → v5 roles: flat sheets, no glass, no glow; «brand» buttons are `btn`; tints are `paper2`. */
+function withLegacy(c: V5Tokens): ColorTokens {
+  return {
+    ...c,
+    bg: c.paper,
+    bgGradient: [c.paper, c.paper],
+    bgGlow: 'rgba(0,0,0,0)',
+    surface: c.paper2,
+    surfaceSolid: c.paper2,
+    surfaceRaised: c.paper,
+    surfaceSunken: c.paper2,
+    glassBorder: null,
+    separator: c.line,
+    iconSecondary: c.ink3,
+    brand: c.btn,
+    brandPressed: c.ink2,
+    brandTint: c.paper2,
+    onBrand: c.onBtn,
+    brandGlow: 'rgba(0,0,0,0)',
+    highlight: c.place.today,
+    highlightTint: c.paper2,
+    onHighlight: c.onSheet,
+    onHighlight2: c.onSheet2,
+    success: c.ink,
+    successTint: c.paper2,
+    warning: c.ink,
+    warningTint: c.paper2,
+    dangerTint: c.paper2,
+    focus: c.btn,
+    fade: c.tray,
+    tabBar: c.tray,
+    tabPill: 'transparent',
+    track: c.line,
+    linkOnBg: c.ink,
+  };
+}
+
+export const lightColors: ColorTokens = withLegacy(lightV5);
+export const darkColors: ColorTokens = withLegacy(darkV5);
+
+/** Text on a place sheet: dark on the five places; on stone light in the dark theme. */
+export function onPlace(c: ColorTokens, place: PlaceKey): { ink: string; ink2: string } {
+  if (place === 'stone') return { ink: c.onStone, ink2: c.onStone2 };
+  // Terracotta: no secondary grey (only ≥ 17 semibold in onSheet).
+  if (place === 'assistant') return { ink: c.onSheet, ink2: c.onSheet };
+  return { ink: c.onSheet, ink2: c.onSheet2 };
+}
+
+/** @deprecated v2 metric tiles were removed in v5 (§11.11); kept for old imports, all = ink. */
 export type MetricKey = 'tasks' | 'spent' | 'reminders' | 'new';
 export const metricColors: Record<'light' | 'dark', Record<MetricKey, string>> = {
-  light: { tasks: '#0A7553', spent: '#A65A08', reminders: '#2F6FD6', new: '#8A6200' },
-  dark: { tasks: '#5FD6A8', spent: '#FFB547', reminders: '#8DB4FF', new: '#FFD36B' },
+  light: { tasks: lightV5.ink, spent: lightV5.ink, reminders: lightV5.ink, new: lightV5.ink },
+  dark: { tasks: darkV5.ink, spent: darkV5.ink, reminders: darkV5.ink, new: darkV5.ink },
 };
 
-/** Sticky-note fills: a fixed palette of 7. Keys are stored with notes (`lilac` is new in v2). */
+/* ---------------- stickers ---------------- */
+
+/** v5 sticker palette of 5, no place hues. */
+export type StickerKey = 'paper' | 'sand' | 'rose' | 'mist' | 'graphite';
+export const STICKER_KEYS: readonly StickerKey[] = ['paper', 'sand', 'rose', 'mist', 'graphite'];
+export const stickerColors: Record<'light' | 'dark', Record<StickerKey, string>> = {
+  light: { paper: '#FFFFFF', sand: '#EFE4CF', rose: '#F3D6DC', mist: '#D4E8E2', graphite: '#E2DFD8' },
+  dark: { paper: '#2A2930', sand: '#4A4232', rose: '#4E3439', mist: '#2E4640', graphite: '#36353C' },
+};
+export const stickerInk = {
+  light: { ink: '#1A191E', ink2: '#4D4A52' },
+  dark: { ink: '#F1EEE8', ink2: '#C9C4CE' },
+} as const;
+
+/**
+ * Sticky-note keys stored with notes (v2). They are NOT rewritten: on read `legacyStickerMap` turns them into a v5
+ * sticker, so saved data stays as it is.
+ */
 export type NoteColorKey = 'white' | 'yellow' | 'peach' | 'pink' | 'lilac' | 'blue' | 'green';
-
-/** The order of the colour picker (design-system v2 §2). */
+/** Every stored key (the data domain). */
 export const NOTE_COLOR_KEYS: readonly NoteColorKey[] = ['white', 'yellow', 'peach', 'pink', 'lilac', 'blue', 'green'];
-
-/** Text on every fill is `noteInk` (checked ≥4.5:1 by a test). */
-export const lightNoteColors: Record<NoteColorKey, string> = {
-  white: '#FFFFFF',
-  yellow: '#FFEDB0',
-  peach: '#FFDCC7',
-  pink: '#FBD5DC',
-  lilac: '#E6DDFB',
-  blue: '#D4E6FB',
-  green: '#DDEFC4',
+/** v2 NoteColorKey → v5 StickerKey. */
+export const legacyStickerMap: Record<NoteColorKey, StickerKey> = {
+  white: 'paper',
+  yellow: 'sand',
+  peach: 'rose',
+  pink: 'rose',
+  lilac: 'graphite',
+  blue: 'mist',
+  green: 'mist',
 };
+/** The colour picker: one stored key per v5 sticker (paper, sand, rose, mist, graphite). */
+export const STICKER_PICKER_KEYS: readonly NoteColorKey[] = ['white', 'yellow', 'pink', 'blue', 'lilac'];
+/** A stored key (old or new) → its v5 sticker. Unknown keys are paper. */
+export function stickerOf(key: string | null | undefined): StickerKey {
+  if (!key) return 'paper';
+  if ((STICKER_KEYS as readonly string[]).includes(key)) return key as StickerKey;
+  return legacyStickerMap[key as NoteColorKey] ?? 'paper';
+}
 
-/** Ф-57: one step brighter than v2 (they looked muddy on the A23); `noteInk.dark` stays ≥ 4.5:1 on each. */
-export const darkNoteColors: Record<NoteColorKey, string> = {
-  white: '#1D4239',
-  yellow: '#5A4A22',
-  peach: '#5A3C29',
-  pink: '#5A3340',
-  lilac: '#443C60',
-  blue: '#284A68',
-  green: '#3D5530',
-};
+const noteFills = (scheme: 'light' | 'dark') =>
+  Object.fromEntries(NOTE_COLOR_KEYS.map((k) => [k, stickerColors[scheme][legacyStickerMap[k]]])) as Record<NoteColorKey, string>;
+/** Stored key → fill (through `legacyStickerMap`). */
+export const lightNoteColors: Record<NoteColorKey, string> = noteFills('light');
+export const darkNoteColors: Record<NoteColorKey, string> = noteFills('dark');
+export const noteInk = stickerInk;
 
-export const noteInk = { light: { ink: '#1F2B24', ink2: '#4A5A50' }, dark: { ink: '#DAF1DE', ink2: '#B9D5C1' } } as const;
+/* ---------------- expense categories ---------------- */
 
-/** «Расходы» categories: solid = dot / bar / icon, tint = solid at 12% (light) / 22% (dark) behind the icon. */
+/**
+ * «Расходы» categories: deep muted hues, never a place hue. Used as a 12 dp square, a bar segment, a progress fill —
+ * never as a background. `bills` (a v2 key) keeps the slate family.
+ */
 export type CategoryKey = 'food' | 'transport' | 'home' | 'cafe' | 'health' | 'kids' | 'bills' | 'other';
 export const categoryColors: Record<'light' | 'dark', Record<CategoryKey, string>> = {
-  light: { food: '#2E9F6A', transport: '#3E7BEA', home: '#D98A0B', cafe: '#8A63D2', health: '#D9467A', kids: '#00A3B4', bills: '#56708F', other: '#8A9A93' },
-  dark: { food: '#5CC98F', transport: '#78A6FF', home: '#FFC061', cafe: '#C3A6FF', health: '#FF85AE', kids: '#4FD3E0', bills: '#93A9C6', other: '#A9BAB3' },
+  light: { food: '#2F7F70', transport: '#4F5D86', home: '#8C6A43', cafe: '#B05A78', health: '#9B3F4C', kids: '#737A35', bills: '#5B6A78', other: '#8A857B' },
+  dark: { food: '#5FB3A3', transport: '#8E9BC8', home: '#C29C70', cafe: '#DB8CA8', health: '#D97A86', kids: '#AEB65E', bills: '#9AA9B8', other: '#A8A397' },
 };
-export const categoryTintAlpha = { light: 0.15, dark: 0.22 } as const;
-/** Darker variants for amounts on a light card (≥4.5:1); the dark theme uses `categoryColors.dark`. */
-export const categoryText: Record<CategoryKey, string> = {
-  food: '#1E7F52',
-  transport: '#2F6FD6',
-  home: '#A65A08',
-  cafe: '#7650C4',
-  health: '#B23462',
-  kids: '#00788A',
-  bills: '#4A6280',
-  other: '#5E6E67',
-};
+/** v5: category colour is never a background; the tint is only a faint square behind an icon. */
+export const categoryTintAlpha = { light: 0.14, dark: 0.22 } as const;
+/** Amounts are `ink` in v5; kept for old imports (= the light category colour). */
+export const categoryText: Record<CategoryKey, string> = categoryColors.light;
 
-/** Page label colours — only the small page icon / chip, never titles or backgrounds. */
+/** Page label colours → the place sheet colour of the page (only the small `PlaceTab` / icon). */
 export type PageColorKey = 'today' | 'notes' | 'tasks' | 'shopping' | 'expenses' | 'documents';
 export const pageColors: Record<'light' | 'dark', Record<PageColorKey, string>> = {
-  light: { today: '#FFC845', notes: '#E9A800', tasks: '#0A7553', shopping: '#3E7BEA', expenses: '#D9822B', documents: '#56708F' },
-  dark: { today: '#FFB547', notes: '#FFC845', tasks: '#5FD6A8', shopping: '#78A6FF', expenses: '#FFA65C', documents: '#93A9C6' },
+  light: { today: lightV5.place.today, notes: lightV5.place.notes, tasks: lightV5.place.tasks, shopping: lightV5.place.stone, expenses: lightV5.place.expenses, documents: lightV5.place.stone },
+  dark: { today: darkV5.place.today, notes: darkV5.place.notes, tasks: darkV5.place.tasks, shopping: darkV5.place.stone, expenses: darkV5.place.expenses, documents: darkV5.place.stone },
 };
 
-/** `#RRGGBB` + alpha → `rgba(…)` (category tints, 96% tab bar). */
+/** A page template → the place whose colour it carries. */
+export function placeOfTemplate(templateKey: string | null | undefined): PlaceKey {
+  switch (templateKey) {
+    case 'notes':
+      return 'notes';
+    case 'expenses':
+      return 'expenses';
+    case 'tasks':
+      return 'tasks';
+    case 'today':
+      return 'today';
+    default:
+      return 'stone';
+  }
+}
+
+/** `#RRGGBB` + alpha → `rgba(…)`. */
 export function withAlpha(hex: string, alpha: number): string {
   const m = /^#([0-9a-f]{6})$/i.exec(hex);
   if (!m) return hex;
@@ -236,5 +307,5 @@ export function withAlpha(hex: string, alpha: number): string {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
 }
 
-/** Full-screen Android alarm (S14) keeps its fixed colours in both themes — not part of this redesign. */
+/** Full-screen Android alarm (S14) keeps its fixed colours in both themes. */
 export const alarmScreen = { bg: '#B4361E', text: '#FFFFFF' } as const;

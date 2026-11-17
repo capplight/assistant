@@ -94,7 +94,8 @@ describe('colour roles: WCAG contrast in both themes', () => {
   it('follows the phone, and the override wins', async () => {
     const { result } = await renderHook(() => useTheme());
     expect(result.current.scheme).toBe('light');
-    expect(result.current.elevation.card).not.toBeNull();
+    // v5: flat sheets in both themes — no card shadows.
+    expect(result.current.elevation.card).toBeNull();
     await act(async () => useSchemePreference.getState().set('dark'));
     expect(result.current.scheme).toBe('dark');
     expect(result.current.colors.bg).toBe(darkColors.bg);
@@ -106,15 +107,17 @@ describe('colour roles: WCAG contrast in both themes', () => {
 
 describe('layout toolkit', () => {
   it('width classes, gutters and the readable column', async () => {
-    expect(layoutFor({ width: 320, height: 568 })).toMatchObject({ widthClass: 'compact', gutter: 12, contentWidth: 296 });
-    expect(layoutFor({ width: 360, height: 780 })).toMatchObject({ widthClass: 'regular', gutter: 16 });
-    expect(layoutFor({ width: 412, height: 915 })).toMatchObject({ widthClass: 'regular', gutter: 16, twoPane: false });
-    expect(layoutFor({ width: 600, height: 960 })).toMatchObject({ widthClass: 'expanded', gutter: 20, tablet: true });
+    // v5 gutters: 16 at ≤ 340, 20 normally, 24 from 420.
+    expect(layoutFor({ width: 320, height: 568 })).toMatchObject({ widthClass: 'compact', gutter: 16, contentWidth: 288 });
+    expect(layoutFor({ width: 360, height: 780 })).toMatchObject({ widthClass: 'regular', gutter: 20 });
+    expect(layoutFor({ width: 412, height: 915 })).toMatchObject({ widthClass: 'regular', gutter: 20, twoPane: false });
+    expect(layoutFor({ width: 430, height: 932 })).toMatchObject({ widthClass: 'regular', gutter: 24 });
+    expect(layoutFor({ width: 600, height: 960 })).toMatchObject({ widthClass: 'expanded', gutter: 24, tablet: true });
     const big = layoutFor({ width: 1280, height: 800 });
     expect(big).toMatchObject({ widthClass: 'expanded', twoPane: true, landscape: true, contentWidth: 600 });
     // Safe areas eat into the width (landscape notch).
     expect(layoutFor({ width: 844, height: 390, insets: { top: 0, bottom: 21, left: 47, right: 47 } }).contentWidth).toBe(600);
-    expect(layoutFor({ width: 640, height: 360, insets: { top: 0, bottom: 0, left: 40, right: 40 } }).contentWidth).toBe(520);
+    expect(layoutFor({ width: 640, height: 360, insets: { top: 0, bottom: 0, left: 40, right: 40 } }).contentWidth).toBe(512);
   });
 
   it('font scale is clamped to 2.0; ≥1.5 is large font', async () => {
@@ -257,8 +260,9 @@ describe('components', () => {
     expect(onPress).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('b2')).toBeDisabled();
     const flat = (id: string) => StyleSheet.flatten(screen.getByTestId(id).props.style);
-    expect(flat('b1')).toMatchObject({ minHeight: 50, backgroundColor: lightColors.brand, borderRadius: 9999 });
-    expect(flat('b2')).toMatchObject({ backgroundColor: lightColors.brandTint, opacity: 0.4 });
+    // v5: `btn` (black) 52 / radius 26; secondary = 1.5 `ink` outline.
+    expect(flat('b1')).toMatchObject({ minHeight: 52, backgroundColor: lightColors.btn, borderRadius: 26 });
+    expect(flat('b2')).toMatchObject({ backgroundColor: 'transparent', borderWidth: 1.5, borderColor: lightColors.ink, opacity: 0.4 });
     expect(flat('b3').minHeight).toBe(48);
     expect(screen.getByText('Начать')).toHaveStyle({ fontSize: 17, color: lightColors.onBrand });
   });
@@ -334,9 +338,10 @@ describe('components', () => {
         <ListRow testID="r2" title="Два" />
       </ListGroup>,
     );
+    // v5: rows lie on the paper; a 1 dp `line` between them (the whole row), none after the last.
     const divider = (id: string) => {
-      const box = screen.getByTestId(id).children[0] as unknown as { children: { props: { style: unknown } }[] };
-      return StyleSheet.flatten(box.children[0]!.props.style as never) as { borderBottomWidth?: number };
+      const box = screen.getByTestId(id).children[0] as unknown as { props: { style: unknown } };
+      return StyleSheet.flatten(box.props.style as never) as { borderBottomWidth?: number };
     };
     expect(divider('r1').borderBottomWidth).toBeGreaterThan(0);
     expect(divider('r2').borderBottomWidth).toBeUndefined();
@@ -345,7 +350,7 @@ describe('components', () => {
   it('StickyNote: note fill, long press opens the menu, 8-line preview', async () => {
     const onLong = jest.fn();
     await render(<StickyNote testID="n" text="Купить молоко" color="green" onLongPress={onLong} pinned />);
-    expect(StyleSheet.flatten(screen.getByTestId('n').props.style)).toMatchObject({ backgroundColor: lightNoteColors.green, borderRadius: 18 });
+    expect(StyleSheet.flatten(screen.getByTestId('n').props.style)).toMatchObject({ backgroundColor: lightNoteColors.green, borderRadius: 20 });
     await fireEvent(screen.getByTestId('n'), 'longPress');
     expect(onLong).toHaveBeenCalled();
     expect(screen.getByText('Купить молоко').props.numberOfLines).toBe(6);
@@ -365,7 +370,7 @@ describe('components', () => {
     await fireEvent.press(screen.getByTestId('t-undo'));
     await fireEvent.press(screen.getByLabelText('Закрыть'));
     expect([ex, undo, close].map((f) => f.mock.calls.length)).toEqual([1, 1, 1]);
-    expect(StyleSheet.flatten(screen.getByTestId('t').props.style)).toMatchObject({ borderRadius: 22, minHeight: 52 });
+    expect(StyleSheet.flatten(screen.getByTestId('t').props.style)).toMatchObject({ borderRadius: 18, minHeight: 54, backgroundColor: lightColors.noticeBg });
   });
 
   it('TabBar: tablist, selected tab, brand pill', async () => {
@@ -382,6 +387,8 @@ describe('components', () => {
     expect(screen.getByTestId('tab-b')).not.toBeSelected();
     await fireEvent.press(screen.getByTestId('tab-b'));
     expect(go).toHaveBeenCalledTimes(1);
-    expect(screen.getByText('Сегодня')).toHaveStyle({ color: lightColors.brand });
+    // v5: the active word is `trayInk` on the dark tray, the others `trayInk2`.
+    expect(screen.getByText('Сегодня')).toHaveStyle({ color: lightColors.trayInk });
+    expect(screen.getByText('Ещё')).toHaveStyle({ color: lightColors.trayInk2 });
   });
 });

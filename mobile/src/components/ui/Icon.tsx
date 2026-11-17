@@ -20,7 +20,8 @@ export type { LucideIcon };
 
 /** The only icon sizes of the system (design-system §1): 20 / 24 / 28. */
 export type IconSize = 'sm' | 'md' | 'lg';
-const SIZES: Record<IconSize, 20 | 24 | 28> = { sm: 20, md: 24, lg: 28 };
+// v5 sizes: 18 · 22 · 26 (screens-v5 `.i.s`, `.i`, `.i.l`).
+const SIZES: Record<IconSize, number> = { sm: 18, md: 22, lg: 26 };
 
 export function iconPx(s: IconSize = 'md'): number {
   return SIZES[s];

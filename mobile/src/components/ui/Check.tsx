@@ -17,10 +17,10 @@ type CircleProps = {
   testID?: string;
 };
 
-/** The 24 circle itself: outline 1.75 `iconSecondary`; checked = `brand` fill + `onBrand` check. */
-export function CheckMark({ checked }: { checked: boolean }) {
+/** v5 check (`.ck`): 26 (32 at large text), a 2 `ink` ring; done = `ink` fill + `paper` tick; waiting = `ink3` ring. */
+export function CheckMark({ checked, waiting = false }: { checked: boolean; waiting?: boolean }) {
   const theme = useTheme();
-  const s = theme.size.checkbox;
+  const s = theme.m.checkbox;
   return (
     <View
       accessibilityElementsHidden
@@ -31,13 +31,14 @@ export function CheckMark({ checked }: { checked: boolean }) {
           width: s,
           height: s,
           borderRadius: s / 2,
-          borderWidth: checked ? 0 : theme.icon.strokeWidth,
-          borderColor: theme.colors.iconSecondary,
-          backgroundColor: checked ? theme.colors.brand : 'transparent',
+          borderWidth: checked ? 0 : 2,
+          borderColor: waiting ? theme.colors.ink3 : theme.colors.ink,
+          borderStyle: waiting ? 'dashed' : 'solid',
+          backgroundColor: checked ? theme.colors.ink : 'transparent',
         },
       ]}
     >
-      {checked ? <Check size={16} color={theme.colors.onBrand} strokeWidth={2.5} /> : null}
+      {checked ? <Check size={15} color={theme.colors.paper} strokeWidth={3} /> : null}
     </View>
   );
 }

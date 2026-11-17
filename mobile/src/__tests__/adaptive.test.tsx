@@ -25,12 +25,14 @@ describe.each(['/', 'notes'] as const)('%s', (route) => {
     for (let i = 0; i < 5; i++) await act(async () => void (await jest.advanceTimersByTimeAsync(40)));
 
     expect(auditLayout(screen.toJSON(), { windowWidth: w.width })).toEqual([]);
-    expect(flat('main-footer').maxWidth).toBe(600);
+    // v5: the tray spans the window; the strip and the tab cells stay in a ≤ 600 column.
+    expect(flat('assistant-strip-column').maxWidth).toBe(600);
     expect(flat('bottom-tabs').maxWidth).toBe(600);
     const tabs = screen.getAllByRole('tab').filter((t) => typeof t.props.testID === 'string' && t.props.testID.startsWith('tab-'));
-    // Ф-48: Сегодня · Заметки · Расходы · Дела · Ещё; at ≥150 % «Заметки» go to «Ещё».
-    expect(tabs.length).toBe(w.fontScale >= 1.5 ? 3 : 5);
-    for (const id of ['assistant-plus', 'assistant-mic']) {
+    // v5 (§11.5): the same five tabs at every font size.
+    expect(tabs.length).toBe(5);
+    // v5 strip: the dot and the mic (≥ 48 target); «+» is on the page sheet (Ф-82).
+    for (const id of ['assistant-mic']) {
       expect(flat(id).width).toBeGreaterThanOrEqual(48);
       expect(flat(id).height).toBeGreaterThanOrEqual(48);
     }

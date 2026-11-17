@@ -2,9 +2,9 @@ import { Pin } from 'lucide-react-native';
 import { Children, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View, type AccessibilityActionEvent, type AccessibilityActionInfo, type LayoutChangeEvent } from 'react-native';
 
-import { gridItemWidth, NOTE_COLOR_KEYS, noteInk, useLayout, useTheme, withAlpha, type NoteColorKey } from '@/theme';
+import Svg, { Path } from 'react-native-svg';
 
-import { cardEdge } from './Card';
+import { gridItemWidth, noteInk, STICKER_PICKER_KEYS, useLayout, useTheme, type NoteColorKey } from '@/theme';
 
 import { AppText } from '../AppText';
 import { Icon } from './Icon';
@@ -40,16 +40,17 @@ type NoteProps = {
  * so it keeps its colour; the person's own choice always wins. Display only — nothing is saved.
  */
 export function autoNoteColor(seed: string): NoteColorKey {
-  const fills = NOTE_COLOR_KEYS.filter((k) => k !== 'white');
+  // v5: one stored key per sticker colour (sand, rose, mist, graphite), never a place hue.
+  const fills = STICKER_PICKER_KEYS.filter((k) => k !== 'white');
   let h = 0;
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
   return fills[h % fills.length]!;
 }
 
 /**
- * A sticker v2 (design-system §5 StickyNote v2): the note colour as fill (`white` = surface + card shadow and ring),
- * radius 18, padding 12; grid: title 15/700, text 14 up to 8 lines, date 12; list: title 17, text 15, the date top
- * right. Text is `noteInk` on every fill (a preview of the person's own note; the full text opens on tap).
+ * A sticker v5 (screens-v5 `.stk`): the sticker colour as fill (old keys through `legacyStickerMap`; «бумага» has a
+ * 1 `line` edge), radius 20, padding 14; grid: title 16/700, text 14 `stickerInk.ink2`, date 13; list: title 17.
+ * Changed by the assistant: the 24 terracotta fold in the top right corner (no glow).
  */
 export function StickyNote({
   text,
@@ -74,8 +75,8 @@ export function StickyNote({
   const list = look === 'list';
   const titleStyle = list
     ? { fontFamily: theme.type.headline.fontFamily, fontSize: 17, lineHeight: 22, color: ink.ink }
-    : { fontFamily: theme.type.sectionLabel.fontFamily, fontSize: 15, lineHeight: 20, color: ink.ink };
-  const textStyle = list ? { fontSize: 15, lineHeight: 20, color: ink.ink } : { fontSize: 14, lineHeight: 19, color: ink.ink };
+    : { fontFamily: theme.type.headline.fontFamily, fontSize: 16, lineHeight: 20, color: ink.ink };
+  const textStyle = list ? { fontSize: 15, lineHeight: 21, color: ink.ink2 } : { fontSize: 14, lineHeight: 20, color: ink.ink2 };
   const dateText = date ? (
     <AppText variant="caption" style={{ color: ink.ink2, fontFamily: theme.type.footnote.fontFamily }}>
       {date}
@@ -93,28 +94,21 @@ export function StickyNote({
       delayLongPress={400}
       style={({ pressed }) => [
         {
-          backgroundColor: highlighted ? theme.colors.highlightTint : theme.notes[color],
-          borderRadius: theme.radius.lg,
-          padding: theme.space[3],
-          paddingHorizontal: list ? theme.space[4] : theme.space[3],
-          gap: theme.space[1],
+          backgroundColor: theme.notes[color],
+          borderRadius: 20,
+          paddingTop: 14,
+          paddingHorizontal: 14,
+          paddingBottom: 13,
+          gap: 4,
+          overflow: 'hidden',
         },
-        white ? theme.elevation.card : null,
-        white ? cardEdge(theme) : null,
-        changed
-          ? {
-              borderWidth: 1.5,
-              borderColor: withAlpha(theme.colors.brand, 0.5),
-              shadowColor: theme.colors.brand,
-              shadowOpacity: 0.35,
-              shadowRadius: 10,
-              shadowOffset: { width: 0, height: 0 },
-              elevation: 3,
-            }
-          : null,
+        white ? { borderWidth: 1, borderColor: theme.colors.line } : null,
+        // A new / found sticker is ringed in terracotta for a moment (the assistant put it here).
+        highlighted ? { borderWidth: 2, borderColor: theme.colors.place.assistant } : null,
         pressedStyle(pressed),
       ]}
     >
+      {changed ? <Fold paper={theme.colors.paper} color={theme.colors.place.assistant} testID={testID ? `${testID}-changed` : undefined} /> : null}
       {title || pinned || (list && date) ? (
         <View style={styles.head}>
           {title ? (
@@ -175,7 +169,20 @@ export function ResponsiveGrid({ children, columns, gap = 8, testID }: GridProps
   );
 }
 
+/** The 24 dp «изменил помощник» fold: a terracotta corner under a paper triangle. */
+function Fold({ paper, color, testID }: { paper: string; color: string; testID?: string }) {
+  return (
+    <View testID={testID} pointerEvents="none" style={styles.fold}>
+      <Svg width={24} height={24}>
+        <Path d="M0 0 H24 V24 Z" fill={paper} />
+        <Path d="M0 0 L24 24 H8 A8 8 0 0 1 0 16 Z" fill={color} />
+      </Svg>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  fold: { position: 'absolute', right: 0, top: 0, width: 24, height: 24, borderTopRightRadius: 20, overflow: 'hidden', zIndex: 1 },
   head: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   listBody: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   flex: { flex: 1 },

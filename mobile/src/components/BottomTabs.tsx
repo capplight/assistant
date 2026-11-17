@@ -1,5 +1,5 @@
 import { router, usePathname } from 'expo-router';
-import { CalendarDays, LayoutGrid, MessageCircleMore, StickyNote, WalletCards } from 'lucide-react-native';
+import { CreditCard, Ellipsis, MessageSquareText, StickyNote, Sun } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -10,7 +10,7 @@ import { useFeatures } from '@/store/features';
 import { selectSortedPages, usePages, type Page } from '@/store/pages';
 import { useToast } from '@/store/toast';
 import { useView } from '@/store/view';
-import { useTheme } from '@/theme';
+import { type PlaceKey } from '@/theme';
 
 import type { LucideIcon } from './ui/Icon';
 import { TabBar } from './ui/TabBar';
@@ -23,39 +23,41 @@ export type MainTab = {
   /** The page of a slot; null for «Сегодня», «Помощник», «Ещё» and a «Расходы» not made yet. */
   page: Page | null;
   centre: boolean;
+  /** v5: the colour of the capsule. */
+  place: PlaceKey;
   href: string | null;
   /** «Расходы» made on the first tap (Ф-48). */
   ensure?: 'expenses';
 };
 
-const SLOT_ICON = { notes: StickyNote, expenses: WalletCards, assistant: MessageCircleMore } as const;
+const SLOT_ICON = { notes: StickyNote, expenses: CreditCard, assistant: MessageSquareText } as const;
 
 /**
- * Ф-58: «Сегодня · Заметки · Помощник · Расходы · Ещё» (`pages/tabs.ts`); at font ≥150 % «Сегодня · Помощник · Ещё».
+ * Ф-58: «Сегодня · Заметки · Помощник · Расходы · Ещё» (`pages/tabs.ts`), the same five at every font size (v5).
  * The labels are the template's short names (a renamed page keeps its own).
  */
 export function useTabs(): MainTab[] {
   const { t } = useTranslation();
-  const { largeFont } = useTheme();
   const { tabLabel } = usePageLabels();
   const shopping = useFeatures((f) => f.shopping);
   const pages = usePages(useShallow(selectSortedPages));
-  const { slots } = mainTabs(pages, { largeFont, shopping });
+  const { slots } = mainTabs(pages, { largeFont: false, shopping });
   return [
-    { key: 'today', label: t('tpl.short.today'), icon: CalendarDays, page: null, centre: false, href: '/' },
+    { key: 'today', label: t('tpl.short.today'), icon: Sun, page: null, centre: false, place: 'today', href: '/' },
     ...slots.map((s): MainTab => {
-      if (s.key === 'assistant') return { key: 'assistant', label: t('tabs.assistant'), icon: SLOT_ICON.assistant, page: null, centre: true, href: '/assistant' };
+      if (s.key === 'assistant') return { key: 'assistant', label: t('tabs.assistant'), icon: SLOT_ICON.assistant, page: null, centre: true, place: 'assistant', href: '/assistant' };
       return {
         key: s.page?.id ?? s.key,
         label: s.page ? tabLabel(s.page) : t(`tpl.short.${s.key}`),
         icon: SLOT_ICON[s.key],
         page: s.page,
         centre: false,
+        place: s.key,
         href: s.page ? `/page/${s.page.id}` : null,
         ...(s.key === 'expenses' ? { ensure: 'expenses' as const } : {}),
       };
     }),
-    { key: 'more', label: t('tabs.more'), icon: LayoutGrid, page: null, centre: false, href: '/more' },
+    { key: 'more', label: t('tabs.more'), icon: Ellipsis, page: null, centre: false, place: 'stone', href: '/more' },
   ];
 }
 
@@ -107,6 +109,7 @@ export function BottomTabs({ bottomInset = 0 }: { bottomInset?: number }) {
         label: tab.label,
         icon: tab.icon,
         centre: tab.centre,
+        place: tab.place,
         active: tab.key === activeKey,
         accessibilityLabel: t('tabs.a11y', { name: tab.label }),
         onPress: () => void open(tab),

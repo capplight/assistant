@@ -7,9 +7,8 @@ import { Icon, type LucideIcon } from './Icon';
 import { hitSlopFor, pressedStyle } from './motion';
 
 /**
- * - `tonal`    brandTint + brand (suggestions, actions in the answer);
- * - `neutral`  surfaceSunken + ink;
- * - `selected` brand + onBrand (the chosen filter).
+ * v5 chip (screens-v5 `.chip`): 38 high, radius 19, 1.5 `line2` outline, Onest 600 15 `ink`;
+ * `selected` = `btn` fill + `onBtn`. `tonal` / `neutral` are v2 names of the outlined chip.
  */
 export type ChipVariant = 'tonal' | 'neutral' | 'selected';
 
@@ -28,19 +27,28 @@ type Props = {
 /** Height 32 (hit 48), radius round, padding 12, `callout` 600 (design-system §3 Chip). Wraps, never cut. */
 export function Chip({ label, variant = 'tonal', icon, onPress, accessibilityLabel, selected, style, testID }: Props) {
   const theme = useTheme();
-  const bg = { tonal: theme.colors.brandTint, neutral: theme.colors.surfaceSunken, selected: theme.colors.brand }[variant];
-  const fg: keyof ColorTokens = variant === 'tonal' ? 'brand' : variant === 'selected' ? 'onBrand' : 'ink';
+  const on = variant === 'selected';
+  const bg = on ? theme.colors.btn : 'transparent';
+  const fg: keyof ColorTokens = on ? 'onBtn' : 'ink';
   const inner = (
     <>
       {icon ? <Icon icon={icon} size="sm" color={fg} /> : null}
-      <AppText variant="callout" color={fg} style={[styles.label, { fontFamily: theme.type.sectionLabel.fontFamily }]}>
+      <AppText variant="callout" color={fg} style={[styles.label, { fontFamily: theme.type.sheetMeta.fontFamily, lineHeight: 19 }]}>
         {label}
       </AppText>
     </>
   );
   const box: StyleProp<ViewStyle> = [
     styles.chip,
-    { minHeight: theme.size.chipHeight, backgroundColor: bg, paddingHorizontal: theme.space[3], gap: theme.space[1], borderRadius: theme.radius.round },
+    {
+      minHeight: theme.size.chipHeight,
+      backgroundColor: bg,
+      paddingHorizontal: 15,
+      gap: 6,
+      borderRadius: theme.size.chipHeight / 2,
+      borderWidth: on ? 0 : 1.5,
+      borderColor: theme.colors.line2,
+    },
     style,
   ];
   if (!onPress)

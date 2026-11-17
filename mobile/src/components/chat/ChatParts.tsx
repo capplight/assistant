@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { AiLabel } from '@/components/AiLabel';
-import { Check, ChevronRight, Clock, CloudOff, FileUp, Map as MapIcon, MessageCircleMore, Search, StickyNote, Undo2 } from 'lucide-react-native';
+import { Clock, CloudOff, CreditCard, Lock, MessageSquareText, StickyNote, Sun, Undo2, ListChecks, Ellipsis } from 'lucide-react-native';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -13,53 +13,46 @@ import type { ChatAction, ChatMessage } from '@/store/assistant';
 import { usePages, type Page } from '@/store/pages';
 import { useToast } from '@/store/toast';
 import { useView } from '@/store/view';
-import { useTheme, withAlpha } from '@/theme';
+import { placeOfTemplate, useTheme, type PlaceKey } from '@/theme';
 
 import { AppText } from '../AppText';
 import { answerNotice, useLocalHitTitles } from '../answerText';
 import { ReplaceSheet } from '../ReplaceSheet';
 import { LocalHitChips, SourceChips } from '../SourceChips';
-import { TileGrid } from '../ui/Brief';
 import { Button } from '../ui/Button';
-import { cardEdge } from '../ui/Card';
-import { Icon, PageIcon, type LucideIcon } from '../ui/Icon';
+import { ResultCard } from '../ui/Floating';
+import { Icon, type LucideIcon } from '../ui/Icon';
+import { BigNumber, Inset, PlaceTab, Row } from '../ui/Leaf';
 import { pressedStyle } from '../ui/motion';
 
-/** The glowing round mark of the assistant (header 40, empty state 76). */
+/** The assistant's mark: the terracotta circle with the chat icon (onboarding, empty states). No glow (v5). */
 export function AssistantMark({ size = 40 }: { size?: number }) {
   const theme = useTheme();
   return (
     <View
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
-      style={[
-        styles.center,
-        { width: size, height: size, borderRadius: size / 2, backgroundColor: theme.colors.brand },
-        { shadowColor: theme.colors.brand, shadowOpacity: 0.55, shadowRadius: size / 3, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
-      ]}
+      style={[styles.center, { width: size, height: size, borderRadius: size / 2, backgroundColor: theme.colors.place.assistant }]}
     >
-      <MessageCircleMore size={size * 0.48} color={theme.colors.onBrand} strokeWidth={theme.icon.strokeWidth} />
+      <MessageSquareText size={size * 0.48} color={theme.colors.onSheet} strokeWidth={theme.icon.strokeWidth} />
     </View>
   );
 }
 
-/** «Сегодня» — the day between messages, a `surfaceSunken` chip in the middle. */
+/** «Сегодня, 9:38» — the day between messages: a centred caption (`ink3` 13). */
 export function DaySeparator({ label }: { label: string }) {
-  const theme = useTheme();
   return (
-    <View style={[styles.center, { marginVertical: theme.space[1] }]} accessibilityRole="header">
-      <View style={{ backgroundColor: theme.colors.surfaceSunken, borderRadius: theme.radius.round, paddingHorizontal: theme.space[3], paddingVertical: 4 }}>
-        <AppText variant="footnote" color="ink2">
-          {label}
-        </AppText>
-      </View>
+    <View style={styles.center} accessibilityRole="header">
+      <AppText variant="footnote" style={{ textAlign: 'center' }}>
+        {label}
+      </AppText>
     </View>
   );
 }
 
 /**
- * What the person said: right, filled `brand`, `onBrand` text. Said in the line of another tab: a caption
- * «с вкладки «Заметки»» above (v4 `FromTabCaption`) — one conversation, two ways in.
+ * What the person said (`.me`): right, `btn` fill, `onBtn` text 16, radius 20 20 6 20, ≤ 82 %. Said in the line of
+ * another tab: a caption «с вкладки «Заметки»» above — one conversation, two ways in.
  */
 export function UserBubble({ m, testID }: { m: ChatMessage; testID?: string }) {
   const theme = useTheme();
@@ -68,7 +61,7 @@ export function UserBubble({ m, testID }: { m: ChatMessage; testID?: string }) {
   return (
     <View style={{ alignItems: 'flex-end', gap: 4 }}>
       {fromTab ? (
-        <AppText testID={testID ? `${testID}-from` : undefined} variant="caption" color="ink2">
+        <AppText testID={testID ? `${testID}-from` : undefined} variant="caption">
           {t('assistant.from_tab', { page: fromTab })}
         </AppText>
       ) : null}
@@ -76,15 +69,15 @@ export function UserBubble({ m, testID }: { m: ChatMessage; testID?: string }) {
         testID={testID}
         accessible
         accessibilityLabel={t('chat.you', { text: m.text })}
-        style={{ maxWidth: '86%', backgroundColor: theme.colors.brand, borderRadius: theme.radius.lg, borderBottomRightRadius: theme.radius.xs, paddingHorizontal: theme.space[4], paddingVertical: theme.space[2] + 2 }}
+        style={{ maxWidth: '82%', backgroundColor: theme.colors.btn, borderTopLeftRadius: 20, borderTopRightRadius: 20, borderBottomRightRadius: 6, borderBottomLeftRadius: 20, paddingHorizontal: 15, paddingVertical: 11 }}
       >
-        <AppText style={{ color: theme.colors.onBrand }}>{m.text}</AppText>
+        <AppText style={{ color: theme.colors.onBtn, lineHeight: 22 }}>{m.text}</AppText>
       </View>
     </View>
   );
 }
 
-/** The answer: left, no bubble. A short answer is a value (`answerValue`) with its note; sources as chips. */
+/** The answer (`.bot`): left, no bubble, 16.5 medium. A short answer is the ONE big number with its note beside. */
 export function AssistantMessage({ m, testID }: { m: ChatMessage; testID?: string }) {
   const theme = useTheme();
   const { t } = useTranslation();
@@ -96,30 +89,36 @@ export function AssistantMessage({ m, testID }: { m: ChatMessage; testID?: strin
   return (
     <View testID={testID} style={{ gap: theme.space[2], alignItems: 'stretch' }}>
       {m.saved ? (
-        <View style={[styles.row, { gap: 6 }]}>
+        <View style={[styles.row, { gap: 5, justifyContent: 'flex-end' }]}>
           <Icon icon={Clock} size="sm" color="ink3" />
           <AppText variant="footnote">{t('assistant.saved_later')}</AppText>
         </View>
       ) : null}
-      {m.status === 'streaming' && !m.text ? <AppText color="ink2">{m.activity ?? t('assistant.thinking')}</AppText> : null}
+      {m.status === 'streaming' && !m.text ? <AppText variant="chat" color="ink2">{m.activity ?? t('assistant.thinking')}</AppText> : null}
       {m.action && (m.action.undoOf || (m.action.undid?.length ?? 0) > 0) ? (
         <UndoResultCard m={m} action={m.action} />
       ) : m.action ? (
         <ActionResultCard m={m} action={m.action} />
       ) : null}
       {value ? (
-        <View>
-          <AppText testID={testID ? `${testID}-value` : undefined} variant="answerValue">
-            {value.value}
-          </AppText>
-          {value.note ? <AppText variant="footnote">{value.note}</AppText> : null}
+        <View style={[styles.row, { alignItems: 'flex-end', gap: 12 }]}>
+          <View>
+            <BigNumber testID={testID ? `${testID}-value` : undefined} value={value.value} />
+          </View>
+          {value.note ? (
+            <AppText variant="small" style={[styles.flex, { paddingBottom: 5 }]}>
+              {value.note}
+            </AppText>
+          ) : null}
         </View>
       ) : m.text && !m.action && !m.saved ? (
-        <AppText testID={testID ? `${testID}-text` : undefined}>{m.text}</AppText>
+        <AppText testID={testID ? `${testID}-text` : undefined} variant="chat">
+          {m.text}
+        </AppText>
       ) : null}
       {m.proposal && !m.proposal.answered ? (
         <View style={{ gap: theme.space[2] }}>
-          <AppText>{m.proposal.question}</AppText>
+          <AppText variant="chat">{m.proposal.question}</AppText>
           <View style={[styles.row, { flexWrap: 'wrap', gap: theme.space[2] }]}>
             {m.proposal.options.map((o) => (
               <Button
@@ -137,13 +136,13 @@ export function AssistantMessage({ m, testID }: { m: ChatMessage; testID?: strin
       {notice ? <AppText variant="callout">{notice}</AppText> : null}
       {hits.length > 0 ? <LocalHitChips messageId={m.id} recordIds={hits} titles={titles} /> : null}
       {m.sources && m.sources.length > 0 ? <SourceChips messageId={m.id} sources={m.sources} /> : null}
-      {/* R-06: the one label on AI-made content, shown whole. */}
-      {m.status === 'done' && m.aiGenerated && !!m.text && !m.action ? (
-        <AiLabel testID={testID ? `${testID}-ai` : undefined} variant="footnote" />
-      ) : null}
+      {m.status === 'done' && m.aiGenerated && !!m.text && !m.action ? <AiLabel testID={testID ? `${testID}-ai` : undefined} variant="footnote" /> : null}
     </View>
   );
 }
+
+/** The icon of a place on a result sheet. */
+const PLACE_ICON: Record<PlaceKey, LucideIcon> = { today: Sun, notes: StickyNote, assistant: MessageSquareText, expenses: CreditCard, tasks: ListChecks, stone: Ellipsis };
 
 /** The record a change is about, once it is on the phone (it may still come by /sync). */
 async function recordOf(serverId: string | null): Promise<LocalRecord | null> {
@@ -156,9 +155,9 @@ async function recordOf(serverId: string | null): Promise<LocalRecord | null> {
 }
 
 /**
- * The result of a change in the conversation (v4 `ActionResultCard` / `MultiActionCard`): one result — the page's
- * square, what, «Дела · завтра, 10:00», ✓ and «Переложить · Отменить»; several — «Сделал 3 дела», a row per place
- * (each opens it) and «Переложить · Отменить всё». Undone: «отменено». It stays in the conversation.
+ * The result of a change in the conversation (screens-v5 «Помощник · разговор»): each thing made is a small sheet in
+ * the colour of its place («Дела · завтра, 10:00» over «Позвонить в ЦОН»; a tap opens it), then «Переложить» (an
+ * ordinary link) · «Отменить» / «Отменить всё» (terracotta: the assistant's action). Undone: struck, «отменено».
  */
 export function ActionResultCard({ m, action }: { m: ChatMessage; action: ChatAction }) {
   const theme = useTheme();
@@ -203,75 +202,55 @@ export function ActionResultCard({ m, action }: { m: ChatMessage; action: ChatAc
     if (!rec) return showToast(t('save.replace_later'), 3000);
     setReplace({ record: rec, what: rows[0]?.title ?? actionText(action, i18n.language), from: firstPage });
   };
-  const square = (icon: LucideIcon | null, page: Page | null) => (
-    <View style={[styles.center, { width: 36, height: 36, borderRadius: theme.radius.sm, backgroundColor: theme.colors.brandTint }]}>
-      {page ? <PageIcon name={page.icon} color={theme.colors.brand} size={20} /> : <Icon icon={icon ?? Check} size="sm" color="brand" />}
-    </View>
-  );
-  const card = [{ backgroundColor: theme.colors.surface, borderRadius: theme.radius.xl, padding: theme.space[3], gap: theme.space[2] }, theme.elevation.card, cardEdge(theme)];
+  const shown = rows.length > 0 ? rows : [{ itemId: null, title: null, text: actionText(action, i18n.language), pageServerId: action.pageServerId, undone: !!action.undone }];
   return (
-    <View testID={`chat-action-${m.id}`} style={card}>
-      {many ? (
-        <>
-          <View style={[styles.row, { gap: theme.space[2] }]}>
-            <View style={[styles.center, { width: 20, height: 20, borderRadius: 10, backgroundColor: done ? theme.colors.brand : theme.colors.iconSecondary }]}>
-              <Check size={13} color={theme.colors.onBrand} strokeWidth={2.5} />
-            </View>
-            <AppText variant="bodyStrong" color="brand" style={done ? undefined : styles.struck}>
-              {groupNotice ? (i18n.language === 'kk' && groupNotice.text_kk) || groupNotice.text_ru : t('assistant.did_many', { count: rows.length })}
-            </AppText>
-          </View>
-          {rows.map((c, i) => {
-            const page = pageByServer(c.pageServerId);
-            return (
-              <Pressable
-                key={`${c.itemId ?? 'x'}-${i}`}
-                testID={`chat-action-row-${i}`}
-                accessibilityRole="button"
-                onPress={() => void open(c.itemId)}
-                style={({ pressed }) => [
-                  styles.row,
-                  { gap: theme.space[3], minHeight: theme.size.rowHeightMeta, borderTopWidth: i === 0 ? 0 : StyleSheet.hairlineWidth, borderTopColor: theme.colors.separator },
-                  pressedStyle(pressed),
-                ]}
-              >
-                {square(StickyNote, page)}
-                <View style={styles.flex}>
-                  <AppText style={c.undone ? styles.struck : undefined}>{c.title ?? c.text}</AppText>
-                  {page ? <AppText variant="footnote">{title(page)}</AppText> : null}
-                </View>
-                <Icon icon={ChevronRight} size="sm" color="iconSecondary" />
-              </Pressable>
-            );
-          })}
-        </>
-      ) : (
-        <View style={[styles.row, { gap: theme.space[3] }]}>
-          {square(Check, firstPage)}
-          <View style={styles.flex}>
-            <AppText variant="headline" style={done ? undefined : styles.struck}>
-              {rows[0]?.title ?? actionText(action, i18n.language)}
-            </AppText>
-            {firstPage || action.pageTitle ? <AppText variant="footnote">{firstPage ? title(firstPage) : action.pageTitle}</AppText> : null}
-          </View>
-          {done ? (
-            <View style={[styles.center, { width: 26, height: 26, borderRadius: 13, backgroundColor: theme.colors.brand }]}>
-              <Check size={15} color={theme.colors.onBrand} strokeWidth={2.5} />
-            </View>
-          ) : null}
-        </View>
-      )}
+    <View testID={`chat-action-${m.id}`} style={{ gap: 6 }}>
+      {many && groupNotice ? <AppText variant="chat">{(i18n.language === 'kk' && groupNotice.text_kk) || groupNotice.text_ru}</AppText> : null}
+      {many && !groupNotice ? <AppText variant="chat">{t('assistant.did_many', { count: rows.length })}</AppText> : null}
+      {shown.map((c, i) => {
+        const page = pageByServer(c.pageServerId) ?? (i === 0 ? firstPage : null);
+        const place = page ? placeOfTemplate(page.templateKey) : 'stone';
+        const caption = page ? title(page) : (action.pageTitle ?? t('assistant.saved'));
+        return (
+          <ResultCard
+            key={`${c.itemId ?? 'x'}-${i}`}
+            testID={many ? `chat-action-row-${i}` : undefined}
+            place={place}
+            icon={PLACE_ICON[place]}
+            caption={c.title && c.text && c.text !== c.title && many ? `${caption} · ${c.text}` : caption}
+            title={c.title ?? c.text}
+            onPress={() => void open(c.itemId)}
+            style={c.undone || !done ? { opacity: 0.55 } : undefined}
+          />
+        );
+      })}
       {done ? (
         canUndo ? (
-          <View style={[styles.row, { justifyContent: 'flex-end', gap: theme.space[1], flexWrap: 'wrap' }]}>
+          <View style={[styles.row, { gap: 4, flexWrap: 'wrap', marginTop: 4 }]}>
             {(action.savedTo?.length ?? 0) > 0 || action.kind === 'save_item' ? (
-              <Button testID={`chat-replace-${m.id}`} label={t('save.replace')} variant="text" onPress={() => void doReplace()} />
+              <>
+                <Button testID={`chat-replace-${m.id}`} label={t('save.replace')} variant="link" size="small" onPress={() => void doReplace()} />
+                <AppText variant="small" color="ink3" accessibilityElementsHidden importantForAccessibility="no">
+                  ·
+                </AppText>
+              </>
             ) : null}
-            <Button testID={`chat-undo-${m.id}`} label={many ? t('assistant.undo_all') : t('common.undo')} variant="text" onPress={() => void undoAction(m.id)} />
+            <Pressable
+              testID={`chat-undo-${m.id}`}
+              accessibilityRole="button"
+              accessibilityLabel={many ? t('assistant.undo_all') : t('common.undo')}
+              onPress={() => void undoAction(m.id)}
+              hitSlop={8}
+              style={({ pressed }) => [{ minHeight: theme.size.minTouch, justifyContent: 'center', paddingHorizontal: 8 }, pressedStyle(pressed)]}
+            >
+              <AppText style={{ color: theme.colors.assistantText, fontFamily: theme.type.headline.fontFamily, fontSize: 15, lineHeight: 18 }}>
+                {many ? t('assistant.undo_all') : t('common.undo')}
+              </AppText>
+            </Pressable>
           </View>
         ) : null
       ) : (
-        <AppText testID={`chat-undone-${m.id}`} variant="footnote" style={[styles.struck, { alignSelf: 'flex-end' }]}>
+        <AppText testID={`chat-undone-${m.id}`} variant="footnote" style={styles.struck}>
           {t('assistant.undone')}
         </AppText>
       )}
@@ -280,79 +259,70 @@ export function ActionResultCard({ m, action }: { m: ChatMessage; action: ChatAc
   );
 }
 
-/** «Нет связи. Всё, что скажете, сохраню и разберу позже» (v4 §10.4). */
+/** «Нет связи. Всё, что скажете, сохраню и разберу позже» on the paper (no small text on terracotta). */
 export function OfflineBanner() {
   const theme = useTheme();
   const { t } = useTranslation();
   return (
-    <View testID="chat-offline" style={[styles.row, { gap: theme.space[3], backgroundColor: theme.colors.surfaceSunken, borderRadius: theme.radius.lg, padding: theme.space[3] }]}>
-      <Icon icon={CloudOff} size="sm" color="ink2" />
-      <AppText variant="callout" color="ink" style={styles.flex}>
-        {t('assistant.offline')}
+    <Inset testID="chat-offline" style={[styles.row, { alignItems: 'flex-start', gap: 12 }]}>
+      <CloudOff size={22} color={theme.colors.ink} strokeWidth={theme.icon.strokeWidth} />
+      <AppText style={[styles.flex, { fontSize: 15.5, lineHeight: 22 }]}>
+        <AppText style={{ fontFamily: theme.type.headline.fontFamily, fontSize: 15.5 }}>{t('assistant.offline_title')}</AppText> {t('assistant.offline_rest')}
       </AppText>
-    </View>
+    </Inset>
   );
 }
 
-const EXAMPLES: { key: string; icon: LucideIcon; phrase: boolean }[] = [
-  { key: 'remember', icon: StickyNote, phrase: true },
-  { key: 'forward', icon: FileUp, phrase: false },
-  { key: 'find', icon: Search, phrase: true },
-  { key: 'plan', icon: MapIcon, phrase: true },
+const EXAMPLES: { key: string; place: PlaceKey }[] = [
+  { key: 'note', place: 'notes' },
+  { key: 'spend', place: 'expenses' },
+  { key: 'task', place: 'tasks' },
+  { key: 'find', place: 'stone' },
 ];
 
 /**
- * A new conversation (v4 «Помощник · первый раз»): the glowing mark, the one line for people «Скажите или перешлите — я
- * разложу по местам и найду, когда понадобится», four examples (a tap puts the phrase into the line) and «Ваши записи
- * видите только вы».
+ * A new conversation (screens-v5 «Помощник · первый раз»): the one big line, «Можно начать так» with four example
+ * rows — each has the colour of the place its record will go to; a tap puts the phrase into the field — and
+ * «Ваши записи видите только вы».
  */
 export function ChatEmpty() {
   const theme = useTheme();
   const { t } = useTranslation();
   return (
-    <View testID="chat-empty" style={{ alignItems: 'center', gap: theme.space[4], paddingTop: theme.space[4] }}>
-      <View style={[styles.center, { width: 92, height: 92, borderRadius: 46, backgroundColor: withAlpha(theme.colors.brand, 0.14) }]}>
-        <AssistantMark size={72} />
-      </View>
-      <AppText testID="chat-tagline" variant="title1" style={{ textAlign: 'center' }}>
+    <View testID="chat-empty">
+      <AppText testID="chat-tagline" variant="title1" style={{ marginTop: 18 }}>
         {t('assistant.tagline')}
       </AppText>
-      <View style={{ alignSelf: 'stretch' }}>
-        <TileGrid testID="chat-examples">
-          {EXAMPLES.map((e) => (
-            <Pressable
-              key={e.key}
-              testID={`chat-example-${e.key}`}
-              accessibilityRole="button"
-              onPress={() => {
-                if (e.phrase) useView.getState().requestLine({ kind: 'text', text: t(`assistant.example_${e.key}_phrase`) });
-              }}
-              style={({ pressed }) => [
-                { backgroundColor: theme.colors.surface, borderRadius: theme.radius.xl, padding: theme.space[3], gap: theme.space[2], minHeight: 112 },
-                theme.elevation.card,
-                cardEdge(theme),
-                pressedStyle(pressed),
-              ]}
-            >
-              <View style={[styles.center, { width: 32, height: 32, borderRadius: theme.radius.sm, backgroundColor: theme.colors.brandTint }]}>
-                <Icon icon={e.icon} size="sm" color="brand" />
-              </View>
-              <AppText variant="headline">{t(`assistant.example_${e.key}`)}</AppText>
-              <AppText variant="footnote">{t(`assistant.example_${e.key}_hint`)}</AppText>
-            </Pressable>
-          ))}
-        </TileGrid>
-      </View>
-      <AppText variant="footnote" color="ink2">
-        {t('assistant.private')}
+      <AppText variant="section" accessibilityRole="header" style={{ marginTop: 26, marginBottom: 6 }}>
+        {t('assistant.start_like')}
       </AppText>
+      <View testID="chat-examples">
+        {EXAMPLES.map((e, i) => (
+          <Row
+            key={e.key}
+            first={i === 0}
+            testID={`chat-example-${e.key}`}
+            accessibilityLabel={t(`assistant.ex_${e.key}`)}
+            onPress={() => useView.getState().requestLine({ kind: 'text', text: t(`assistant.ex_${e.key}_phrase`) })}
+          >
+            <PlaceTab place={e.place} />
+            <AppText numberOfLines={1} style={styles.flex}>
+              {t(`assistant.ex_${e.key}`)}
+            </AppText>
+          </Row>
+        ))}
+      </View>
+      <View style={[styles.row, { gap: 6, marginTop: 14 }]}>
+        <Lock size={15} color={theme.colors.ink3} strokeWidth={theme.icon.strokeWidth} />
+        <AppText variant="footnote">{t('assistant.private')}</AppText>
+      </View>
     </View>
   );
 }
 
 /**
- * «Вернул как было» after an undo by phrase (v4 `UndoResultCard`, Ф-67): ↩ and the server's words, what came back
- * (`summary`), and «Открыть «Историю»». The action it undid says «отменено» where it is in the conversation.
+ * «Вернул как было» after an undo by phrase (Ф-67): ↩ and the server's words, what came back, and «Открыть
+ * «Историю»». The action it undid says «отменено» where it is in the conversation.
  */
 export function UndoResultCard({ m, action }: { m: ChatMessage; action: ChatAction }) {
   const theme = useTheme();
@@ -360,23 +330,18 @@ export function UndoResultCard({ m, action }: { m: ChatMessage; action: ChatActi
   const head = action.notice ? (i18n.language === 'kk' && action.notice.text_kk) || action.notice.text_ru : t('assistant.undid');
   const body = actionText(action, i18n.language);
   return (
-    <View
-      testID={`chat-undo-result-${m.id}`}
-      style={[{ backgroundColor: theme.colors.surface, borderRadius: theme.radius.xl, padding: theme.space[3], gap: theme.space[2] }, theme.elevation.card, cardEdge(theme)]}
-    >
-      <View style={[styles.row, { gap: theme.space[3] }]}>
-        <View style={[styles.center, { width: 36, height: 36, borderRadius: theme.radius.sm, backgroundColor: theme.colors.brandTint }]}>
-          <Icon icon={Undo2} size="sm" color="brand" />
-        </View>
+    <Inset testID={`chat-undo-result-${m.id}`} style={{ gap: theme.space[2] }}>
+      <View style={[styles.row, { gap: 12 }]}>
+        <Undo2 size={22} color={theme.colors.ink} strokeWidth={theme.icon.strokeWidth} />
         <View style={styles.flex}>
           <AppText variant="headline">{head}</AppText>
           {body && body !== head ? <AppText variant="footnote">{body}</AppText> : null}
         </View>
       </View>
       <View style={[styles.row, { justifyContent: 'flex-end' }]}>
-        <Button testID={`chat-open-history-${m.id}`} label={t('assistant.open_history')} variant="text" onPress={() => router.push('/history')} />
+        <Button testID={`chat-open-history-${m.id}`} label={t('assistant.open_history')} variant="link" size="small" onPress={() => router.push('/history')} />
       </View>
-    </View>
+    </Inset>
   );
 }
 

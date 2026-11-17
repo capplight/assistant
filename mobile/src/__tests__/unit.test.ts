@@ -65,26 +65,32 @@ describe('templates and premarks', () => {
 });
 
 describe('theme tokens', () => {
-  it('match the «Мята / Глубина» system v2 (design-system v2 §2, Ф-55)', () => {
-    expect(lightColors.bg).toBe('#D3ECDE');
-    expect(lightColors.brand).toBe('#0A7553');
-    expect(lightColors.highlight).toBe('#FFC845');
-    expect(darkColors.bg).toBe('#051F20');
-    expect(darkColors.brand).toBe('#5FD6A8');
-    expect(darkColors.highlight).toBe('#FFB547');
+  it('match v5 «Листы» (tokens-v5.ts, Ф-79): tray, paper, places, black buttons, terracotta assistant', () => {
+    expect(lightColors.tray).toBe('#1A191E');
+    expect(lightColors.paper).toBe('#FBF8F2');
+    expect(lightColors.ink3).toBe('#6B6774');
+    expect(lightColors.place).toEqual({ today: '#F6D35B', notes: '#A9CCF4', assistant: '#E0592C', expenses: '#B6D89C', tasks: '#CDBFF5', stone: '#D8D2C6' });
+    expect(darkColors.place).toEqual({ today: '#C9A23A', notes: '#5E93DC', assistant: '#E0592C', expenses: '#6FA35C', tasks: '#9683E6', stone: '#42404A' });
+    // The v2 names are aliases of the v5 roles: «brand» buttons are black (light) / light (dark).
+    expect(lightColors.brand).toBe(lightColors.btn);
+    expect(darkColors.brand).toBe('#F1EEE8');
+    expect(lightColors.bg).toBe(lightColors.paper);
+    expect(darkColors.a4).toBe('#FFFFFF');
   });
 
-  it('platform sizes (Ф-45): body 16–17, buttons never larger than body, nothing below 11, no caps anywhere (Ф-56)', () => {
-    expect(type.body.fontSize).toBeGreaterThanOrEqual(16);
-    expect(type.body.fontSize).toBeLessThanOrEqual(17);
-    expect(type.button.fontSize).toBeLessThanOrEqual(type.body.fontSize!);
+  it('v5 sizes (tokens-v5 `type`): rows 16, buttons 17 bold, nothing below 12, no caps anywhere (Ф-56)', () => {
+    expect(type.body.fontSize).toBe(16);
+    expect(type.button.fontSize).toBe(17);
+    expect(type.phrase).toMatchObject({ fontFamily: 'Geologica_700Bold', fontSize: 27 });
+    expect(type.bigNumber).toMatchObject({ fontFamily: 'Geologica_700Bold', fontSize: 46, fontVariant: ['tabular-nums'] });
     for (const [name, t] of Object.entries(type)) {
-      expect(t.fontSize).toBeGreaterThanOrEqual(11);
+      // 13 is the smallest text; the tab label is 12 (11.5 at ≤ 340 dp), capped at 13.
+      expect(t.fontSize).toBeGreaterThanOrEqual(name === 'tabLabel' ? 12 : 13);
       expect(t.textTransform).toBeUndefined();
       expect(t.letterSpacing ?? 0).toBeLessThanOrEqual(0.2);
       void name;
       // Room for the tails of қ ң ғ ұ (digits-only tokens — a tile number, the answer value — are tight on purpose).
-      if (name !== 'metric' && name !== 'answerValue') expect(t.lineHeight! / t.fontSize!).toBeGreaterThanOrEqual(1.1);
+      if (!['metric', 'answerValue', 'tabLabel', 'mark'].includes(name)) expect(t.lineHeight! / t.fontSize!).toBeGreaterThanOrEqual(1.08);
     }
   });
 });

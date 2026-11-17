@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Building2, ChevronDown, Ellipsis, FileText, ListOrdered, MessageSquareText } from 'lucide-react-native';
+import { Building2, ChevronDown, Ellipsis, FileText, ListOrdered, MessageSquareText, Plus } from 'lucide-react-native';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, View, type AccessibilityActionEvent } from 'react-native';
@@ -20,6 +20,7 @@ import { useTheme } from '@/theme';
 import { AppText } from '../AppText';
 import { Button } from '../ui/Button';
 import { ListGroup, ListRow } from '../ui/Card';
+import { Inset } from '../ui/Leaf';
 import { Chip } from '../ui/Chip';
 import { EmptyState } from '../ui/EmptyState';
 import { Icon } from '../ui/Icon';
@@ -151,7 +152,12 @@ export function DocumentsView({ page, entries, frameTop, ordering }: ViewProps) 
   const header = (
     <View style={{ gap: theme.space[4], marginBottom: theme.space[2] }}>
       {frameTop}
-      <Button testID="docs-new-kp" label={ai ? t('kp.new') : t('kp.new_no_ai')} onPress={newKp} />
+      {/* screens-v5 «Документы»: how to make one by a phrase, then the lists; one black button at the end. */}
+      {ai ? (
+        <Inset testID="docs-hint">
+          <AppText style={{ fontSize: 15.5, lineHeight: 22 }}>{t('kp.hint_say')}</AppText>
+        </Inset>
+      ) : null}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.space[2] }}>
         <Chip testID="docs-company" icon={Building2} label={t('kp.my_company')} onPress={() => router.push('/company')} />
         <Chip testID="docs-prices" icon={ListOrdered} label={t('kp.my_prices')} onPress={() => router.push('/price-list')} />
@@ -295,6 +301,15 @@ export function DocumentsView({ page, entries, frameTop, ordering }: ViewProps) 
         renderGroup={renderGroup}
         menuExtra={menuExtra}
         empty={empty}
+        footer={
+          <Button
+            testID="docs-new-kp"
+            label={ai ? t('kp.new') : t('kp.new_no_ai')}
+            icon={<Plus size={22} color={theme.colors.onBtn} strokeWidth={theme.icon.strokeWidth} />}
+            onPress={newKp}
+            style={{ marginTop: theme.space[5] }}
+          />
+        }
       />
       {choosing ? (
         <ChoiceSheet

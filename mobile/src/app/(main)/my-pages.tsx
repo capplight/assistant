@@ -69,12 +69,10 @@ export default function MyPagesScreen() {
   };
 
   return (
-    <Screen testID="my-pages-screen" edges={['top']} scroll={false}>
+    <Screen testID="my-pages-screen" scroll={false} sub={t('pages.in_tabs', { n: inTabs })}>
+      <Header title={t('pages.my')} back={{ onPress: () => router.navigate('/more'), label: t('more.title'), testID: 'my-pages-back' }} />
       <View style={{ flex: 1 }} {...drag.handlers}>
         <ScrollView scrollEnabled={!drag.active} contentContainerStyle={{ paddingTop: theme.space[2], paddingBottom: theme.space[4] }}>
-          <Header title={t('pages.my')} back={{ onPress: () => router.navigate('/more'), testID: 'my-pages-back' }}>
-            <AppText variant="callout">{t('pages.in_tabs', { n: inTabs })}</AppText>
-          </Header>
           <View style={{ height: theme.space[2] }} />
           <View testID="my-pages-today" style={[styles.row, card]}>
             <PageIcon name="today" size={24} color={theme.colors.ink2} />

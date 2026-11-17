@@ -28,7 +28,6 @@ const pos = (i: number) => String.fromCharCode(66 + i); // B, C, D… (bytes ord
 
 const notes = () => usePages.getState().pages.find((p) => p.templateKey === 'notes')!;
 const lastAnswer = () => useAssistant.getState().messages.filter((m) => m.role === 'assistant').at(-1);
-const bg = (testId: string) => StyleSheet.flatten(screen.getByTestId(testId).props.style)?.backgroundColor;
 
 let s: FakeServer;
 
@@ -200,9 +199,10 @@ describe('US-24: «Разложи» → the result on the page, highlight 600 ms
     expect(screen.queryByTestId('answer-banner')).toBeNull();
     expect(r.getPathname()).toBe(`/page/${notes().id}`);
     expect(notes().viewVersion).toBe(4);
-    // The changed stickers are lit (`highlightTint`) for 600 ms, then show their own colours again.
-    const lit = bg('record-n1');
-    await settle(() => bg('record-n1') !== lit);
+    // v5: the changed stickers are ringed in terracotta for 600 ms, then the ring goes.
+    const ring = () => StyleSheet.flatten(screen.getByTestId('record-n1').props.style)?.borderColor;
+    const lit = ring();
+    await settle(() => ring() !== lit);
     // Then the records themselves come by /v1/sync (docs/api/chat.md «Notes for the phone»).
     await settle(() => s.callsTo('GET /sync').length > 0);
   });

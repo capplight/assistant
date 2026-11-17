@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Search } from 'lucide-react-native';
+import { Search, X } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -24,11 +24,14 @@ export function FindField({
   label,
   value,
   onChange,
+  large = false,
 }: {
   testID: string;
   label: string;
   value: string;
   onChange: (value: string) => void;
+  /** v5 «Поиск»: 52 high, radius 26, on `paper` (it lies on the stone sheet). */
+  large?: boolean;
 }) {
   const theme = useTheme();
   return (
@@ -36,26 +39,32 @@ export function FindField({
       style={[
         styles.field,
         {
-          minHeight: theme.size.minTouch,
-          borderRadius: theme.radius.md,
-          backgroundColor: theme.colors.surfaceSunken,
-          paddingHorizontal: theme.space[3],
+          minHeight: large ? 52 : theme.size.minTouch,
+          borderRadius: large ? 26 : 16,
+          backgroundColor: large ? theme.colors.paper : theme.colors.paper2,
+          paddingLeft: 16,
+          paddingRight: 8,
           gap: theme.space[2],
         },
       ]}
     >
-      <Icon icon={Search} size="sm" color="iconSecondary" />
+      <Icon icon={Search} size="md" color="ink" />
       <TextInput
         testID={testID}
         accessibilityLabel={label}
         placeholder={label}
-        placeholderTextColor={theme.colors.ink2}
+        placeholderTextColor={theme.colors.ink3}
         value={value}
         onChangeText={onChange}
         returnKeyType="search"
         maxFontSizeMultiplier={MAX_FONT_SCALE}
-        style={[theme.type.body, styles.input, { color: theme.colors.ink, minHeight: theme.size.minTouch }]}
+        style={[theme.type.body, styles.input, { color: theme.colors.ink, minHeight: theme.size.minTouch, fontSize: large ? 17 : 16 }]}
       />
+      {value ? (
+        <Pressable testID={`${testID}-clear`} accessibilityRole="button" accessibilityLabel={label} onPress={() => onChange('')} hitSlop={4} style={styles.clear}>
+          <X size={18} color={theme.colors.ink3} strokeWidth={theme.icon.strokeWidth} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -281,6 +290,7 @@ export function SearchState({ state }: { state: ServerSearchState }) {
 }
 
 const styles = StyleSheet.create({
+  clear: { width: 48, height: 48, margin: -4, alignItems: 'center', justifyContent: 'center' },
   field: { flexDirection: 'row', alignItems: 'center' },
   input: { flex: 1 },
   row: { flexDirection: 'row', alignItems: 'center' },

@@ -115,7 +115,7 @@ export function ConfirmCard() {
   };
 
   return (
-    <View testID="confirm-card" accessibilityLiveRegion="polite" style={[{ backgroundColor: theme.colors.surfaceRaised, borderRadius: theme.radius.xl, padding: theme.space[3], gap: theme.space[3], overflow: 'hidden' }, theme.elevation.floating]}>
+    <View testID="confirm-card" accessibilityLiveRegion="polite" style={[{ backgroundColor: theme.colors.paper, borderRadius: 20, borderWidth: 1, borderColor: theme.colors.line, padding: theme.space[3], gap: theme.space[3], overflow: 'hidden' }, theme.elevation.floating]}>
       <View style={[styles.row, { gap: theme.space[3] }]}>
         <View style={[styles.square, { width: 46, height: 46, borderRadius: theme.radius.md, backgroundColor: theme.colors.brandTint }]}>
           <Icon icon={alarm ? AlarmClock : BellRing} color="brand" />

@@ -1,67 +1,56 @@
-import type { ReactNode } from 'react';
-import { ScrollView, StyleSheet, View, type ScrollViewProps } from 'react-native';
-import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
+import { Children, isValidElement, type ComponentProps, type ReactElement, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { ScrollViewProps } from 'react-native';
+import type { Edge } from 'react-native-safe-area-context';
 
-import { useTheme } from '@/theme';
+import type { PlaceKey } from '@/theme';
 
-import { ScreenBackground } from './ui/ScreenBackground';
+import { Header } from './ui/Header';
+import { PlaceScreen, type PlaceScreenProps } from './ui/PlaceScreen';
 
 type Props = {
   children: ReactNode;
-  /** Pinned at the bottom (outside the scroll), e.g. «Подходит». */
+  /** Pinned at the bottom of the paper (outside the scroll), e.g. «Подходит». */
   footer?: ReactNode;
+  /** v2 prop, ignored: the v5 sheet handles the safe areas itself. */
   edges?: Edge[];
   scroll?: boolean;
   contentContainerStyle?: ScrollViewProps['contentContainerStyle'];
   testID?: string;
-};
+  /** v5: the sheet colour of the place (default stone — service screens). */
+  place?: PlaceKey;
+} & Pick<PlaceScreenProps, 'peek' | 'phrase' | 'mode' | 'askRoom' | 'stripMeta' | 'sub' | 'paperTone' | 'scrollRef' | 'onScroll' | 'onContentSizeChange' | 'metaNode' | 'sheetExtra' | 'paperPadding' | 'hideTitle'>;
 
-/** The v2 background (gradient + top glow), 12/16/20 side padding, ≤600 centred on tablets. */
-export function Screen({
-  children,
-  footer,
-  edges = ['top', 'bottom'],
-  scroll = true,
-  contentContainerStyle,
-  testID,
-}: Props) {
-  const theme = useTheme();
-  const pad = { paddingHorizontal: theme.screenPadding };
-  // Without a bounded height a list inside (scroll={false}) would grow with its content and never scroll.
-  const inner = (
-    <View style={[styles.inner, !scroll && styles.bounded, { maxWidth: theme.size.maxContentWidth }]}>{children}</View>
-  );
+/**
+ * Every screen in the v5 look (design-system §11): a `PlaceScreen`. When the first child is a `<Header>`, it becomes
+ * the coloured sheet (title, meta, «‹ Назад», ≤ 2 icons, its accessory and children); without a header the screen is
+ * the paper alone on the tray.
+ */
+export function Screen({ children, footer, scroll = true, contentContainerStyle, testID, place = 'stone', mode, sheetExtra, ...rest }: Props) {
+  const { t } = useTranslation();
+  const all = Children.toArray(children);
+  const first = all[0];
+  const header = isValidElement(first) && first.type === Header ? (first as ReactElement<ComponentProps<typeof Header>>).props : null;
+  const body = header ? all.slice(1) : all;
   return (
-    <SafeAreaView testID={testID} edges={edges} style={[styles.root, { backgroundColor: theme.colors.bg }]}>
-      <ScreenBackground />
-      {scroll ? (
-        <ScrollView
-          contentContainerStyle={[pad, { paddingTop: theme.space[4], paddingBottom: theme.size.contentEndGap }, styles.center, contentContainerStyle]}
-          keyboardShouldPersistTaps="handled"
-        >
-          {inner}
-        </ScrollView>
-      ) : (
-        <View style={[styles.root, pad, styles.center]}>{inner}</View>
-      )}
-      {footer ? (
-        <View
-          style={[
-            pad,
-            styles.center,
-            { paddingVertical: theme.space[3] },
-          ]}
-        >
-          <View style={[styles.inner, { maxWidth: theme.size.maxContentWidth }]}>{footer}</View>
-        </View>
-      ) : null}
-    </SafeAreaView>
+    <PlaceScreen
+      place={place}
+      mode={header ? mode : 'bare'}
+      title={header?.title ?? ''}
+      meta={header?.meta}
+      back={header?.back ? { label: header.back.label ?? t('common.back'), onPress: header.back.onPress, testID: header.back.testID ?? 'header-back' } : undefined}
+      actions={header?.actions}
+      accessory={header?.accessory}
+      sheetExtra={sheetExtra ?? header?.children}
+      headerTestID={header?.testID}
+      titleTestID={header?.titleTestID}
+      scroll={scroll}
+      footer={footer}
+      contentContainerStyle={contentContainerStyle as PlaceScreenProps['contentContainerStyle']}
+      testID={testID}
+      {...rest}
+    >
+      {body}
+    </PlaceScreen>
   );
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1 },
-  center: { alignItems: 'center' },
-  inner: { width: '100%', flexGrow: 1 },
-  bounded: { flex: 1, minHeight: 0 },
-});

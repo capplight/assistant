@@ -27,6 +27,12 @@ jest.mock('@expo-google-fonts/onest', () => ({
   Onest_500Medium: 'Onest_500Medium',
   Onest_600SemiBold: 'Onest_600SemiBold',
   Onest_700Bold: 'Onest_700Bold',
+  Onest_800ExtraBold: 'Onest_800ExtraBold',
+}));
+
+jest.mock('@expo-google-fonts/geologica', () => ({
+  useFonts: () => [true, null],
+  Geologica_700Bold: 'Geologica_700Bold',
 }));
 
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);

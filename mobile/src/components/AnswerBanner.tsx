@@ -61,13 +61,17 @@ export function AnswerBanner() {
   const box = [
     styles.box,
     {
-      // Design-system §3 AnswerSheet look, compact: raised surface, radius 24, floating shadow, no border.
-      backgroundColor: theme.colors.surfaceRaised,
-      borderRadius: theme.radius.sheet,
-      padding: theme.space[4],
+      // v5 §11.12 «Ответ на вопрос»: a `paper` card 8 above the strip, radius 20, a `line` edge, the notice shadow.
+      backgroundColor: theme.colors.paper,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: theme.colors.line,
+      paddingTop: 14,
+      paddingHorizontal: 16,
+      paddingBottom: 6,
       gap: theme.space[2],
     },
-    theme.elevation.floating,
+    { shadowColor: '#000000', shadowOffset: { width: 0, height: 16 }, shadowRadius: 34, shadowOpacity: 0.3, elevation: 12 },
   ];
   const buttonsRow = [styles.row, { gap: theme.space[2], flexDirection: 'row' as const, flexWrap: 'wrap' as const, alignItems: 'center' as const }];
 

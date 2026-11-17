@@ -7,13 +7,13 @@ export type AppTextProps = TextProps & {
   color?: keyof ColorTokens;
 };
 
-/** Secondary by default: meta lines and dates. Everything else is `ink`. */
-const SECONDARY: ReadonlySet<TypeToken> = new Set(['callout', 'footnote']);
+/** v5: `callout` / `small` are ink2, captions (`footnote`, `caption`) ink3 (≥ 4.5 on paper and paper2); the rest `ink`. */
+const SECONDARY: Partial<Record<TypeToken, keyof ColorTokens>> = { callout: 'ink2', small: 'ink2', footnote: 'ink3', caption: 'ink3' };
 
 /** All text goes through here: type scale, theme colour, font scaling capped at 200% (hero sums: `AmountText` fits them to their box). */
 export function AppText({ variant = 'body', color, style, maxFontSizeMultiplier, ...rest }: AppTextProps) {
   const theme = useTheme();
-  const defaultColor: keyof ColorTokens = SECONDARY.has(variant) ? 'ink2' : 'ink';
+  const defaultColor: keyof ColorTokens = SECONDARY[variant] ?? 'ink';
   return (
     <Text
       maxFontSizeMultiplier={maxFontSizeMultiplier ?? MAX_FONT_SCALE}

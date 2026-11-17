@@ -270,10 +270,10 @@ const stripText = () => {
   const st = useUndo.getState().strip;
   return st?.kind === 'custom' ? st.text : null;
 };
-const text = (id: string) => {
-  const c = screen.getByTestId(id).props.children;
-  return Array.isArray(c) ? c.join('') : String(c);
-};
+// v5: the big number keeps «₸» in a nested Text (0.56 of the size); read the text through it.
+const flatText = (c: unknown): string =>
+  Array.isArray(c) ? c.map(flatText).join('') : c && typeof c === 'object' && 'props' in c ? flatText((c as { props: { children?: unknown } }).props.children) : c == null || c === false ? '' : String(c);
+const text = (id: string) => flatText(screen.getByTestId(id).props.children);
 
 /** The record of an expense on the «Расходы» page (each expense has one, expenses.md). */
 async function withPageRecord(id: string) {
@@ -466,7 +466,8 @@ describe('«Расходы» — the calculator', () => {
     expect(screen.queryByTestId('exp-keypad')).toBeNull();
     await fireEvent.press(screen.getByTestId('exp-enter'));
     await settle(() => screen.queryByTestId('exp-entry-sheet') !== null);
-    expect(screen.getByTestId('exp-total').props.maxFontSizeMultiplier).toBe(1.6);
+    // v5: the one big number grows with the system font at most ×1.3 (HERO_MAX_SCALE).
+    expect(screen.getByTestId('exp-total').props.maxFontSizeMultiplier).toBe(1.3);
     const group = screen.getByTestId('exp-cat-group');
     const style = Array.isArray(group.props.style) ? Object.assign({}, ...group.props.style) : group.props.style;
     expect(style.flexDirection).toBe('column');

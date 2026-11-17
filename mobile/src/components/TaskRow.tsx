@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, View, type AccessibilityActionEvent } from 'reac
 
 import type { TaskOut } from '@/api/types';
 import { useTheme, withAlpha } from '@/theme';
-import { ChangedMark, markFresh } from '@/components/ChangedMark';
+import { ChangedMark } from '@/components/ChangedMark';
 
 import { AppText } from './AppText';
 import { Button } from './ui/Button';
@@ -85,16 +85,16 @@ export function TaskRow({
       </AppText>
     )
   ) : null);
-  const changed = markFresh(task.assistant_changed_at);
   return (
     <View
       style={[
         styles.row,
         {
-          paddingLeft: theme.space[1],
-          // Ф-73: a row the assistant just made or changed — a light `brandTint` 33 % (design-system §10.3).
-          backgroundColor: highlighted ? theme.colors.highlightTint : changed ? withAlpha(theme.colors.brandTint, 0.33) : undefined,
-          borderRadius: highlighted || changed ? theme.radius.sm : 0,
+          // v5: a new row the assistant put here is ringed in terracotta for a moment; «изменил помощник» is the mark below.
+          borderRadius: highlighted ? 12 : 0,
+          borderWidth: highlighted ? 2 : 0,
+          borderColor: highlighted ? theme.colors.place.assistant : 'transparent',
+          paddingHorizontal: highlighted ? 6 : 0,
         },
       ]}
     >
@@ -111,10 +111,10 @@ export function TaskRow({
         style={({ pressed }) => [
           styles.main,
           {
-            gap: theme.space[3],
-            minHeight: big ? theme.size.rowHeightMeta : meta ? theme.size.rowHeightMeta : theme.size.rowHeight,
+            gap: 12,
+            minHeight: big ? theme.size.rowHeightMeta : theme.m.row,
             paddingVertical: theme.space[2],
-            backgroundColor: pressed ? withAlpha(theme.colors.surfaceSunken, 0.5) : 'transparent',
+            backgroundColor: pressed ? withAlpha(theme.colors.paper2, 0.8) : 'transparent',
           },
         ]}
       >
@@ -124,7 +124,7 @@ export function TaskRow({
             variant={big ? 'title2' : 'body'}
             // «В магазине»: large and high contrast, capped at 2× (template-screens 2.4).
             maxFontSizeMultiplier={big ? 2 : undefined}
-            color={done ? 'ink2' : 'ink'}
+            color={done ? 'ink3' : 'ink'}
             style={[big ? { fontFamily: theme.type.headline.fontFamily } : null, done ? { textDecorationLine: 'line-through' } : null]}
           >
             {shownTitle}
@@ -150,7 +150,7 @@ export function TaskRow({
       ) : null}
       {separator ? (
         <View
-          style={[styles.divider, { left: theme.space[1] + theme.size.checkbox + theme.space[3], backgroundColor: theme.colors.separator }]}
+          style={[styles.divider, { left: 0, backgroundColor: theme.colors.line }]}
         />
       ) : null}
     </View>
@@ -162,5 +162,5 @@ const styles = StyleSheet.create({
   main: { flex: 1, flexDirection: 'row', alignItems: 'center' },
   flex: { flex: 1 },
   qty: { alignItems: 'center', justifyContent: 'center' },
-  divider: { position: 'absolute', right: 0, bottom: 0, height: StyleSheet.hairlineWidth },
+  divider: { position: 'absolute', right: 0, bottom: 0, height: 1 },
 });

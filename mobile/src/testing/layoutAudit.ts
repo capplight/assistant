@@ -7,10 +7,13 @@ import { Dimensions, PixelRatio, StyleSheet, type TextStyle, type ViewStyle } fr
  * phone. Jest has no text layout, so this checks the props that decide it on a device:
  *
  * - `clipped-value`   a Text with `numberOfLines` that is a money value or a time line (≤40 letters), or the «ИИ» label;
- * - `fixed-height`    a View with a fixed `height` / `maxHeight` around text (text grows, the box does not);
+ * - `fixed-height`    a View with a fixed `height` / `maxHeight` around text (text grows, the box does not) — except
+ *                     the v5 coloured sheet (`nativeID="v5-sheet"`), whose height is its measured content;
  * - `fixed-input`     a TextInput with a fixed `height`;
  * - `no-scale`        a Text that does not scale (`allowFontScaling={false}`, `maxFontSizeMultiplier` < 1.5)
- *                     unless hidden from screen readers (a drawn thumbnail) or allowed by the caller;
+ *                     unless hidden from screen readers (a drawn thumbnail) or allowed by the caller; v5 caps that
+ *                     the design asks for (`nativeID="v5-capped"`: tab labels ≤ 13 dp, the phrase / big number
+ *                     ×1.3, sheet titles ×1.2) still scale (≥ 1.0) and are allowed;
  * - `row-of-buttons`  ≥3 buttons with words side by side, no `flexWrap` and no sideways scroll
  *                     (2-design §8: «при ≥150% ряды становятся вертикальными списками»);
  * - `small-target`    a button with a fixed height or width under 48;
@@ -112,7 +115,8 @@ export function auditLayout(
       }
       const mult = n.props.maxFontSizeMultiplier as number | undefined;
       // A sum sized to fit its box by AmountText may be capped lower on purpose: it is shrunk, never cut.
-      if (!isHidden && n.props.nativeID !== 'amount-fit' && (n.props.allowFontScaling === false || (mult !== undefined && mult !== 0 && mult < 1.5)))
+      const capped = n.props.nativeID === 'v5-capped' && n.props.allowFontScaling !== false && (mult === undefined || mult >= 1);
+      if (!isHidden && !capped && n.props.nativeID !== 'amount-fit' && (n.props.allowFontScaling === false || (mult !== undefined && mult !== 0 && mult < 1.5)))
         push('no-scale', id, `maxFontSizeMultiplier=${mult} allowFontScaling=${n.props.allowFontScaling}: ${text}`);
       return; // nested Text is part of this one
     }
@@ -120,7 +124,7 @@ export function auditLayout(
     if (n.type === 'TextInput' && typeof style.height === 'number') push('fixed-input', id, `height ${style.height}`);
 
     const scroll = n.type === 'RCTScrollView' || n.type === 'ScrollView';
-    if (!scroll && !isHidden && hasText(n)) {
+    if (!scroll && !isHidden && n.props.nativeID !== 'v5-sheet' && hasText(n)) {
       if (typeof style.height === 'number') push('fixed-height', id, `height ${style.height}: ${textOf(n)}`);
       if (typeof style.maxHeight === 'number' && style.overflow !== 'visible') push('fixed-height', id, `maxHeight ${style.maxHeight}: ${textOf(n)}`);
     }

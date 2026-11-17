@@ -13,8 +13,9 @@ export type TabSlot =
 /**
  * Ф-58: «Сегодня · Заметки · Помощник · Расходы · Ещё» — the assistant's conversation is the raised centre; «Расходы»
  * right of it (made on the first tap when the phone has no such page). «Дела» left the tab bar: «Все дела ›» on
- * «Сегодня» and a tile in «Ещё». At font ≥150 %: «Сегодня · Помощник · Ещё» (five labels do not fit; «Ещё» starts with
- * big tiles). Every other page leads «Ещё». Ф-49: «Покупки» is hidden while `shopping` is off.
+ * «Сегодня» and a row in «Ещё». v5 (Ф-79, design-system §11.5): the same five tabs at every font size — the labels are
+ * capped at 13 instead (`largeFont` is ignored). Every other page leads «Ещё». Ф-49: «Покупки» is hidden while
+ * `shopping` is off.
  */
 export function mainTabs(pages: readonly Page[], o: { largeFont: boolean; shopping: boolean }): { slots: TabSlot[]; overflow: Page[] } {
   const sorted = visiblePages(pages, o.shopping);
@@ -22,9 +23,9 @@ export function mainTabs(pages: readonly Page[], o: { largeFont: boolean; shoppi
   const notes = first('notes');
   const expenses = first('expenses');
   const slots: TabSlot[] = [];
-  if (!o.largeFont && notes) slots.push({ key: 'notes', page: notes, centre: false });
+  if (notes) slots.push({ key: 'notes', page: notes, centre: false });
   slots.push({ key: 'assistant', page: null, centre: true });
-  if (!o.largeFont) slots.push({ key: 'expenses', page: expenses, centre: false });
+  slots.push({ key: 'expenses', page: expenses, centre: false });
   const inTabs = new Set(slots.flatMap((s) => (s.page ? [s.page.id] : [])));
   return { slots, overflow: sorted.filter((p) => !inTabs.has(p.id)) };
 }

@@ -1,10 +1,12 @@
 import '@/i18n';
 
+import { Geologica_700Bold } from '@expo-google-fonts/geologica';
 import {
   Onest_400Regular,
   Onest_500Medium,
   Onest_600SemiBold,
   Onest_700Bold,
+  Onest_800ExtraBold,
   useFonts,
 } from '@expo-google-fonts/onest';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
@@ -28,14 +30,14 @@ import { useLayout, useTheme } from '@/theme';
 export { ErrorBoundary } from 'expo-router';
 
 export default function RootLayout() {
-  const [loaded, error] = useFonts({ Onest_400Regular, Onest_500Medium, Onest_600SemiBold, Onest_700Bold });
+  const [loaded, error] = useFonts({ Onest_400Regular, Onest_500Medium, Onest_600SemiBold, Onest_700Bold, Onest_800ExtraBold, Geologica_700Bold });
   const theme = useTheme();
   useBackgroundSync();
   usePushAnswers();
   useAlarmsLifecycle();
   useFeaturesLifecycle();
 
-  // Fall back to the system font if Onest fails to load — never block the app on a font.
+  // Fall back to the system font if Onest / Geologica fail to load — never block the app on a font.
   if (!loaded && !error) return null;
 
   const nav = theme.scheme === 'dark' ? DarkTheme : DefaultTheme;
@@ -77,19 +79,21 @@ function RootStack() {
     // QA v2 §0.1: Android draws edge-to-edge; the system bar shows the root colour — the theme's `fade` — with light /
     // dark buttons. Imperative and Android-only (the declarative component re-applies on every render).
     if (Platform.OS !== 'android') return;
-    void SystemUI.setBackgroundColorAsync(theme.colors.fade).catch(() => undefined);
+    void SystemUI.setBackgroundColorAsync(theme.colors.tray).catch(() => undefined);
     try {
-      NavigationBar.setStyle(theme.scheme === 'dark' ? 'light' : 'dark');
+      // The navigation bar lies on the tray (the tab bar): light buttons in both themes.
+      NavigationBar.setStyle('light');
     } catch {
       // an old Android without the module: the bar keeps the system colour
     }
-  }, [theme.colors.fade, theme.scheme]);
+  }, [theme.colors.tray]);
   const side = landscape ? { paddingLeft: insets.left, paddingRight: insets.right } : null;
   return (
     <>
-      <StatusBar style={theme.scheme === 'dark' ? 'light' : 'dark'} />
+      {/* v5: the status bar sits on the dark tray in both themes. */}
+      <StatusBar style="light" />
 
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.colors.bg, ...side } }}>
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.colors.tray, ...side } }}>
         <Stack.Screen name="(main)" />
         <Stack.Screen name="(onboarding)" options={{ gestureEnabled: false }} />
         <Stack.Screen name="chat" />

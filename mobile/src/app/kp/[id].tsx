@@ -3,8 +3,7 @@ import { AiLabel } from '@/components/AiLabel';
 import { Ellipsis, Eye, FileDown, FileText, History, MessageSquareText, PencilLine, Plus, Send } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import type { KpItemOut } from '@/api/types';
 import { AmountText } from '@/components/AmountText';
@@ -258,16 +257,34 @@ export default function KpScreen() {
   );
 
   return (
-    <View style={[styles.root, { backgroundColor: theme.colors.bg }]}>
-      <SafeAreaView testID="kp-screen" edges={['top']} style={styles.root}>
-        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: layout.gutter, paddingTop: theme.space[2], paddingBottom: theme.space[6], alignItems: 'center' }}>
-          <View style={{ width: '100%', maxWidth: two ? 600 + sheetWidth + layout.gutter : 600, gap: theme.space[3] }}>
+    <View style={styles.root}>
+      {/* screens-v5 «Документ · A4»: the stone strip «‹ Документы · Счёт № 7 · ⋯»; the white A4 lies on `paper2`. */}
+      <Screen
+        testID="kp-screen"
+        mode="strip"
+        paperTone={mode === 'preview' && !two ? 'paper2' : 'paper'}
+        paperPadding={mode === 'preview' && !two ? 16 : undefined}
+        footer={
+          <TotalBar
+            text={totalText}
+            amount={totals ? money(totals.total) : '—'}
+            label={t(data.vat.mode === 'none' ? 'kp.bar_total' : 'kp.bar_total_vat')}
+            mode={mode}
+            showPreviewToggle={!two}
+            onToggle={() => setMode((m) => (m === 'edit' ? 'preview' : 'edit'))}
+            onSend={() => setSending(true)}
+          />
+        }
+      >
             <Header
               title={kpTitle(doc, t)}
-              meta={statusWord(status, t)}
               back={{ onPress: back, testID: 'kp-back', label: t('kp.back') }}
               actions={[{ key: 'more', testID: 'kp-more', icon: Ellipsis, label: t('kp.more'), onPress: () => setMore(true) }]}
-            >
+            />
+          <View style={{ width: '100%', maxWidth: two ? 600 + sheetWidth + layout.gutter : 600, gap: theme.space[3], alignSelf: 'center' }}>
+            <AppText testID="kp-status" variant="footnote">
+              {statusWord(status, t)}
+            </AppText>
               {two ? null : (
                 <SegmentedControl
                   testID="kp-mode"
@@ -280,7 +297,6 @@ export default function KpScreen() {
                   onChange={setMode}
                 />
               )}
-            </Header>
             {versionLine ? (
               <AppText testID="kp-version-line" variant="footnote">
                 {versionLine}
@@ -297,17 +313,7 @@ export default function KpScreen() {
               preview
             )}
           </View>
-        </ScrollView>
-        <TotalBar
-          text={totalText}
-          amount={totals ? money(totals.total) : '—'}
-          label={t(data.vat.mode === 'none' ? 'kp.bar_total' : 'kp.bar_total_vat')}
-          mode={mode}
-          showPreviewToggle={!two}
-          onToggle={() => setMode((m) => (m === 'edit' ? 'preview' : 'edit'))}
-          onSend={() => setSending(true)}
-        />
-      </SafeAreaView>
+      </Screen>
 
       {lineFor && lineIndex >= 0 ? (
         <LineSheet

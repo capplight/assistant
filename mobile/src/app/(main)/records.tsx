@@ -1,10 +1,10 @@
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { FlatList } from 'react-native';
 
 import { PageEmpty } from '@/components/page/PageEmpty';
 import { RecordRow } from '@/components/RecordRow';
 import { Screen } from '@/components/Screen';
+import { PlaceFlatList } from '@/components/ui/PlaceScreen';
 import { Header } from '@/components/ui';
 import { useAllRecords } from '@/records/useRecords';
 import { useTheme } from '@/theme';
@@ -20,12 +20,12 @@ export default function AllRecordsScreen() {
   // ux-audit P0-7: a stack screen has «‹ Назад».
   const back = () => (router.canGoBack() ? router.back() : router.replace('/more'));
   return (
-    <Screen testID="all-records" edges={['top']} scroll={false}>
-      <FlatList
+    <Screen testID="all-records" scroll={false}>
+      <Header title={t('more.all_records')} back={{ onPress: back, label: t('more.title'), testID: 'records-back' }} />
+      <PlaceFlatList
         data={records ?? []}
         keyExtractor={(r) => r.id}
         contentContainerStyle={{ paddingTop: theme.space[2], paddingBottom: theme.space[4] }}
-        ListHeaderComponent={<Header title={t('more.all_records')} back={{ onPress: back, testID: 'records-back' }} />}
         ListEmptyComponent={records ? <PageEmpty lines={[t('page.empty')]} /> : undefined}
         renderItem={({ item }) => (
           <RecordRow

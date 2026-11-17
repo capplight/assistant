@@ -10,7 +10,7 @@ import path from 'path';
 import { KAZAKH_GLYPH_TEST_LINE } from '@/theme';
 
 const REQUIRED = 'әӘғҒқҚңҢөӨұҰүҮһҺіІ₸№«»';
-const WEIGHTS = ['400Regular', '500Medium', '600SemiBold', '700Bold'];
+const WEIGHTS = ['400Regular', '500Medium', '600SemiBold', '700Bold', '800ExtraBold'];
 
 function cmapCodepoints(buf: Buffer): Set<number> {
   const numTables = buf.readUInt16BE(4);
@@ -50,6 +50,13 @@ describe('Onest covers Kazakh glyphs', () => {
   const dir = path.dirname(require.resolve('@expo-google-fonts/onest/package.json'));
   it.each(WEIGHTS)('%s has ә ғ қ ң ө ұ ү һ і (both cases), ₸ № « »', (w) => {
     const cps = cmapCodepoints(fs.readFileSync(path.join(dir, w, `Onest_${w}.ttf`)));
+    const missing = [...REQUIRED].filter((ch) => !cps.has(ch.codePointAt(0)!));
+    expect(missing).toEqual([]);
+  });
+
+  it('v5: Geologica 700 (phrase, big number) has the Kazakh letters and ₸ too', () => {
+    const g = path.dirname(require.resolve('@expo-google-fonts/geologica/package.json'));
+    const cps = cmapCodepoints(fs.readFileSync(path.join(g, '700Bold', 'Geologica_700Bold.ttf')));
     const missing = [...REQUIRED].filter((ch) => !cps.has(ch.codePointAt(0)!));
     expect(missing).toEqual([]);
   });

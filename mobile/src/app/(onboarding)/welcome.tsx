@@ -1,24 +1,22 @@
 import { router } from 'expo-router';
-import { BellRing, KeyRound, Mic, ReceiptText } from 'lucide-react-native';
+import { CreditCard, ListChecks, MessageSquareText, StickyNote, Sun } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 
 import { AppText } from '@/components/AppText';
-import { Screen } from '@/components/Screen';
 import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Icon, type LucideIcon } from '@/components/ui/Icon';
-import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { Chip } from '@/components/ui/Chip';
+import type { LucideIcon } from '@/components/ui/Icon';
 import { buildConsentRequest, consentScreen } from '@/consent/texts';
 import { useConsentTexts } from '@/consent/useConsentTexts';
 import { getOutbox } from '@/db';
-import { LANGUAGES, type Language } from '@/i18n';
+import { LANGUAGES } from '@/i18n';
 import { finishWithDefaults } from '@/onboarding/service';
 import { kickSync } from '@/services';
 import { getFeatures, useFeatures } from '@/store/features';
 import { useOnboarding } from '@/store/onboarding';
-import { useTheme } from '@/theme';
+import { sheet as sheetV5, useTheme, type PlaceKey } from '@/theme';
 
 /**
  * The first launch (Ф-34): one welcome screen → «Начать» → «Сегодня». The line under the button says that
@@ -31,6 +29,7 @@ import { useTheme } from '@/theme';
 export default function WelcomeScreen() {
   const theme = useTheme();
   const { t } = useTranslation();
+  const { height } = useWindowDimensions();
   const language = useOnboarding((s) => s.language);
   const setLanguage = useOnboarding((s) => s.setLanguage);
   const markOpened = useOnboarding((s) => s.markOpened);
@@ -65,97 +64,72 @@ export default function WelcomeScreen() {
   const link = (label: string, doc: 'policy' | 'terms') => (
     <AppText
       variant="footnote"
-      color="brand"
+      color="ink3"
       testID={`welcome-policy-link-${doc}`}
       accessibilityRole="link"
       suppressHighlighting
       onPress={() => router.push({ pathname: '/legal', params: { doc } })}
-      style={{ fontFamily: theme.type.sectionLabel.fontFamily }}
+      style={{ textDecorationLine: 'underline' }}
     >
       {label}
     </AppText>
   );
 
+  // screens-v5 «Приветствие»: the stack of the five places on the tray (the splash and the colours at once), on top the
+  // paper sheet with one line about the product, the language and «Начать». Steps shrink on short phones.
+  const step = Math.max(28, Math.min(60, Math.round((height * 0.4 - sheetV5.peek) / 5)));
+  const paperTop = sheetV5.peek + 5 * step;
+  const stack: { place: PlaceKey; icon: LucideIcon; label: string }[] = [
+    { place: 'today', icon: Sun, label: t('tpl.short.today') },
+    { place: 'notes', icon: StickyNote, label: t('tpl.short.notes') },
+    { place: 'assistant', icon: MessageSquareText, label: t('tabs.assistant') },
+    { place: 'expenses', icon: CreditCard, label: t('tpl.short.expenses') },
+    { place: 'tasks', icon: ListChecks, label: t('tpl.short.tasks') },
+  ];
   return (
-    <Screen
-      testID="welcome-screen"
-      footer={
-        <View style={{ gap: theme.space[3] }}>
-          <Button testID="welcome-start" label={t('tour.start')} disabled={busy} onPress={() => void begin()} />
-          <AppText testID="welcome-policy" variant="footnote" style={styles.center}>
-            {t('welcome.policy_before')}
-            {link(t('welcome.policy'), 'policy')}
-            {t('welcome.policy_and')}
-            {link(t('welcome.terms'), 'terms')}
-            {t('welcome.policy_after')}
-          </AppText>
-          {forOther ? (
-            <Button testID="welcome-for-other" variant="text" label={t('tour.for_other')} onPress={() => void begin()} />
-          ) : null}
+    <View testID="welcome-screen" style={[styles.flex, { backgroundColor: theme.colors.tray, paddingTop: theme.m.top }]}>
+      <View style={styles.flex}>
+        <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={StyleSheet.absoluteFill}>
+          {stack.map((x, i) => (
+            <View key={x.place} style={[styles.layer, { top: sheetV5.peek + i * step, height: 340, backgroundColor: theme.colors.place[x.place], paddingHorizontal: 22 }]}>
+              <x.icon size={22} color={theme.colors.onSheet} strokeWidth={theme.icon.strokeWidth} />
+              <AppText numberOfLines={1} style={{ color: theme.colors.onSheet, fontFamily: theme.type.headline.fontFamily, fontSize: 17, lineHeight: 22 }}>
+                {x.label}
+              </AppText>
+            </View>
+          ))}
         </View>
-      }
-    >
-      <View style={{ gap: theme.space[5], paddingTop: theme.space[4] }}>
-        <Illustration />
-        <View style={{ gap: theme.space[2] }}>
-          <AppText variant="title1" accessibilityRole="header" style={styles.center}>
-            {t('welcome.title')}
-          </AppText>
-          <AppText variant="callout" style={styles.center}>
-            {t('welcome.body')}
-          </AppText>
-        </View>
-        <View style={[styles.lang, { maxWidth: theme.largeFont ? undefined : 320 }]}>
-          <SegmentedControl<Language>
-            testID="welcome-lang"
-            accessibilityLabel={t('lang.choose')}
-            segments={LANGUAGES.map((l) => ({ key: l, label: t(`lang.${l}`), testID: `lang-${l}` }))}
-            value={language}
-            onChange={setLanguage}
-          />
+        <View style={[styles.paper, { top: paperTop, backgroundColor: theme.colors.paper }]}>
+          <ScrollView contentContainerStyle={{ paddingHorizontal: 22, paddingTop: 26, paddingBottom: Math.max(theme.m.insets.bottom, 16) + 8 }}>
+            <AppText variant="title" accessibilityRole="header" style={{ lineHeight: 34 }}>
+              {t('welcome.title')}
+            </AppText>
+            <AppText style={{ fontSize: 17, lineHeight: 25, color: theme.colors.ink2, marginTop: 12 }}>{t('welcome.body')}</AppText>
+            <View testID="welcome-lang" accessibilityRole="radiogroup" accessibilityLabel={t('lang.choose')} style={[styles.row, { gap: 8, marginTop: 20, flexWrap: 'wrap' }]}>
+              {LANGUAGES.map((l) => (
+                <Chip key={l} testID={`lang-${l}`} label={t(`lang.${l}`)} variant={language === l ? 'selected' : 'neutral'} selected={language === l} onPress={() => setLanguage(l)} />
+              ))}
+            </View>
+            <Button testID="welcome-start" label={t('tour.start')} disabled={busy} onPress={() => void begin()} style={{ marginTop: 20 }} />
+            <AppText testID="welcome-policy" variant="footnote" style={[styles.center, { marginTop: 12 }]}>
+              {t('welcome.policy_before')}
+              {link(t('welcome.policy'), 'policy')}
+              {t('welcome.policy_and')}
+              {link(t('welcome.terms'), 'terms')}
+              {t('welcome.policy_after')}
+            </AppText>
+            {forOther ? <Button testID="welcome-for-other" variant="text" label={t('tour.for_other')} onPress={() => void begin()} /> : null}
+          </ScrollView>
         </View>
       </View>
-    </Screen>
-  );
-}
-
-/** One picture in the brand colour: the mic on an emerald square with the sun, three things it keeps. */
-function Illustration() {
-  const theme = useTheme();
-  const { t } = useTranslation();
-  const chip = (icon: LucideIcon, text: string, sun: boolean, tilt: string) => (
-    <Card style={[styles.chip, { transform: [{ rotate: tilt }], paddingVertical: theme.space[2], paddingHorizontal: theme.space[3], gap: theme.space[2] }]}>
-      <View style={[styles.dot, { backgroundColor: sun ? theme.colors.highlight : theme.colors.brand }]}>
-        <Icon icon={icon} size="sm" color={sun ? 'onHighlight' : 'onBrand'} />
-      </View>
-      <AppText variant="callout" color="ink" style={{ fontFamily: theme.type.sectionLabel.fontFamily, flexShrink: 1 }}>
-        {text}
-      </AppText>
-    </Card>
-  );
-  return (
-    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ alignItems: 'center', gap: theme.space[3] }}>
-      <View style={[styles.mark, { backgroundColor: theme.colors.brand, borderRadius: 38 }, theme.elevation.floating]}>
-        <View style={[styles.sun, { backgroundColor: theme.colors.highlight }]} />
-        <Mic size={56} color={theme.colors.onBrand} strokeWidth={theme.icon.strokeWidth} />
-      </View>
-      {theme.largeFont ? null : (
-        <View style={[styles.chips, { gap: theme.space[2] }]}>
-          {chip(BellRing, t('welcome.ex_pill'), false, '-3deg')}
-          {chip(KeyRound, t('welcome.ex_code'), true, '3deg')}
-          {chip(ReceiptText, t('welcome.ex_receipt'), true, '-2deg')}
-        </View>
-      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  row: { flexDirection: 'row', alignItems: 'center' },
   center: { textAlign: 'center' },
-  lang: { alignSelf: 'center', width: '100%' },
-  mark: { width: 124, height: 124, alignItems: 'center', justifyContent: 'center' },
-  sun: { position: 'absolute', right: 16, top: 16, width: 22, height: 22, borderRadius: 11 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' },
-  chip: { flexDirection: 'row', alignItems: 'center' },
-  dot: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  layer: { position: 'absolute', left: 0, right: 0, borderTopLeftRadius: 28, borderTopRightRadius: 28, flexDirection: 'row', gap: 10, paddingTop: 13 },
+  paper: { position: 'absolute', left: 0, right: 0, bottom: 0, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' },
 });

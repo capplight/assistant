@@ -87,13 +87,18 @@ export default function SearchScreen() {
   const open = (record: LocalRecord) => router.navigate({ pathname: '/record/[id]', params: { id: record.id, q: trimmed } });
 
   return (
-    <Screen testID="search-screen" edges={['top']}>
+    // screens-v5 «Поиск»: the stone sheet holds «‹ Назад» and the one field (on `paper`, 52, radius 26).
+    <Screen
+      testID="search-screen"
+      sheetExtra={
+        <View style={{ marginTop: 6, marginBottom: 2 }}>
+          <FindField testID="search-field" label={t('search.field')} value={q} onChange={setQ} large />
+        </View>
+      }
+      hideTitle
+    >
+      <Header title={t('search.title')} back={{ onPress: () => (router.canGoBack() ? router.back() : router.navigate('/')), testID: 'search-back' }} />
       <View style={{ gap: theme.space[4] }}>
-        <Header
-          title={t('search.title')}
-          back={{ onPress: () => (router.canGoBack() ? router.back() : router.navigate('/')), testID: 'search-back' }}
-        />
-        <FindField testID="search-field" label={t('search.field')} value={q} onChange={setQ} />
         {answer ? (
           <View style={{ gap: theme.space[2] }}>
             <SearchAnswer answer={answer} onOpen={() => router.push({ pathname: '/history', params: { focus: answer.id } })} />

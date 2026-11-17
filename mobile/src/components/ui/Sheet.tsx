@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { useTheme } from '@/theme';
+import { useChrome } from '@/store/chrome';
+import { useTheme, type PlaceKey } from '@/theme';
 
 import { AppText } from '../AppText';
 import { Button } from './Button';
@@ -22,19 +23,24 @@ type SheetProps = {
   closeButton?: boolean;
   /** Scrolls when taller than ~85 % of the window (default on). */
   scroll?: boolean;
+  /** The place it was opened from (its 6 dp strip on top); default: the screen under it. */
+  place?: PlaceKey;
   testID?: string;
 };
 
 /**
- * The one bottom sheet (design-system §3 Sheet): `surfaceRaised`, radius 24, a 36×4 handle, `scrim` that closes
+ * The one bottom sheet v5 (design-system §11.2 «Шторка»): `paper`, radius 28, a 6 dp strip in the colour of the
+ * place it was opened from, a 40 × 5 `line2` grabber, the `scrim` that closes
  * on tap, ≤600 wide and centred on tablets, lifted above the keyboard on both platforms (edge-to-edge Android).
  * Reduced motion: fades instead of sliding.
  */
-export function Sheet({ visible, onClose, title, children, footer, closeButton = true, scroll = true, testID }: SheetProps) {
+export function Sheet({ visible, onClose, title, children, footer, closeButton = true, scroll = true, place, testID }: SheetProps) {
   const theme = useTheme();
   const { t } = useTranslation();
   const { height } = useWindowDimensions();
   const reduced = useReducedMotion();
+  const fromPlace = useChrome((s) => s.place);
+  const stripColor = theme.colors.place[place ?? fromPlace];
   const body = (
     <View style={{ gap: theme.space[3] }}>
       {children}
@@ -59,31 +65,34 @@ export function Sheet({ visible, onClose, title, children, footer, closeButton =
             style={[
               styles.sheet,
               {
-                backgroundColor: theme.colors.surfaceRaised,
+                backgroundColor: theme.colors.paper,
                 borderTopLeftRadius: theme.radius.sheet,
                 borderTopRightRadius: theme.radius.sheet,
                 maxWidth: theme.size.maxContentWidth,
-                paddingHorizontal: theme.space[5],
-                paddingBottom: theme.space[4],
+                paddingHorizontal: theme.m.gutter,
+                paddingBottom: theme.space[6],
+                overflow: 'hidden',
               },
-              theme.elevation.floating,
+              { shadowColor: '#000000', shadowOffset: { width: 0, height: -10 }, shadowRadius: 30, shadowOpacity: 0.25, elevation: 16 },
             ]}
           >
+            <View testID={testID ? `${testID}-strip` : undefined} style={{ height: 6, backgroundColor: stripColor, marginHorizontal: -theme.m.gutter }} />
             <View
               style={[
                 styles.handle,
                 {
                   width: theme.size.sheetHandle.width,
                   height: theme.size.sheetHandle.height,
-                  backgroundColor: theme.colors.separator,
-                  marginVertical: theme.space[2],
+                  backgroundColor: theme.colors.line2,
+                  marginTop: 8,
+                  marginBottom: 12,
                 },
               ]}
             />
             {title || closeButton ? (
               <View style={[styles.head, { gap: theme.space[2], marginBottom: theme.space[2] }]}>
                 {title ? (
-                  <AppText variant="headline" accessibilityRole="header" style={styles.flex}>
+                  <AppText variant="headline" accessibilityRole="header" style={[styles.flex, { fontSize: 21, lineHeight: 26 }]}>
                     {title}
                   </AppText>
                 ) : (
@@ -148,6 +157,6 @@ const styles = StyleSheet.create({
   scrim: { flex: 1, justifyContent: 'flex-end', alignItems: 'center' },
   // No maxHeight (it would cut text at 200 %): the scrim's top padding bounds it and the content scrolls.
   sheet: { width: '100%', flexShrink: 1 },
-  handle: { alignSelf: 'center', borderRadius: 2 },
+  handle: { alignSelf: 'center', borderRadius: 3 },
   head: { flexDirection: 'row', alignItems: 'center' },
 });

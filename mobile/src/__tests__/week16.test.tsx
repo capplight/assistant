@@ -180,7 +180,7 @@ describe('«Сегодня» — the tear-off sheet', () => {
     await renderRouter(APP_DIR, { initialUrl: '/' });
     expect(screen.getByTestId('task-t1')).toHaveTextContent(/Позвонить маме/);
     expect(screen.getByTestId('task-check-t1')).toBeTruthy();
-    expect(screen.getByTestId('today-brief')).toBeTruthy();
+    expect(screen.getByTestId('sheet-phrase')).toBeTruthy();
   });
 });
 

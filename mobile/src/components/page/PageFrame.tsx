@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { ArrowUpDown, Ellipsis, LayoutGrid, List, PencilLine, Plus, Search, SlidersHorizontal, X } from 'lucide-react-native';
-import { useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
@@ -11,8 +11,9 @@ import { usePageEntries } from '@/records/useRecords';
 import { useServerSearch } from '@/records/useServerSearch';
 import type { Page } from '@/store/pages';
 import { useNotesLook } from '@/store/notesLook';
+import { useChrome } from '@/store/chrome';
 import { useView } from '@/store/view';
-import { useTheme } from '@/theme';
+import { placeOfTemplate, useTheme, type PlaceKey } from '@/theme';
 
 import { AppText } from '../AppText';
 import { ActionList, Button, Header, Icon, Sheet, ViewToggle, type SheetAction } from '../ui';
@@ -31,7 +32,31 @@ import { entryRow, shownEntries, sortEntries } from './rows';
  * shows the found records the same way on every page. The bottom edge — answer banner, «Отменить»,
  * the assistant line, tabs — is the main layout's footer, outside the tool.
  */
+/** What a page tool puts on the coloured sheet (v5 «Расходы»: month · the big number · the phrase). */
+export type SheetSlot = { metaNode?: ReactNode; sheetExtra?: ReactNode; phrase?: string; sub?: string; hideTitle?: boolean };
+const SheetSlotContext = createContext<((s: SheetSlot | null) => void) | null>(null);
+
+/**
+ * A tool fills its page's sheet. `key` says when it changed (the node itself is new on every render): the sheet is
+ * set again only then, and cleared on unmount.
+ */
+export function useSheetSlot(slot: SheetSlot | null, key: string): void {
+  const set = useContext(SheetSlotContext);
+  const ref = useRef(slot);
+  useEffect(() => {
+    ref.current = slot;
+  });
+  useEffect(() => {
+    set?.(ref.current);
+  }, [key, set]);
+  useEffect(() => () => set?.(null), [set]);
+}
+
+/** Neighbour places peeking above the sheet of a tab root (design-system §11.1). */
+const PEEK: Partial<Record<PlaceKey, readonly [PlaceKey, PlaceKey]>> = { notes: ['expenses', 'today'], expenses: ['tasks', 'assistant'] };
+
 export function PageFrame({ page }: { page: Page }) {
+  const [slot, setSlot] = useState<SheetSlot | null>(null);
   const theme = useTheme();
   const { t, i18n } = useTranslation();
   const { title } = usePageLabels();
@@ -54,6 +79,8 @@ export function PageFrame({ page }: { page: Page }) {
   const notesLook = useNotesLook((st) => st.look);
   const setNotesLook = useNotesLook((st) => st.set);
   const isNotes = page.templateKey === 'notes';
+  const place = placeOfTemplate(page.templateKey);
+  const shopping = useView((st) => st.shopMode === page.id);
 
   // The marker goes after 600 ms (Reduce Motion: the same, it is a colour, not a move).
   useEffect(() => {
@@ -97,8 +124,7 @@ export function PageFrame({ page }: { page: Page }) {
     },
   ];
   // One line (ux-audit P0-2): the title, 🔍 and ⋯; «Порядок», «Настроить» live in ⋯; the field opens on 🔍.
-  const top = (
-    <View style={{ gap: theme.space[2] }}>
+  const header = (
       <Header
         testID="page-header"
         title={title(page)}
@@ -139,11 +165,16 @@ export function PageFrame({ page }: { page: Page }) {
             onPress: () => (searchShown ? closeSearch() : router.navigate({ pathname: '/search', params: { page: page.id } })),
           },
               ]),
+          // screens-v5 «Заметки»: 🔍 and «+» on the sheet («+» opens «Добавить» of the assistant line).
+          { key: 'add', testID: 'page-add', icon: Plus, label: t('line.plus_a11y'), onPress: () => useChrome.getState().requestAdd() },
           ...(page.templateKey === 'expenses'
             ? []
             : [{ key: 'menu', testID: 'page-menu', icon: Ellipsis, label: t('move.menu_a11y', { what: title(page) }), onPress: () => setMenuOpen(true) }]),
         ]}
       />
+  );
+  const top = (
+    <View style={{ gap: theme.space[2] }}>
       {searchShown ? (
         <FindField testID="page-find" label={t('page.find')} value={q} onChange={(value) => setFind({ pageId: page.id, q: value })} />
       ) : null}
@@ -204,7 +235,22 @@ export function PageFrame({ page }: { page: Page }) {
   }
 
   return (
-    <Screen testID={`page-${page.templateKey}`} edges={['top']} scroll={false}>
+    <SheetSlotContext.Provider value={setSlot}>
+    <Screen
+      testID={`page-${page.templateKey}`}
+      place={place}
+      peek={PEEK[place]}
+      scroll={false}
+      askRoom
+      phrase={slot?.phrase}
+      sub={slot?.sub}
+      metaNode={slot?.metaNode}
+      sheetExtra={slot?.sheetExtra}
+      hideTitle={slot?.hideTitle}
+      paperPadding={isNotes ? 14 : undefined}
+    >
+      {/* «Я в магазине» is the list alone: no sheet header (template-screens 3). */}
+      {shopping ? null : header}
       <View testID={`page-view-${view.key}`} style={{ flex: 1 }}>
         {middle}
       </View>
@@ -224,6 +270,7 @@ export function PageFrame({ page }: { page: Page }) {
         />
       ) : null}
     </Screen>
+    </SheetSlotContext.Provider>
   );
 }
 

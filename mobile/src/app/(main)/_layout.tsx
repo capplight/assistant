@@ -7,6 +7,7 @@ import { MainFooter } from '@/components/MainFooter';
 import { AiConsentUpdate } from '@/consent/AiConsentUpdate';
 import { KEYBOARD_BEHAVIOR } from '@/components/useKeyboard';
 import { finishWithDefaults } from '@/onboarding/service';
+import { InTabsContext } from '@/store/chrome';
 import { useOnboarding } from '@/store/onboarding';
 import { useSession } from '@/store/session';
 import { useOnboardingResumeHref } from '@/store/useOnboardingResume';
@@ -37,6 +38,7 @@ export default function MainLayout() {
   return (
     // Keep the assistant line above the keyboard on both platforms: Android is edge-to-edge and no longer resizes (week 17).
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={KEYBOARD_BEHAVIOR}>
+      <InTabsContext.Provider value>
       <Tabs backBehavior="history" screenOptions={{ headerShown: false, animation: 'none' }} tabBar={() => <MainFooter />}>
         <Tabs.Screen name="index" />
         <Tabs.Screen name="page/[id]" />
@@ -54,6 +56,7 @@ export default function MainLayout() {
         <Tabs.Screen name="ai-import" />
         <Tabs.Screen name="ai-chats" />
       </Tabs>
+      </InTabsContext.Provider>
       <AiConsentUpdate />
     </KeyboardAvoidingView>
   );

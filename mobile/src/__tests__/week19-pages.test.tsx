@@ -92,7 +92,7 @@ describe('«Заметки»: the sticker grid (design-system §3 StickyNote)', 
     else expect(StyleSheet.flatten(screen.getByTestId('sticker-notes0').parent!.parent!.props.style)?.flexDirection).not.toBe('row');
     const style = StyleSheet.flatten(screen.getByTestId('record-notes0').props.style);
     expect(style.borderWidth ?? 0).toBe(0);
-    expect(style.borderRadius).toBe(18); // v2 StickyNote
+    expect(style.borderRadius).toBe(20); // v5 sticker (.stk)
     expect(screen.queryByTestId('record-menu-notes0')).toBeNull();
     // Ф-38: no «Ряды | Доска» while the board is off.
     expect(screen.queryByTestId('notes-mode-board')).toBeNull();

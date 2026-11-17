@@ -3,7 +3,7 @@ import { useWindowDimensions } from 'react-native';
 import { SafeAreaInsetsContext, type EdgeInsets } from 'react-native-safe-area-context';
 
 import { size } from './layout';
-import { LARGE_FONT_SCALE, MAX_FONT_SCALE } from './typography';
+import { LARGE_FONT_SCALE, MAX_FONT_SCALE, SMALL_WIDTH } from './typography';
 
 /**
  * Adaptive layout toolkit (founder requirement; design-system §4 «Ширины экрана»).
@@ -29,7 +29,7 @@ export type Layout = {
   /** Clamped to MAX_FONT_SCALE. */
   fontScale: number;
   largeFont: boolean;
-  /** Screen side padding: 12 / 16 / 20. */
+  /** Screen side padding: 16 / 20 / 24 (v5). */
   gutter: number;
   /** Max width of a readable column (text, lists, the bottom bar). */
   contentMaxWidth: number;
@@ -50,9 +50,11 @@ export function widthClassOf(width: number): WidthClass {
   return 'compact';
 }
 
+/** v5 side gutters: 16 at ≤ 340 dp, 20 normally, 24 at ≥ 420 dp (tokens-v5 `size.gutter`). */
 export function gutterFor(width: number): number {
-  const c = widthClassOf(width);
-  return c === 'compact' ? size.screenPaddingNarrow : c === 'expanded' ? size.screenPaddingWide : size.screenPadding;
+  if (width <= SMALL_WIDTH) return 16;
+  if (width >= 420) return 24;
+  return 20;
 }
 
 /**

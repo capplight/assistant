@@ -23,6 +23,7 @@ import { MovePageSheet, type MoveMode } from '../MovePageSheet';
 import { RecordMenuSheet, type MenuExtra } from '../RecordMenuSheet';
 import { RecordRow, type RowMoves } from '../RecordRow';
 import { TaskRow } from '../TaskRow';
+import { usePlaceList } from '../ui/PlaceScreen';
 import { useDrag } from '../useDrag';
 import { dueText, shownEntries, type EntryRow, type Row } from './rows';
 
@@ -124,6 +125,9 @@ export function EntryList({
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [moveSheet, setMoveSheet] = useState<{ recordId: string; mode: MoveMode } | null>(null);
   const drag = useDrag();
+  // v5: this list is the scroll of the page's coloured sheet (it collapses as the list goes up).
+  const listRef = useRef<FlatList<Line>>(null);
+  const place = usePlaceList((y, animated) => listRef.current?.scrollToOffset({ offset: y, animated }));
   const searching = searchQuery !== undefined && searchQuery.trim().length > 0;
 
   // FlatList wants one callback for its whole life: the page id is read from a ref.
@@ -233,6 +237,7 @@ export function EntryList({
     <>
       <View style={{ flex: 1 }} {...drag.handlers}>
         <FlatList<Line>
+          ref={listRef}
           testID="page-records"
           data={lines}
           keyExtractor={(r) =>
@@ -250,9 +255,15 @@ export function EntryList({
           onTouchEnd={() => setTouching(false)}
           onTouchCancel={() => setTouching(false)}
           onScrollBeginDrag={() => setTouching(true)}
-          onMomentumScrollEnd={() => setTouching(false)}
-          // The header sits right under the safe area (≤56 dp, ux-audit P0-2); the end clears the floating bottom.
-          contentContainerStyle={{ paddingTop: theme.space[2], paddingBottom: theme.size.contentEndGap }}
+          onMomentumScrollEnd={(e) => {
+            setTouching(false);
+            place?.onMomentumScrollEnd(e);
+          }}
+          onScroll={place?.onScroll}
+          onScrollEndDrag={place?.onScrollEndDrag}
+          scrollEventThrottle={place?.scrollEventThrottle}
+          // The first row starts under the sheet's overlap; the end clears the assistant strip and the tabs.
+          contentContainerStyle={{ paddingTop: place ? place.inset : theme.space[2], paddingBottom: theme.m.ask.listBottomPadding + theme.space[2] }}
           keyboardShouldPersistTaps="handled"
           ListHeaderComponent={header}
           ListFooterComponent={footer}

@@ -491,10 +491,11 @@ const BoardSticker = memo(function BoardSticker({
           height: size,
           zIndex: lifted ? 100_000 : z + 1,
           elevation: lifted ? 8 : 1,
-          backgroundColor: lit ? theme.colors.highlightTint : theme.notes[color ?? 'white'],
-          borderRadius: theme.radius.md,
-          borderColor: lit || lifted ? theme.colors.highlight : theme.colors.separator,
-          borderWidth: lit || lifted ? 3 : 1,
+          backgroundColor: theme.notes[color ?? 'white'],
+          borderRadius: 20,
+          // v5: a sticker the assistant just put here is ringed in terracotta; a lifted one in `ink`.
+          borderColor: lit ? theme.colors.place.assistant : lifted ? theme.colors.ink : theme.colors.line,
+          borderWidth: lit || lifted ? 2 : 1,
         },
         drag ? { transform: drag.getTranslateTransform() } : null,
       ]}

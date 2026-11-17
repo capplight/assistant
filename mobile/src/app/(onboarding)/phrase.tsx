@@ -1,16 +1,20 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, TextInput, View } from 'react-native';
+import { TextInput, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/ui/Button';
+import { Header } from '@/components/ui/Header';
+import { PlaceTab, Row } from '@/components/ui/Leaf';
 import { Screen } from '@/components/Screen';
 import { suggestedPages } from '@/pages/premarks';
 import { useAlarms } from '@/alarms/store';
 import { getCapture } from '@/services';
 import { introMarks, selectNoAi, useOnboarding } from '@/store/onboarding';
-import { MAX_FONT_SCALE, useTheme } from '@/theme';
+import { MAX_FONT_SCALE, useTheme, type PlaceKey } from '@/theme';
+
+const PLACES: PlaceKey[] = ['notes', 'tasks', 'expenses'];
 
 /**
  * S03 — first phrase (path 3). Typed here; the phrase becomes a local record + outbox item
@@ -45,29 +49,23 @@ export default function PhraseScreen() {
   };
 
   return (
-    <Screen testID="phrase-screen">
-      <AppText variant="largeTitle" accessibilityRole="header" style={{ marginBottom: theme.space[5] }}>
+    // screens-v5 «Первая фраза»: the terracotta strip, the big question, examples as rows in the colour of their place.
+    <Screen testID="phrase-screen" place="assistant" mode="strip">
+      <Header title="" />
+      <AppText accessibilityRole="header" style={[theme.type.title, { fontSize: 27, lineHeight: 32, letterSpacing: -0.5, marginTop: 10 }]}>
         {noAi ? t('phrase.title_typed') : t('phrase.title')}
       </AppText>
-      <View style={{ gap: theme.space[3] }}>
+      <AppText variant="callout" style={{ fontSize: 16, marginTop: 8, marginBottom: 4 }}>
+        {t('phrase.for_example')}
+      </AppText>
+      <View>
         {examples.map((ex, i) => (
-          <Pressable
-            key={i}
-            testID={`phrase-example-${i}`}
-            accessibilityRole="button"
-            onPress={() => submit(ex)}
-            style={{
-              minHeight: theme.size.buttonHeight,
-              justifyContent: 'center',
-              padding: theme.space[4],
-              borderRadius: theme.radius.lg,
-              borderWidth: 1,
-              borderColor: theme.colors.separator,
-              backgroundColor: theme.colors.surface,
-            }}
-          >
-            <AppText>{ex}</AppText>
-          </Pressable>
+          <Row key={i} first={i === 0} testID={`phrase-example-${i}`} accessibilityLabel={ex} onPress={() => submit(ex)}>
+            <PlaceTab place={PLACES[i] ?? 'notes'} />
+            <AppText numberOfLines={1} style={{ flex: 1 }}>
+              {`«${ex}»`}
+            </AppText>
+          </Row>
         ))}
       </View>
       <TextInput
@@ -84,12 +82,12 @@ export default function PhraseScreen() {
           {
             marginTop: theme.space[6],
             minHeight: theme.size.buttonHeight,
-            borderWidth: 1,
-            borderColor: theme.colors.iconSecondary,
-            borderRadius: theme.radius.sm,
-            paddingHorizontal: theme.space[3],
+            borderWidth: 1.5,
+            borderColor: theme.colors.ink,
+            borderRadius: 26,
+            paddingHorizontal: 18,
             color: theme.colors.ink,
-            backgroundColor: theme.colors.surface,
+            backgroundColor: theme.colors.paper,
           },
         ]}
       />

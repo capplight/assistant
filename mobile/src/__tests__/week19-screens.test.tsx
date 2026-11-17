@@ -23,7 +23,8 @@ beforeEach(() => {
 describe('«Ещё» (Ф-41)', () => {
   it('v4: the profile, the «Дела» / «Документы» tiles, the rows (История among them), «Ваши страницы»; no stubs', async () => {
     await renderRouter(APP_DIR, { initialUrl: '/more' });
-    const rows = ['more-profile', 'more-tasks', 'more-documents', 'more-history', 'more-records', 'more-import', 'more-ai-chats', 'more-settings', 'more-add_page', 'more-my_pages'];
+    // screens-v5 «Ещё»: plain rows, «Корзина» among them, 🔍 on the stone sheet.
+    const rows = ['more-search', 'more-profile', 'more-tasks', 'more-documents', 'more-history', 'more-records', 'more-trash', 'more-import', 'more-ai-chats', 'more-settings', 'more-add_page', 'more-my_pages'];
     for (const id of rows) expect(screen.getByTestId(id)).toBeTruthy();
     const ids = new Set<string>();
     const walk = (n: unknown): void => {
@@ -37,7 +38,7 @@ describe('«Ещё» (Ф-41)', () => {
     walk(screen.toJSON());
     expect([...ids].sort()).toEqual([...rows].sort());
     expect(screen.queryByText('Появится позже')).toBeNull();
-    for (const gone of ['more-trash', 'more-did', 'more-lang', 'more-delete_account', 'more-my_data', 'more-alarms', 'more-chat']) {
+    for (const gone of ['more-did', 'more-lang', 'more-delete_account', 'more-my_data', 'more-alarms', 'more-chat']) {
       expect(screen.queryByTestId(gone)).toBeNull();
     }
   });
@@ -133,7 +134,8 @@ describe('«Сегодня» and the beta switches (Ф-42)', () => {
     await renderRouter(APP_DIR, { initialUrl: '/' });
     expect(screen.getByTestId('task-a')).toHaveTextContent(/Позвонить в банк/);
     expect(screen.getByTestId('task-b')).toHaveTextContent(/Оплатить интернет/);
-    expect(screen.getByTestId('today-all-tasks')).toHaveTextContent(/Все дела · 2/);
+    // screens-v5 «Сегодня»: «Все дела ›» without a count.
+    expect(screen.getByTestId('today-all-tasks')).toHaveTextContent(/Все дела/);
     await fireEvent.press(screen.getByTestId('task-check-b'));
     await settle(() => screen.getByTestId('task-check-b').props.accessibilityState.checked === true);
   });

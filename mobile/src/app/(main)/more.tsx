@@ -1,28 +1,23 @@
 import { router } from 'expo-router';
-import { ChevronRight, CircleHelp, FolderInput, History, LayoutGrid, MessagesSquare, Plus, Search, Settings, ShieldAlert } from 'lucide-react-native';
-import { useState } from 'react';
+import { CircleHelp, FileText, FolderInput, Inbox, LayoutGrid, LayoutList, Plus, Search, Settings, ShieldAlert, Trash2 } from 'lucide-react-native';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Linking, Pressable, StyleSheet, View } from 'react-native';
+import { Linking, StyleSheet, View } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 
 import { AppText } from '@/components/AppText';
 import { PageNameSheet } from '@/components/PageNameSheet';
 import { Screen } from '@/components/Screen';
 import { supportUrl } from '@/components/support';
-import { MetricTile, TileGrid } from '@/components/ui/Brief';
-import { cardEdge, ListGroup, ListRow } from '@/components/ui/Card';
 import { Header } from '@/components/ui/Header';
-import { Icon, PageIcon } from '@/components/ui/Icon';
-import { pressedStyle } from '@/components/ui/motion';
+import type { LucideIcon } from '@/components/ui/Icon';
+import { PlaceTab, Row, RowChevron, RowMeta, SectionHead } from '@/components/ui/Leaf';
 import { getRecords } from '@/db';
-import { formatMinor, periodOf } from '@/expenses/calc';
-import { board, liveEntries } from '@/expenses/feed';
-import { useExpenses } from '@/expenses/store';
 import { useKp } from '@/kp/store';
 import { addCustomPage, ensureTemplatePage } from '@/pages/service';
 import { mainTabs } from '@/pages/tabs';
 import { usePageLabels } from '@/pages/usePageLabels';
-import { LIST_LIMIT, useLocalQuery } from '@/records/useRecords';
+import { LIST_LIMIT, useLocalQuery, useTrash } from '@/records/useRecords';
 import { useAssistant } from '@/store/assistant';
 import { useFeatures } from '@/store/features';
 import { useOnboarding } from '@/store/onboarding';
@@ -32,7 +27,7 @@ import { useToast } from '@/store/toast';
 import { localDate } from '@/tasks/rows';
 import { isDone, liveTasks } from '@/tasks/service';
 import { useTasks } from '@/tasks/store';
-import { metricColors, useTheme } from '@/theme';
+import { placeOfTemplate, useTheme } from '@/theme';
 
 const initials = (name: string) =>
   name
@@ -65,12 +60,6 @@ export default function MoreScreen() {
   const messages = useAssistant((s) => s.messages);
   const tasks = useTasks((s) => s.tasks);
   const ticks = useTasks((s) => s.ticks);
-  const monthSpent = useExpenses((s) => {
-    const today = localDate(Date.now());
-    const m = board(liveEntries(s.entries, s.edits), periodOf('month', today), s.categories).main;
-    return m?.currency === 'KZT' ? m.total : 0n;
-  });
-  const notesPage = pages.find((p) => p.templateKey === 'notes');
   const [naming, setNaming] = useState(false);
   const [todayKey] = useState(() => localDate(Date.now()));
   const records = useLocalQuery(async () => (await getRecords()).list(LIST_LIMIT), []);
@@ -80,7 +69,6 @@ export default function MoreScreen() {
 
   const liveDocs = Object.values(docs).filter((d) => !d.deleted_at);
   const drafts = liveDocs.filter((d) => d.status === 'draft' || d.status === 'extracting').length;
-  const lastDoc = [...liveDocs].sort((a, b) => (b.updated_at ?? '').localeCompare(a.updated_at ?? ''))[0];
   const today = new Date().toDateString();
   const todayActions = Object.values(actions).filter((a) => !a.undo_of && a.created_at && new Date(a.created_at).toDateString() === today);
   const todayTurns = messages.filter((m) => m.role === 'user' && new Date(m.at).toDateString() === today);
@@ -98,8 +86,6 @@ export default function MoreScreen() {
       if (p) router.navigate({ pathname: '/page/[id]', params: { id: p.id } });
     });
   const tasksToday = liveTasks(tasks, 'todo').filter((x) => !!x.due_date && x.due_date <= todayKey && !isDone(x, ticks)).length;
-  const notesCount = notesPage ? (records ?? []).filter((r) => r.pageId === notesPage.id).length : 0;
-  const spentText = formatMinor(monthSpent).replace(/\s?₸$/, '');
   const openDocuments = () =>
     void ensureTemplatePage('documents').then((p) => {
       if (p) router.navigate({ pathname: '/page/[id]', params: { id: p.id } });
@@ -109,119 +95,87 @@ export default function MoreScreen() {
   const signInFirst = needsSignIn || !phoneLinked;
   const profileMeta = signInFirst ? t('more.sign_in_keep') : (phone ?? t('more.profile_hint'));
 
+  const trash = useTrash();
+  const row = (o: { id: string; title: string; meta?: string; lead: React.ReactNode; onPress: () => void; first?: boolean; label?: string }) => (
+    <Row key={o.id} first={o.first} testID={o.id} accessibilityLabel={o.label ?? (o.meta ? `${o.title}. ${o.meta}` : o.title)} onPress={o.onPress}>
+      {o.lead}
+      <AppText numberOfLines={1} style={styles.flex}>
+        {o.title}
+      </AppText>
+      {o.meta ? <RowMeta>{o.meta}</RowMeta> : null}
+      <RowChevron />
+    </Row>
+  );
+  const icon = (I: LucideIcon) => <I size={22} color={theme.colors.ink} strokeWidth={theme.icon.strokeWidth} />;
+
   return (
-    <Screen testID="page-more" edges={['top']}>
-      <Header title={t('more.title')} />
-      <View style={{ gap: theme.space[3] }}>
-        {needsConsent ? (
-          <ListGroup>
-            {needsConsent ? (
-              <ListRow testID="more-consent" icon={ShieldAlert} title={t('account_consent.row')} meta={t('account_consent.row_hint')} chevron onPress={() => router.push('/account-consent')} />
-            ) : null}
-          </ListGroup>
-        ) : null}
-
-        {/* QA v2 §5.1: one profile card — signed in: the masked number; not yet / expired: the sign-in, here. */}
-        <Pressable
-          testID="more-profile"
-          accessibilityRole="button"
-          accessibilityLabel={`${displayName}. ${profileMeta}`}
-          onPress={() => (signInFirst ? router.push(needsSignIn ? '/phone?reason=expired' : '/phone') : router.push('/settings'))}
-          style={({ pressed }) => [
-            styles.row,
-            { backgroundColor: theme.colors.surface, borderRadius: theme.radius.xxl, padding: theme.space[4], gap: theme.space[3] },
-            theme.elevation.card,
-            cardEdge(theme),
-            pressedStyle(pressed),
-          ]}
-        >
-          <View style={[styles.avatar, { backgroundColor: theme.colors.brand }]}>
-            <AppText variant="headline" style={{ color: theme.colors.onBrand }}>
-              {name ? initials(name) : '·'}
-            </AppText>
-          </View>
+    <Screen testID="page-more" place="stone" peek={['expenses', 'assistant']} askRoom>
+      <Header title={t('more.title')} actions={[{ key: 'search', icon: Search, label: t('today.search'), onPress: () => router.navigate('/search'), testID: 'more-search' }]} />
+      {needsConsent ? (
+        <Row first testID="more-consent" onPress={() => router.push('/account-consent')} accessibilityLabel={`${t('account_consent.row')}. ${t('account_consent.row_hint')}`}>
+          {icon(ShieldAlert)}
           <View style={styles.flex}>
-            <AppText variant="headline">{displayName}</AppText>
-            <AppText testID="profile-meta" variant="callout">
-              {profileMeta}
-            </AppText>
+            <AppText>{t('account_consent.row')}</AppText>
+            <AppText variant="footnote">{t('account_consent.row_hint')}</AppText>
           </View>
-          <Icon icon={ChevronRight} size="sm" color="iconSecondary" />
-        </Pressable>
+          <RowChevron />
+        </Row>
+      ) : null}
 
-        <TileGrid testID="tiles-more">
-          {/* Дела left the tab bar for the centre «Помощник» (VISION-2026-11): a tile here, «Все дела ›» on «Сегодня». */}
-          <MetricTile
-            testID="more-tasks"
-            label={t('more.tasks')}
-            value={String(tasksToday)}
-            unit={t('more.on_today')}
-            caption={tasksToday === 0 ? t('more.tasks_free') : t('more.tasks_ok')}
-            color={metricColors[theme.scheme].reminders}
-            onPress={() => openTemplate('tasks')}
-          />
-          {theme.largeFont ? (
-            <>
-              <MetricTile testID="more-notes" label={t('more.notes')} value={String(notesCount)} caption={t('more.notes_hint')} color={metricColors[theme.scheme].new} onPress={() => openTemplate('notes')} />
-              <MetricTile testID="more-expenses" label={t('more.expenses')} value={spentText} unit="₸" caption={t('more.expenses_hint')} color={metricColors[theme.scheme].spent} onPress={() => openTemplate('expenses')} />
-            </>
-          ) : null}
-          <MetricTile
-            testID="more-documents"
-            label={t('more.documents')}
-            value={String(drafts)}
-            unit={t('more.drafts', { count: drafts })}
-            caption={lastDoc?.title ?? t('more.documents_empty')}
-            color={metricColors[theme.scheme].tasks}
-            onPress={openDocuments}
-          />
-        </TileGrid>
+      {/* QA v2 §5.1: one profile row — signed in: the masked number; not yet / expired: the sign-in, here. */}
+      <Row
+        first={!needsConsent}
+        testID="more-profile"
+        accessibilityLabel={`${displayName}. ${profileMeta}`}
+        onPress={() => (signInFirst ? router.push(needsSignIn ? '/phone?reason=expired' : '/phone') : router.push('/settings'))}
+        style={{ minHeight: 64 }}
+      >
+        <View style={[styles.avatar, { backgroundColor: theme.colors.paper2 }]}>
+          <AppText style={{ fontFamily: theme.type.title.fontFamily, fontSize: 16 }}>{name ? initials(name) : '·'}</AppText>
+        </View>
+        <View style={styles.flex}>
+          <AppText variant="headline">{displayName}</AppText>
+          <AppText testID="profile-meta" variant="footnote" style={{ fontVariant: ['tabular-nums'] }}>
+            {profileMeta}
+          </AppText>
+        </View>
+        <RowChevron />
+      </Row>
+      {/* «Дела» left the tab bar for the centre «Помощник»: a row here, «Все дела ›» on «Сегодня». */}
+      {row({ id: 'more-tasks', title: t('more.tasks'), meta: t('more.tasks_meta', { n: tasksToday }), lead: <PlaceTab place="tasks" />, onPress: () => openTemplate('tasks') })}
+      {row({ id: 'more-documents', title: t('more.documents'), meta: drafts > 0 ? `${drafts} ${t('more.drafts', { count: drafts })}` : undefined, lead: icon(FileText), onPress: openDocuments })}
+      {/* Ф-77: the imported chats live apart from «Заметки». */}
+      {row({ id: 'more-ai-chats', title: t('aichats.title'), lead: icon(Inbox), onPress: () => router.navigate('/ai-chats') })}
+      {row({
+        id: 'more-history',
+        title: t('more.history'),
+        meta: historyToday > 0 ? t('more.history_today', { n: historyToday }) : undefined,
+        lead: <PlaceTab place="assistant" />,
+        onPress: () => router.push('/history'),
+        label: `${t('more.history')}. ${historyToday > 0 && lastAction?.created_at ? t('more.last_at', { time: time(lastAction.created_at) }) : t('more.history_hint')}`,
+      })}
+      {row({ id: 'more-records', title: t('more.all_records'), meta: records ? String(records.length) : undefined, lead: icon(LayoutGrid), onPress: () => router.navigate('/records') })}
+      {row({ id: 'more-trash', title: t('trash.short'), meta: trash && trash.length > 0 ? String(trash.length) : undefined, lead: icon(Trash2), onPress: () => router.navigate('/trash') })}
+      {row({ id: 'more-settings', title: t('more.settings'), lead: icon(Settings), onPress: () => router.push('/settings') })}
 
-        <ListGroup>
-          {/* v4 «Ещё»: «Принести переписку · ChatGPT, Claude, Gemini — всё в одном месте» (Telegram is inside). */}
-          <ListRow testID="more-import" icon={FolderInput} title={t('more.import_chats')} meta={t('more.import_chats_hint')} chevron onPress={() => router.push('/ai-import')} />
-          {/* Ф-77: the imported chats live apart from «Заметки». */}
-          <ListRow testID="more-ai-chats" icon={MessagesSquare} title={t('aichats.title')} chevron onPress={() => router.navigate('/ai-chats')} />
-          <ListRow
-            testID="more-history"
-            icon={History}
-            title={t('more.history')}
-            meta={historyToday > 0 && lastAction?.created_at ? t('more.last_at', { time: time(lastAction.created_at) }) : t('more.history_hint')}
-            chevron
-            onPress={() => router.push('/history')}
-          />
-          <ListRow
-            testID="more-records"
-            icon={Search}
-            title={t('more.all_records')}
-            meta={records ? t('more.records_count', { count: records.length }) : undefined}
-            chevron
-            onPress={() => router.navigate('/records')}
-          />
-          <ListRow testID="more-settings" icon={Settings} title={t('more.settings')} meta={t('more.settings_hint')} chevron onPress={() => router.push('/settings')} />
-          {support ? <ListRow testID="more-help" icon={CircleHelp} title={t('more.help')} chevron onPress={() => void Linking.openURL(support).catch(() => undefined)} /> : null}
-        </ListGroup>
+      <SectionHead title={t('more.more_section')} />
+      {/* v4 «Ещё»: «Принести переписку · ChatGPT, Claude, Gemini — всё в одном месте» (Telegram is inside). */}
+      {row({ id: 'more-import', first: true, title: t('more.import_chats'), meta: undefined, lead: icon(FolderInput), onPress: () => router.push('/ai-import') })}
+      {support ? row({ id: 'more-help', title: t('more.help'), lead: icon(CircleHelp), onPress: () => void Linking.openURL(support).catch(() => undefined) }) : null}
 
-        <ListGroup title={t('more.your_pages')}>
-          {shownOverflow.map((p) => (
-            <ListRow
-              key={p.id}
-              testID={`more-page-${p.id}`}
-              left={
-                <View style={[styles.square, { backgroundColor: theme.colors.brandTint, borderRadius: theme.radius.sm }]}>
-                  <PageIcon name={p.icon} color={theme.colors.brand} size={20} />
-                </View>
-              }
-              title={title(p)}
-              chevron
-              onPress={() => router.navigate({ pathname: '/page/[id]', params: { id: p.id } })}
-            />
-          ))}
-          <ListRow testID="more-add_page" icon={Plus} title={t('more.add_page')} chevron onPress={() => setNaming(true)} />
-          {/* Order, rename, remove the pages (S34): the tabs stay fixed (Ф-48), «Ваши страницы» follow this order. */}
-          <ListRow testID="more-my_pages" icon={LayoutGrid} title={t('more.my_pages')} chevron onPress={() => router.navigate('/my-pages')} />
-        </ListGroup>
-      </View>
+      <SectionHead title={t('more.your_pages')} />
+      {shownOverflow.map((p, i) =>
+        row({
+          id: `more-page-${p.id}`,
+          first: i === 0,
+          title: title(p),
+          lead: <PlaceTab place={placeOfTemplate(p.templateKey)} />,
+          onPress: () => router.navigate({ pathname: '/page/[id]', params: { id: p.id } }),
+        }),
+      )}
+      {row({ id: 'more-add_page', first: shownOverflow.length === 0, title: t('more.add_page'), lead: icon(Plus), onPress: () => setNaming(true) })}
+      {/* Order, rename, remove the pages (S34): the tabs stay fixed (Ф-48), «Ваши страницы» follow this order. */}
+      {row({ id: 'more-my_pages', title: t('more.my_pages'), lead: icon(LayoutList), onPress: () => router.navigate('/my-pages') })}
       {naming ? (
         <PageNameSheet
           onClose={() => setNaming(false)}
@@ -239,8 +193,6 @@ export default function MoreScreen() {
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center' },
   flex: { flex: 1 },
-  avatar: { minWidth: 52, minHeight: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
-  square: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
+  avatar: { minWidth: 48, minHeight: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
 });

@@ -6,7 +6,6 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { useTheme } from '@/theme';
 
 import { AppText } from '../AppText';
-import { cardEdge } from './Card';
 import { Icon, type LucideIcon } from './Icon';
 import { pressedStyle } from './motion';
 
@@ -35,7 +34,7 @@ export function BackButton({ onPress, label, testID = 'header-back' }: BackProps
   );
 }
 
-/** A round 40 button (`surface` + shadow), 48 target: search and ⋯ in the header. */
+/** v5: a plain 40 icon button (`.ib`), 48 target: search and ⋯. */
 export function HeaderButton({ icon, label, onPress, testID }: Omit<HeaderAction, 'key'>) {
   const theme = useTheme();
   const s = theme.size.headerButton;
@@ -47,8 +46,8 @@ export function HeaderButton({ icon, label, onPress, testID }: Omit<HeaderAction
       onPress={onPress}
       style={({ pressed }) => [styles.target, { width: theme.size.minTouch, height: theme.size.minTouch }, pressedStyle(pressed)]}
     >
-      <View style={[styles.round, { width: s, height: s, borderRadius: s / 2, backgroundColor: theme.colors.surface }, theme.elevation.card, cardEdge(theme)]}>
-        <Icon icon={icon} size="sm" color="ink" />
+      <View style={[styles.round, { width: s, height: s, borderRadius: s / 2 }]}>
+        <Icon icon={icon} size="md" color="ink" />
       </View>
     </Pressable>
   );

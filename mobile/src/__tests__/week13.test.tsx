@@ -240,10 +240,10 @@ const stripText = () => {
   const st = useUndo.getState().strip;
   return st?.kind === 'custom' ? st.text : null;
 };
-const text = (id: string) => {
-  const c = screen.getByTestId(id).props.children;
-  return Array.isArray(c) ? c.join('') : String(c);
-};
+// v5: the big number keeps «₸» in a nested Text (0.56 of the size); read the text through it.
+const flatText = (c: unknown): string =>
+  Array.isArray(c) ? c.map(flatText).join('') : c && typeof c === 'object' && 'props' in c ? flatText((c as { props: { children?: unknown } }).props.children) : c == null || c === false ? '' : String(c);
+const text = (id: string) => flatText(screen.getByTestId(id).props.children);
 const live = () => liveEntries(useExpenses.getState().entries, useExpenses.getState().edits);
 const toCheckN = () => live().filter((e) => e.review_fields.includes('amount')).length;
 const octoberTotal = () => board(live(), periodOf('month', '2026-10-15')).main?.total ?? 0n;
@@ -465,7 +465,7 @@ describe('receipt photo, QR, «Проверьте сумму», «Объедин
     setMediaForTests(m);
     await renderRouter(APP_DIR, { initialUrl: `/page/${expensesPage().id}` });
     await settle(() => screen.queryByTestId('exp-board') !== null);
-    await fireEvent.press(screen.getByTestId('assistant-plus'));
+    await fireEvent.press(screen.getByTestId('page-add'));
     await fireEvent.press(screen.getByTestId('add-camera'));
     await settle(() => screen.queryByTestId('receipt-camera-why') !== null);
     expect(text('receipt-camera-why')).toMatch(/Снимок делаете вы сами/);
@@ -635,7 +635,7 @@ describe('receipt photo, QR, «Проверьте сумму», «Объедин
     expect(screen.getByTestId('exp-check-amount-v2').props.maxFontSizeMultiplier).toBe(1.6);
     expect(screen.getByTestId('exp-check-ok-v2').props.accessibilityLabel).toBe('Верно, 700 ₸');
     await fireEvent.press(screen.getByTestId('exp-attention-sheet-close'));
-    await fireEvent.press(screen.getByTestId('assistant-plus'));
+    await fireEvent.press(screen.getByTestId('page-add'));
     await settle(() => screen.queryByTestId('add-camera') !== null);
     expect(screen.getByTestId('add-camera')).toBeTruthy();
   });

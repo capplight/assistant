@@ -7,15 +7,16 @@ import { persistStorage } from '@/store/storage';
 
 import { darkColors, darkNoteColors, lightColors, lightNoteColors, type ColorTokens, type NoteColorKey } from './colors';
 import { elevation, icon, motion, radius, size, space, type Elevation } from './layout';
+import { useLayoutMetrics, type LayoutMetrics, type Scheme } from './metrics';
 import { gutterFor } from './responsive';
 import { LARGE_FONT_SCALE, MAX_FONT_SCALE, type } from './typography';
 
 export * from './colors';
 export * from './layout';
+export * from './metrics';
 export * from './responsive';
 export * from './typography';
 
-export type Scheme = 'light' | 'dark';
 export type SchemePreference = 'system' | Scheme;
 
 /** «Как в телефоне» by default; «Настройки → Тема» overrides it (kept on the phone). */
@@ -46,16 +47,19 @@ export type Theme = {
   fontScale: number;
   /** ≥150%: fewer tabs, two-row capsule, one-column grids. */
   largeFont: boolean;
-  /** Side padding for this window width: 12 (<360) · 16 · 20 (≥600). */
+  /** Side padding for this window width: 16 (≤340) · 20 · 24 (≥420). */
   screenPadding: number;
+  /** v5 adaptive metrics (sheets, tab bar, assistant strip): `useLayoutMetrics`. */
+  m: LayoutMetrics;
 };
 
-/** «Мята» (light) / «Глубина» (dark), following the phone unless overridden. */
+/** v5 «Листы» light / dark, following the phone unless overridden («Настройки → Тема»). */
 export function useTheme(): Theme {
   const system = useColorScheme() === 'dark' ? 'dark' : 'light';
   const preference = useSchemePreference((s) => s.preference);
   const scheme: Scheme = preference === 'system' ? system : preference;
   const { fontScale: rawScale, width } = useWindowDimensions();
+  const m = useLayoutMetrics(scheme);
   return useMemo(() => {
     const fontScale = Math.min(rawScale || 1, MAX_FONT_SCALE);
     return {
@@ -72,6 +76,7 @@ export function useTheme(): Theme {
       fontScale,
       largeFont: fontScale >= LARGE_FONT_SCALE,
       screenPadding: gutterFor(width),
+      m,
     };
-  }, [scheme, rawScale, width]);
+  }, [scheme, rawScale, width, m]);
 }
