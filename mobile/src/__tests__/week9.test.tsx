@@ -547,7 +547,10 @@ describe('final contract (week 9 backend)', () => {
     s.on('POST /reminders/active', () => ({ status: 200, body: { device_id: 'd-1', retargeted: 0 } }))
       .on('GET /reminders/fires', () => ({ status: 200, body: { device_id: 'd-1', fires: [], reminders: [] } }))
       .on('DELETE /reminders/*', () => ({ status: 200, body: { reminder: null, fires: [], action: action('adel', 'Удалил напоминание «Свет»', { kind: 'edit_reminder', initiated_by: 'user' }) } }));
-    const due = Date.now() + 60 * MIN;
+    // Keep the reminder «today» even late in the evening (the «Дела» page groups by day).
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 0, 0);
+    const due = Math.min(Date.now() + 60 * MIN, Math.max(Date.now() + 30_000, endOfToday.getTime()));
     const r = reminderOut({ id: 'r8', title: 'Свет', due_at: iso(due), kind: 'normal', status: 'scheduled', level: 'notification', version: 1 })!;
     const f = fireOut({ id: 'f8', reminder_id: 'r8', key: 'r8:k:0:0', occurrence_at: iso(due), fire_at: iso(due), offset_min: 0, snooze_n: 0, state: 'planned' })!;
     useAlarms.setState({ reminders: { r8: r }, fires: { [f.key]: f } });

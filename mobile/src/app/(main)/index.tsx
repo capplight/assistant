@@ -1,5 +1,5 @@
 import { router, useFocusEffect } from 'expo-router';
-import { Copy, PhoneMissed, Search } from 'lucide-react-native';
+import { Copy, Search } from 'lucide-react-native';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
@@ -198,7 +198,7 @@ export default function TodayScreen() {
   const phrase = counts ? `${brief.headline}\n${counts}.` : brief.headline;
 
   const risk = useAlarmRisk();
-  const waiting = risk || missed.length > 0 || repeats > 0 || proposals.length > 0 || !!tip;
+  const waiting = risk || repeats > 0 || proposals.length > 0 || !!tip;
   const minutesOf = (ms: number) => {
     const d = new Date(ms);
     return d.getHours() * 60 + d.getMinutes();
@@ -206,15 +206,9 @@ export default function TodayScreen() {
   const nowMin = minutesOf(now);
   // «План дня» blocks: missed rings (past, not done) and today's rings; the next one within the hour has its
   // «Готово» / «+10 мин» under the plan (they do not fit into a 40 dp block).
+  // screens-v5-extra «Сегодня · пропущено»: missed rings are their own section on top, not plan blocks.
+  const missedRows = plan.filter((p) => p.state === 'missed');
   const planItems: PlanItem[] = [
-    ...plan.filter((p) => p.state === 'missed').map((p, i) => ({
-      id: p.key,
-      testID: p.testID,
-      label: p.label,
-      start: missed[i] && dayOffset(missed[i]!.at, now) === 0 ? minutesOf(missed[i]!.at) : 0,
-      title: p.title,
-      onPress: p.onPress,
-    })),
     ...rings.map((r) => ({ id: `r-${r.group}`, testID: `upcoming-${r.group}`, start: minutesOf(r.fireAt), title: r.title })),
   ];
   const soon = plan.find((p) => p.state === 'now');
@@ -237,6 +231,28 @@ export default function TodayScreen() {
       actions={[{ key: 'search', icon: Search, label: t('today.search'), onPress: () => router.navigate('/search'), testID: 'today-search' }]}
     >
       <PendingAnswerCard />
+      {missedRows.length > 0 ? (
+        <View testID="today-missed" style={{ marginBottom: theme.space[3] }}>
+          <SectionHead first title={t('today.missed_title')} right={String(missedRows.length)} />
+          {missedRows.map((p, i) => {
+            const row = missed[i]!;
+            return (
+              <View key={p.key} testID={p.testID} accessible accessibilityLabel={p.label} style={{ borderTopWidth: i === 0 ? 0 : 1, borderTopColor: theme.colors.line, paddingVertical: 10, gap: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <AppText style={[theme.type.planTime, { width: 48 }]}>{p.time}</AppText>
+                  <AppText numberOfLines={2} style={{ flex: 1 }}>
+                    {p.title}
+                  </AppText>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8, paddingLeft: 60, flexWrap: 'wrap' }}>
+                  <Button testID={`missed-done-${row.key}`} label={t('today.done_btn')} size="small" onPress={() => void markMissedDone(row, t)} />
+                  <Button testID={`missed-move-${row.key}`} label={t('today.move_btn')} size="small" variant="secondary" onPress={p.onPress} />
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      ) : null}
 
       <View testID="today-list">
         <SectionHead
@@ -299,18 +315,8 @@ export default function TodayScreen() {
         <View testID="today-waiting">
           <SectionHead title={t('today.waiting')} />
           <AlarmRiskRow />
-          {missed.slice(0, 2).map((row, i) => (
-            <Row key={row.key} first={i === 0} testID={`waiting-missed-${row.key}`}>
-              <PhoneMissed size={22} color={theme.colors.ink} strokeWidth={theme.icon.strokeWidth} />
-              <View style={{ flex: 1 }}>
-                <AppText numberOfLines={2}>{row.title}</AppText>
-                <AppText variant="footnote">{t('today.missed_meta')}</AppText>
-              </View>
-              <Button testID={`missed-done-${row.key}`} label={t('today.done_btn')} variant="text" onPress={() => void markMissedDone(row, t)} />
-            </Row>
-          ))}
           {repeats > 0 ? (
-            <Row first={missed.length === 0} testID="waiting-repeats" onPress={() => router.push('/duplicates')} accessibilityLabel={t('today.repeats', { count: repeats })}>
+            <Row first testID="waiting-repeats" onPress={() => router.push('/duplicates')} accessibilityLabel={t('today.repeats', { count: repeats })}>
               <Copy size={22} color={theme.colors.ink} strokeWidth={theme.icon.strokeWidth} />
               <View style={{ flex: 1 }}>
                 <AppText>{t('today.repeats', { count: repeats })}</AppText>

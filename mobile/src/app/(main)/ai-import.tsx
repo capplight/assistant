@@ -11,6 +11,7 @@ import { Screen } from '@/components/Screen';
 import { ProgressBar } from '@/components/ui/Brief';
 import { Button } from '@/components/ui/Button';
 import { CompactConfirm } from '@/components/ui/Floating';
+import { BigNumber } from '@/components/ui/Leaf';
 import { Card, cardEdge } from '@/components/ui/Card';
 import { Header } from '@/components/ui/Header';
 import { Icon } from '@/components/ui/Icon';
@@ -119,8 +120,10 @@ export default function AiImportScreen() {
     );
   } else if (imp) {
     status = (
-      <Card testID="aiimp-done">
-        <AppText variant="headline">{t('aiimp.done_title')}</AppText>
+      // screens-v5-extra «Переписки · готово»: how many — the one big number; what was found — one line.
+      <View testID="aiimp-done" style={{ gap: theme.space[2] }}>
+        <BigNumber value={String(imp.conversations ?? imp.created_count ?? 0)} />
+        <AppText variant="small">{t('aiimp.done_title')}</AppText>
         <AppText testID="aiimp-summary">{imp.summary_ru ?? t('aiimp.done', { count: imp.conversations ?? imp.created_count, name: name ?? '' })}</AppText>
         <View style={[styles.row, { gap: theme.space[2], flexWrap: 'wrap' }]}>
           <Button testID="aiimp-open" label={t('aiimp.open_chats')} size="small" onPress={() => router.navigate('/ai-chats')} />
@@ -129,7 +132,7 @@ export default function AiImportScreen() {
             <Button testID="aiimp-undo" label={t('aiimp.undo')} variant="link" size="small" onPress={() => setAskUndo(true)} />
           ) : null}
         </View>
-      </Card>
+      </View>
     );
   }
 

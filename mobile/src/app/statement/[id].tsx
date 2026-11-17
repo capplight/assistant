@@ -8,6 +8,7 @@ import { AmountText } from '@/components/AmountText';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/Screen';
+import { Header } from '@/components/ui/Header';
 import { formatMinor, toMinor } from '@/expenses/calc';
 import { dayName, planTitle } from '@/expenses/feed';
 import { confirmStatement, loadStatement, planNumbers, rejectStatement, undoStatement, type PlanResult } from '@/expenses/receipts';
@@ -64,7 +65,7 @@ export default function StatementScreen() {
       if (job?.state === 'failed') {
         return (
           <>
-            <AppText variant="largeTitle" accessibilityRole="header">
+            <AppText variant="title1" accessibilityRole="header">
               {t('exp.statement_failed_title')}
             </AppText>
             <AppText testID="plan-failed">{job.message ?? t('exp.statement_failed')}</AppText>
@@ -74,7 +75,7 @@ export default function StatementScreen() {
       }
       return (
         <>
-          <AppText testID="plan-reading" variant="largeTitle" accessibilityRole="header" accessibilityLiveRegion="polite">
+          <AppText testID="plan-reading" variant="title1" accessibilityRole="header" accessibilityLiveRegion="polite">
             {online ? t('exp.statement_reading') : t('exp.statement_waits')}
           </AppText>
           <AppText>{t('exp.statement_nothing_yet')}</AppText>
@@ -85,7 +86,7 @@ export default function StatementScreen() {
     if (st.status === 'confirmed') {
       return (
         <>
-          <AppText testID="plan-confirmed" variant="largeTitle" accessibilityRole="header" accessibilityLiveRegion="polite">
+          <AppText testID="plan-confirmed" variant="title1" accessibilityRole="header" accessibilityLiveRegion="polite">
             {t('exp.statement_added', { count: n?.add ?? 0 })}
           </AppText>
           {st.rows_similar > 0 ? <AppText>{t('exp.plan_similar_after', { count: st.rows_similar })}</AppText> : null}
@@ -98,7 +99,7 @@ export default function StatementScreen() {
       const key = st.status === 'undone' ? 'exp.plan_undone' : st.status === 'rejected' ? 'exp.plan_rejected' : 'exp.plan_expired';
       return (
         <>
-          <AppText testID={`plan-${st.status}`} variant="largeTitle" accessibilityRole="header" accessibilityLiveRegion="polite">
+          <AppText testID={`plan-${st.status}`} variant="title1" accessibilityRole="header" accessibilityLiveRegion="polite">
             {t(key)}
           </AppText>
           <Button testID="plan-done" label={t('exp.plan_done')} onPress={done} />
@@ -110,12 +111,12 @@ export default function StatementScreen() {
     const a = n!.adds;
     return (
       <>
-        <AppText testID="plan-title" variant="largeTitle" accessibilityRole="header">
+        <AppText testID="plan-title" variant="title1" accessibilityRole="header">
           {title}
         </AppText>
         {st.bank && BANKS[st.bank] ? <AppText variant="callout">{BANKS[st.bank]}</AppText> : null}
         {a ? (
-          <View testID="plan-numbers" style={[{ gap: theme.space[2], borderRadius: theme.radius.lg, padding: theme.space[4], backgroundColor: theme.colors.surface }, theme.elevation.card]}>
+          <View testID="plan-numbers" style={{ gap: theme.space[2], borderRadius: 16, paddingVertical: 12, paddingHorizontal: 14, backgroundColor: theme.colors.paper2 }}>
             <AppText variant="callout">{t('exp.plan_spent')}</AppText>
             <AmountText testID="plan-spent" variant="amount" maxScale={1.6} inset={theme.screenPadding * 2 + theme.space[4] * 2 + 4}>
               {formatMinor(n!.spent ?? 0n, cur)}
@@ -201,7 +202,9 @@ export default function StatementScreen() {
 
   return (
     <>
-      <Screen testID="plan-screen">
+      {/* screens-v5-extra «Выписка · что нашёл»: the green strip «‹ Расходы · Выписка». */}
+      <Screen testID="plan-screen" place="expenses" mode="strip">
+        <Header title={t('exp.statement_title')} back={{ onPress: () => (router.canGoBack() ? router.back() : router.replace('/')), label: t('tpl.short.expenses'), testID: 'plan-back' }} />
         <View style={{ gap: theme.space[4] }}>{body()}</View>
       </Screen>
     </>
@@ -231,7 +234,7 @@ function PlanRow({ r, lang }: { r: StatementRowOut; lang: string }) {
       testID={`plan-row-${r.n}`}
       accessible
       accessibilityLabel={[dayName(r.date, lang), what, amount, tag].filter(Boolean).join('. ')}
-      style={{ flexDirection: 'row', gap: theme.space[2], minHeight: theme.size.minTouch, alignItems: 'center', borderBottomWidth: 1, borderColor: theme.colors.separator, opacity: r.state === 'existing' ? 0.6 : 1 }}
+      style={{ flexDirection: 'row', gap: theme.space[2], minHeight: theme.size.minTouch, alignItems: 'center', borderBottomWidth: 1, borderColor: theme.colors.line, opacity: r.state === 'existing' ? 0.6 : 1 }}
     >
       <View style={{ flex: 1 }}>
         <AppText>{what}</AppText>

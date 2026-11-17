@@ -1,6 +1,6 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { AiLabel } from '@/components/AiLabel';
-import { Check, TriangleAlert } from 'lucide-react-native';
+import { Check } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
@@ -124,21 +124,22 @@ export default function RecordScreen() {
             styles.banner,
             {
               backgroundColor: theme.colors.paper2,
-              borderRadius: theme.radius.lg,
-              padding: theme.space[3],
+              borderRadius: 16,
+              paddingVertical: 12,
+              paddingHorizontal: 14,
               marginTop: theme.space[3],
               gap: theme.space[2],
             },
           ]}
         >
-          <TriangleAlert size={22} color={theme.colors.ink} />
-          <AppText style={styles.flex}>
+          <AppText style={[styles.flex, { fontSize: 15.5, lineHeight: 22 }]}>
             {t(`check.banner.${pluralForm(toCheck.length)}`, { n: toCheck.length })}
           </AppText>
           <Button
             testID="check-show"
             label={t('check.show')}
-            variant="text"
+            variant="link"
+            size="small"
             minHeight={theme.size.minTouch}
             onPress={() => setAsking(toCheck[0] ?? null)}
           />
@@ -146,8 +147,8 @@ export default function RecordScreen() {
       ) : null}
 
       {rows.length > 0 ? (
-        <View style={{ marginTop: theme.space[6], gap: theme.space[2] }}>
-          <AppText variant="sectionLabel" accessibilityRole="header">
+        <View style={{ marginTop: theme.space[5] }}>
+          <AppText variant="section" accessibilityRole="header" style={{ marginBottom: 6 }}>
             {t('record.understood')}
           </AppText>
           {rows.map((row) => (
@@ -163,24 +164,20 @@ export default function RecordScreen() {
               }
               disabled={row.verified}
               onPress={() => setAsking(row)}
-              style={[
-                {
-                  minHeight: theme.size.minTouch,
-                  padding: theme.space[3],
-                  borderRadius: theme.radius.md,
-                  backgroundColor: row.verified ? theme.colors.surface : theme.colors.highlightTint,
-                  gap: 2,
-                },
-                row.verified ? theme.elevation.card : null,
-              ]}
+              // screens-v5-extra «Запись · голосовая»: «Что я понял» as rows; a doubtful value is underlined with a dashed
+              // line and «проверьте» — a request, not an error (no red, no terracotta).
+              style={{ minHeight: theme.m.row, paddingVertical: 8, borderTopWidth: 1, borderTopColor: theme.colors.line, gap: 2 }}
             >
               <AppText variant="footnote">{fieldLabel(row.kind)}</AppText>
-              <AppText variant="number">{row.value ?? ''}</AppText>
-              <View style={[styles.mark, { gap: theme.space[1] }]}>
-                {row.verified ? <Check size={18} color={theme.colors.success} /> : null}
-                <AppText variant="callout" color={row.verified ? 'success' : 'warning'}>
-                  {row.verified ? t('check.verified') : t('check.badge')}
+              <View style={[styles.mark, { gap: 8 }]}>
+                <AppText
+                  variant="number"
+                  style={row.verified ? null : { textDecorationLine: 'underline', textDecorationStyle: 'dashed', textDecorationColor: theme.colors.ink3 }}
+                >
+                  {row.value ?? ''}
                 </AppText>
+                {row.verified ? <Check size={16} color={theme.colors.ink3} /> : null}
+                <AppText variant="footnote">{row.verified ? t('check.verified') : t('check.badge')}</AppText>
               </View>
             </Pressable>
           ))}
@@ -192,20 +189,20 @@ export default function RecordScreen() {
       ) : null}
       {body ? (
         <View style={{ marginTop: theme.space[6], gap: theme.space[2] }}>
-          <AppText variant="sectionLabel" accessibilityRole="header">
+          <AppText variant="section" accessibilityRole="header">
             {t('record.text')}
           </AppText>
-          <AppText selectable testID="record-text">
+          <AppText selectable testID="record-text" variant="noteBody">
             {body}
           </AppText>
         </View>
       ) : null}
 
+      {/* Into the trash, reversible («Удалено · Восстановить»): an ordinary link, never red (§11.3). */}
       <Button
         testID="record-delete"
         label={t('record.delete')}
-        variant="text"
-        labelColor="danger"
+        variant="link"
         style={{ marginTop: theme.space[8] }}
         onPress={() => {
           const recordId = record.id;
@@ -217,9 +214,11 @@ export default function RecordScreen() {
 
       {asking ? (
         <Sheet visible testID="check-sheet" closeButton={false} onClose={closeSheet}>
-              <AppText variant="callout">{fieldLabel(asking.kind)}</AppText>
+              <AppText variant="footnote">{fieldLabel(asking.kind)}</AppText>
               {fixing === null ? (
                 <>
+                  {/* screens-v5-extra «Проверьте значение»: the value itself, large, then the question. */}
+                  {asking.value ? <AppText style={[theme.type.title, { fontVariant: ['tabular-nums'] }]}>{asking.value}</AppText> : null}
                   <AppText variant="title2" accessibilityRole="header">
                     {t('check.confirm', { value: asking.value ?? '' })}
                   </AppText>
@@ -260,10 +259,12 @@ export default function RecordScreen() {
                       theme.type.body,
                       {
                         minHeight: theme.size.buttonHeight,
-                        borderRadius: theme.radius.md,
+                        borderRadius: 16,
+                        borderWidth: 1.5,
+                        borderColor: theme.colors.ink,
                         paddingHorizontal: theme.space[4],
                         color: theme.colors.ink,
-                        backgroundColor: theme.colors.surfaceSunken,
+                        backgroundColor: theme.colors.paper,
                       },
                     ]}
                   />

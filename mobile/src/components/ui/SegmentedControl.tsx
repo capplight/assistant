@@ -32,10 +32,11 @@ export function SegmentedControl<K extends string>({ segments, value, onChange, 
         styles.track,
         {
           flexDirection: column ? 'column' : 'row',
-          backgroundColor: theme.colors.surfaceSunken,
-          borderRadius: theme.radius.sm,
-          padding: 2,
-          gap: 2,
+          // v5: chips on the paper («Неделя · Месяц · Год»): outlined, the chosen one `btn`.
+          backgroundColor: 'transparent',
+          borderRadius: 0,
+          padding: 0,
+          gap: 8,
         },
       ]}
     >
@@ -55,19 +56,16 @@ export function SegmentedControl<K extends string>({ segments, value, onChange, 
               styles.segment,
               column ? null : styles.flex,
               {
-                minHeight: theme.size.segmentedHeight - 4,
-                borderRadius: theme.radius.sm - 2,
-                paddingHorizontal: theme.space[2],
-                backgroundColor: on ? theme.colors.surface : 'transparent',
+                minHeight: theme.size.chipHeight,
+                borderRadius: theme.size.chipHeight / 2,
+                paddingHorizontal: 15,
+                backgroundColor: on ? theme.colors.btn : 'transparent',
+                borderWidth: on ? 0 : 1.5,
+                borderColor: theme.colors.line2,
               },
-              on ? theme.elevation.card : null,
             ]}
           >
-            <AppText
-              variant="callout"
-              color={on ? 'ink' : 'ink2'}
-              style={[styles.label, on ? { fontFamily: theme.type.sectionLabel.fontFamily } : null]}
-            >
+            <AppText variant="callout" color={on ? 'onBtn' : 'ink'} style={[styles.label, { fontFamily: theme.type.sheetMeta.fontFamily }]}>
               {label}
             </AppText>
           </Pressable>

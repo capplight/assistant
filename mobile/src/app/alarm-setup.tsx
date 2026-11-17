@@ -1,3 +1,4 @@
+import { Check } from 'lucide-react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,6 +11,7 @@ import { useAlarms } from '@/alarms/store';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/Screen';
+import { Header } from '@/components/ui/Header';
 import { getAlarmPort } from '@/services';
 import { useTheme } from '@/theme';
 
@@ -93,8 +95,11 @@ export default function AlarmSetupScreen() {
     k === 'battery' && caps?.vendor === 'xiaomi' ? t('setup.hint_battery_xiaomi') : t(`setup.hint_${k}`);
 
   return (
+    // screens-v5-extra «Будильник · настройка телефона»: the stone strip, steps as numbered circles (done = a black
+    // circle with a tick), «Открыть» beside each, «Проверить будильник» at the end.
     <Screen
       testID="setup-screen"
+      mode="strip"
       footer={
         <View style={{ gap: theme.space[2] }}>
           <Button testID="setup-test" label={t('setup.test')} onPress={() => void startTest()} disabled={test.state === 'waiting'} />
@@ -106,7 +111,8 @@ export default function AlarmSetupScreen() {
         </View>
       }
     >
-      <AppText variant="largeTitle" accessibilityRole="header" style={{ marginBottom: theme.space[4] }}>
+      <Header title={t('setup.strip_title')} back={{ onPress: leave, label: t('more.settings'), testID: 'setup-back' }} />
+      <AppText variant="title1" accessibilityRole="header" style={{ marginBottom: theme.space[4] }}>
         {t('setup.title')}
       </AppText>
       {caps && noAlarmScreen(caps) ? (
@@ -124,32 +130,43 @@ export default function AlarmSetupScreen() {
           key={s.key}
           testID={`setup-step-${s.key}`}
           accessible={false}
-          style={{ paddingVertical: theme.space[3], borderBottomWidth: 1, borderBottomColor: theme.colors.separator, gap: theme.space[2] }}
+          style={{ paddingVertical: theme.space[3], borderTopWidth: i === 0 ? 0 : 1, borderTopColor: theme.colors.line, flexDirection: 'row', gap: 12 }}
         >
+          <View
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            style={{ width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: s.done ? theme.colors.btn : 'transparent', borderWidth: s.done ? 0 : 1.5, borderColor: theme.colors.ink }}
+          >
+            {s.done ? <Check size={16} color={theme.colors.onBtn} strokeWidth={3} /> : <AppText variant="buttonSmall">{String(i + 1)}</AppText>}
+          </View>
+          <View style={{ flex: 1, gap: theme.space[2] }}>
           <AppText
             variant="bodyStrong"
             accessibilityLabel={t(s.done ? 'setup.step_a11y_done' : 'setup.step_a11y_todo', { n: i + 1, step: t(TITLE[s.key]) })}
           >
-            {`${i + 1}  ${t(TITLE[s.key])}`}
+            {t(TITLE[s.key])}
           </AppText>
           {s.done ? (
-            <AppText testID={`setup-done-${s.key}`} color="success">
-              {`✓ ${t('setup.step_done')}`}
+            <AppText testID={`setup-done-${s.key}`} variant="footnote">
+              {t('setup.step_done')}
             </AppText>
           ) : (
             <>
-              <AppText variant="callout">{hint(s.key)}</AppText>
+              <AppText variant="footnote">{hint(s.key)}</AppText>
               <Button
                 testID={`setup-open-${s.key}`}
                 label={s.target === null ? t('setup.allow') : t('setup.open')}
                 variant="secondary"
+                size="small"
+                style={{ alignSelf: 'flex-start' }}
                 onPress={() => void run(s)}
               />
               {s.confirmByHand && opened.includes(s.key) ? (
-                <Button testID={`setup-confirm-${s.key}`} label={t('setup.confirm')} variant="text" onPress={() => confirm(s.key)} />
+                <Button testID={`setup-confirm-${s.key}`} label={t('setup.confirm')} variant="link" size="small" onPress={() => confirm(s.key)} />
               ) : null}
             </>
           )}
+          </View>
         </View>
       ))}
       <View style={{ marginTop: theme.space[5], gap: theme.space[2] }} accessibilityLiveRegion="polite">
@@ -158,7 +175,7 @@ export default function AlarmSetupScreen() {
           <AppText testID="setup-test-waiting">{t('setup.test_waiting', { time: timeText(test.dueAt) })}</AppText>
         ) : null}
         {test.state === 'ok' ? (
-          <AppText testID="setup-test-ok" variant="bodyStrong" color="success">
+          <AppText testID="setup-test-ok" variant="bodyStrong">
             {t('setup.test_ok')}
           </AppText>
         ) : null}

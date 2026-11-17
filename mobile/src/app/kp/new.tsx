@@ -2,13 +2,13 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { AiLabel } from '@/components/AiLabel';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, TextInput, View } from 'react-native';
+import { TextInput, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/ui/Button';
 import { CheckBadge } from '@/components/kp/KpParts';
 import { Screen } from '@/components/Screen';
-import { BackButton } from '@/components/ui/Header';
+import { Header } from '@/components/ui/Header';
 import { VoiceListening } from '@/components/VoiceListening';
 import { getMedia, type PickedMedia } from '@/expenses/media';
 import { assistantOn, dropJob, pumpJobs, startKp } from '@/kp/service';
@@ -112,20 +112,16 @@ export default function NewKpScreen() {
     begin(rec.id);
   };
 
+  // screens-v5-extra «Новый документ»: the stone strip «‹ Документы · Новый», the step on the paper.
   const header = (
-    <View style={styles.row}>
-      <BackButton testID="kp-new-close" label={t('kp.back')} onPress={close} />
-      <AppText variant="footnote" style={{ marginLeft: 'auto' }}>
-        {t('kp.step', { n: 1 })}
-      </AppText>
-    </View>
+    <AppText variant="footnote">{t('kp.step', { n: 1 })}</AppText>
   );
 
   let body;
   if (!assistantOn()) {
     body = (
       <>
-        <AppText variant="largeTitle" accessibilityRole="header">
+        <AppText variant="title1" accessibilityRole="header">
           {t('kp.no_ai_title')}
         </AppText>
         <AppText testID="kp-new-no-ai">{t('kp.no_ai_body')}</AppText>
@@ -140,7 +136,7 @@ export default function NewKpScreen() {
       const items = all ? data.items : data.items.slice(0, FIRST_ITEMS);
       body = (
         <>
-          <AppText variant="largeTitle" accessibilityRole="header">
+          <AppText variant="title1" accessibilityRole="header">
             {t('kp.understood')}
           </AppText>
           {job.message ? (
@@ -249,7 +245,7 @@ export default function NewKpScreen() {
   } else if (!profileReady(profile) && !(savedProfile?.secrets_masked && savedProfile.complete) && !companyLater) {
     body = (
       <>
-        <AppText variant="largeTitle" accessibilityRole="header">
+        <AppText variant="title1" accessibilityRole="header">
           {t('kp.company_first_title')}
         </AppText>
         <AppText>{t('kp.company_first_body')}</AppText>
@@ -291,7 +287,7 @@ export default function NewKpScreen() {
   } else if (mode === 'camera_ask') {
     body = (
       <>
-        <AppText variant="largeTitle" accessibilityRole="header">
+        <AppText variant="title1" accessibilityRole="header">
           {t('exp.camera_title')}
         </AppText>
         <AppText testID="kp-new-camera-why">{t('exp.camera_why')}</AppText>
@@ -314,7 +310,7 @@ export default function NewKpScreen() {
   } else {
     body = (
       <>
-        <AppText variant="largeTitle" accessibilityRole="header">
+        <AppText variant="title1" accessibilityRole="header">
           {t('kp.source_title')}
         </AppText>
         {!online ? (
@@ -337,7 +333,8 @@ export default function NewKpScreen() {
   }
 
   return (
-    <Screen testID="kp-new">
+    <Screen testID="kp-new" mode="strip">
+      <Header title={t('kp.new_short')} back={{ onPress: close, label: t('kp.back'), testID: 'kp-new-close' }} />
       <View style={{ gap: theme.space[4] }}>
         {header}
         {body}
@@ -346,6 +343,3 @@ export default function NewKpScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center' },
-});

@@ -58,11 +58,12 @@ export default function DuplicatesScreen() {
   }, []);
 
   return (
-    <Screen testID="page-duplicates" edges={['top']}>
-      <Header title={t('dup.title')} back={{ onPress: () => (router.canGoBack() ? router.back() : router.replace('/')), testID: 'dup-back' }}>
-        <AppText variant="callout">{t('dup.hint')}</AppText>
-      </Header>
-      <View style={{ height: theme.space[3] }} />
+    // screens-v5-extra «Повторы»: a second-level stone screen, the sheet collapsed.
+    <Screen testID="page-duplicates" mode="strip">
+      <Header title={t('dup.title')} back={{ onPress: () => (router.canGoBack() ? router.back() : router.replace('/')), label: t('more.settings'), testID: 'dup-back' }} />
+      <AppText variant="small" style={{ marginBottom: theme.space[3] }}>
+        {t('dup.hint')}
+      </AppText>
 
       {cleanup && preview ? (
         <Card testID="dup-batch" tone="brandTint" style={{ gap: theme.space[3], marginBottom: theme.space[5] }}>

@@ -11,6 +11,7 @@ import type { ConsentTextOut, ImportOut } from '@/api/types';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/Screen';
+import { Header } from '@/components/ui/Header';
 import {
   cancelImport,
   confirmCleanup,
@@ -183,20 +184,10 @@ export default function ImportScreen() {
   }
 
   return (
-    <Screen testID="page-import" edges={['top']}>
-      <View style={[styles.row, { marginBottom: theme.space[4] }]}>
-        <Button
-          testID="import-back"
-          label={`‹ ${t('common.back')}`}
-          variant="text"
-          minHeight={theme.size.minTouch}
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
-        />
-        <AppText variant="largeTitle" accessibilityRole="header" style={styles.flex}>
-          {t('import.title')}
-        </AppText>
-      </View>
-      <AppText variant="sectionLabel" accessibilityRole="header" style={{ marginBottom: theme.space[2] }}>
+    // screens-v5-extra «Telegram · …»: a stone second-level screen, the sheet collapsed «‹ Ещё · Из Telegram».
+    <Screen testID="page-import" mode="strip">
+      <Header title={t('import.title')} back={{ onPress: () => (router.canGoBack() ? router.back() : router.replace('/')), label: t('more.title'), testID: 'import-back' }} />
+      <AppText variant="title1" accessibilityRole="header" style={{ marginBottom: theme.space[2] }}>
         {t('import.tg_section')}
       </AppText>
       {body}

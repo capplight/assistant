@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useChrome } from '@/store/chrome';
 import { useTheme } from '@/theme';
 
 import { AppText } from './AppText';
@@ -56,6 +57,7 @@ export function RecordMenuSheet({
   onDocument?: () => void;
 }) {
   const theme = useTheme();
+  const fromPlace = useChrome((st) => st.place);
   const { t } = useTranslation();
   const row = (testID: string, label: string, onPress: () => void, hint?: string) => (
     <Pressable
@@ -73,7 +75,7 @@ export function RecordMenuSheet({
         <AppText>{label}</AppText>
         {hint ? <AppText variant="callout">{hint}</AppText> : null}
       </View>
-      <ChevronRight size={22} color={theme.colors.ink2} />
+      <ChevronRight size={18} color={theme.colors.ink3} />
     </Pressable>
   );
   return (
@@ -84,15 +86,19 @@ export function RecordMenuSheet({
           testID="record-menu"
           style={[
             {
-              backgroundColor: theme.colors.surface,
+              backgroundColor: theme.colors.paper,
               borderTopLeftRadius: theme.radius.sheet,
               borderTopRightRadius: theme.radius.sheet,
               maxHeight: '90%',
+              overflow: 'hidden',
             },
-            theme.elevation.floating,
+            { shadowColor: '#000000', shadowOffset: { width: 0, height: -10 }, shadowRadius: 30, shadowOpacity: 0.25, elevation: 16 },
           ]}
         >
-          <ScrollView contentContainerStyle={{ padding: theme.space[5], gap: theme.space[2] }}>
+          {/* screens-v5-extra «Меню записи»: the bottom sheet with the strip of the place it was opened from. */}
+          <View style={{ height: 6, backgroundColor: theme.colors.place[fromPlace] }} />
+          <View style={{ width: 40, height: 5, borderRadius: 3, backgroundColor: theme.colors.line2, alignSelf: 'center', marginTop: 8 }} />
+          <ScrollView contentContainerStyle={{ paddingHorizontal: theme.m.gutter, paddingTop: 12, paddingBottom: theme.space[5], gap: theme.space[2] }}>
             <AppText variant="title2" accessibilityRole="header" numberOfLines={3}>
               {title}
             </AppText>
@@ -109,7 +115,7 @@ export function RecordMenuSheet({
                 label={t('move.up')}
                 accessibilityLabel={t('move.up_a11y', { what: title })}
                 variant="secondary"
-                icon={<ArrowUp size={22} color={theme.colors.brand} />}
+                icon={<ArrowUp size={22} color={theme.colors.ink} />}
                 disabled={!canUp}
                 onPress={onUp}
                 style={styles.flex}
@@ -119,7 +125,7 @@ export function RecordMenuSheet({
                 label={t('move.down')}
                 accessibilityLabel={t('move.down_a11y', { what: title })}
                 variant="secondary"
-                icon={<ArrowDown size={22} color={theme.colors.brand} />}
+                icon={<ArrowDown size={22} color={theme.colors.ink} />}
                 disabled={!canDown}
                 onPress={onDown}
                 style={styles.flex}
@@ -130,13 +136,8 @@ export function RecordMenuSheet({
             {row('record-menu-move', t('move.to'), onMoveTo)}
             {row('record-menu-also', t('move.also'), onAlso)}
             {row('record-menu-remove', t('move.remove'), onRemove, t('move.remove_hint'))}
-            <Button
-              testID="record-menu-delete"
-              label={t('move.delete')}
-              variant="text"
-              labelColor="danger"
-              onPress={onDelete}
-            />
+            {/* Into the trash with «Удалено · Восстановить»: not red (only irreversible actions are). */}
+            {row('record-menu-delete', t('move.delete'), onDelete)}
             <Button testID="record-menu-close" label={t('common.close')} variant="secondary" onPress={onClose} />
           </ScrollView>
         </SafeAreaView>

@@ -10,6 +10,7 @@ import { ContactPhoneField } from '@/components/kp/ContactPhoneField';
 import { KpTextField } from '@/components/kp/KpEdits';
 import { CheckBadge } from '@/components/kp/KpParts';
 import { Screen } from '@/components/Screen';
+import { Header } from '@/components/ui/Header';
 import { answerDraft, discardDraft, editDraftText, openDraft, type DraftOpenResult } from '@/kp/service';
 import { shownDraft, useKp } from '@/kp/store';
 import { useTheme } from '@/theme';
@@ -65,14 +66,9 @@ export default function DraftScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      <Screen testID="draft-screen">
+      <Screen testID="draft-screen" mode="strip">
+        <Header title={email_ ? t('draft.title_mail') : t('draft.title_wa')} back={{ onPress: close, label: t('common.close'), testID: 'draft-close' }} />
         <View style={{ gap: theme.space[4] }}>
-          <View style={styles.row}>
-            <AppText variant="largeTitle" accessibilityRole="header" style={{ flexShrink: 1 }}>
-              {email_ ? t('draft.title_mail') : t('draft.title_wa')}
-            </AppText>
-            <Button testID="draft-close" label={t('common.close')} variant="text" minHeight={theme.size.minTouch} style={{ marginLeft: 'auto' }} onPress={close} />
-          </View>
 
           {ask && !answered ? (
             <View testID="draft-did" style={{ gap: theme.space[3], padding: theme.space[4], borderRadius: theme.radius.lg, borderWidth: 2, borderColor: theme.colors.brand }}>

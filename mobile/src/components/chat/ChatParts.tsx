@@ -133,7 +133,12 @@ export function AssistantMessage({ m, testID }: { m: ChatMessage; testID?: strin
           </View>
         </View>
       ) : null}
-      {notice ? <AppText variant="callout">{notice}</AppText> : null}
+      {/* screens-v5-extra «на сегодня хватит», «Ответ не дошёл»: a calm plate on the paper, never red. */}
+      {notice ? (
+        <Inset testID={testID ? `${testID}-notice` : undefined}>
+          <AppText style={{ fontSize: 15.5, lineHeight: 22 }}>{notice}</AppText>
+        </Inset>
+      ) : null}
       {hits.length > 0 ? <LocalHitChips messageId={m.id} recordIds={hits} titles={titles} /> : null}
       {m.sources && m.sources.length > 0 ? <SourceChips messageId={m.id} sources={m.sources} /> : null}
       {m.status === 'done' && m.aiGenerated && !!m.text && !m.action ? <AiLabel testID={testID ? `${testID}-ai` : undefined} variant="footnote" /> : null}

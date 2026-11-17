@@ -44,7 +44,8 @@ export function ReplaceSheet({ record, what, from, onClose }: { record: LocalRec
     });
   };
   return (
-    <Sheet testID="replace-sheet" visible onClose={onClose} title={t('save.replace_title', { what })}>
+    // screens-v5-extra «Переложить»: the terracotta strip (opened from the assistant's result).
+    <Sheet testID="replace-sheet" visible onClose={onClose} title={t('save.replace_title', { what })} place="assistant">
       <View style={{ gap: theme.space[3] }}>
         <AppText variant="callout">{t('save.replace_hint')}</AppText>
         <ListGroup>

@@ -12,12 +12,11 @@ import { useExpenses, type ReceiptJob } from '@/expenses/store';
 import { useConnectivity } from '@/store/connectivity';
 import { useFeatures } from '@/store/features';
 import { useToast } from '@/store/toast';
-import { useTheme, withAlpha } from '@/theme';
+import { useTheme } from '@/theme';
 
 import { AmountText } from '../AmountText';
 import { AppText } from '../AppText';
 import { Button } from '../ui/Button';
-import { Card } from '../ui/Card';
 import { Icon } from '../ui/Icon';
 import { pressedStyle } from '../ui/motion';
 import { Sheet } from './ExpenseParts';
@@ -160,25 +159,24 @@ export function AttentionCard({ items, onOpen }: { items: AttentionItem[]; onOpe
     .filter(Boolean)
     .join(' · ');
   return (
-    <Card testID="exp-attention" padded={false} onPress={onOpen} accessibilityLabel={`${t('exp.attention')}: ${items.length}. ${meta}`}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.space[3], paddingHorizontal: theme.space[4], paddingVertical: theme.space[3], minHeight: theme.size.rowHeightMeta }}>
-        <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: theme.colors.highlightTint, alignItems: 'center', justifyContent: 'center' }}>
-          <Icon icon={AlertCircle} size="sm" color="warning" />
-        </View>
-        <View style={{ flex: 1 }}>
-          <AppText variant="headline">{t('exp.attention')}</AppText>
-          <AppText testID="exp-attention-meta" variant="callout">
-            {meta}
-          </AppText>
-        </View>
-        <View style={{ minWidth: 28, paddingHorizontal: theme.space[2], minHeight: 24, borderRadius: 12, backgroundColor: withAlpha(theme.colors.highlight, 0.9), alignItems: 'center', justifyContent: 'center' }}>
-          <AppText testID="exp-attention-count" variant="footnote" color="onHighlight" style={{ fontFamily: theme.type.sectionLabel.fontFamily }}>
-            {String(items.length)}
-          </AppText>
-        </View>
-        <Icon icon={ChevronRight} size="sm" color="iconSecondary" />
+    // screens-v5-extra «Расходы · требует внимания»: a section on top of the paper — «Требует внимания  3», one row.
+    <Pressable testID="exp-attention" accessibilityRole="button" onPress={onOpen} accessibilityLabel={`${t('exp.attention')}: ${items.length}. ${meta}`}>
+      <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
+        <AppText variant="section" accessibilityRole="header">
+          {t('exp.attention')}
+        </AppText>
+        <AppText testID="exp-attention-count" variant="small" color="ink3" style={{ fontVariant: ['tabular-nums'] }}>
+          {String(items.length)}
+        </AppText>
       </View>
-    </Card>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: theme.m.row }}>
+        <Icon icon={AlertCircle} size="md" color="ink" />
+        <AppText testID="exp-attention-meta" style={{ flex: 1 }}>
+          {meta}
+        </AppText>
+        <Icon icon={ChevronRight} size="sm" color="ink3" />
+      </View>
+    </Pressable>
   );
 }
 

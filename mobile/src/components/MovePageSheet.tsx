@@ -115,15 +115,19 @@ export function MovePageSheet({
           testID="move-sheet"
           style={[
             {
-              backgroundColor: theme.colors.surface,
+              backgroundColor: theme.colors.paper,
               borderTopLeftRadius: theme.radius.sheet,
               borderTopRightRadius: theme.radius.sheet,
               maxHeight: '90%',
+              overflow: 'hidden',
             },
-            theme.elevation.floating,
+            { shadowColor: '#000000', shadowOffset: { width: 0, height: -10 }, shadowRadius: 30, shadowOpacity: 0.25, elevation: 16 },
           ]}
         >
-          <ScrollView contentContainerStyle={{ padding: theme.space[5], gap: theme.space[3] }}>
+          {/* screens-v5-extra «Переложить»: a v5 bottom sheet — the terracotta strip, the grabber. */}
+          <View style={{ height: 6, backgroundColor: theme.colors.place.assistant }} />
+          <View style={{ width: 40, height: 5, borderRadius: 3, backgroundColor: theme.colors.line2, alignSelf: 'center', marginTop: 8 }} />
+          <ScrollView contentContainerStyle={{ paddingHorizontal: theme.m.gutter, paddingTop: 12, paddingBottom: theme.space[5], gap: theme.space[3] }}>
             <AppText variant="title2" accessibilityRole="header">
               {mode === 'move' ? t('move.sheet_move') : t('move.sheet_also')}
             </AppText>

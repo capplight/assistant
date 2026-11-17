@@ -11,9 +11,10 @@ import type { ReminderDraft } from '@/api/types';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/Screen';
+import { Header } from '@/components/ui/Header';
 import { useToast } from '@/store/toast';
 import { tasksState } from '@/tasks/store';
-import { MAX_FONT_SCALE, useTheme } from '@/theme';
+import { fontFamily, MAX_FONT_SCALE, useTheme } from '@/theme';
 
 const MIN = 60_000;
 const OFFSETS = [0, 15, 60, 1440] as const;
@@ -125,15 +126,19 @@ export default function ReminderScreen() {
       style={[
         styles.chip,
         {
-          // design-system §3 Chip: neutral `surfaceSunken`, the chosen one `brand` — no outlines.
+          // v5 chip: a 1.5 `line2` outline, the chosen one `btn` (screens-v5-extra «Дело · редактор»).
           minHeight: theme.size.minTouch,
           borderRadius: theme.radius.round,
-          backgroundColor: selected ? theme.colors.brand : theme.colors.surfaceSunken,
-          paddingHorizontal: theme.space[4],
+          backgroundColor: selected ? theme.colors.btn : 'transparent',
+          borderWidth: selected ? 0 : 1.5,
+          borderColor: theme.colors.line2,
+          paddingHorizontal: 15,
         },
       ]}
     >
-      <AppText color={selected ? 'onBrand' : 'ink'}>{label}</AppText>
+      <AppText color={selected ? 'onBtn' : 'ink'} style={{ fontFamily: theme.type.sheetMeta.fontFamily, fontSize: 15 }}>
+        {label}
+      </AppText>
     </Pressable>
   );
 
@@ -145,10 +150,10 @@ export default function ReminderScreen() {
       onPress={onPress}
       style={[
         styles.step,
-        { minWidth: theme.size.buttonHeight + 16, minHeight: theme.size.buttonHeight, paddingHorizontal: theme.space[2], borderRadius: theme.radius.round, backgroundColor: theme.colors.brandTint },
+        { minWidth: theme.size.buttonHeight + 16, minHeight: theme.size.minTouch, paddingHorizontal: theme.space[2], borderRadius: theme.radius.round, borderWidth: 1.5, borderColor: theme.colors.ink },
       ]}
     >
-      <AppText variant="title2" color="brand">
+      <AppText variant="buttonSmall" style={{ fontVariant: ['tabular-nums'] }}>
         {sign}
       </AppText>
     </Pressable>
@@ -157,22 +162,20 @@ export default function ReminderScreen() {
   const off = Math.round((new Date(due).setHours(0, 0, 0, 0) - new Date(now).setHours(0, 0, 0, 0)) / 86_400_000);
 
   return (
+    // screens-v5-extra «Дело · редактор»: the lilac strip of «Дела», the fields labelled above, the time = one big number.
     <Screen
       testID="reminder-screen"
+      place="tasks"
+      mode="strip"
       footer={<Button testID="rem-save" label={t('rem.save')} onPress={() => void save()} />}
     >
-      <View style={[styles.row, { marginBottom: theme.space[4] }]}>
-        <AppText variant="largeTitle" accessibilityRole="header" style={styles.flex}>
-          {parsed ? t('rem.title_parsed') : t('rem.title_new')}
-        </AppText>
-        <Button testID="rem-close" label={t('rem.close')} variant="text" minHeight={theme.size.minTouch} onPress={() => router.back()} />
-      </View>
+      <Header title={parsed ? t('rem.title_parsed') : t('rem.title_new')} back={{ onPress: () => router.back(), label: t('rem.close'), testID: 'rem-close' }} />
       {p.message ? (
-        <AppText testID="rem-message" color="warning" style={{ marginBottom: theme.space[3] }}>
+        <AppText testID="rem-message" style={{ marginBottom: theme.space[3] }}>
           {p.message}
         </AppText>
       ) : null}
-      <AppText variant="sectionLabel">{t('rem.what')}</AppText>
+      <AppText variant="caption" style={styles.label}>{t('rem.what')}</AppText>
       <TextInput
         testID="rem-title"
         accessibilityLabel={t('rem.what')}
@@ -191,16 +194,18 @@ export default function ReminderScreen() {
             marginTop: theme.space[2],
             marginBottom: theme.space[5],
             minHeight: theme.size.buttonHeight,
-            borderRadius: theme.radius.md,
+            borderRadius: 16,
+            borderWidth: 1.5,
+            borderColor: theme.colors.ink,
             padding: theme.space[3],
             paddingHorizontal: theme.space[4],
             color: theme.colors.ink,
-            backgroundColor: theme.colors.surfaceSunken,
+            backgroundColor: theme.colors.paper,
           },
         ]}
       />
 
-      <AppText variant="sectionLabel">{t('rem.when')}</AppText>
+      <AppText variant="caption" style={styles.label}>{t('rem.when')}</AppText>
       {options.length > 1 ? (
         <View style={[styles.wrap, { gap: theme.space[2], marginTop: theme.space[2] }]}>
           {options.map((o, i) =>
@@ -212,14 +217,21 @@ export default function ReminderScreen() {
           )}
         </View>
       ) : null}
-      <AppText testID="rem-day" variant="title2" style={{ marginTop: theme.space[3] }}>
+      <AppText testID="rem-day" variant="section" style={{ marginTop: theme.space[3] }}>
         {dayText(due, now)}
       </AppText>
-      <AppText testID="rem-time" variant="largeTitle" accessibilityLabel={t('rem.time_a11y', { time: timeText(due) })}>
+      <AppText
+        testID="rem-time"
+        nativeID="v5-capped"
+        maxFontSizeMultiplier={theme.m.heroMaxScale}
+        style={theme.type.bigNumber}
+        accessibilityLabel={t('rem.time_a11y', { time: timeText(due) })}
+      >
         {timeText(due)}
       </AppText>
       {first?.time_assumed && !edited ? (
-        <AppText color="warning" variant="callout">
+        // The assistant set the time itself: the terracotta mark «проверьте» (not a warning colour).
+        <AppText variant="mark" color="assistantText">
           {t('rem.time_assumed')}
         </AppText>
       ) : null}
@@ -237,18 +249,18 @@ export default function ReminderScreen() {
         {off > 0 ? chip('day-prev', t('rem.day_prev'), false, () => setDay(off - 1)) : null}
       </View>
 
-      <AppText variant="sectionLabel">{t('rem.how')}</AppText>
+      <AppText variant="caption" style={styles.label}>{t('rem.how')}</AppText>
       <View style={[styles.wrap, { gap: theme.space[2], marginTop: theme.space[2] }]}>
         {chip('level-alarm', `🔔 ${t('alarm.level_alarm')}`, level === 'alarm', () => setLevel('alarm'))}
         {chip('level-notification', t('alarm.level_notification'), level === 'notification', () => setLevel('notification'))}
       </View>
       {lateRisk(caps) ? (
-        <AppText testID="rem-late-risk" color="warning" variant="callout" style={{ marginTop: theme.space[2] }}>
+        <AppText testID="rem-late-risk" variant="small" style={{ marginTop: theme.space[2] }}>
           {t('rem.late_risk')}
         </AppText>
       ) : null}
 
-      <AppText variant="sectionLabel" style={{ marginTop: theme.space[5] }}>
+      <AppText variant="caption" style={[styles.label, { marginTop: theme.space[5] }]}>
         {t('rem.remind')}
       </AppText>
       <View style={[styles.wrap, { gap: theme.space[2], marginTop: theme.space[2] }]}>
@@ -278,5 +290,6 @@ const styles = StyleSheet.create({
   wrap: { flexDirection: 'row', flexWrap: 'wrap' },
   flex: { flex: 1 },
   chip: { justifyContent: 'center' },
+  label: { fontFamily: fontFamily.semibold, marginBottom: 2 },
   step: { alignItems: 'center', justifyContent: 'center' },
 });

@@ -7,6 +7,7 @@ import { AppText } from '@/components/AppText';
 import { Button } from '@/components/ui/Button';
 import { KpTextField } from '@/components/kp/KpEdits';
 import { Screen } from '@/components/Screen';
+import { Header } from '@/components/ui/Header';
 import { assistantOn, createDraft } from '@/kp/service';
 import { shownData, useKp } from '@/kp/store';
 import { useTheme } from '@/theme';
@@ -38,10 +39,11 @@ export default function NewDraftScreen() {
   };
 
   return (
-    <Screen testID="draft-new">
+    // screens-v5-extra «Сообщение клиенту»: a stone second-level screen.
+    <Screen testID="draft-new" mode="strip">
+      <Header title={t('draft.strip_title')} back={{ onPress: close, label: t('kp.back'), testID: 'draft-new-back' }} />
       <View style={{ gap: theme.space[4] }}>
-        <Button testID="draft-new-back" label={`‹ ${t('kp.back')}`} variant="text" minHeight={theme.size.minTouch} style={{ alignSelf: 'flex-start' }} onPress={close} />
-        <AppText variant="largeTitle" accessibilityRole="header">
+        <AppText variant="title1" accessibilityRole="header">
           {name ? t('draft.new_title_to', { name }) : t('draft.new_title')}
         </AppText>
         {!assistantOn() ? (

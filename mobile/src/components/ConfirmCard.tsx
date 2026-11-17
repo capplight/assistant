@@ -15,6 +15,7 @@ import { AppText } from './AppText';
 import { Button } from './ui/Button';
 import { Chip } from './ui/Chip';
 import { Icon } from './ui/Icon';
+import { PlaceTab } from './ui/Leaf';
 import { useReducedMotion } from './ui/motion';
 
 /** The card closes by itself this long after the reminder is set (design-system v2 §4). */
@@ -115,39 +116,45 @@ export function ConfirmCard() {
   };
 
   return (
-    <View testID="confirm-card" accessibilityLiveRegion="polite" style={[{ backgroundColor: theme.colors.paper, borderRadius: 20, borderWidth: 1, borderColor: theme.colors.line, padding: theme.space[3], gap: theme.space[3], overflow: 'hidden' }, theme.elevation.floating]}>
-      <View style={[styles.row, { gap: theme.space[3] }]}>
-        <View style={[styles.square, { width: 46, height: 46, borderRadius: theme.radius.md, backgroundColor: theme.colors.brandTint }]}>
-          <Icon icon={alarm ? AlarmClock : BellRing} color="brand" />
-        </View>
-        <View style={styles.flex}>
-          <AppText testID="confirm-card-state" variant="eyebrow" color="brand">
-            {ambiguous ? t('rem.card_when') : error ? t('rem.card_check') : alarm ? t('rem.card_alarm_set') : t('rem.card_set')}
-          </AppText>
-          <AppText testID="confirm-card-title" variant="headline">
-            {shown?.title || card.text}
-          </AppText>
-          {!ambiguous && when ? (
-            <AppText testID="confirm-card-when" variant="callout">
-              {when}
-            </AppText>
-          ) : null}
-        </View>
+    // screens-v5-extra «Строка C · «Понял так»»: a `paper` card above the strip — «▮ Понял так · ляжет в «Дела»», the
+    // title bold, when and how small; under a line «Изменить» (a link) and «Готово» (the main button).
+    <View
+      testID="confirm-card"
+      accessibilityLiveRegion="polite"
+      style={[
+        { backgroundColor: theme.colors.paper, borderRadius: 20, borderWidth: 1, borderColor: theme.colors.line, paddingTop: 14, paddingHorizontal: 16, paddingBottom: 6, overflow: 'hidden' },
+        { shadowColor: '#000000', shadowOffset: { width: 0, height: 16 }, shadowRadius: 34, shadowOpacity: 0.3, elevation: 12 },
+      ]}
+    >
+      <View style={[styles.row, { gap: 8 }]}>
+        <PlaceTab place="tasks" style={{ width: 12, height: 16 }} />
+        <AppText testID="confirm-card-state" variant="caption" style={styles.flex}>
+          {ambiguous ? t('rem.card_when') : error ? t('rem.card_check') : t('rem.card_understood', { kind: alarm ? t('rem.card_alarm_set') : t('rem.card_set') })}
+        </AppText>
+        <Icon icon={alarm ? AlarmClock : BellRing} size="sm" color="ink3" />
       </View>
+      <AppText testID="confirm-card-title" variant="headline" style={{ fontSize: 17, lineHeight: 22, marginTop: 6 }}>
+        {shown?.title || card.text}
+      </AppText>
+      {!ambiguous && when ? (
+        <AppText testID="confirm-card-when" variant="small">
+          {when}
+        </AppText>
+      ) : null}
       {ambiguous ? (
-        <View style={[styles.row, { flexWrap: 'wrap', gap: theme.space[2] }]}>
+        <View style={[styles.row, { flexWrap: 'wrap', gap: theme.space[2], marginTop: 10 }]}>
           {card.options.map((o, i) => (
             <Chip key={`${o.due_at}-${i}`} testID={`confirm-card-option-${i}`} label={o.due_at ? `${dayText(dueOf(o), now)}, ${timeText(dueOf(o))}` : o.title} onPress={() => pick(o)} />
           ))}
         </View>
       ) : null}
-      <View style={[styles.row, { gap: theme.space[2], flexDirection: theme.largeFont ? 'column' : 'row', alignItems: 'stretch' }]}>
-        {!ambiguous && !error ? <Button testID="confirm-card-done" label={t('rem.card_done')} onPress={close} style={theme.largeFont ? undefined : styles.flex} /> : null}
-        <Button testID="confirm-card-change" label={t('rem.card_change')} variant="secondary" onPress={() => void change()} style={theme.largeFont ? undefined : styles.flex} />
+      <View style={[styles.row, { justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: theme.colors.line, marginTop: 10, minHeight: 52, gap: 8, flexWrap: 'wrap' }]}>
+        <Button testID="confirm-card-change" label={t('rem.card_change')} variant="link" size="small" onPress={() => void change()} />
+        {!ambiguous && !error ? <Button testID="confirm-card-done" label={t('rem.card_done')} size="small" onPress={close} /> : null}
       </View>
       {savedAt && !reduced ? (
-        <View style={{ height: 3, borderRadius: 2, backgroundColor: theme.colors.track }}>
-          <View testID="confirm-card-bar" style={{ height: 3, borderRadius: 2, width: `${left * 100}%`, backgroundColor: theme.colors.brand }} />
+        <View style={{ height: 2, borderRadius: 1, backgroundColor: theme.colors.line, marginBottom: 4 }}>
+          <View testID="confirm-card-bar" style={{ height: 2, borderRadius: 1, width: `${left * 100}%`, backgroundColor: theme.colors.ink }} />
         </View>
       ) : null}
     </View>

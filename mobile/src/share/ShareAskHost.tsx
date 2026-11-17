@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/Button';
 import { AppText } from '@/components/AppText';
-import { Sheet } from '@/components/page/ExpenseParts';
+import { Sheet } from '@/components/ui/Sheet';
 import { readAsReceipt, readAsStatement } from '@/expenses/receipts';
 import { makeDocumentFrom } from '@/kp/start';
 import { useFeatures } from '@/store/features';
@@ -24,7 +24,8 @@ export function ShareAskHost() {
   if (!ask) return null;
   const close = () => set(null);
   return (
-    <Sheet testID="share-ask" title={t('exp.share_title')} onClose={close}>
+    // screens-v5-extra «Что это?»: what was shared is the assistant's — the sheet carries its terracotta strip.
+    <Sheet visible testID="share-ask" title={t('exp.share_title')} onClose={close} place="assistant">
       <AppText>{t('exp.share_saved')}</AppText>
       <Button
         testID="share-ask-receipt"
