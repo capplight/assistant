@@ -46,6 +46,8 @@ export type ColorTokens = {
   scrim: string;
   a4: string; // document page, always white
   a4Ink: string;
+  askBg: string; // LEGACY: docked strip of variant A (not chosen, Ф-82). The chosen strip C uses paper + ink border.
+  askLine: string; // LEGACY: variant A outline
 };
 
 export const lightColors: ColorTokens = {
@@ -83,6 +85,8 @@ export const lightColors: ColorTokens = {
   scrim: 'rgba(26,25,30,0.38)',
   a4: '#FFFFFF',
   a4Ink: '#1A191E',
+  askBg: '#FBF8F2', // legacy (variant A)
+  askLine: 'transparent', // legacy (variant A)
 };
 
 /** Dark: yellow and green toned down more than in the concept (#D9AE32 → #C9A23A, #7DB866 → #6FA35C); sheets 6 dp shorter. */
@@ -121,6 +125,8 @@ export const darkColors: ColorTokens = {
   scrim: 'rgba(0,0,0,0.55)',
   a4: '#FFFFFF',
   a4Ink: '#1A191E',
+  askBg: '#2A2930', // legacy (variant A)
+  askLine: '#34323A', // legacy (variant A)
 };
 
 /** Tab order (Ф-58). Every tab shows icon + word (older users). «Дела» is reached from «Сегодня» and «Ещё». */
@@ -272,6 +278,8 @@ export const motion = {
   confirm: { duration: 220, easing: [0.2, 0, 0, 1] },
   deleteToStack: { duration: 240, easing: [0.3, 0, 1, 1] },
   check: { duration: 300, easing: [0.2, 0, 0, 1] },
+  askCollapse: { duration: 200, easing: [0.2, 0, 0, 1] }, // assistant strip → circle (Ф-82)
+  askExpand: { duration: 240, easing: [0.2, 0, 0, 1] }, // circle → strip
   reducedMotionFade: 150,
 } as const;
 
@@ -285,4 +293,91 @@ export const chat = {
   resultCard: { radius: 18, bg: 'place of the result', text: 'onSheet' }, // «Дела · завтра, 10:00 — Позвонить в ЦОН»
   inputPlaceholder: 'Спросите или запишите…',
   emptyLine: 'Скажите или перешлите — я разложу по местам и найду, когда понадобится.',
+} as const;
+
+/* ---------------- assistant on other tabs (Ф-81, Ф-82: variant C «Строка, которая сворачивается») ----------------
+ * Same assistant and same conversation as the «Помощник» tab. Mocks: screens-v5.html (main screens, «Размеры»).
+ * Rules: design-system.md §11.12. Components: AskBar (strip), AskBubble (circle), QuickAnswerCard, TopNotice position 'aboveAskBar'.
+ * Shown on: today, notes, expenses, tasks, more (Ф-82: kept on «Ещё» for now) + inside places: note, category, receipt.
+ * Not shown on: assistant tab (own input), settings, search, history, chatgptImport, document (A4), onboarding, bottom sheets, confirms.
+ * Offline: shown; the phrase is saved as a note and parsed later (Ф-69).
+ * Colour: 9 dp dot = place.assistant (the assistant's mark); strip/circle = paper + 1.5 ink border; mic / send = btn.
+ * All sizes in dp; `bottom` is measured from the bottom edge of the screen (tabBar 68 + homeIndicator 24 + 10 = 102).
+ */
+export const assistantEntry = {
+  variant: 'C',
+  placeholder: {
+    today: 'Скажите или напишите…',
+    notes: 'Сохранить в Заметки…',
+    expenses: 'Записать трату…',
+    tasks: 'Добавить дело…',
+    more: 'Скажите или напишите…',
+    noteDetail: 'Попросите поменять заметку…',
+    expenseCategory: 'Записать в {category}…', // «Записать в Транспорт…»
+    receipt: 'Спросите про этот чек…',
+  },
+  dot: 9,
+  // expanded state: strip lying over the paper sheet, above the tab bar
+  bar: {
+    height: 48, heightLarge: 56, radius: 24, radiusLarge: 28,
+    aboveTabBar: 10, bottom: 102, // 68 + 24 + 10
+    inset: { default: 12, small: 8, large: 16 }, // left = right; window ≤ 340 → small, ≥ 420 → large
+    padding: { left: 16, right: 6 }, gap: 10, smallPaddingLeft: 14, smallGap: 8,
+    bg: 'paper',
+    border: { width: 1.5, color: 'ink' },
+    elevation: { shadowColor: '#000000', shadowOffset: { width: 0, height: 10 }, shadowRadius: 22, shadowOpacity: 0.2, elevation: 6 },
+    text: { fontFamily: fontFamily.medium, fontSize: 16, small: 15, large: 19, maxSize: 20, color: 'ink3' }, // 5.2:1 light, 6.3:1 dark; one line, ellipsis
+    mic: 36, micLarge: 44, micColor: 'btn', // becomes «send» (arrow up) when there is text
+    bottomFade: 34, // paper gradient (transparent → paper at 70 %) at the bottom of the paper sheet: no text in the 10 dp gap
+  },
+  // collapsed state: circle at the right end of the strip
+  bubble: {
+    size: 48, sizeLarge: 56, align: 'right', // same right inset and same bottom as the bar
+    bg: 'paper',
+    border: { width: 1.5, color: 'ink' },
+    icon: 22, iconColor: 'ink', // lucide message-square, as on the «Помощник» tab
+    dot: { size: 9, color: 'place.assistant', corner: 'topRight', offset: 3, ring: { width: 2, color: 'paper' } },
+  },
+  scroll: {
+    collapseAfterDownDp: 24, // continuous downward scroll before collapsing (ignores jitter); not while scrollY ≤ 24
+    expandAfterIdleMs: 600, // after the scroll (incl. momentum) stops
+    expandOnUpDp: 24, // immediately on upward scroll
+    expandNearEndDp: 24, // distance to the end of the list
+    expandOnScreenChange: true, // every tab / screen opens with the bar expanded
+    neverCollapseWhen: ['contentFits', 'focused', 'hasDraftText', 'voice', 'savedNoticeVisible', 'answerCardVisible', 'screenReaderEnabled'],
+    followsFinger: false, // event-driven, not scroll-linked
+  },
+  motion: {
+    collapse: { duration: 200, easing: [0.2, 0, 0, 1], width: 'full → bubble, anchored right', textOutMs: [0, 80], iconInMs: [120, 200] },
+    expand: { duration: 240, easing: [0.2, 0, 0, 1], iconOutMs: [0, 80], textInMs: [120, 240] },
+    reducedMotion: { crossFade: 150, easing: 'linear' }, // no width morph: strip and circle cross-fade
+  },
+  listBottomPadding: 70, // 48 + 10 + 12, from the top of the tab bar
+  listBottomPaddingLarge: 78, // 56 + 10 + 12
+  keyboard: {
+    aboveKeyboard: 8, // tap on bar or bubble → focus + keyboard; bar rides 8 dp above the keyboard with the keyboard animation
+    tabsUnderKeyboard: true,
+    collapseSheet: true,
+    destination: { height: 28, gap: 6, radius: 14, bg: 'paper2', color: 'ink2', text: 'Ляжет в {place} · {category}' }, // code parser (Ф-78)
+    onHide: 'back above the tab bar, expanded; draft text is kept',
+  },
+  voice: { minHeight: 64, cancel: 36, done: 36 },
+  savedNotice: { place: 'above the bar', gap: 8, bottom: 158, bottomLarge: 166, inset: 'same as bar', ms: 3000, text: 'Записал в {place}', action: 'Отменить' }, // bar stays expanded while shown
+  answerCard: { gap: 8, radius: 20, maxLines: 3, bg: 'paper', elevation: 'notice', action: 'Продолжить в чате', dismiss: ['x', 'swipeDown', 'tapOutside'] },
+  newItemRing: { color: 'place.assistant', width: 2, ms: 1500 },
+  a11y: {
+    barLabel: 'Строка помощника', // TextInput; the placeholder is read as the hint
+    micLabel: 'Сказать голосом',
+    sendLabel: 'Записать',
+    bubbleRole: 'button',
+    bubbleLabel: 'Помощник. {placeholder without «…»}', // «Помощник. Записать трату»
+    bubbleHint: 'Открывает строку, чтобы записать или спросить',
+    minTouch: 48,
+  },
+} as const;
+
+/** NOT CHOSEN (Ф-82). Variants A and B — only for the history mocks in screens-v5.html → «Чат на других экранах — варианты». Do not implement. */
+export const assistantEntryLegacy = {
+  A: { height: 48, heightLarge: 56, radius: 24, gapAbove: 8, inset: { default: 12, small: 8, large: 16 }, bg: 'askBg', border: 'askLine', scroll: 'fixed', listBottomPadding: 16 },
+  B: { button: 56, color: 'place.assistant', aboveTabBar: 14, hideOnScrollDown: true, showAfterStopMs: 400, listBottomPadding: 84, panel: { heightPct: 56, maxPct: 90 } },
 } as const;

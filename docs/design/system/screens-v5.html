@@ -34,6 +34,8 @@
   --st-paper:#FFFFFF;--st-sand:#EFE4CF;--st-rose:#F3D6DC;--st-mist:#D4E8E2;--st-graph:#E2DFD8;--stInk:#1A191E;--stInk2:#4D4A52;
   /* форма */
   --sheetB:44px;--phrase:27px;--peekF:none;
+  /* строка помощника и клавиатура макета (Ф-81) */
+  --askBg:#FBF8F2;--askLine:transparent;--kb:#D3D0CA;--kbKey:#FFFFFF;--kbKey2:#ADA9A1;--kbInk:#1A191E;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   color-scheme:dark;
@@ -50,6 +52,7 @@
   --k-food:#5FB3A3;--k-trans:#8E9BC8;--k-home:#C29C70;--k-cafe:#DB8CA8;--k-health:#D97A86;--k-kids:#AEB65E;--k-other:#A8A397;
   --st-paper:#2A2930;--st-sand:#4A4232;--st-rose:#4E3439;--st-mist:#2E4640;--st-graph:#36353C;--stInk:#F1EEE8;--stInk2:#C9C4CE;
   --sheetB:38px;--phrase:25px;--peekF:brightness(.62);
+  --askBg:#2A2930;--askLine:#34323A;--kb:#26252B;--kbKey:#46444D;--kbKey2:#34323A;--kbInk:#F1EEE8;
 }}
 :root[data-theme="dark"]{
   color-scheme:dark;
@@ -66,6 +69,7 @@
   --k-food:#5FB3A3;--k-trans:#8E9BC8;--k-home:#C29C70;--k-cafe:#DB8CA8;--k-health:#D97A86;--k-kids:#AEB65E;--k-other:#A8A397;
   --st-paper:#2A2930;--st-sand:#4A4232;--st-rose:#4E3439;--st-mist:#2E4640;--st-graph:#36353C;--stInk:#F1EEE8;--stInk2:#C9C4CE;
   --sheetB:38px;--phrase:25px;--peekF:brightness(.62);
+  --askBg:#2A2930;--askLine:#34323A;--kb:#26252B;--kbKey:#46444D;--kbKey2:#34323A;--kbInk:#F1EEE8;
 }
 
 /* ---------- страница ---------- */
@@ -289,6 +293,73 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 .tt th{font-weight:700;color:var(--pg-ink2);font-size:13px}
 .scroll-x{overflow-x:auto}
 .kz{font-size:24px;line-height:1.35;margin:6px 0 2px;overflow-wrap:anywhere}
+
+/* =====================================================================
+   ЧАТ НА ДРУГИХ ЭКРАНАХ · A / B / C (Ф-81). ВЫБРАН C (Ф-82); A и B — история
+   ===================================================================== */
+.ph{--dockIn:12px}.ph.w320{--dockIn:8px}.ph.w430{--dockIn:16px}
+.vh{font:800 21px/1.25 Onest;margin:34px 0 6px;letter-spacing:-.2px}
+.vh span{font:700 13px/1 Onest;background:var(--pg-ink);color:var(--pg);padding:4px 9px;border-radius:999px;vertical-align:3px;margin-left:6px}
+.vs{font:700 17px/1.3 Onest;margin:26px 0 12px;color:var(--pg-ink)}
+.adot{width:9px;height:9px;border-radius:50%;background:var(--asst);flex:none;display:inline-block}
+.caret{display:inline-block;width:2px;height:19px;background:var(--ink);vertical-align:-4px;margin-left:1px}
+/* A · строка в лотке над вкладками */
+.dock{flex:none;position:relative;z-index:3;padding:8px var(--dockIn) 0}
+.kb~.dock,.dock:has(+.kb){padding-bottom:8px}
+.astr{height:48px;border-radius:24px;background:var(--askBg);box-shadow:inset 0 0 0 1px var(--askLine);display:flex;align-items:center;gap:10px;padding:0 6px 0 16px;color:var(--ink3);font:500 16px/1.2 Onest}
+.astr .rb{width:36px;height:36px}.astr .rb .i{width:20px;height:20px}
+.astr.typing{color:var(--ink)}
+.astr.voice{height:auto;min-height:64px;padding:8px 8px 8px 8px;align-items:center}
+.astr.voice .ib.ring{box-shadow:inset 0 0 0 1.5px var(--ink)}
+.vl{display:flex;align-items:center;gap:7px;font:700 14px/1.2 Onest;color:var(--ink2)}
+.vt{display:block;font:600 16px/1.3 Onest;color:var(--ink);margin-top:3px}
+.wv{display:inline-flex;align-items:center;gap:3px;margin-left:6px;height:18px}
+.wv i{width:3px;border-radius:2px;background:var(--ink);display:block}
+.wv.big{display:flex;justify-content:center;height:44px;gap:5px;margin:18px 0 0}.wv.big i{width:5px;border-radius:3px}
+.dest{display:flex;align-items:center;gap:8px;height:28px;padding:0 8px 6px;font:600 14px/1 Onest;color:var(--trayInk)}
+.notice.atstrip{top:auto;bottom:156px;left:var(--dockIn);right:var(--dockIn)}
+.qa{position:absolute;left:var(--dockIn);right:var(--dockIn);bottom:156px;z-index:20;background:var(--paper);border-radius:20px;padding:14px 16px 6px;box-shadow:0 0 0 1px var(--line),0 16px 34px -8px rgba(0,0,0,.4)}
+.qa-t{font:500 16px/1.4 Onest;margin-top:6px !important;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.qa-f{display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--line);margin-top:10px;min-height:44px;font-size:16px}
+.ph.w320 .astr{font-size:15px;padding-left:14px;gap:8px}
+.ph.lg .astr{height:56px;border-radius:28px;font-size:19px}.ph.lg .astr .rb{width:44px;height:44px}
+/* клавиатура телефона (только в макете) */
+.kb{flex:none;height:252px;background:var(--kb);padding:0 3px;display:flex;flex-direction:column;gap:10px}
+.ksug{display:flex;height:38px;align-items:center;justify-content:space-around;font:500 15px Onest;color:var(--kbInk);border-bottom:1px solid var(--kbKey2)}
+.kr{display:flex;gap:5px;padding:0 2px}
+.kr span{flex:1;height:42px;border-radius:6px;background:var(--kbKey);color:var(--kbInk);display:grid;place-items:center;font:400 19px Onest;box-shadow:0 1px 0 var(--kbKey2)}
+.kr span.w{flex:1.4;background:var(--kbKey2)}.kr span.w2{flex:1.3;background:var(--kbKey2);font-size:15px}.kr span.sp{flex:5;font-size:15px}
+.kb,.home.kbh{position:relative;z-index:42}.home.kbh{background:var(--kb)}.home.kbh::after{background:var(--kbInk)}
+/* B · плавающая кнопка и мини-чат */
+.fab{position:absolute;right:calc(var(--gut) - 4px);bottom:106px;width:56px;height:56px;border-radius:50%;background:var(--asst);color:var(--onSheet);display:grid;place-items:center;z-index:6;box-shadow:0 10px 24px -8px rgba(0,0,0,.5)}
+.fabtip{position:absolute;right:calc(var(--gut) + 62px);bottom:116px;z-index:6;background:var(--noticeBg);color:var(--noticeInk);font:600 15px/1.2 Onest;padding:10px 14px;border-radius:14px 14px 4px 14px;box-shadow:0 10px 24px -10px rgba(0,0,0,.5);white-space:nowrap}
+.pap.end{display:flex;flex-direction:column;justify-content:flex-end}
+.pap.padB{padding-bottom:84px}.pap.padC{padding-bottom:70px}
+.mini{position:absolute;left:0;right:0;z-index:41;background:var(--paper);border-radius:28px 28px 0 0;display:flex;flex-direction:column;overflow:hidden;padding:0 var(--gut) 10px;box-shadow:0 -10px 30px rgba(0,0,0,.25)}
+.mini .strip-c{height:6px;background:var(--c);margin:0 calc(var(--gut) * -1);flex:none}
+.mini .grab{flex:none}
+.mhead{display:flex;align-items:center;gap:12px;font:750 17px/1.2 Onest;min-height:40px;flex:none}
+.mbody{flex:1;min-height:0;overflow:hidden;padding-top:8px;display:flex;flex-direction:column;justify-content:flex-end}
+.mbody .me p{font-size:15.5px}
+.mask{flex:none;height:52px;border-radius:26px;box-shadow:inset 0 0 0 1.5px var(--ink);display:flex;align-items:center;gap:10px;padding:0 7px 0 16px;color:var(--ink3);font:500 16px/1.2 Onest;margin-top:10px}
+.mask .rb{width:38px;height:38px}.mask.typing{color:var(--ink)}
+/* C · строка поверх листа, сворачивается в кружок — ВЫБРАНО (Ф-82), стоит на основных экранах */
+.fstrip{position:absolute;left:var(--dockIn);right:var(--dockIn);bottom:102px;height:48px;z-index:6;border-radius:24px;background:var(--paper);box-shadow:inset 0 0 0 1.5px var(--ink),0 10px 22px -12px rgba(0,0,0,.45);display:flex;align-items:center;gap:10px;padding:0 6px 0 16px;color:var(--ink3);font:500 16px/1.2 Onest}
+.fstrip .rb{width:36px;height:36px}.fstrip .rb .i{width:20px;height:20px}
+.fbub{position:absolute;right:var(--dockIn);bottom:102px;width:48px;height:48px;border-radius:50%;z-index:6;background:var(--paper);color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink),0 10px 22px -12px rgba(0,0,0,.45);display:grid;place-items:center}
+.fbub .adot{position:absolute;right:3px;top:3px;box-shadow:0 0 0 2px var(--paper)}
+.ph.w320 .fstrip{font-size:15px;padding-left:14px;gap:8px}
+.ph.lg .fstrip{height:56px;border-radius:28px;font-size:19px}.ph.lg .fstrip .rb{width:44px;height:44px}
+.ph.lg .fbub{width:56px;height:56px}.ph.lg .pap.padC{padding-bottom:78px}
+.notice.atC{top:auto;bottom:158px;left:var(--dockIn);right:var(--dockIn)}.ph.lg .notice.atC{bottom:166px}
+/* C · фокус: строка над клавиатурой (в потоке), над ней — куда ляжет запись */
+.cfocus{flex:none;position:relative;z-index:3;background:var(--paper);padding:0 var(--dockIn) 8px}
+.cfocus .fstrip{position:relative;left:auto;right:auto;bottom:auto;color:var(--ink)}
+.cdest{display:inline-flex;align-items:center;gap:8px;height:28px;padding:0 12px;border-radius:14px;background:var(--paper2);color:var(--ink2);font:600 14px/1 Onest;margin:0 0 6px 2px}
+.vh span.no{background:var(--pg-tab);color:var(--pg-ink)}
+.ring{box-shadow:0 0 0 2px var(--asst);border-radius:12px}
+/* C · растушёвка под строкой: текст не просвечивает в зазоре 10 между строкой и вкладками */
+.pap.padC::after{content:"";position:absolute;left:0;right:0;bottom:0;height:34px;z-index:4;pointer-events:none;background:linear-gradient(to bottom,transparent,var(--paper) 70%)}
 </style>
 </head>
 <body>
@@ -330,6 +401,7 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 <symbol id="pin" viewBox="0 0 24 24"><path d="M12 20.5s-6-5.3-6-10.5a6 6 0 0 1 12 0c0 5.2-6 10.5-6 10.5z"/><circle cx="12" cy="10" r="2"/></symbol>
 <symbol id="film" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 4v16M16 4v16M4 9h4M4 15h4M16 9h4M16 15h4"/></symbol>
 <symbol id="export" viewBox="0 0 24 24"><path d="M12 14V3.5M8.5 7L12 3.5 15.5 7"/><path d="M4.5 13v6.5h15V13"/></symbol>
+<symbol id="up" viewBox="0 0 24 24"><path d="M12 19V5.5M6.5 11L12 5.5 17.5 11"/></symbol>
 <symbol id="redo" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></symbol>
 </svg>
 <div class="wrap">
@@ -340,13 +412,13 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 </header>
 <nav class="bar" aria-label="Разделы и тема">
 <div class="seg" role="group" aria-label="Тема"><button type="button" data-t="light">Светлая</button><button type="button" data-t="dark">Тёмная</button></div>
-<a href="#g-main">Вкладки</a><a href="#g-more">Ещё и служебные</a><a href="#g-states">Состояния</a><a href="#g-onb">Первый запуск</a><a href="#g-docs">Документы</a><a href="#g-adapt">Размеры</a><a href="#g-tokens">Токены</a><a href="#g-rules">Правила</a>
+<a href="#g-main">Вкладки</a><a href="#g-more">Ещё и служебные</a><a href="#g-states">Состояния</a><a href="#g-onb">Первый запуск</a><a href="#g-docs">Документы</a><a href="#g-adapt">Размеры</a><a href="#g-entry">Чат на других экранах</a><a href="#g-tokens">Токены</a><a href="#g-rules">Правила</a>
 </nav>
 
 <!-- ============================== ВКЛАДКИ ============================== -->
 <section class="grp" id="g-main">
 <h2>Вкладки</h2>
-<p class="lead">Сегодня · Заметки · Помощник · Расходы · Ещё. У каждой вкладки есть цвет и слово. Большая фраза есть только на «Сегодня» и «Расходах», на остальных экранах — обычный заголовок. При прокрутке цветной лист сворачивается в полоску с названием.</p>
+<p class="lead">Сегодня · Заметки · Помощник · Расходы · Ещё. У каждой вкладки есть цвет и слово. Большая фраза есть только на «Сегодня» и «Расходах», на остальных экранах — обычный заголовок. При прокрутке цветной лист сворачивается в полоску с названием. Строка помощника — вариант C (Ф-82): лежит на листе над вкладками, при прокрутке вниз сжимается в кружок, при остановке и в конце списка раскрывается. На вкладке «Помощник» её нет — там полное поле.</p>
 <div class="phones">
 
 <!-- Помощник · пусто -->
@@ -410,7 +482,7 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 <figure><div class="frame"><div class="ph">
 <div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-asst"></i><i class="c-notes"></i></div>
 <div class="sheet c-today"><div class="sh-top"><span class="sp">Вторник, 17 ноября</span><span class="ib"><svg class="i"><use href="#search"/></svg></span></div><p class="phrase">Спокойный день.<br>5&nbsp;дел, 1&nbsp;встреча.</p><p class="ttl ttl-only">Сегодня</p></div>
-<div class="pap"><div class="sec">План дня<span class="lk">Все дела<svg class="i xs"><use href="#chev"/></svg></span></div>
+<div class="pap padC"><div class="sec">План дня<span class="lk">Все дела<svg class="i xs"><use href="#chev"/></svg></span></div>
 <div class="plan">
 <div class="blk done"><span class="t">09:00</span><h4 class="ell">Таблетка от давления</h4></div>
 <div class="now"><span>9:41</span></div>
@@ -424,14 +496,14 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 <div class="ln f0"><span class="ck"></span><span class="f1 ell">Оплатить интернет</span><span class="m">до пт</span></div>
 <div class="ln"><span class="ck"></span><span class="f1 ell">Купить корм коту</span><span class="m">вечером</span></div>
 <div class="sec">Потрачено сегодня<span class="lk tn">3 600 ₸<svg class="i xs"><use href="#chev"/></svg></span></div></div>
-<nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
-</div></div><figcaption><b>Сегодня · развёрнут</b>Большая фраза — две строки максимум. План дня из «Ритма»: высота блока равна длительности (1 dp на минуту, минимум 40), пустое время — «свободно 2 ч». Сейчас — чёрная линия.</figcaption></figure>
+<div class="fstrip" role="group" aria-label="Строка помощника"><span class="adot" aria-hidden="true"></span><span class="f1 ell">Скажите или напишите…</span><span class="rb" role="button" aria-label="Сказать голосом"><svg class="i"><use href="#mic"/></svg></span></div><nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>Сегодня · развёрнут</b>Большая фраза — две строки максимум. План дня из «Ритма»: высота блока равна длительности (1 dp на минуту, минимум 40), пустое время — «свободно 2 ч». Сейчас — чёрная линия. Внизу строка помощника (Ф-82, вариант C) в покое: 48 dp, на 10 над вкладками, лежит на листе.</figcaption></figure>
 
 <!-- Сегодня · свёрнут -->
 <figure><div class="frame"><div class="ph">
 <div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-asst"></i><i class="c-notes"></i></div>
 <div class="sheet min c-today"><div class="strip"><div class="l"><span class="cap" style="color:var(--on2);font-weight:600;padding-left:8px">вт, 17 нояб.</span></div><div class="t">Сегодня</div><div class="r"><span class="ib"><svg class="i"><use href="#search"/></svg></span></div></div></div>
-<div class="pap"><div style="margin-top:-244px"><div class="sec">План дня<span class="lk">Все дела<svg class="i xs"><use href="#chev"/></svg></span></div>
+<div class="pap padC"><div style="margin-top:-244px"><div class="sec">План дня<span class="lk">Все дела<svg class="i xs"><use href="#chev"/></svg></span></div>
 <div class="plan">
 <div class="blk done"><span class="t">09:00</span><h4 class="ell">Таблетка от давления</h4></div>
 <div class="now"><span>9:41</span></div>
@@ -449,14 +521,14 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 <div class="ln f0"><span class="tn" style="width:48px;font:700 14px Onest">10:00</span><span class="f1 ell">Позвонить в ЦОН</span></div>
 <div class="ln"><span class="tn" style="width:48px;font:700 14px Onest">16:00</span><span class="f1 ell">Стоматолог</span><span class="m">ждёт ответа</span></div>
 </div></div>
-<nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
-</div></div><figcaption><b>Сегодня · после прокрутки</b>Лист свернулся в полоску 44 dp с названием, как большой заголовок в iOS. Фраза ушла, дата стала короткой. Прокрутка вверх раскрывает лист обратно.</figcaption></figure>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div><span class="fbub" role="button" aria-label="Помощник. Скажите или напишите"><svg class="i"><use href="#asst"/></svg><span class="adot" aria-hidden="true"></span></span>
+</div></div><figcaption><b>Сегодня · после прокрутки</b>Лист свернулся в полоску 44 dp с названием, как большой заголовок в iOS. Фраза ушла, дата стала короткой. Пока листают вниз, строка помощника сжата в кружок 48 справа; через 0,6 с после остановки, при прокрутке вверх и в конце списка она снова раскрывается.</figcaption></figure>
 
 <!-- Заметки · список -->
 <figure><div class="frame"><div class="ph">
 <div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-exp"></i><i class="c-today"></i></div>
 <div class="sheet c-notes"><div class="sh-top"><span class="sp">128 заметок</span><span class="ib"><svg class="i"><use href="#search"/></svg></span><span class="ib"><svg class="i"><use href="#plus"/></svg></span></div><p class="ttl">Заметки</p></div>
-<div class="pap" style="padding-left:14px;padding-right:14px">
+<div class="pap padC" style="padding-left:14px;padding-right:14px">
 <div class="chips" style="margin-bottom:12px"><span class="chip on">Все</span><span class="chip">Важные</span><span class="chip"><svg class="i xs"><use href="#film"/></svg>Из материала</span></div>
 <div style="display:flex;gap:8px;align-items:flex-start">
 <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
@@ -472,14 +544,37 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 </div>
 </div>
 </div>
-<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes on"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
-</div></div><figcaption><b>Заметки · список</b>Обычный заголовок, без фразы. Стикеры — в своей приглушённой палитре (песок, роза, туман, графит, бумага): ни голубого «Заметок», ни жёлтого «Сегодня». Изменённая помощником — с терракотовым уголком.</figcaption></figure>
+<div class="fstrip" role="group" aria-label="Строка помощника"><span class="adot" aria-hidden="true"></span><span class="f1 ell">Сохранить в Заметки…</span><span class="rb" role="button" aria-label="Сказать голосом"><svg class="i"><use href="#mic"/></svg></span></div><nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes on"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>Заметки · список</b>Обычный заголовок, без фразы. Стикеры — в своей приглушённой палитре (песок, роза, туман, графит, бумага): ни голубого «Заметок», ни жёлтого «Сегодня». Изменённая помощником — с терракотовым уголком. Строка «Сохранить в Заметки…» — в покое.</figcaption></figure>
+
+<!-- Заметки · листают (C: кружок) -->
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-exp"></i><i class="c-today"></i></div>
+<div class="sheet min c-notes"><div class="strip"><div class="l"><span class="cap" style="color:var(--on2);font-weight:600;padding-left:8px">128</span></div><div class="t">Заметки</div><div class="r"><span class="ib"><svg class="i"><use href="#search"/></svg></span></div></div></div>
+<div class="pap padC" style="padding-left:14px;padding-right:14px"><div style="margin-top:-96px">
+<div class="chips" style="margin-bottom:12px"><span class="chip on">Все</span><span class="chip">Важные</span><span class="chip"><svg class="i xs"><use href="#film"/></svg>Из материала</span></div>
+<div style="display:flex;gap:8px;align-items:flex-start">
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
+<div class="stk st-sand"><h4>Код домофона</h4><p class="tn" style="font:800 26px/1.15 Onest;margin-top:6px">4512</p><p class="cap">подъезд 3, кв. 47</p></div>
+<div class="stk st-paper"><span class="fold"></span><h4 style="padding-right:14px">Алматы: что посмотреть</h4><span class="chg" style="display:flex;margin-top:6px">изменил помощник</span><p class="small" style="margin-top:4px;color:var(--stInk2)">Медеу — после 16:00, Кок-Тобе, Зелёный базар</p></div>
+<div class="stk st-mist"><h4>Wi-Fi на даче</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Dacha_5G<br>sunflower2024</p><p class="cap" style="margin-top:6px">10 нояб.</p></div>
+</div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
+<div class="stk st-rose"><h4>Подарки на НГ</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Алие — коньки<br>Папе — термос</p><p class="cap" style="margin-top:6px">2 нояб.</p></div>
+<div class="stk st-graph"><h4>Размер шин</h4><p class="tn" style="font:800 20px/1.2 Onest;margin-top:6px">205/55 R16</p></div>
+<div class="stk st-paper"><h4>Стамбул</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">23 совета · кафе, музеи</p><p class="cap row" style="gap:5px;margin-top:6px"><svg class="i xs"><use href="#film"/></svg>из материала</p></div>
+<div class="stk st-sand"><h4>Мастер по стиралке</h4><p class="small tn" style="margin-top:4px;color:var(--stInk2)">Ержан<br>+7 701 455 12 90</p></div>
+</div>
+</div>
+</div></div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes on"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div><span class="fbub" role="button" aria-label="Помощник. Сохранить в Заметки"><svg class="i"><use href="#asst"/></svg><span class="adot" aria-hidden="true"></span></span>
+</div></div><figcaption><b>Заметки · листают</b>Тот же экран посреди прокрутки вниз: лист свёрнут, строка — кружок 48 с точкой помощника, справа на 10 над вкладками. Нажатие на кружок — строка раскрывается в фокусе, сразу с клавиатурой.</figcaption></figure>
 
 <!-- Заметка · открыта -->
 <figure><div class="frame"><div class="ph">
 <div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div>
 <div class="sheet min c-notes"><div class="strip"><div class="l"><span class="back"><svg class="i"><use href="#back"/></svg>Заметки</span></div><div class="t"></div><div class="r"><span class="ib"><svg class="i"><use href="#share"/></svg></span><span class="ib"><svg class="i"><use href="#more"/></svg></span></div></div></div>
-<div class="pap">
+<div class="pap padC">
 <div style="background:var(--paper2);border-radius:16px;padding:12px 14px">
 <div class="row"><span class="chg f1">изменил помощник · 12:40</span><span class="undo">Отменить</span></div>
 <p class="small" style="margin-top:6px">Медеу — на вечер, новая цена канатки, добавил озеро. Вы просили: «обнови по свежему рилсу».</p>
@@ -493,10 +588,9 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 <li><mark>Большое Алматинское озеро — выезд в 7:00, взять тёплое</mark></li>
 </ol>
 <p class="cap" style="margin-top:14px">Зачёркнуто — что было, подсвечено — что стало. Через сутки пометка уйдёт, текст останется.</p>
-<div class="ask"><span class="plus"><svg class="i"><use href="#plus"/></svg></span><span class="f1 ell">Попросите что-то поменять…</span><span class="rb"><svg class="i"><use href="#mic"/></svg></span></div>
 </div>
-<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes on"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
-</div></div><figcaption><b>Заметка · «изменил помощник»</b>Правка прямо в тексте, как в «Тетради»: старое зачёркнуто, новое подсвечено терракотовым маркером (не жёлтым — жёлтый занят «Сегодня»). Плашка сверху держится сутки.</figcaption></figure>
+<div class="fstrip" role="group" aria-label="Строка помощника"><span class="adot" aria-hidden="true"></span><span class="f1 ell">Попросите поменять заметку…</span><span class="rb" role="button" aria-label="Сказать голосом"><svg class="i"><use href="#mic"/></svg></span></div><nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes on"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>Заметка · «изменил помощник»</b>Правка прямо в тексте, как в «Тетради»: старое зачёркнуто, новое подсвечено терракотовым маркером (не жёлтым — жёлтый занят «Сегодня»). Плашка сверху держится сутки. Внутри заметки строка говорит про открытое: «Попросите поменять заметку…» — «это / здесь» значит эта заметка.</figcaption></figure>
 
 <!-- Расходы · месяц -->
 <figure><div class="frame"><div class="ph">
@@ -505,7 +599,7 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 <p class="big" style="margin-top:4px">184 350<span class="cur">₸</span></p>
 <p class="phrase" style="font-size:calc(var(--phrase) - 4px);margin-top:10px">Успеваете: ещё 65&nbsp;650&nbsp;₸</p>
 <p class="sub">из 250 000 ₸ · до конца месяца 13 дней</p></div>
-<div class="pap">
+<div class="pap padC">
 <div style="display:flex;gap:3px;height:30px"><i class="k-food" style="flex:62.4;background:var(--k);border-radius:6px"></i><i class="k-home" style="flex:41.2;background:var(--k);border-radius:6px"></i><i class="k-trans" style="flex:28.9;background:var(--k);border-radius:6px"></i><i class="k-cafe" style="flex:20.8;background:var(--k);border-radius:6px"></i><i class="k-health" style="flex:18.75;background:var(--k);border-radius:6px"></i><i class="k-kids" style="flex:12.3;background:var(--k);border-radius:6px"></i><i style="flex:65.65;border-radius:6px;box-shadow:inset 0 0 0 1.5px var(--line2);background:repeating-linear-gradient(135deg,transparent 0 6px,var(--line) 6px 7px)"></i></div>
 <p class="cap" style="margin:6px 0 4px">полоски — категории в масштабе, штриховка — ещё можно потратить</p>
 <div class="ln f0"><span class="kq k-food"></span><span class="f1">Продукты</span><b class="am">62 400</b></div>
@@ -515,14 +609,34 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 <div class="ln"><span class="kq k-health"></span><span class="f1">Здоровье</span><b class="am">18 750</b></div>
 <div class="ln"><span class="kq k-kids"></span><span class="f1">Дети</span><b class="am">12 300</b></div>
 </div>
-<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp on"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
-</div></div><figcaption><b>Расходы · месяц</b>Одна крупная цифра (из «Табло»), табличные цифры везде. Короткая фраза — второй и последний крупный текст. У категорий своя палитра: Транспорт — сланцевый, не терракотовый.</figcaption></figure>
+<div class="fstrip" role="group" aria-label="Строка помощника"><span class="adot" aria-hidden="true"></span><span class="f1 ell">Записать трату…</span><span class="rb" role="button" aria-label="Сказать голосом"><svg class="i"><use href="#mic"/></svg></span></div><nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp on"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>Расходы · месяц</b>Одна крупная цифра (из «Табло»), табличные цифры везде. Короткая фраза — второй и последний крупный текст. У категорий своя палитра: Транспорт — сланцевый, не терракотовый. Строка «Записать трату…» в покое.</figcaption></figure>
+
+<!-- Расходы · записал (C: уведомление над строкой) -->
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-tasks"></i><i class="c-asst"></i></div>
+<div class="sheet c-exp"><div class="sh-top"><span class="sp row" style="gap:2px">Ноябрь<svg class="i s"><use href="#down"/></svg></span><span class="ib"><svg class="i"><use href="#search"/></svg></span></div>
+<p class="big" style="margin-top:4px">185 550<span class="cur">₸</span></p>
+<p class="phrase" style="font-size:calc(var(--phrase) - 4px);margin-top:10px">Успеваете: ещё 64&nbsp;450&nbsp;₸</p>
+<p class="sub">из 250 000 ₸ · до конца месяца 13 дней</p></div>
+<div class="pap end padC"><div>
+<div style="display:flex;gap:3px;height:30px"><i class="k-food" style="flex:62.4;background:var(--k);border-radius:6px"></i><i class="k-home" style="flex:41.2;background:var(--k);border-radius:6px"></i><i class="k-trans" style="flex:28.9;background:var(--k);border-radius:6px"></i><i class="k-cafe" style="flex:22;background:var(--k);border-radius:6px"></i><i class="k-health" style="flex:18.75;background:var(--k);border-radius:6px"></i><i class="k-kids" style="flex:12.3;background:var(--k);border-radius:6px"></i><i style="flex:64.45;border-radius:6px;box-shadow:inset 0 0 0 1.5px var(--line2);background:repeating-linear-gradient(135deg,transparent 0 6px,var(--line) 6px 7px)"></i></div>
+<p class="cap" style="margin:6px 0 4px">полоски — категории в масштабе, штриховка — ещё можно потратить</p>
+<div class="ln f0"><span class="kq k-food"></span><span class="f1">Продукты</span><b class="am">62 400</b></div>
+<div class="ln"><span class="kq k-home"></span><span class="f1">Дом</span><b class="am">41 200</b></div>
+<div class="ln"><span class="kq k-trans"></span><span class="f1">Транспорт</span><b class="am">28 900</b></div>
+<div class="ln ring" style="padding:0 10px;margin:0 -10px;border-top-color:transparent"><span class="kq k-cafe"></span><span class="f1">Кафе</span><b class="am">22 000</b></div>
+<div class="ln"><span class="kq k-health"></span><span class="f1">Здоровье</span><b class="am">18 750</b></div>
+<div class="ln"><span class="kq k-kids"></span><span class="f1">Дети</span><b class="am">12 300</b></div>
+</div></div>
+<div class="fstrip" role="group" aria-label="Строка помощника"><span class="adot" aria-hidden="true"></span><span class="f1 ell">Записать трату…</span><span class="rb" role="button" aria-label="Сказать голосом"><svg class="i"><use href="#mic"/></svg></span></div><div class="notice atC"><span class="tm"><i></i><i></i><i class="o"></i></span><span class="f1">Записал: Кафе · 1 200 ₸</span><span class="act asst">Отменить</span></div><nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp on"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>Расходы · записал на месте</b>Сказали в строку «кофе 1 200». Уведомление «Записал…» встаёт на 8 над строкой — туда, куда человек смотрит; 3 с, «Отменить» терракотовый. Строка в этот момент раскрыта и не сворачивается. Изменённая строка 1,5 с обведена терракотой 2 dp. Конец списка: уведомление на 3 с закрывает последнюю строку «Дети», потом она снова видна над строкой помощника (запас 70).</figcaption></figure>
 
 <!-- Расходы · категория -->
 <figure><div class="frame"><div class="ph">
 <div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div>
 <div class="sheet min c-exp"><div class="strip"><div class="l"><span class="back"><svg class="i"><use href="#back"/></svg>Расходы</span></div><div class="t">Транспорт</div><div class="r"><span class="ib"><svg class="i"><use href="#more"/></svg></span></div></div></div>
-<div class="pap">
+<div class="pap padC">
 <p class="cap row" style="gap:8px"><span class="kq k-trans"></span>Транспорт · ноябрь</p>
 <p class="big" style="margin-top:8px">28 900<span class="cur">₸</span></p>
 <p class="small" style="margin-top:6px">из 35 000 ₸ на месяц · осталось <b class="tn" style="color:var(--ink)">6 100 ₸</b></p>
@@ -536,14 +650,14 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 <div class="ln f0"><span class="f1 ell">Бензин АИ-95</span><span class="m">10:20</span><b class="am" style="width:70px;text-align:right">18 000</b></div>
 <div class="ln"><span class="f1 ell">Мойка</span><span class="m">11:00</span><b class="am" style="width:70px;text-align:right">3 500</b></div>
 </div>
-<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp on"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
-</div></div><figcaption><b>Расходы · категория</b>Зелёный лист свёрнут: это место «Расходы». Цвет категории — только маленький квадрат и полоска, не фон.</figcaption></figure>
+<div class="fstrip" role="group" aria-label="Строка помощника"><span class="adot" aria-hidden="true"></span><span class="f1 ell">Записать в Транспорт…</span><span class="rb" role="button" aria-label="Сказать голосом"><svg class="i"><use href="#mic"/></svg></span></div><nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp on"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>Расходы · категория</b>Зелёный лист свёрнут: это место «Расходы». Цвет категории — только маленький квадрат и полоска, не фон. Строка знает открытое: «Записать в Транспорт…» — трата сразу ляжет в эту категорию.</figcaption></figure>
 
 <!-- Расходы · чек -->
 <figure><div class="frame"><div class="ph">
 <div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div>
 <div class="sheet min c-exp"><div class="strip"><div class="l"><span class="back"><svg class="i"><use href="#back"/></svg>Расходы</span></div><div class="t">Чек</div><div class="r"><span class="ib"><svg class="i"><use href="#share"/></svg></span></div></div></div>
-<div class="pap">
+<div class="pap padC">
 <div class="row" style="align-items:flex-end"><p class="big f1">9 540<span class="cur">₸</span></p><span class="chip" style="height:34px"><span class="kq k-food"></span>Продукты</span></div>
 <p class="cap" style="margin-top:6px">Вчера, 19:20 · из фото чека · 7 позиций</p>
 <div style="margin-top:14px;background:var(--paper2);border-radius:14px 14px 0 0;padding:14px 16px 6px;font-size:14.5px;line-height:1.3">
@@ -563,14 +677,14 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 <div style="height:10px;background:linear-gradient(135deg,var(--paper2) 33%,transparent 33%) 0 0/14px 10px repeat-x,linear-gradient(225deg,var(--paper2) 33%,transparent 33%) 0 0/14px 10px repeat-x"></div>
 <div class="row" style="gap:10px;margin-top:14px"><span class="btn ghost sm" style="flex:1">Разбить по категориям</span></div>
 </div>
-<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp on"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
-</div></div><figcaption><b>Расходы · чек</b>Чек — бумажная лента на светлом листе, цифры табличные. Итог — единственная крупная цифра. Категория выбирается чипом, его цвет из палитры категорий.</figcaption></figure>
+<div class="fstrip" role="group" aria-label="Строка помощника"><span class="adot" aria-hidden="true"></span><span class="f1 ell">Спросите про этот чек…</span><span class="rb" role="button" aria-label="Сказать голосом"><svg class="i"><use href="#mic"/></svg></span></div><nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp on"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>Расходы · чек</b>Чек — бумажная лента на светлом листе, цифры табличные. Итог — единственная крупная цифра. Категория выбирается чипом, его цвет из палитры категорий. Строка: «Спросите про этот чек…» — «сколько ушло на молочку?».</figcaption></figure>
 
 <!-- Дела -->
 <figure><div class="frame"><div class="ph">
 <div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div>
 <div class="sheet c-tasks"><div class="sh-top"><span class="back"><svg class="i"><use href="#back"/></svg>Сегодня</span><span class="sp"></span><span class="ib"><svg class="i"><use href="#plus"/></svg></span></div><p class="ttl">Дела</p><p class="sub">Вторник, 17 ноября · 4 на сегодня</p></div>
-<div class="pap">
+<div class="pap padC">
 <div class="sec">Сегодня<span class="m">1 из 4</span></div>
 <div class="ln f0"><span class="ck ok"><svg class="i xs" style="stroke-width:3"><use href="#check"/></svg></span><span class="f1 ell" style="color:var(--ink3);text-decoration:line-through">Таблетка от давления</span><span class="m">09:00</span></div>
 <div class="ln"><span class="ck"></span><span class="f1 ell">Созвон с бухгалтером</span><span class="m">10:30</span></div>
@@ -583,8 +697,26 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 <div class="ln f0"><span class="ck"></span><span class="f1 ell">Поменять масло в машине</span></div>
 </div>
 <div class="notice"><span class="tm"><i></i><i class="o"></i><i class="o"></i></span><span class="f1">Удалено: «Купить корм коту»</span><span class="act">Восстановить</span></div>
-<nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
-</div></div><figcaption><b>Дела · «Удалено · Восстановить»</b>Открыты из «Сегодня» и остаются сиреневыми. Удаление без «Да»: сверху уведомление на 3 с, «Восстановить» — обычная ссылка, не терракотовая (это действие человека).</figcaption></figure>
+<div class="fstrip" role="group" aria-label="Строка помощника"><span class="adot" aria-hidden="true"></span><span class="f1 ell">Добавить дело…</span><span class="rb" role="button" aria-label="Сказать голосом"><svg class="i"><use href="#mic"/></svg></span></div><nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>Дела · «Удалено · Восстановить»</b>Открыты из «Сегодня» и остаются сиреневыми. Удаление без «Да»: сверху уведомление на 3 с, «Восстановить» — обычная ссылка, не терракотовая (это действие человека). Внизу строка «Добавить дело…».</figcaption></figure>
+
+<!-- Строка помощника в фокусе (C) -->
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div>
+<div class="sheet min c-exp"><div class="strip"><div class="l"><span class="cap" style="color:var(--on2);font-weight:600;padding-left:8px">ноябрь</span></div><div class="t">Расходы</div><div class="r"><span class="tn" style="font:700 15px Onest;padding-right:8px">184 350 ₸</span></div></div></div>
+<div class="pap flat">
+<div style="display:flex;gap:3px;height:30px"><i class="k-food" style="flex:62.4;background:var(--k);border-radius:6px"></i><i class="k-home" style="flex:41.2;background:var(--k);border-radius:6px"></i><i class="k-trans" style="flex:28.9;background:var(--k);border-radius:6px"></i><i class="k-cafe" style="flex:20.8;background:var(--k);border-radius:6px"></i><i class="k-health" style="flex:18.75;background:var(--k);border-radius:6px"></i><i class="k-kids" style="flex:12.3;background:var(--k);border-radius:6px"></i><i style="flex:65.65;border-radius:6px;box-shadow:inset 0 0 0 1.5px var(--line2);background:repeating-linear-gradient(135deg,transparent 0 6px,var(--line) 6px 7px)"></i></div>
+<p class="cap" style="margin:6px 0 4px">полоски — категории в масштабе, штриховка — ещё можно потратить</p>
+<div class="ln f0"><span class="kq k-food"></span><span class="f1">Продукты</span><b class="am">62 400</b></div>
+<div class="ln"><span class="kq k-home"></span><span class="f1">Дом</span><b class="am">41 200</b></div>
+<div class="ln"><span class="kq k-trans"></span><span class="f1">Транспорт</span><b class="am">28 900</b></div>
+<div class="ln"><span class="kq k-cafe"></span><span class="f1">Кафе</span><b class="am">20 800</b></div>
+<div class="ln"><span class="kq k-health"></span><span class="f1">Здоровье</span><b class="am">18 750</b></div>
+<div class="ln"><span class="kq k-kids"></span><span class="f1">Дети</span><b class="am">12 300</b></div>
+</div>
+<div class="cfocus"><div class="cdest"><span class="ptab c-exp" style="width:12px;height:16px"></span>Ляжет в Расходы · Кафе</div><div class="fstrip" role="group" aria-label="Строка помощника"><span class="adot" aria-hidden="true"></span><span class="f1 ell">кофе 1 200<span class="caret"></span></span><span class="rb" role="button" aria-label="Записать"><svg class="i"><use href="#up"/></svg></span></div></div>
+<div class="kb" aria-hidden="true"><div class="ksug"><span>кофе</span><span>кофе 1 200</span><span>кофейня</span></div><div class="kr"><span>й</span><span>ц</span><span>у</span><span>к</span><span>е</span><span>н</span><span>г</span><span>ш</span><span>щ</span><span>з</span><span>х</span></div><div class="kr"><span>ф</span><span>ы</span><span>в</span><span>а</span><span>п</span><span>р</span><span>о</span><span>л</span><span>д</span><span>ж</span><span>э</span></div><div class="kr"><span class="w">⇧</span><span>я</span><span>ч</span><span>с</span><span>м</span><span>и</span><span>т</span><span>ь</span><span>б</span><span>ю</span><span class="w">⌫</span></div><div class="kr"><span class="w2">123</span><span class="w2">🌐</span><span class="sp">пробел</span><span class="w2">⏎</span></div></div><div class="home kbh"></div>
+</div></div><figcaption><b>Строка в фокусе · клавиатура</b>Нажали на строку или кружок: строка встаёт на 8 над клавиатурой, вкладки уходят под клавиатуру, цветной лист свёрнут, список кончается над строкой. Пока строка в фокусе или в ней есть текст, она не сворачивается. Над ней — куда ляжет запись, если это понял код (Ф-78). Микрофон сменяется стрелкой «Записать».</figcaption></figure>
 
 </div>
 </section>
@@ -599,7 +731,7 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 <figure><div class="frame"><div class="ph">
 <div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-exp"></i><i class="c-asst"></i></div>
 <div class="sheet c-stone"><div class="sh-top"><span class="sp"></span><span class="ib"><svg class="i"><use href="#search"/></svg></span></div><p class="ttl">Ещё</p></div>
-<div class="pap">
+<div class="pap padC">
 <div class="ln f0" style="min-height:64px"><span style="width:48px;height:48px;border-radius:50%;background:var(--paper2);display:grid;place-items:center;font:800 16px Onest;flex:none">АН</span><span class="f1"><b style="display:block;font-weight:700">Айдар Нурланов</b><span class="cap tn">+7 701 ••• 12 90</span></span><svg class="i s" style="color:var(--ink3)"><use href="#chev"/></svg></div>
 <div class="ln"><span class="ptab c-tasks"></span><span class="f1">Дела</span><span class="m">4 на сегодня</span><svg class="i s" style="color:var(--ink3)"><use href="#chev"/></svg></div>
 <div class="ln"><svg class="i"><use href="#doc"/></svg><span class="f1">Документы</span><span class="m">3 черновика</span><svg class="i s" style="color:var(--ink3)"><use href="#chev"/></svg></div>
@@ -609,8 +741,8 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 <div class="ln"><svg class="i"><use href="#trash"/></svg><span class="f1">Корзина</span><span class="m">3</span><svg class="i s" style="color:var(--ink3)"><use href="#chev"/></svg></div>
 <div class="ln"><svg class="i"><use href="#gear"/></svg><span class="f1">Настройки</span><svg class="i s" style="color:var(--ink3)"><use href="#chev"/></svg></div>
 </div>
-<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone on"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
-</div></div><figcaption><b>Ещё</b>Нейтральный тёплый камень (#D8D2C6, в тёмной — графит). Простые строки без плиток. У «Дел» и «Истории» — маленький язычок цвета их листа.</figcaption></figure>
+<div class="fstrip" role="group" aria-label="Строка помощника"><span class="adot" aria-hidden="true"></span><span class="f1 ell">Скажите или напишите…</span><span class="rb" role="button" aria-label="Сказать голосом"><svg class="i"><use href="#mic"/></svg></span></div><nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone on"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>Ещё</b>Нейтральный тёплый камень (#D8D2C6, в тёмной — графит). Простые строки без плиток. У «Дел» и «Истории» — маленький язычок цвета их листа. Строка помощника на «Ещё» пока есть (Ф-82), подсказка как на «Сегодня»; последняя строка «Настройки» видна над ней.</figcaption></figure>
 
 <!-- Поиск -->
 <figure><div class="frame"><div class="ph">
@@ -868,9 +1000,310 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 <!-- ============================== РАЗМЕРЫ ============================== -->
 <section class="grp" id="g-adapt">
 <h2>Размеры экранов и крупный шрифт</h2>
-<p class="lead">«Сегодня» на трёх ширинах: маленький 320 dp, обычный 390 dp, большой 430 dp. На маленьком экране и при крупном системном шрифте фраза уходит, остаётся заголовок. Подписи вкладок не растут больше 13 — иначе «Помощник» не помещается.</p>
+<p class="lead">«Сегодня» на трёх ширинах: маленький 320 dp, обычный 390 dp, большой 430 dp. На маленьком экране и при крупном системном шрифте фраза уходит, остаётся заголовок. Подписи вкладок не растут больше 13 — иначе «Помощник» не помещается. Строка помощника (C): отступ сбоку 8 / 12 / 16, высота 48, при крупном шрифте 56 и кружок 56.</p>
 <div class="phones">
 
+<figure><div class="frame"><div class="ph w320">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-asst"></i><i class="c-notes"></i></div>
+<div class="sheet c-today"><div class="sh-top"><span class="sp">Вторник, 17 ноября</span><span class="ib"><svg class="i"><use href="#search"/></svg></span></div><p class="phrase">Спокойный день.<br>5&nbsp;дел, 1&nbsp;встреча.</p><p class="ttl ttl-only">Сегодня</p></div>
+<div class="pap padC"><div class="sec">План дня<span class="lk">Все дела<svg class="i xs"><use href="#chev"/></svg></span></div>
+<div class="plan">
+<div class="blk done"><span class="t">09:00</span><h4 class="ell">Таблетка от давления</h4></div>
+<div class="now"><span>9:41</span></div>
+<div class="blk main" style="height:40px"><span class="t" style="color:var(--ink)">10:30</span><div class="row"><h4 class="f1 ell">Созвон с бухгалтером</h4><span class="cap">30 мин</span></div></div>
+<div class="free" style="height:120px"><span>свободно 2 ч</span></div>
+<div class="blk" style="height:60px"><span class="t">13:00</span><div class="row"><h4 class="f1 ell">Обед с Ерланом</h4><span class="cap">1 ч</span></div></div>
+<div class="free" style="height:30px"><span>30 мин</span></div>
+<div class="blk" style="height:40px"><span class="t">14:30</span><div class="row"><h4 class="f1 ell">Забрать Алию из школы</h4><span class="cap">30 мин</span></div></div>
+</div>
+<div class="sec">Не забыть<span class="m">2</span></div>
+<div class="ln f0"><span class="ck"></span><span class="f1 ell">Оплатить интернет</span><span class="m">до пт</span></div>
+<div class="ln"><span class="ck"></span><span class="f1 ell">Купить корм коту</span><span class="m">вечером</span></div>
+<div class="sec">Потрачено сегодня<span class="lk tn">3 600 ₸<svg class="i xs"><use href="#chev"/></svg></span></div></div>
+<div class="fstrip" role="group" aria-label="Строка помощника"><span class="adot" aria-hidden="true"></span><span class="f1 ell">Скажите или напишите…</span><span class="rb" role="button" aria-label="Сказать голосом"><svg class="i"><use href="#mic"/></svg></span></div><nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>320 × 640 dp</b>Маленький телефон: только заголовок «Сегодня» и дата. Поля 16, подписи вкладок 11,5. Строка помощника: отступ 8, подсказка 15.</figcaption></figure>
+
+<figure><div class="frame fw390"><div class="ph w390">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-asst"></i><i class="c-notes"></i></div>
+<div class="sheet c-today"><div class="sh-top"><span class="sp">Вторник, 17 ноября</span><span class="ib"><svg class="i"><use href="#search"/></svg></span></div><p class="phrase">Спокойный день.<br>5&nbsp;дел, 1&nbsp;встреча.</p><p class="ttl ttl-only">Сегодня</p></div>
+<div class="pap padC"><div class="sec">План дня<span class="lk">Все дела<svg class="i xs"><use href="#chev"/></svg></span></div>
+<div class="plan">
+<div class="blk done"><span class="t">09:00</span><h4 class="ell">Таблетка от давления</h4></div>
+<div class="now"><span>9:41</span></div>
+<div class="blk main" style="height:40px"><span class="t" style="color:var(--ink)">10:30</span><div class="row"><h4 class="f1 ell">Созвон с бухгалтером</h4><span class="cap">30 мин</span></div></div>
+<div class="free" style="height:120px"><span>свободно 2 ч</span></div>
+<div class="blk" style="height:60px"><span class="t">13:00</span><div class="row"><h4 class="f1 ell">Обед с Ерланом</h4><span class="cap">1 ч</span></div></div>
+<div class="free" style="height:30px"><span>30 мин</span></div>
+<div class="blk" style="height:40px"><span class="t">14:30</span><div class="row"><h4 class="f1 ell">Забрать Алию из школы</h4><span class="cap">30 мин</span></div></div>
+</div>
+<div class="sec">Не забыть<span class="m">2</span></div>
+<div class="ln f0"><span class="ck"></span><span class="f1 ell">Оплатить интернет</span><span class="m">до пт</span></div>
+<div class="ln"><span class="ck"></span><span class="f1 ell">Купить корм коту</span><span class="m">вечером</span></div>
+<div class="sec">Потрачено сегодня<span class="lk tn">3 600 ₸<svg class="i xs"><use href="#chev"/></svg></span></div>
+<div class="sec">Завтра</div>
+<div class="ln f0"><span class="tn" style="width:48px;font:700 14px Onest">10:00</span><span class="f1 ell">Позвонить в ЦОН</span></div></div>
+<div class="fstrip" role="group" aria-label="Строка помощника"><span class="adot" aria-hidden="true"></span><span class="f1 ell">Скажите или напишите…</span><span class="rb" role="button" aria-label="Сказать голосом"><svg class="i"><use href="#mic"/></svg></span></div><nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>390 × 844 dp</b>Обычный размер: фраза в две строки, поля 20. Строка помощника: отступ 12, 48 dp.</figcaption></figure>
+
+<figure><div class="frame fw430"><div class="ph w430">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-asst"></i><i class="c-notes"></i></div>
+<div class="sheet c-today"><div class="sh-top"><span class="sp">Вторник, 17 ноября</span><span class="ib"><svg class="i"><use href="#search"/></svg></span></div><p class="phrase">Спокойный день.<br>5&nbsp;дел, 1&nbsp;встреча.</p><p class="ttl ttl-only">Сегодня</p></div>
+<div class="pap padC"><div class="sec">План дня<span class="lk">Все дела<svg class="i xs"><use href="#chev"/></svg></span></div>
+<div class="plan">
+<div class="blk done"><span class="t">09:00</span><h4 class="ell">Таблетка от давления</h4></div>
+<div class="now"><span>9:41</span></div>
+<div class="blk main" style="height:40px"><span class="t" style="color:var(--ink)">10:30</span><div class="row"><h4 class="f1 ell">Созвон с бухгалтером</h4><span class="cap">30 мин</span></div></div>
+<div class="free" style="height:120px"><span>свободно 2 ч</span></div>
+<div class="blk" style="height:60px"><span class="t">13:00</span><div class="row"><h4 class="f1 ell">Обед с Ерланом</h4><span class="cap">1 ч</span></div></div>
+<div class="free" style="height:30px"><span>30 мин</span></div>
+<div class="blk" style="height:40px"><span class="t">14:30</span><div class="row"><h4 class="f1 ell">Забрать Алию из школы</h4><span class="cap">30 мин</span></div></div>
+</div>
+<div class="sec">Не забыть<span class="m">2</span></div>
+<div class="ln f0"><span class="ck"></span><span class="f1 ell">Оплатить интернет</span><span class="m">до пт</span></div>
+<div class="ln"><span class="ck"></span><span class="f1 ell">Купить корм коту</span><span class="m">вечером</span></div>
+<div class="sec">Потрачено сегодня<span class="lk tn">3 600 ₸<svg class="i xs"><use href="#chev"/></svg></span></div>
+<div class="sec">Завтра</div>
+<div class="ln f0"><span class="tn" style="width:48px;font:700 14px Onest">10:00</span><span class="f1 ell">Позвонить в ЦОН</span></div>
+<div class="ln"><span class="tn" style="width:48px;font:700 14px Onest">16:00</span><span class="f1 ell">Стоматолог</span><span class="m">ждёт ответа</span></div></div>
+<div class="fstrip" role="group" aria-label="Строка помощника"><span class="adot" aria-hidden="true"></span><span class="f1 ell">Скажите или напишите…</span><span class="rb" role="button" aria-label="Сказать голосом"><svg class="i"><use href="#mic"/></svg></span></div><nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>430 × 932 dp</b>Большой телефон: фраза 30, поля 24. Лишнее место уходит в список, а не в пустоту. Строка помощника: отступ 16, высота та же 48 — на большом экране не толстеет.</figcaption></figure>
+
+<figure><div class="frame"><div class="ph lg">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-asst"></i><i class="c-notes"></i></div>
+<div class="sheet c-today"><div class="sh-top"><span class="sp">Вторник, 17 ноября</span><span class="ib"><svg class="i"><use href="#search"/></svg></span></div><p class="ttl">Сегодня</p></div>
+<div class="pap padC">
+<div class="sec">План дня</div>
+<div class="ln f0"><span class="tn" style="width:66px;font-weight:700">10:30</span><span class="f1 ell">Созвон с бухгалтером</span></div>
+<div class="ln"><span class="tn" style="width:66px;font-weight:700;color:var(--ink2)">11:00</span><span class="f1 ell" style="color:var(--ink2)">свободно 2 ч</span></div>
+<div class="ln"><span class="tn" style="width:66px;font-weight:700">13:00</span><span class="f1 ell">Обед с Ерланом</span></div>
+<div class="ln"><span class="tn" style="width:66px;font-weight:700">14:30</span><span class="f1 ell">Забрать Алию</span></div>
+<div class="sec">Не забыть</div>
+<div class="ln f0"><span class="ck"></span><span class="f1 ell">Оплатить интернет</span></div>
+<div class="ln"><span class="ck"></span><span class="f1 ell">Купить корм коту</span></div>
+</div>
+<div class="fstrip" role="group" aria-label="Строка помощника"><span class="adot" aria-hidden="true"></span><span class="f1 ell">Скажите или напишите…</span><span class="rb" role="button" aria-label="Сказать голосом"><svg class="i"><use href="#mic"/></svg></span></div><nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>Крупный шрифт · ×1,35</b>Фразы нет, только заголовок. План дня из блоков становится строками: время + дело, свободное время — строкой. Вкладки те же пять, подписи 13. Строка помощника 56, подсказка 19 (не больше 20), микрофон 44; запас снизу у списка 78.</figcaption></figure>
+<figure><div class="frame"><div class="ph lg">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-asst"></i><i class="c-notes"></i></div>
+<div class="sheet c-today"><div class="sh-top"><span class="sp">Вторник, 17 ноября</span><span class="ib"><svg class="i"><use href="#search"/></svg></span></div><p class="ttl">Сегодня</p></div>
+<div class="pap padC"><div style="margin-top:-60px">
+<div class="sec">План дня</div>
+<div class="ln f0"><span class="tn" style="width:66px;font-weight:700">10:30</span><span class="f1 ell">Созвон с бухгалтером</span></div>
+<div class="ln"><span class="tn" style="width:66px;font-weight:700;color:var(--ink2)">11:00</span><span class="f1 ell" style="color:var(--ink2)">свободно 2 ч</span></div>
+<div class="ln"><span class="tn" style="width:66px;font-weight:700">13:00</span><span class="f1 ell">Обед с Ерланом</span></div>
+<div class="ln"><span class="tn" style="width:66px;font-weight:700">14:30</span><span class="f1 ell">Забрать Алию</span></div>
+<div class="sec">Не забыть</div>
+<div class="ln f0"><span class="ck"></span><span class="f1 ell">Оплатить интернет</span></div>
+<div class="ln"><span class="ck"></span><span class="f1 ell">Купить корм коту</span></div>
+<div class="sec">Потрачено сегодня</div>
+<div class="ln f0"><span class="f1 ell">Кофе</span><b class="am" style="font-size:21px">1 200</b></div>
+</div></div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div><span class="fbub" role="button" aria-label="Помощник. Скажите или напишите"><svg class="i"><use href="#asst"/></svg><span class="adot" aria-hidden="true"></span></span>
+</div></div><figcaption><b>Крупный шрифт · листают</b>При крупном шрифте кружок 56 (вместо 48), той же обводки, с точкой помощника. Сворачивается так же; если включено «Уменьшение движения» — строка и кружок сменяются затуханием 150 мс, без сжатия.</figcaption></figure>
+
+</div>
+</section>
+
+<!-- ============================== ЧАТ НА ДРУГИХ ЭКРАНАХ · ВАРИАНТЫ (Ф-81; выбран C — Ф-82; A и B оставлены для истории) ============================== -->
+<section class="grp" id="g-entry">
+<h2>Чат на других экранах — варианты</h2>
+<p class="lead">Ф-81: помощник должен быть под рукой на каждой вкладке — записать на месте и коротко ответить. Это тот же помощник и та же переписка, что во вкладке «Помощник». Ниже три варианта на одних и тех же экранах: «Сегодня», «Заметки», «Расходы», «Дела». <b>Основатель выбрал C (Ф-82)</b> — он уже стоит на основных экранах и в «Размерах». A и B оставлены здесь для истории, в работу не идут.</p>
+<div class="facts">
+<div class="fact"><h3>A · «Строка, как была» — не выбрано</h3><p>Тонкая строка-лист над вкладками, всегда на месте, с подсказкой для этой вкладки.</p><ul><li><b>Плюс:</b> видно сразу, что сюда можно писать; не закрывает список; одно нажатие до записи. Пожилым понятно: строка всегда в одном месте и с понятной подписью.</li><li><b>Минус:</b> забирает 56 dp высоты на каждом экране; на маленьком телефоне списка видно меньше.</li></ul></div>
+<div class="fact"><h3>B · «Плавающая кнопка» — не выбрано</h3><p>Круглая терракотовая кнопка в углу, по нажатию — мини-чат на полэкрана.</p><ul><li><b>Плюс:</b> экран почти не занят; в мини-чате видно несколько последних сообщений.</li><li><b>Минус:</b> значок без слова — пожилые не догадываются, что это; закрывает правый край строк (суммы); на каждую запись на одно нажатие больше; мини-чат закрывает экран, и «это / здесь» читается хуже.</li></ul></div>
+<div class="fact" style="border-color:var(--pg-ink)"><h3>C · «Строка, которая сворачивается» — выбрано (Ф-82)</h3><p>Строка лежит поверх листа; при прокрутке вниз сжимается в кружок, при остановке или в конце списка — снова строка.</p><ul><li><b>Плюс:</b> в покое — как A, при чтении длинного списка — почти не мешает.</li><li><b>Минус:</b> «прыгает» — пожилых это сбивает; сложнее в разработке; в покое всё же закрывает низ листа.</li></ul></div>
+<div class="fact"><h3>Как было: дизайнер советовал A</h3><p>Для истории. Основатель выбрал C (Ф-82); минусы C закрыты правилами: строка не сворачивается в фокусе, с текстом, при уведомлении и с экранным диктором; в конце списка раскрыта; запас снизу 70. Главная задача строки — записать мелочь за одно действие, десятки раз в день, в том числе людям 60+. Это лучше всего делает строка, которая всегда на месте и подписана словами. Строку не надо прятать при прокрутке: она стоит не на списке, а под ним, поэтому ничего не закрывает. Если основателю жалко 56 dp — запасной вариант C. B не советую: это привычка сайтов, где чат — служба поддержки, а у нас это главный способ записывать.</p></div>
+</div>
+<h3 class="vh" id="g-entry-a">A · «Строка, как была» <span class="no">не выбрано</span></h3>
+<p class="lead">Строка — тонкий лист цвета бумаги на тёмном лотке, между листом с подробностями и вкладками. Слева терракотовая точка — знак помощника (как у «изменил помощник» и «Слушаю»). Микрофон — чёрная кнопка, как все действия. Строка не прячется при прокрутке и ничего не закрывает: лист с подробностями кончается над ней.</p>
+<div class="phones">
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-asst"></i><i class="c-notes"></i></div>
+<div class="sheet c-today"><div class="sh-top"><span class="sp">Вторник, 17 ноября</span><span class="ib"><svg class="i"><use href="#search"/></svg></span></div><p class="phrase">Спокойный день.<br>5&nbsp;дел, 1&nbsp;встреча.</p><p class="ttl ttl-only">Сегодня</p></div>
+<div class="pap"><div class="sec">План дня<span class="lk">Все дела<svg class="i xs"><use href="#chev"/></svg></span></div>
+<div class="plan">
+<div class="blk done"><span class="t">09:00</span><h4 class="ell">Таблетка от давления</h4></div>
+<div class="now"><span>9:41</span></div>
+<div class="blk main" style="height:40px"><span class="t" style="color:var(--ink)">10:30</span><div class="row"><h4 class="f1 ell">Созвон с бухгалтером</h4><span class="cap">30 мин</span></div></div>
+<div class="free" style="height:120px"><span>свободно 2 ч</span></div>
+<div class="blk" style="height:60px"><span class="t">13:00</span><div class="row"><h4 class="f1 ell">Обед с Ерланом</h4><span class="cap">1 ч</span></div></div>
+<div class="free" style="height:30px"><span>30 мин</span></div>
+<div class="blk" style="height:40px"><span class="t">14:30</span><div class="row"><h4 class="f1 ell">Забрать Алию из школы</h4><span class="cap">30 мин</span></div></div>
+</div>
+<div class="sec">Не забыть<span class="m">2</span></div>
+<div class="ln f0"><span class="ck"></span><span class="f1 ell">Оплатить интернет</span><span class="m">до пт</span></div>
+<div class="ln"><span class="ck"></span><span class="f1 ell">Купить корм коту</span><span class="m">вечером</span></div>
+<div class="sec">Потрачено сегодня<span class="lk tn">3 600 ₸<svg class="i xs"><use href="#chev"/></svg></span></div></div>
+<div class="dock"><div class="astr"><span class="adot"></span><span class="f1 ell">Скажите или напишите…</span><span class="rb" aria-label="Голос"><svg class="i"><use href="#mic"/></svg></span></div></div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>A · Сегодня · развёрнут</b>Подсказка «Скажите или напишите…»: на «Сегодня» можно всё — помощник сам разложит. От листа до строки 8 dp лотка, строка 48, вкладки сразу под ней.</figcaption></figure>
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-asst"></i><i class="c-notes"></i></div>
+<div class="sheet min c-today"><div class="strip"><div class="l"><span class="cap" style="color:var(--on2);font-weight:600;padding-left:8px">вт, 17 нояб.</span></div><div class="t">Сегодня</div><div class="r"><span class="ib"><svg class="i"><use href="#search"/></svg></span></div></div></div>
+<div class="pap"><div style="margin-top:-244px"><div class="sec">План дня<span class="lk">Все дела<svg class="i xs"><use href="#chev"/></svg></span></div>
+<div class="plan">
+<div class="blk done"><span class="t">09:00</span><h4 class="ell">Таблетка от давления</h4></div>
+<div class="now"><span>9:41</span></div>
+<div class="blk main" style="height:40px"><span class="t" style="color:var(--ink)">10:30</span><div class="row"><h4 class="f1 ell">Созвон с бухгалтером</h4><span class="cap">30 мин</span></div></div>
+<div class="free" style="height:120px"><span>свободно 2 ч</span></div>
+<div class="blk" style="height:60px"><span class="t">13:00</span><div class="row"><h4 class="f1 ell">Обед с Ерланом</h4><span class="cap">1 ч</span></div></div>
+<div class="free" style="height:30px"><span>30 мин</span></div>
+<div class="blk" style="height:40px"><span class="t">14:30</span><div class="row"><h4 class="f1 ell">Забрать Алию из школы</h4><span class="cap">30 мин</span></div></div>
+</div>
+<div class="sec">Не забыть<span class="m">2</span></div>
+<div class="ln f0"><span class="ck"></span><span class="f1 ell">Оплатить интернет</span><span class="m">до пт</span></div>
+<div class="ln"><span class="ck"></span><span class="f1 ell">Купить корм коту</span><span class="m">вечером</span></div>
+<div class="sec">Потрачено сегодня<span class="lk tn">3 600 ₸<svg class="i xs"><use href="#chev"/></svg></span></div>
+<div class="sec">Завтра<span class="lk">Все дела<svg class="i xs"><use href="#chev"/></svg></span></div>
+<div class="ln f0"><span class="tn" style="width:48px;font:700 14px Onest">10:00</span><span class="f1 ell">Позвонить в ЦОН</span></div>
+<div class="ln"><span class="tn" style="width:48px;font:700 14px Onest">16:00</span><span class="f1 ell">Стоматолог</span><span class="m">ждёт ответа</span></div>
+</div></div>
+<div class="dock"><div class="astr"><span class="adot"></span><span class="f1 ell">Скажите или напишите…</span><span class="rb" aria-label="Голос"><svg class="i"><use href="#mic"/></svg></span></div></div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>A · Сегодня · после прокрутки</b>Лист свернулся, а строка осталась на месте — она не над списком, а под ним, поэтому ничего не закрывает и не прыгает.</figcaption></figure>
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-exp"></i><i class="c-today"></i></div>
+<div class="sheet c-notes"><div class="sh-top"><span class="sp">128 заметок</span><span class="ib"><svg class="i"><use href="#search"/></svg></span><span class="ib"><svg class="i"><use href="#plus"/></svg></span></div><p class="ttl">Заметки</p></div>
+<div class="pap" style="padding-left:14px;padding-right:14px">
+<div class="chips" style="margin-bottom:12px"><span class="chip on">Все</span><span class="chip">Важные</span><span class="chip"><svg class="i xs"><use href="#film"/></svg>Из материала</span></div>
+<div style="display:flex;gap:8px;align-items:flex-start">
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
+<div class="stk st-sand"><h4>Код домофона</h4><p class="tn" style="font:800 26px/1.15 Onest;margin-top:6px">4512</p><p class="cap">подъезд 3, кв. 47</p></div>
+<div class="stk st-paper"><span class="fold"></span><h4 style="padding-right:14px">Алматы: что посмотреть</h4><span class="chg" style="display:flex;margin-top:6px">изменил помощник</span><p class="small" style="margin-top:4px;color:var(--stInk2)">Медеу — после 16:00, Кок-Тобе, Зелёный базар</p></div>
+<div class="stk st-mist"><h4>Wi-Fi на даче</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Dacha_5G<br>sunflower2024</p><p class="cap" style="margin-top:6px">10 нояб.</p></div>
+</div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
+<div class="stk st-rose"><h4>Подарки на НГ</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Алие — коньки<br>Папе — термос</p><p class="cap" style="margin-top:6px">2 нояб.</p></div>
+<div class="stk st-graph"><h4>Размер шин</h4><p class="tn" style="font:800 20px/1.2 Onest;margin-top:6px">205/55 R16</p></div>
+<div class="stk st-paper"><h4>Стамбул</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">23 совета · кафе, музеи</p><p class="cap row" style="gap:5px;margin-top:6px"><svg class="i xs"><use href="#film"/></svg>из материала</p></div>
+<div class="stk st-sand"><h4>Мастер по стиралке</h4><p class="small tn" style="margin-top:4px;color:var(--stInk2)">Ержан<br>+7 701 455 12 90</p></div>
+</div>
+</div>
+</div>
+<div class="dock"><div class="astr"><span class="adot"></span><span class="f1 ell">Сохранить в Заметки…</span><span class="rb" aria-label="Голос"><svg class="i"><use href="#mic"/></svg></span></div></div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes on"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>A · Заметки</b>«Сохранить в Заметки…»: всё сказанное здесь ляжет заметкой, если не похоже явно на трату или дело.</figcaption></figure>
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-tasks"></i><i class="c-asst"></i></div>
+<div class="sheet c-exp"><div class="sh-top"><span class="sp row" style="gap:2px">Ноябрь<svg class="i s"><use href="#down"/></svg></span><span class="ib"><svg class="i"><use href="#search"/></svg></span></div>
+<p class="big" style="margin-top:4px">184 350<span class="cur">₸</span></p>
+<p class="phrase" style="font-size:calc(var(--phrase) - 4px);margin-top:10px">Успеваете: ещё 65&nbsp;650&nbsp;₸</p>
+<p class="sub">из 250 000 ₸ · до конца месяца 13 дней</p></div>
+<div class="pap">
+<div style="display:flex;gap:3px;height:30px"><i class="k-food" style="flex:62.4;background:var(--k);border-radius:6px"></i><i class="k-home" style="flex:41.2;background:var(--k);border-radius:6px"></i><i class="k-trans" style="flex:28.9;background:var(--k);border-radius:6px"></i><i class="k-cafe" style="flex:20.8;background:var(--k);border-radius:6px"></i><i class="k-health" style="flex:18.75;background:var(--k);border-radius:6px"></i><i class="k-kids" style="flex:12.3;background:var(--k);border-radius:6px"></i><i style="flex:65.65;border-radius:6px;box-shadow:inset 0 0 0 1.5px var(--line2);background:repeating-linear-gradient(135deg,transparent 0 6px,var(--line) 6px 7px)"></i></div>
+<p class="cap" style="margin:6px 0 4px">полоски — категории в масштабе, штриховка — ещё можно потратить</p>
+<div class="ln f0"><span class="kq k-food"></span><span class="f1">Продукты</span><b class="am">62 400</b></div>
+<div class="ln"><span class="kq k-home"></span><span class="f1">Дом</span><b class="am">41 200</b></div>
+<div class="ln"><span class="kq k-trans"></span><span class="f1">Транспорт</span><b class="am">28 900</b></div>
+<div class="ln"><span class="kq k-cafe"></span><span class="f1">Кафе</span><b class="am">20 800</b></div>
+<div class="ln"><span class="kq k-health"></span><span class="f1">Здоровье</span><b class="am">18 750</b></div>
+<div class="ln"><span class="kq k-kids"></span><span class="f1">Дети</span><b class="am">12 300</b></div>
+</div>
+<div class="dock"><div class="astr"><span class="adot"></span><span class="f1 ell">Записать трату…</span><span class="rb" aria-label="Голос"><svg class="i"><use href="#mic"/></svg></span></div></div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp on"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>A · Расходы · месяц</b>«Записать трату…»: «кофе 1 200» сразу ляжет тратой. Зелёный лист и строка не спорят: между ними полоска лотка и светлый лист.</figcaption></figure>
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div>
+<div class="sheet c-tasks"><div class="sh-top"><span class="back"><svg class="i"><use href="#back"/></svg>Сегодня</span><span class="sp"></span><span class="ib"><svg class="i"><use href="#plus"/></svg></span></div><p class="ttl">Дела</p><p class="sub">Вторник, 17 ноября · 4 на сегодня</p></div>
+<div class="pap">
+<div class="sec">Сегодня<span class="m">1 из 4</span></div>
+<div class="ln f0"><span class="ck ok"><svg class="i xs" style="stroke-width:3"><use href="#check"/></svg></span><span class="f1 ell" style="color:var(--ink3);text-decoration:line-through">Таблетка от давления</span><span class="m">09:00</span></div>
+<div class="ln"><span class="ck"></span><span class="f1 ell">Созвон с бухгалтером</span><span class="m">10:30</span></div>
+<div class="ln" style="padding:8px 0"><span class="ck"></span><span class="f1"><span style="display:block">Оплатить интернет</span><span class="chg" style="margin-top:4px">изменил помощник · срок</span></span><span class="m">до пт</span></div>
+<div class="ln"><span class="ck"></span><span class="f1 ell">Забрать Алию из школы</span><span class="m">14:30</span></div>
+<div class="sec">Завтра<span class="m">2</span></div>
+<div class="ln f0"><span class="ck"></span><span class="f1 ell">Позвонить в ЦОН</span><span class="m">10:00</span></div>
+<div class="ln"><span class="ck wait"></span><span class="f1 ell">Записаться к стоматологу</span><span class="m">ждёт ответа</span></div>
+<div class="sec">Без срока</div>
+<div class="ln f0"><span class="ck"></span><span class="f1 ell">Поменять масло в машине</span></div>
+</div>
+<div class="dock"><div class="astr"><span class="adot"></span><span class="f1 ell">Добавить дело…</span><span class="rb" aria-label="Голос"><svg class="i"><use href="#mic"/></svg></span></div></div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>A · Дела</b>«Добавить дело…»: «завтра в 10 ЦОН» — дело со сроком. Вкладка остаётся «Сегодня», откуда пришли.</figcaption></figure>
+</div>
+<h4 class="vs">Строка помощника · состояния</h4>
+<div class="phones">
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div>
+<div class="sheet min c-exp"><div class="strip"><div class="l"><span class="cap" style="color:var(--on2);font-weight:600;padding-left:8px">ноябрь</span></div><div class="t">Расходы</div><div class="r"><span class="tn" style="font:700 15px Onest;padding-right:8px">184 350 ₸</span></div></div></div>
+<div class="pap">
+<div style="display:flex;gap:3px;height:30px"><i class="k-food" style="flex:62.4;background:var(--k);border-radius:6px"></i><i class="k-home" style="flex:41.2;background:var(--k);border-radius:6px"></i><i class="k-trans" style="flex:28.9;background:var(--k);border-radius:6px"></i><i class="k-cafe" style="flex:20.8;background:var(--k);border-radius:6px"></i><i class="k-health" style="flex:18.75;background:var(--k);border-radius:6px"></i><i class="k-kids" style="flex:12.3;background:var(--k);border-radius:6px"></i><i style="flex:65.65;border-radius:6px;box-shadow:inset 0 0 0 1.5px var(--line2);background:repeating-linear-gradient(135deg,transparent 0 6px,var(--line) 6px 7px)"></i></div>
+<p class="cap" style="margin:6px 0 4px">полоски — категории в масштабе, штриховка — ещё можно потратить</p>
+<div class="ln f0"><span class="kq k-food"></span><span class="f1">Продукты</span><b class="am">62 400</b></div>
+<div class="ln"><span class="kq k-home"></span><span class="f1">Дом</span><b class="am">41 200</b></div>
+<div class="ln"><span class="kq k-trans"></span><span class="f1">Транспорт</span><b class="am">28 900</b></div>
+<div class="ln"><span class="kq k-cafe"></span><span class="f1">Кафе</span><b class="am">20 800</b></div>
+<div class="ln"><span class="kq k-health"></span><span class="f1">Здоровье</span><b class="am">18 750</b></div>
+<div class="ln"><span class="kq k-kids"></span><span class="f1">Дети</span><b class="am">12 300</b></div>
+</div>
+<div class="dock"><div class="dest"><span class="ptab c-exp" style="width:12px;height:16px"></span>Ляжет в Расходы · Кафе</div><div class="astr typing"><span class="adot"></span><span class="f1 ell">кофе 1 200<span class="caret"></span></span><span class="rb" aria-label="Записать"><svg class="i"><use href="#up"/></svg></span></div></div>
+<div class="kb" aria-hidden="true"><div class="ksug"><span>кофе</span><span>кофе 1 200</span><span>кофейня</span></div><div class="kr"><span>й</span><span>ц</span><span>у</span><span>к</span><span>е</span><span>н</span><span>г</span><span>ш</span><span>щ</span><span>з</span><span>х</span></div><div class="kr"><span>ф</span><span>ы</span><span>в</span><span>а</span><span>п</span><span>р</span><span>о</span><span>л</span><span>д</span><span>ж</span><span>э</span></div><div class="kr"><span class="w">⇧</span><span>я</span><span>ч</span><span>с</span><span>м</span><span>и</span><span>т</span><span>ь</span><span>б</span><span>ю</span><span class="w">⌫</span></div><div class="kr"><span class="w2">123</span><span class="w2">🌐</span><span class="sp">пробел</span><span class="w2">⏎</span></div></div><div class="home kbh"></div>
+</div></div><figcaption><b>A · фокус, клавиатура</b>Строка поднимается над клавиатурой (8 dp зазор), вкладки уходят под клавиатуру, цветной лист сворачивается — список остаётся виден. Над строкой — куда ляжет запись, если это понял код (Ф-78). Микрофон сменяется стрелкой «записать».</figcaption></figure>
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-exp"></i><i class="c-today"></i></div>
+<div class="sheet c-notes"><div class="sh-top"><span class="sp">128 заметок</span><span class="ib"><svg class="i"><use href="#search"/></svg></span><span class="ib"><svg class="i"><use href="#plus"/></svg></span></div><p class="ttl">Заметки</p></div>
+<div class="pap" style="padding-left:14px;padding-right:14px">
+<div class="chips" style="margin-bottom:12px"><span class="chip on">Все</span><span class="chip">Важные</span><span class="chip"><svg class="i xs"><use href="#film"/></svg>Из материала</span></div>
+<div style="display:flex;gap:8px;align-items:flex-start">
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
+<div class="stk st-paper" style="box-shadow:inset 0 0 0 2px var(--asst)"><h4>Пароль от роутера</h4><p class="small tn" style="margin-top:4px;color:var(--stInk2)">ivanova2024</p><p class="cap" style="margin-top:6px">только что</p></div>
+<div class="stk st-sand"><h4>Код домофона</h4><p class="tn" style="font:800 26px/1.15 Onest;margin-top:6px">4512</p><p class="cap">подъезд 3, кв. 47</p></div>
+<div class="stk st-paper"><span class="fold"></span><h4 style="padding-right:14px">Алматы: что посмотреть</h4><span class="chg" style="display:flex;margin-top:6px">изменил помощник</span><p class="small" style="margin-top:4px;color:var(--stInk2)">Медеу — после 16:00, Кок-Тобе, Зелёный базар</p></div>
+<div class="stk st-mist"><h4>Wi-Fi на даче</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Dacha_5G<br>sunflower2024</p><p class="cap" style="margin-top:6px">10 нояб.</p></div>
+</div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
+<div class="stk st-rose"><h4>Подарки на НГ</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Алие — коньки<br>Папе — термос</p><p class="cap" style="margin-top:6px">2 нояб.</p></div>
+<div class="stk st-graph"><h4>Размер шин</h4><p class="tn" style="font:800 20px/1.2 Onest;margin-top:6px">205/55 R16</p></div>
+<div class="stk st-paper"><h4>Стамбул</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">23 совета · кафе, музеи</p><p class="cap row" style="gap:5px;margin-top:6px"><svg class="i xs"><use href="#film"/></svg>из материала</p></div>
+<div class="stk st-sand"><h4>Мастер по стиралке</h4><p class="small tn" style="margin-top:4px;color:var(--stInk2)">Ержан<br>+7 701 455 12 90</p></div>
+</div>
+</div>
+</div>
+<div class="dock"><div class="astr"><span class="adot"></span><span class="f1 ell">Сохранить в Заметки…</span><span class="rb" aria-label="Голос"><svg class="i"><use href="#mic"/></svg></span></div></div>
+<div class="notice atstrip"><span class="tm"><i></i><i></i><i class="o"></i></span><span class="f1">Записал в Заметки</span><span class="act asst">Отменить</span></div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes on"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>A · записал на месте</b>Уведомление встаёт прямо над строкой — туда, куда человек смотрит, 3 с, «Отменить» терракотовый. Новая запись 1,5 с обведена терракотой. Нажатие на уведомление открывает запись. Сказанное попадает и в переписку «Помощника».</figcaption></figure>
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-tasks"></i><i class="c-asst"></i></div>
+<div class="sheet c-exp"><div class="sh-top"><span class="sp row" style="gap:2px">Ноябрь<svg class="i s"><use href="#down"/></svg></span><span class="ib"><svg class="i"><use href="#search"/></svg></span></div>
+<p class="big" style="margin-top:4px">184 350<span class="cur">₸</span></p>
+<p class="phrase" style="font-size:calc(var(--phrase) - 4px);margin-top:10px">Успеваете: ещё 65&nbsp;650&nbsp;₸</p>
+<p class="sub">из 250 000 ₸ · до конца месяца 13 дней</p></div>
+<div class="pap">
+<div style="display:flex;gap:3px;height:30px"><i class="k-food" style="flex:62.4;background:var(--k);border-radius:6px"></i><i class="k-home" style="flex:41.2;background:var(--k);border-radius:6px"></i><i class="k-trans" style="flex:28.9;background:var(--k);border-radius:6px"></i><i class="k-cafe" style="flex:20.8;background:var(--k);border-radius:6px"></i><i class="k-health" style="flex:18.75;background:var(--k);border-radius:6px"></i><i class="k-kids" style="flex:12.3;background:var(--k);border-radius:6px"></i><i style="flex:65.65;border-radius:6px;box-shadow:inset 0 0 0 1.5px var(--line2);background:repeating-linear-gradient(135deg,transparent 0 6px,var(--line) 6px 7px)"></i></div>
+<p class="cap" style="margin:6px 0 4px">полоски — категории в масштабе, штриховка — ещё можно потратить</p>
+<div class="ln f0"><span class="kq k-food"></span><span class="f1">Продукты</span><b class="am">62 400</b></div>
+<div class="ln"><span class="kq k-home"></span><span class="f1">Дом</span><b class="am">41 200</b></div>
+<div class="ln"><span class="kq k-trans"></span><span class="f1">Транспорт</span><b class="am">28 900</b></div>
+<div class="ln"><span class="kq k-cafe"></span><span class="f1">Кафе</span><b class="am">20 800</b></div>
+<div class="ln"><span class="kq k-health"></span><span class="f1">Здоровье</span><b class="am">18 750</b></div>
+<div class="ln"><span class="kq k-kids"></span><span class="f1">Дети</span><b class="am">12 300</b></div>
+</div>
+<div class="dock"><div class="astr"><span class="adot"></span><span class="f1 ell">Записать трату…</span><span class="rb" aria-label="Голос"><svg class="i"><use href="#mic"/></svg></span></div></div>
+<div class="qa"><p class="cap">Вы спросили: «сколько ушло на такси в ноябре?»</p><p class="qa-t">На такси — <b class="tn">11 400 ₸</b>, 6 поездок. Весь транспорт — <b class="tn">28 900 ₸</b>.</p><p class="cap" style="margin-top:4px">Расходы · Транспорт ›</p><div class="qa-f"><span class="lnk">Продолжить в чате</span><span class="ib" aria-label="Закрыть" style="color:var(--ink2);margin-right:-10px"><svg class="i s"><use href="#x"/></svg></span></div></div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp on"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>A · ответ на вопрос</b>Короткий ответ — карточкой над строкой, не больше 3 строк, источник ссылкой. «Продолжить в чате» открывает «Помощника» с этим вопросом и ответом. Карточка закрывается крестиком, смахиванием вниз или касанием мимо.</figcaption></figure>
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div>
+<div class="sheet c-tasks"><div class="sh-top"><span class="back"><svg class="i"><use href="#back"/></svg>Сегодня</span><span class="sp"></span><span class="ib"><svg class="i"><use href="#plus"/></svg></span></div><p class="ttl">Дела</p><p class="sub">Вторник, 17 ноября · 4 на сегодня</p></div>
+<div class="pap">
+<div class="sec">Сегодня<span class="m">1 из 4</span></div>
+<div class="ln f0"><span class="ck ok"><svg class="i xs" style="stroke-width:3"><use href="#check"/></svg></span><span class="f1 ell" style="color:var(--ink3);text-decoration:line-through">Таблетка от давления</span><span class="m">09:00</span></div>
+<div class="ln"><span class="ck"></span><span class="f1 ell">Созвон с бухгалтером</span><span class="m">10:30</span></div>
+<div class="ln" style="padding:8px 0"><span class="ck"></span><span class="f1"><span style="display:block">Оплатить интернет</span><span class="chg" style="margin-top:4px">изменил помощник · срок</span></span><span class="m">до пт</span></div>
+<div class="ln"><span class="ck"></span><span class="f1 ell">Забрать Алию из школы</span><span class="m">14:30</span></div>
+<div class="sec">Завтра<span class="m">2</span></div>
+<div class="ln f0"><span class="ck"></span><span class="f1 ell">Позвонить в ЦОН</span><span class="m">10:00</span></div>
+<div class="ln"><span class="ck wait"></span><span class="f1 ell">Записаться к стоматологу</span><span class="m">ждёт ответа</span></div>
+<div class="sec">Без срока</div>
+<div class="ln f0"><span class="ck"></span><span class="f1 ell">Поменять масло в машине</span></div>
+</div>
+<div class="dock"><div class="astr voice"><span class="ib ring" aria-label="Отмена" style="width:36px;height:36px;color:var(--ink)"><svg class="i s"><use href="#x"/></svg></span><span class="f1"><span class="vl"><span class="adot"></span>Слушаю<span class="wv" aria-hidden="true"><i style="height:6px"></i><i style="height:14px"></i><i style="height:9px"></i><i style="height:18px"></i><i style="height:11px"></i><i style="height:5px"></i><i style="height:13px"></i></span></span><span class="vt">завтра в десять позвонить <span style="color:var(--ink3)">в ЦОН</span></span></span><span class="rb" aria-label="Готово"><svg class="i"><use href="#check"/></svg></span></div></div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>A · голос</b>Нажатие на микрофон: строка растёт до двух строк — «Слушаю», волна и текст по ходу речи. Слева «Отмена», справа «Готово». Экран не меняется, вкладки на месте.</figcaption></figure>
+</div>
+<h4 class="vs">Строка помощника · размеры</h4>
+<div class="phones">
 <figure><div class="frame"><div class="ph w320">
 <div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-asst"></i><i class="c-notes"></i></div>
 <div class="sheet c-today"><div class="sh-top"><span class="sp">Вторник, 17 ноября</span><span class="ib"><svg class="i"><use href="#search"/></svg></span></div><p class="phrase">Спокойный день.<br>5&nbsp;дел, 1&nbsp;встреча.</p><p class="ttl ttl-only">Сегодня</p></div>
@@ -888,31 +1321,9 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 <div class="ln f0"><span class="ck"></span><span class="f1 ell">Оплатить интернет</span><span class="m">до пт</span></div>
 <div class="ln"><span class="ck"></span><span class="f1 ell">Купить корм коту</span><span class="m">вечером</span></div>
 <div class="sec">Потрачено сегодня<span class="lk tn">3 600 ₸<svg class="i xs"><use href="#chev"/></svg></span></div></div>
+<div class="dock"><div class="astr"><span class="adot"></span><span class="f1 ell">Скажите или напишите…</span><span class="rb" aria-label="Голос"><svg class="i"><use href="#mic"/></svg></span></div></div>
 <nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
-</div></div><figcaption><b>320 × 640 dp</b>Маленький телефон: только заголовок «Сегодня» и дата. Поля 16, подписи вкладок 11,5.</figcaption></figure>
-
-<figure><div class="frame fw390"><div class="ph w390">
-<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-asst"></i><i class="c-notes"></i></div>
-<div class="sheet c-today"><div class="sh-top"><span class="sp">Вторник, 17 ноября</span><span class="ib"><svg class="i"><use href="#search"/></svg></span></div><p class="phrase">Спокойный день.<br>5&nbsp;дел, 1&nbsp;встреча.</p><p class="ttl ttl-only">Сегодня</p></div>
-<div class="pap"><div class="sec">План дня<span class="lk">Все дела<svg class="i xs"><use href="#chev"/></svg></span></div>
-<div class="plan">
-<div class="blk done"><span class="t">09:00</span><h4 class="ell">Таблетка от давления</h4></div>
-<div class="now"><span>9:41</span></div>
-<div class="blk main" style="height:40px"><span class="t" style="color:var(--ink)">10:30</span><div class="row"><h4 class="f1 ell">Созвон с бухгалтером</h4><span class="cap">30 мин</span></div></div>
-<div class="free" style="height:120px"><span>свободно 2 ч</span></div>
-<div class="blk" style="height:60px"><span class="t">13:00</span><div class="row"><h4 class="f1 ell">Обед с Ерланом</h4><span class="cap">1 ч</span></div></div>
-<div class="free" style="height:30px"><span>30 мин</span></div>
-<div class="blk" style="height:40px"><span class="t">14:30</span><div class="row"><h4 class="f1 ell">Забрать Алию из школы</h4><span class="cap">30 мин</span></div></div>
-</div>
-<div class="sec">Не забыть<span class="m">2</span></div>
-<div class="ln f0"><span class="ck"></span><span class="f1 ell">Оплатить интернет</span><span class="m">до пт</span></div>
-<div class="ln"><span class="ck"></span><span class="f1 ell">Купить корм коту</span><span class="m">вечером</span></div>
-<div class="sec">Потрачено сегодня<span class="lk tn">3 600 ₸<svg class="i xs"><use href="#chev"/></svg></span></div>
-<div class="sec">Завтра</div>
-<div class="ln f0"><span class="tn" style="width:48px;font:700 14px Onest">10:00</span><span class="f1 ell">Позвонить в ЦОН</span></div></div>
-<nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
-</div></div><figcaption><b>390 × 844 dp</b>Обычный размер: фраза в две строки, поля 20.</figcaption></figure>
-
+</div></div><figcaption><b>A · 320 × 640</b>Отступ строки от краёв 8 (вместо 12), текст 15. Лист с подробностями кончается над строкой, поэтому она ничего не закрывает; в конце прокрутки последняя строка видна целиком.</figcaption></figure>
 <figure><div class="frame fw430"><div class="ph w430">
 <div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-asst"></i><i class="c-notes"></i></div>
 <div class="sheet c-today"><div class="sh-top"><span class="sp">Вторник, 17 ноября</span><span class="ib"><svg class="i"><use href="#search"/></svg></span></div><p class="phrase">Спокойный день.<br>5&nbsp;дел, 1&nbsp;встреча.</p><p class="ttl ttl-only">Сегодня</p></div>
@@ -933,9 +1344,9 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 <div class="sec">Завтра</div>
 <div class="ln f0"><span class="tn" style="width:48px;font:700 14px Onest">10:00</span><span class="f1 ell">Позвонить в ЦОН</span></div>
 <div class="ln"><span class="tn" style="width:48px;font:700 14px Onest">16:00</span><span class="f1 ell">Стоматолог</span><span class="m">ждёт ответа</span></div></div>
+<div class="dock"><div class="astr"><span class="adot"></span><span class="f1 ell">Скажите или напишите…</span><span class="rb" aria-label="Голос"><svg class="i"><use href="#mic"/></svg></span></div></div>
 <nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
-</div></div><figcaption><b>430 × 932 dp</b>Большой телефон: фраза 30, поля 24. Лишнее место уходит в список, а не в пустоту.</figcaption></figure>
-
+</div></div><figcaption><b>A · 430 × 932</b>Отступ 16, высота та же 48: на большом экране строка не толстеет.</figcaption></figure>
 <figure><div class="frame"><div class="ph lg">
 <div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-asst"></i><i class="c-notes"></i></div>
 <div class="sheet c-today"><div class="sh-top"><span class="sp">Вторник, 17 ноября</span><span class="ib"><svg class="i"><use href="#search"/></svg></span></div><p class="ttl">Сегодня</p></div>
@@ -949,9 +1360,272 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 <div class="ln f0"><span class="ck"></span><span class="f1 ell">Оплатить интернет</span></div>
 <div class="ln"><span class="ck"></span><span class="f1 ell">Купить корм коту</span></div>
 </div>
+<div class="dock"><div class="astr"><span class="adot"></span><span class="f1 ell">Скажите или напишите…</span><span class="rb" aria-label="Голос"><svg class="i"><use href="#mic"/></svg></span></div></div>
 <nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
-</div></div><figcaption><b>Крупный шрифт · ×1,35</b>Фразы нет, только заголовок. План дня из блоков становится строками: время + дело, свободное время — строкой. Вкладки те же пять, подписи 13.</figcaption></figure>
-
+</div></div><figcaption><b>A · крупный шрифт ×1,35</b>Строка 56, текст 19 (не больше 20), микрофон 44. Подсказка в одну строку, длинная — с многоточием.</figcaption></figure>
+</div>
+<h3 class="vh" id="g-entry-b">B · «Плавающая кнопка» <span class="no">не выбрано</span></h3>
+<p class="lead">Круглая кнопка 56 справа, на 14 dp выше вкладок. Она терракотовая: это сам помощник (как его вкладка), а не обычное действие. При прокрутке вниз уезжает за правый край, при остановке через 0,4 с или прокрутке вверх — возвращается. Счётчиков нет: в мини-чате нечего «непрочитанного». Подсказка словами — только первые 3 раза.</p>
+<div class="phones">
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-asst"></i><i class="c-notes"></i></div>
+<div class="sheet c-today"><div class="sh-top"><span class="sp">Вторник, 17 ноября</span><span class="ib"><svg class="i"><use href="#search"/></svg></span></div><p class="phrase">Спокойный день.<br>5&nbsp;дел, 1&nbsp;встреча.</p><p class="ttl ttl-only">Сегодня</p></div>
+<div class="pap"><div class="sec">План дня<span class="lk">Все дела<svg class="i xs"><use href="#chev"/></svg></span></div>
+<div class="plan">
+<div class="blk done"><span class="t">09:00</span><h4 class="ell">Таблетка от давления</h4></div>
+<div class="now"><span>9:41</span></div>
+<div class="blk main" style="height:40px"><span class="t" style="color:var(--ink)">10:30</span><div class="row"><h4 class="f1 ell">Созвон с бухгалтером</h4><span class="cap">30 мин</span></div></div>
+<div class="free" style="height:120px"><span>свободно 2 ч</span></div>
+<div class="blk" style="height:60px"><span class="t">13:00</span><div class="row"><h4 class="f1 ell">Обед с Ерланом</h4><span class="cap">1 ч</span></div></div>
+<div class="free" style="height:30px"><span>30 мин</span></div>
+<div class="blk" style="height:40px"><span class="t">14:30</span><div class="row"><h4 class="f1 ell">Забрать Алию из школы</h4><span class="cap">30 мин</span></div></div>
+</div>
+<div class="sec">Не забыть<span class="m">2</span></div>
+<div class="ln f0"><span class="ck"></span><span class="f1 ell">Оплатить интернет</span><span class="m">до пт</span></div>
+<div class="ln"><span class="ck"></span><span class="f1 ell">Купить корм коту</span><span class="m">вечером</span></div>
+<div class="sec">Потрачено сегодня<span class="lk tn">3 600 ₸<svg class="i xs"><use href="#chev"/></svg></span></div></div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div><span class="fab" aria-label="Помощник"><svg class="i l"><use href="#asst"/></svg></span><span class="fabtip">Запишите сюда, не уходя</span>
+</div></div><figcaption><b>B · Сегодня · первый раз</b>Подсказка рядом с кнопкой — первые 3 запуска, потом только значок. Кнопка лежит на светлом листе и закрывает его правый нижний угол.</figcaption></figure>
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-exp"></i><i class="c-today"></i></div>
+<div class="sheet c-notes"><div class="sh-top"><span class="sp">128 заметок</span><span class="ib"><svg class="i"><use href="#search"/></svg></span><span class="ib"><svg class="i"><use href="#plus"/></svg></span></div><p class="ttl">Заметки</p></div>
+<div class="pap" style="padding-left:14px;padding-right:14px">
+<div class="chips" style="margin-bottom:12px"><span class="chip on">Все</span><span class="chip">Важные</span><span class="chip"><svg class="i xs"><use href="#film"/></svg>Из материала</span></div>
+<div style="display:flex;gap:8px;align-items:flex-start">
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
+<div class="stk st-sand"><h4>Код домофона</h4><p class="tn" style="font:800 26px/1.15 Onest;margin-top:6px">4512</p><p class="cap">подъезд 3, кв. 47</p></div>
+<div class="stk st-paper"><span class="fold"></span><h4 style="padding-right:14px">Алматы: что посмотреть</h4><span class="chg" style="display:flex;margin-top:6px">изменил помощник</span><p class="small" style="margin-top:4px;color:var(--stInk2)">Медеу — после 16:00, Кок-Тобе, Зелёный базар</p></div>
+<div class="stk st-mist"><h4>Wi-Fi на даче</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Dacha_5G<br>sunflower2024</p><p class="cap" style="margin-top:6px">10 нояб.</p></div>
+</div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
+<div class="stk st-rose"><h4>Подарки на НГ</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Алие — коньки<br>Папе — термос</p><p class="cap" style="margin-top:6px">2 нояб.</p></div>
+<div class="stk st-graph"><h4>Размер шин</h4><p class="tn" style="font:800 20px/1.2 Onest;margin-top:6px">205/55 R16</p></div>
+<div class="stk st-paper"><h4>Стамбул</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">23 совета · кафе, музеи</p><p class="cap row" style="gap:5px;margin-top:6px"><svg class="i xs"><use href="#film"/></svg>из материала</p></div>
+<div class="stk st-sand"><h4>Мастер по стиралке</h4><p class="small tn" style="margin-top:4px;color:var(--stInk2)">Ержан<br>+7 701 455 12 90</p></div>
+</div>
+</div>
+</div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes on"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div><span class="fab" aria-label="Помощник"><svg class="i l"><use href="#asst"/></svg></span>
+</div></div><figcaption><b>B · Заметки</b>Кнопка закрывает часть стикера справа внизу — прокрутка до конца это исправляет (у списка запас снизу 84 dp).</figcaption></figure>
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-tasks"></i><i class="c-asst"></i></div>
+<div class="sheet c-exp"><div class="sh-top"><span class="sp row" style="gap:2px">Ноябрь<svg class="i s"><use href="#down"/></svg></span><span class="ib"><svg class="i"><use href="#search"/></svg></span></div>
+<p class="big" style="margin-top:4px">184 350<span class="cur">₸</span></p>
+<p class="phrase" style="font-size:calc(var(--phrase) - 4px);margin-top:10px">Успеваете: ещё 65&nbsp;650&nbsp;₸</p>
+<p class="sub">из 250 000 ₸ · до конца месяца 13 дней</p></div>
+<div class="pap end padB"><div>
+<div style="display:flex;gap:3px;height:30px"><i class="k-food" style="flex:62.4;background:var(--k);border-radius:6px"></i><i class="k-home" style="flex:41.2;background:var(--k);border-radius:6px"></i><i class="k-trans" style="flex:28.9;background:var(--k);border-radius:6px"></i><i class="k-cafe" style="flex:20.8;background:var(--k);border-radius:6px"></i><i class="k-health" style="flex:18.75;background:var(--k);border-radius:6px"></i><i class="k-kids" style="flex:12.3;background:var(--k);border-radius:6px"></i><i style="flex:65.65;border-radius:6px;box-shadow:inset 0 0 0 1.5px var(--line2);background:repeating-linear-gradient(135deg,transparent 0 6px,var(--line) 6px 7px)"></i></div>
+<p class="cap" style="margin:6px 0 4px">полоски — категории в масштабе, штриховка — ещё можно потратить</p>
+<div class="ln f0"><span class="kq k-food"></span><span class="f1">Продукты</span><b class="am">62 400</b></div>
+<div class="ln"><span class="kq k-home"></span><span class="f1">Дом</span><b class="am">41 200</b></div>
+<div class="ln"><span class="kq k-trans"></span><span class="f1">Транспорт</span><b class="am">28 900</b></div>
+<div class="ln"><span class="kq k-cafe"></span><span class="f1">Кафе</span><b class="am">20 800</b></div>
+<div class="ln"><span class="kq k-health"></span><span class="f1">Здоровье</span><b class="am">18 750</b></div>
+<div class="ln"><span class="kq k-kids"></span><span class="f1">Дети</span><b class="am">12 300</b></div>
+</div></div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp on"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div><span class="fab" aria-label="Помощник"><svg class="i l"><use href="#asst"/></svg></span>
+</div></div><figcaption><b>B · Расходы · конец списка</b>В конце прокрутки последняя строка встаёт над кнопкой: запас снизу = 56 + 14 + 14 = 84 dp. Пока список не долистан, кнопка закрывает суммы справа.</figcaption></figure>
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div>
+<div class="sheet c-tasks"><div class="sh-top"><span class="back"><svg class="i"><use href="#back"/></svg>Сегодня</span><span class="sp"></span><span class="ib"><svg class="i"><use href="#plus"/></svg></span></div><p class="ttl">Дела</p><p class="sub">Вторник, 17 ноября · 4 на сегодня</p></div>
+<div class="pap">
+<div class="sec">Сегодня<span class="m">1 из 4</span></div>
+<div class="ln f0"><span class="ck ok"><svg class="i xs" style="stroke-width:3"><use href="#check"/></svg></span><span class="f1 ell" style="color:var(--ink3);text-decoration:line-through">Таблетка от давления</span><span class="m">09:00</span></div>
+<div class="ln"><span class="ck"></span><span class="f1 ell">Созвон с бухгалтером</span><span class="m">10:30</span></div>
+<div class="ln" style="padding:8px 0"><span class="ck"></span><span class="f1"><span style="display:block">Оплатить интернет</span><span class="chg" style="margin-top:4px">изменил помощник · срок</span></span><span class="m">до пт</span></div>
+<div class="ln"><span class="ck"></span><span class="f1 ell">Забрать Алию из школы</span><span class="m">14:30</span></div>
+<div class="sec">Завтра<span class="m">2</span></div>
+<div class="ln f0"><span class="ck"></span><span class="f1 ell">Позвонить в ЦОН</span><span class="m">10:00</span></div>
+<div class="ln"><span class="ck wait"></span><span class="f1 ell">Записаться к стоматологу</span><span class="m">ждёт ответа</span></div>
+<div class="sec">Без срока</div>
+<div class="ln f0"><span class="ck"></span><span class="f1 ell">Поменять масло в машине</span></div>
+</div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div><span class="fab" aria-label="Помощник"><svg class="i l"><use href="#asst"/></svg></span>
+</div></div><figcaption><b>B · Дела</b>Значок без слова. Старшие люди часто не нажимают незнакомые круглые кнопки — это главный риск варианта.</figcaption></figure>
+</div>
+<h4 class="vs">Мини-чат · состояния</h4>
+<div class="phones">
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-exp"></i><i class="c-today"></i></div>
+<div class="sheet c-notes"><div class="sh-top"><span class="sp">128 заметок</span><span class="ib"><svg class="i"><use href="#search"/></svg></span><span class="ib"><svg class="i"><use href="#plus"/></svg></span></div><p class="ttl">Заметки</p></div>
+<div class="pap" style="padding-left:14px;padding-right:14px">
+<div class="chips" style="margin-bottom:12px"><span class="chip on">Все</span><span class="chip">Важные</span><span class="chip"><svg class="i xs"><use href="#film"/></svg>Из материала</span></div>
+<div style="display:flex;gap:8px;align-items:flex-start">
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
+<div class="stk st-sand"><h4>Код домофона</h4><p class="tn" style="font:800 26px/1.15 Onest;margin-top:6px">4512</p><p class="cap">подъезд 3, кв. 47</p></div>
+<div class="stk st-paper"><span class="fold"></span><h4 style="padding-right:14px">Алматы: что посмотреть</h4><span class="chg" style="display:flex;margin-top:6px">изменил помощник</span><p class="small" style="margin-top:4px;color:var(--stInk2)">Медеу — после 16:00, Кок-Тобе, Зелёный базар</p></div>
+<div class="stk st-mist"><h4>Wi-Fi на даче</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Dacha_5G<br>sunflower2024</p><p class="cap" style="margin-top:6px">10 нояб.</p></div>
+</div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
+<div class="stk st-rose"><h4>Подарки на НГ</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Алие — коньки<br>Папе — термос</p><p class="cap" style="margin-top:6px">2 нояб.</p></div>
+<div class="stk st-graph"><h4>Размер шин</h4><p class="tn" style="font:800 20px/1.2 Onest;margin-top:6px">205/55 R16</p></div>
+<div class="stk st-paper"><h4>Стамбул</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">23 совета · кафе, музеи</p><p class="cap row" style="gap:5px;margin-top:6px"><svg class="i xs"><use href="#film"/></svg>из материала</p></div>
+<div class="stk st-sand"><h4>Мастер по стиралке</h4><p class="small tn" style="margin-top:4px;color:var(--stInk2)">Ержан<br>+7 701 455 12 90</p></div>
+</div>
+</div>
+</div>
+<div class="scrim"></div><div class="mini" style="height:318px;bottom:276px"><div class="strip-c c-asst"></div><div class="grab"></div><div class="mhead"><span class="f1">Помощник</span><span class="lnk" style="font-size:15px">Весь чат</span><span class="ib" aria-label="Закрыть" style="color:var(--ink);margin-right:-8px"><svg class="i"><use href="#x"/></svg></span></div><div class="mbody"><p class="cap" style="text-align:center;margin-bottom:10px">Вчера, 18:20</p><div class="me"><p>такси 2 400</p></div><p class="bot" style="font-size:15.5px">Записал в «Расходы · Транспорт».</p></div><div class="mask typing"><span class="adot"></span><span class="f1 ell">роутер ivanova2024<span class="caret"></span></span><span class="rb"><svg class="i"><use href="#up"/></svg></span></div></div><div class="kb" aria-hidden="true"><div class="ksug"><span>кофе</span><span>кофе 1 200</span><span>кофейня</span></div><div class="kr"><span>й</span><span>ц</span><span>у</span><span>к</span><span>е</span><span>н</span><span>г</span><span>ш</span><span>щ</span><span>з</span><span>х</span></div><div class="kr"><span>ф</span><span>ы</span><span>в</span><span>а</span><span>п</span><span>р</span><span>о</span><span>л</span><span>д</span><span>ж</span><span>э</span></div><div class="kr"><span class="w">⇧</span><span>я</span><span>ч</span><span>с</span><span>м</span><span>и</span><span>т</span><span>ь</span><span>б</span><span>ю</span><span class="w">⌫</span></div><div class="kr"><span class="w2">123</span><span class="w2">🌐</span><span class="sp">пробел</span><span class="w2">⏎</span></div></div><div class="home kbh"></div>
+</div></div><figcaption><b>B · мини-чат, клавиатура</b>Мини-чат садится на клавиатуру. Видны последние сообщения той же переписки. Под ним почти не видно экрана, с которого пришли.</figcaption></figure>
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-exp"></i><i class="c-today"></i></div>
+<div class="sheet c-notes"><div class="sh-top"><span class="sp">128 заметок</span><span class="ib"><svg class="i"><use href="#search"/></svg></span><span class="ib"><svg class="i"><use href="#plus"/></svg></span></div><p class="ttl">Заметки</p></div>
+<div class="pap" style="padding-left:14px;padding-right:14px">
+<div class="chips" style="margin-bottom:12px"><span class="chip on">Все</span><span class="chip">Важные</span><span class="chip"><svg class="i xs"><use href="#film"/></svg>Из материала</span></div>
+<div style="display:flex;gap:8px;align-items:flex-start">
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
+<div class="stk st-sand"><h4>Код домофона</h4><p class="tn" style="font:800 26px/1.15 Onest;margin-top:6px">4512</p><p class="cap">подъезд 3, кв. 47</p></div>
+<div class="stk st-paper"><span class="fold"></span><h4 style="padding-right:14px">Алматы: что посмотреть</h4><span class="chg" style="display:flex;margin-top:6px">изменил помощник</span><p class="small" style="margin-top:4px;color:var(--stInk2)">Медеу — после 16:00, Кок-Тобе, Зелёный базар</p></div>
+<div class="stk st-mist"><h4>Wi-Fi на даче</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Dacha_5G<br>sunflower2024</p><p class="cap" style="margin-top:6px">10 нояб.</p></div>
+</div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
+<div class="stk st-rose"><h4>Подарки на НГ</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Алие — коньки<br>Папе — термос</p><p class="cap" style="margin-top:6px">2 нояб.</p></div>
+<div class="stk st-graph"><h4>Размер шин</h4><p class="tn" style="font:800 20px/1.2 Onest;margin-top:6px">205/55 R16</p></div>
+<div class="stk st-paper"><h4>Стамбул</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">23 совета · кафе, музеи</p><p class="cap row" style="gap:5px;margin-top:6px"><svg class="i xs"><use href="#film"/></svg>из материала</p></div>
+<div class="stk st-sand"><h4>Мастер по стиралке</h4><p class="small tn" style="margin-top:4px;color:var(--stInk2)">Ержан<br>+7 701 455 12 90</p></div>
+</div>
+</div>
+</div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes on"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div><div class="scrim"></div><div class="mini" style="height:58%;bottom:0"><div class="strip-c c-asst"></div><div class="grab"></div><div class="mhead"><span class="f1">Помощник</span><span class="lnk" style="font-size:15px">Весь чат</span><span class="ib" aria-label="Закрыть" style="color:var(--ink);margin-right:-8px"><svg class="i"><use href="#x"/></svg></span></div><div class="mbody"><p class="cap" style="text-align:center;margin-bottom:10px">Вчера, 18:20</p><div class="me"><p>такси 2 400</p></div><p class="bot" style="font-size:15.5px">Записал в «Расходы · Транспорт».</p><div class="me" style="margin-top:14px"><p>пароль от роутера ivanova2024</p></div><p class="bot" style="font-size:15.5px">Сохранил.</p><div class="res c-notes"><svg class="i"><use href="#note"/></svg><div class="f1"><small>Заметки · только что</small><h4 class="ell">Пароль от роутера</h4></div></div><p class="small" style="margin-top:8px"><span class="undo">Отменить</span></p></div><div class="mask"><span class="adot"></span><span class="f1 ell">Сохранить в Заметки…</span><span class="rb" aria-label="Голос"><svg class="i"><use href="#mic"/></svg></span></div></div>
+</div></div><figcaption><b>B · записал</b>Результат — маленький лист цвета места, как в чате. «Отменить» — под ним. Чтобы увидеть запись на экране, мини-чат надо закрыть.</figcaption></figure>
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-tasks"></i><i class="c-asst"></i></div>
+<div class="sheet c-exp"><div class="sh-top"><span class="sp row" style="gap:2px">Ноябрь<svg class="i s"><use href="#down"/></svg></span><span class="ib"><svg class="i"><use href="#search"/></svg></span></div>
+<p class="big" style="margin-top:4px">184 350<span class="cur">₸</span></p>
+<p class="phrase" style="font-size:calc(var(--phrase) - 4px);margin-top:10px">Успеваете: ещё 65&nbsp;650&nbsp;₸</p>
+<p class="sub">из 250 000 ₸ · до конца месяца 13 дней</p></div>
+<div class="pap">
+<div style="display:flex;gap:3px;height:30px"><i class="k-food" style="flex:62.4;background:var(--k);border-radius:6px"></i><i class="k-home" style="flex:41.2;background:var(--k);border-radius:6px"></i><i class="k-trans" style="flex:28.9;background:var(--k);border-radius:6px"></i><i class="k-cafe" style="flex:20.8;background:var(--k);border-radius:6px"></i><i class="k-health" style="flex:18.75;background:var(--k);border-radius:6px"></i><i class="k-kids" style="flex:12.3;background:var(--k);border-radius:6px"></i><i style="flex:65.65;border-radius:6px;box-shadow:inset 0 0 0 1.5px var(--line2);background:repeating-linear-gradient(135deg,transparent 0 6px,var(--line) 6px 7px)"></i></div>
+<p class="cap" style="margin:6px 0 4px">полоски — категории в масштабе, штриховка — ещё можно потратить</p>
+<div class="ln f0"><span class="kq k-food"></span><span class="f1">Продукты</span><b class="am">62 400</b></div>
+<div class="ln"><span class="kq k-home"></span><span class="f1">Дом</span><b class="am">41 200</b></div>
+<div class="ln"><span class="kq k-trans"></span><span class="f1">Транспорт</span><b class="am">28 900</b></div>
+<div class="ln"><span class="kq k-cafe"></span><span class="f1">Кафе</span><b class="am">20 800</b></div>
+<div class="ln"><span class="kq k-health"></span><span class="f1">Здоровье</span><b class="am">18 750</b></div>
+<div class="ln"><span class="kq k-kids"></span><span class="f1">Дети</span><b class="am">12 300</b></div>
+</div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp on"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div><div class="scrim"></div><div class="mini" style="height:56%;bottom:0"><div class="strip-c c-asst"></div><div class="grab"></div><div class="mhead"><span class="f1">Помощник</span><span class="lnk" style="font-size:15px">Весь чат</span><span class="ib" aria-label="Закрыть" style="color:var(--ink);margin-right:-8px"><svg class="i"><use href="#x"/></svg></span></div><div class="mbody"><div class="me"><p>сколько ушло на такси в ноябре?</p></div><p class="bot" style="font-size:15.5px">На такси — <b class="tn">11 400 ₸</b>, 6 поездок. Весь транспорт — <b class="tn">28 900 ₸</b>.</p><p class="cap">Расходы · Транспорт ›</p><span class="btn ghost sm" style="margin-top:12px;width:100%">Продолжить в чате</span></div><div class="mask"><span class="adot"></span><span class="f1 ell">Записать трату…</span><span class="rb" aria-label="Голос"><svg class="i"><use href="#mic"/></svg></span></div></div>
+</div></div><figcaption><b>B · ответ</b>Ответ — сообщением в мини-чате, ниже «Продолжить в чате»: открывает полный экран «Помощника» на этом месте разговора.</figcaption></figure>
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div>
+<div class="sheet c-tasks"><div class="sh-top"><span class="back"><svg class="i"><use href="#back"/></svg>Сегодня</span><span class="sp"></span><span class="ib"><svg class="i"><use href="#plus"/></svg></span></div><p class="ttl">Дела</p><p class="sub">Вторник, 17 ноября · 4 на сегодня</p></div>
+<div class="pap">
+<div class="sec">Сегодня<span class="m">1 из 4</span></div>
+<div class="ln f0"><span class="ck ok"><svg class="i xs" style="stroke-width:3"><use href="#check"/></svg></span><span class="f1 ell" style="color:var(--ink3);text-decoration:line-through">Таблетка от давления</span><span class="m">09:00</span></div>
+<div class="ln"><span class="ck"></span><span class="f1 ell">Созвон с бухгалтером</span><span class="m">10:30</span></div>
+<div class="ln" style="padding:8px 0"><span class="ck"></span><span class="f1"><span style="display:block">Оплатить интернет</span><span class="chg" style="margin-top:4px">изменил помощник · срок</span></span><span class="m">до пт</span></div>
+<div class="ln"><span class="ck"></span><span class="f1 ell">Забрать Алию из школы</span><span class="m">14:30</span></div>
+<div class="sec">Завтра<span class="m">2</span></div>
+<div class="ln f0"><span class="ck"></span><span class="f1 ell">Позвонить в ЦОН</span><span class="m">10:00</span></div>
+<div class="ln"><span class="ck wait"></span><span class="f1 ell">Записаться к стоматологу</span><span class="m">ждёт ответа</span></div>
+<div class="sec">Без срока</div>
+<div class="ln f0"><span class="ck"></span><span class="f1 ell">Поменять масло в машине</span></div>
+</div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div><div class="scrim"></div><div class="mini" style="height:52%;bottom:0"><div class="strip-c c-asst"></div><div class="grab"></div><div class="mhead"><span class="f1">Помощник</span><span class="lnk" style="font-size:15px">Весь чат</span><span class="ib" aria-label="Закрыть" style="color:var(--ink);margin-right:-8px"><svg class="i"><use href="#x"/></svg></span></div><div class="mbody"><p class="row" style="justify-content:center;gap:8px;font:700 15px Onest;color:var(--ink2);margin-top:2px"><span class="adot"></span>Слушаю</p><p style="font:600 21px/1.32 Onest;letter-spacing:-.3px;margin-top:16px;text-align:center">завтра в&nbsp;десять позвонить <span style="color:var(--ink3)">в&nbsp;ЦОН</span></p><div class="wv big" aria-hidden="true"><i style="height:10px"></i><i style="height:24px"></i><i style="height:16px"></i><i style="height:34px"></i><i style="height:20px"></i><i style="height:40px"></i><i style="height:14px"></i><i style="height:28px"></i><i style="height:8px"></i><i style="height:18px"></i><i style="height:6px"></i></div></div><div class="row" style="justify-content:center;gap:28px;padding:6px 0 4px"><span class="ib ring" style="width:52px;height:52px;color:var(--ink)"><svg class="i"><use href="#x"/></svg></span><span class="rb" style="width:64px;height:64px"><svg class="i l"><use href="#check"/></svg></span><span class="ib ring" style="width:52px;height:52px;color:var(--ink)"><svg class="i"><use href="#pen"/></svg></span></div></div>
+</div></div><figcaption><b>B · голос</b>Голос — внутри мини-чата: «Отмена», «Готово», «Текстом». Как во вкладке «Помощник», только меньше.</figcaption></figure>
+</div>
+<h3 class="vh" id="g-entry-c">C · «Строка, которая сворачивается» <span>выбрано (Ф-82)</span></h3>
+<p class="lead">Гибрид A и B. В покое — строка поверх низа светлого листа, в обводке, как поле ввода в «Помощнике». При прокрутке вниз сжимается в кружок 48 справа; при остановке (0,6 с), прокрутке вверх и в конце списка — снова строка. Состояния (фокус, «Записал», ответ, голос) — как в A, только строка лежит на листе. <b>Выбрано (Ф-82)</b>: итоговые размеры и правила — в карточке «C · строка → кружок» ниже, в токенах и в <code>design-system.md</code> §11.12.</p>
+<div class="phones">
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-asst"></i><i class="c-notes"></i></div>
+<div class="sheet c-today"><div class="sh-top"><span class="sp">Вторник, 17 ноября</span><span class="ib"><svg class="i"><use href="#search"/></svg></span></div><p class="phrase">Спокойный день.<br>5&nbsp;дел, 1&nbsp;встреча.</p><p class="ttl ttl-only">Сегодня</p></div>
+<div class="pap padC"><div class="sec">План дня<span class="lk">Все дела<svg class="i xs"><use href="#chev"/></svg></span></div>
+<div class="plan">
+<div class="blk done"><span class="t">09:00</span><h4 class="ell">Таблетка от давления</h4></div>
+<div class="now"><span>9:41</span></div>
+<div class="blk main" style="height:40px"><span class="t" style="color:var(--ink)">10:30</span><div class="row"><h4 class="f1 ell">Созвон с бухгалтером</h4><span class="cap">30 мин</span></div></div>
+<div class="free" style="height:120px"><span>свободно 2 ч</span></div>
+<div class="blk" style="height:60px"><span class="t">13:00</span><div class="row"><h4 class="f1 ell">Обед с Ерланом</h4><span class="cap">1 ч</span></div></div>
+<div class="free" style="height:30px"><span>30 мин</span></div>
+<div class="blk" style="height:40px"><span class="t">14:30</span><div class="row"><h4 class="f1 ell">Забрать Алию из школы</h4><span class="cap">30 мин</span></div></div>
+</div>
+<div class="sec">Не забыть<span class="m">2</span></div>
+<div class="ln f0"><span class="ck"></span><span class="f1 ell">Оплатить интернет</span><span class="m">до пт</span></div>
+<div class="ln"><span class="ck"></span><span class="f1 ell">Купить корм коту</span><span class="m">вечером</span></div>
+<div class="sec">Потрачено сегодня<span class="lk tn">3 600 ₸<svg class="i xs"><use href="#chev"/></svg></span></div></div>
+<div class="fstrip"><span class="adot"></span><span class="f1 ell">Скажите или напишите…</span><span class="rb" aria-label="Голос"><svg class="i"><use href="#mic"/></svg></span></div><nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>C · Сегодня · в покое</b>Строка 48 лежит на листе в 10 dp над вкладками. Высоту экрана не забирает, но закрывает низ листа.</figcaption></figure>
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-exp"></i><i class="c-today"></i></div>
+<div class="sheet min c-notes"><div class="strip"><div class="l"><span class="cap" style="color:var(--on2);font-weight:600;padding-left:8px">128</span></div><div class="t">Заметки</div><div class="r"><span class="ib"><svg class="i"><use href="#search"/></svg></span></div></div></div>
+<div class="pap padC" style="padding-left:14px;padding-right:14px"><div style="margin-top:-96px">
+<div class="chips" style="margin-bottom:12px"><span class="chip on">Все</span><span class="chip">Важные</span><span class="chip"><svg class="i xs"><use href="#film"/></svg>Из материала</span></div>
+<div style="display:flex;gap:8px;align-items:flex-start">
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
+<div class="stk st-sand"><h4>Код домофона</h4><p class="tn" style="font:800 26px/1.15 Onest;margin-top:6px">4512</p><p class="cap">подъезд 3, кв. 47</p></div>
+<div class="stk st-paper"><span class="fold"></span><h4 style="padding-right:14px">Алматы: что посмотреть</h4><span class="chg" style="display:flex;margin-top:6px">изменил помощник</span><p class="small" style="margin-top:4px;color:var(--stInk2)">Медеу — после 16:00, Кок-Тобе, Зелёный базар</p></div>
+<div class="stk st-mist"><h4>Wi-Fi на даче</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Dacha_5G<br>sunflower2024</p><p class="cap" style="margin-top:6px">10 нояб.</p></div>
+</div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
+<div class="stk st-rose"><h4>Подарки на НГ</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Алие — коньки<br>Папе — термос</p><p class="cap" style="margin-top:6px">2 нояб.</p></div>
+<div class="stk st-graph"><h4>Размер шин</h4><p class="tn" style="font:800 20px/1.2 Onest;margin-top:6px">205/55 R16</p></div>
+<div class="stk st-paper"><h4>Стамбул</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">23 совета · кафе, музеи</p><p class="cap row" style="gap:5px;margin-top:6px"><svg class="i xs"><use href="#film"/></svg>из материала</p></div>
+<div class="stk st-sand"><h4>Мастер по стиралке</h4><p class="small tn" style="margin-top:4px;color:var(--stInk2)">Ержан<br>+7 701 455 12 90</p></div>
+</div>
+</div>
+</div></div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes on"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div><span class="fbub" aria-label="Помощник"><svg class="i"><use href="#asst"/></svg><span class="adot"></span></span>
+</div></div><figcaption><b>C · Заметки · листают</b>Пока листают вниз, строка сжата в кружок с точкой помощника. Нажатие на кружок — строка в фокусе, сразу с клавиатурой.</figcaption></figure>
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-tasks"></i><i class="c-asst"></i></div>
+<div class="sheet c-exp"><div class="sh-top"><span class="sp row" style="gap:2px">Ноябрь<svg class="i s"><use href="#down"/></svg></span><span class="ib"><svg class="i"><use href="#search"/></svg></span></div>
+<p class="big" style="margin-top:4px">184 350<span class="cur">₸</span></p>
+<p class="phrase" style="font-size:calc(var(--phrase) - 4px);margin-top:10px">Успеваете: ещё 65&nbsp;650&nbsp;₸</p>
+<p class="sub">из 250 000 ₸ · до конца месяца 13 дней</p></div>
+<div class="pap end padC"><div>
+<div style="display:flex;gap:3px;height:30px"><i class="k-food" style="flex:62.4;background:var(--k);border-radius:6px"></i><i class="k-home" style="flex:41.2;background:var(--k);border-radius:6px"></i><i class="k-trans" style="flex:28.9;background:var(--k);border-radius:6px"></i><i class="k-cafe" style="flex:20.8;background:var(--k);border-radius:6px"></i><i class="k-health" style="flex:18.75;background:var(--k);border-radius:6px"></i><i class="k-kids" style="flex:12.3;background:var(--k);border-radius:6px"></i><i style="flex:65.65;border-radius:6px;box-shadow:inset 0 0 0 1.5px var(--line2);background:repeating-linear-gradient(135deg,transparent 0 6px,var(--line) 6px 7px)"></i></div>
+<p class="cap" style="margin:6px 0 4px">полоски — категории в масштабе, штриховка — ещё можно потратить</p>
+<div class="ln f0"><span class="kq k-food"></span><span class="f1">Продукты</span><b class="am">62 400</b></div>
+<div class="ln"><span class="kq k-home"></span><span class="f1">Дом</span><b class="am">41 200</b></div>
+<div class="ln"><span class="kq k-trans"></span><span class="f1">Транспорт</span><b class="am">28 900</b></div>
+<div class="ln"><span class="kq k-cafe"></span><span class="f1">Кафе</span><b class="am">20 800</b></div>
+<div class="ln"><span class="kq k-health"></span><span class="f1">Здоровье</span><b class="am">18 750</b></div>
+<div class="ln"><span class="kq k-kids"></span><span class="f1">Дети</span><b class="am">12 300</b></div>
+</div></div>
+<div class="fstrip"><span class="adot"></span><span class="f1 ell">Записать трату…</span><span class="rb" aria-label="Голос"><svg class="i"><use href="#mic"/></svg></span></div><nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp on"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>C · Расходы · конец списка</b>В конце списка строка снова раскрыта, а последняя строка встаёт над ней: запас снизу 48 + 10 + 12 = 70 dp.</figcaption></figure>
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div>
+<div class="sheet min c-tasks"><div class="strip"><div class="l"><span class="back"><svg class="i"><use href="#back"/></svg>Сегодня</span></div><div class="t">Дела</div><div class="r"><span class="ib"><svg class="i"><use href="#plus"/></svg></span></div></div></div>
+<div class="pap padC"><div style="margin-top:-60px">
+<div class="sec">Сегодня<span class="m">1 из 4</span></div>
+<div class="ln f0"><span class="ck ok"><svg class="i xs" style="stroke-width:3"><use href="#check"/></svg></span><span class="f1 ell" style="color:var(--ink3);text-decoration:line-through">Таблетка от давления</span><span class="m">09:00</span></div>
+<div class="ln"><span class="ck"></span><span class="f1 ell">Созвон с бухгалтером</span><span class="m">10:30</span></div>
+<div class="ln" style="padding:8px 0"><span class="ck"></span><span class="f1"><span style="display:block">Оплатить интернет</span><span class="chg" style="margin-top:4px">изменил помощник · срок</span></span><span class="m">до пт</span></div>
+<div class="ln"><span class="ck"></span><span class="f1 ell">Забрать Алию из школы</span><span class="m">14:30</span></div>
+<div class="sec">Завтра<span class="m">2</span></div>
+<div class="ln f0"><span class="ck"></span><span class="f1 ell">Позвонить в ЦОН</span><span class="m">10:00</span></div>
+<div class="ln"><span class="ck wait"></span><span class="f1 ell">Записаться к стоматологу</span><span class="m">ждёт ответа</span></div>
+<div class="sec">Без срока</div>
+<div class="ln f0"><span class="ck"></span><span class="f1 ell">Поменять масло в машине</span></div>
+</div></div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div><span class="fbub" aria-label="Помощник"><svg class="i"><use href="#asst"/></svg><span class="adot"></span></span>
+</div></div><figcaption><b>C · Дела · листают</b>Кружок 48 не закрывает отметки слева, но закрывает срок справа у одной строки — пока человек листает.</figcaption></figure>
+</div>
+<h4 class="vs">Размеры и правила: C — итог для разработки, A и B — история</h4>
+<div class="facts">
+<div class="fact"><h3>A · строка — не выбрано</h3><ul>
+<li>Лоток: 8 сверху (от листа) + строка 48 + 0 до вкладок = <b>56</b>. Вкладки 68 и «домой» 24 не меняются. От строки до полоски «домой» — 68.</li>
+<li>Отступ от краёв 12 · 8 на ≤ 340 · 16 на ≥ 420. Радиус 24.</li>
+<li>Цвет: светлая — <code>paper</code>, без обводки; тёмная — <code>paper2</code> + обводка 1 <code>line</code>. Подсказка <code>ink3</code> 16/500 (5,2 и 5,4 : 1).</li>
+<li>Точка помощника 9, <code>place.assistant</code>. Микрофон 36, <code>btn</code>.</li>
+<li>Не прячется при прокрутке. Список не перекрывает — нижний отступ листа обычный (16).</li>
+<li>Фокус: строка над клавиатурой с зазором 8, вкладки под клавиатурой, цветной лист свёрнут. Над строкой строка «Ляжет в …» 28.</li>
+<li>Крупный шрифт: 56, текст 19 (не больше 20), микрофон 44 → лоток 64.</li></ul></div>
+<div class="fact"><h3>B · кнопка и мини-чат — не выбрано</h3><ul>
+<li>Кнопка 56, справа на <code>gutter − 4</code>, на 14 выше вкладок. <code>place.assistant</code>, значок <code>onSheet</code> 26. Тень плавающего слоя.</li>
+<li>Прячется при прокрутке вниз (уезжает за край, 180 мс), возвращается через 0,4 с после остановки.</li>
+<li>Запас снизу у списков 84.</li>
+<li>Мини-чат: <code>paper</code>, полоска 6 терракотовая, ручка, высота 56 % экрана (до 90 % потянув вверх), затемнение <code>scrim</code>.</li>
+<li>Счётчика нет. Подсказка «Запишите сюда, не уходя» — первые 3 раза.</li></ul></div>
+<div class="fact" style="border-color:var(--pg-ink)"><h3>C · строка → кружок — выбрано (Ф-82), итог</h3><ul><li><b>Строка:</b> 48 (крупный шрифт 56), радиус 24 (28). Низ строки на 10 выше вкладок = 102 от низа экрана (68 вкладки + 24 «домой» + 10). Отступ сбоку 12 · 8 (≤ 340) · 16 (≥ 420). <code>paper</code> + обводка 1,5 <code>ink</code>, тень плавающего слоя. Внутри: отступ 16 / 6, точка 9 <code>place.assistant</code>, подсказка Onest 500 16 (15 на ≤ 340, 19 при крупном, не больше 20) <code>ink3</code> — 5,2 : 1 светлая, 6,3 : 1 тёмная; микрофон 36 (44) <code>btn</code>, при тексте — стрелка «Записать».</li><li><b>Кружок:</b> 48 (56), справа на том же отступе и той же высоте; тот же фон и обводка; значок помощника 22 <code>ink</code>, точка 9 в правом верхнем углу с кольцом 2 <code>paper</code>.</li><li><b>Свернуть:</b> прокрутка вниз больше 24 dp подряд и список не в самом верху. <b>Не сворачивать:</b> список помещается целиком; строка в фокусе или в ней есть текст; идёт голос; показано «Записал…» или ответ; включён экранный диктор.</li><li><b>Раскрыть:</b> через 600 мс после остановки (после инерции); сразу при прокрутке вверх больше 24 dp; до конца списка ≤ 24 dp; при смене вкладки или экрана — всегда раскрыта.</li><li><b>Движение:</b> сворачивание 200 мс, раскрытие 240 мс, кривая 0.2, 0, 0, 1; ширина сжимается к правому краю. Текст и микрофон гаснут за первые 80 мс, значок появляется в последние 80 мс (при раскрытии наоборот: значок гаснет 0–80, текст появляется 120–240). Не за пальцем — по событию.</li><li><b>Меньше движения:</b> без сжатия — строка и кружок сменяются затуханием 150 мс, линейно.</li><li><b>Запас снизу у списков:</b> 70 = 48 + 10 + 12 (крупный шрифт 78). Последняя строка всегда видна над раскрытой строкой.</li><li><b>Клавиатура:</b> нажатие на строку или кружок — фокус и клавиатура; строка на 8 над клавиатурой, вкладки под клавиатурой, цветной лист свёрнут; над строкой капсула «Ляжет в …» 28 (<code>paper2</code>, <code>ink2</code>) с зазором 6. Клавиатура закрылась — строка на место, раскрыта.</li><li><b>«Записал…» и ответ:</b> на 8 над строкой (низ на 158, крупный шрифт 166; с клавиатурой — 8 над строкой), отступы как у строки, 3 с, «Отменить» терракотовый.</li><li><b>Доступность:</b> кружок — кнопка «Помощник. {подсказка без многоточия}», например «Помощник. Записать трату», подсказка «Открывает строку, чтобы записать или спросить». Поле — «Строка помощника», микрофон — «Сказать голосом», стрелка — «Записать». Нажатие 48 ≥ 44.</li></ul></div>
+<div class="fact"><h3>Где строка есть, а где нет</h3><ul>
+<li><b>Есть:</b> «Сегодня» («Скажите или напишите…»), «Заметки» («Сохранить в Заметки…»), «Расходы» («Записать трату…»), «Дела» («Добавить дело…»), «Ещё» («Скажите или напишите…», пока есть — Ф-82) — на всех вкладках в одном месте, чтобы её не искать.</li>
+<li><b>Внутри места</b> подсказка про то, что открыто: заметка — «Попросите поменять заметку…», категория — «Записать в Транспорт…», чек — «Спросите про этот чек…». «Это / здесь» = открытая запись.</li>
+<li><b>Нет:</b> «Помощник» (там полное поле), настройки, поиск (своё поле), «История», «Переписки с ChatGPT», открытый документ A4, первый запуск, шторки и подтверждения.</li><li><b>Без связи</b> строка есть, фраза сохраняется заметкой (Ф-69).</li></ul></div>
+<div class="fact"><h3>Терракота или чёрный</h3><ul>
+<li><b>Точка 9 dp — терракотовая</b>: она говорит «это помощник», как метка «изменил помощник» и «Слушаю».</li>
+<li><b>Микрофон и «записать» — чёрные</b> (<code>btn</code>): это действие, как все кнопки. Большой терракотовый круг на каждой вкладке спорил бы с цветными листами и с капсулой «Помощника» прямо под строкой. Кружок C поэтому бумажный с обводкой, терракотовая — только точка.</li></ul></div>
 </div>
 </section>
 
@@ -1063,7 +1737,7 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 <tr><td>Свёрнутый лист</td><td>44 полоска</td></tr></table></div>
 
 <div class="fact"><h3>Движение</h3>
-<table class="tt"><tr><th>Что</th><th>Время</th><th>Кривая</th></tr>
+<div class="scroll-x"><table class="tt" style="min-width:300px"><tr><th>Что</th><th>Время</th><th>Кривая</th></tr>
 <tr><td>Нажатие</td><td>100 мс</td><td>0.2, 0, 0, 1</td></tr>
 <tr><td>Лист сворачивается</td><td>за пальцем, доводка 200 мс</td><td>0.2, 0, 0, 1</td></tr>
 <tr><td>Смена вкладки: лист выезжает из стопки</td><td>320 мс</td><td>пружина 26 / 260</td></tr>
@@ -1072,7 +1746,29 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 <tr><td>Подтверждение</td><td>220 мс</td><td>0.2, 0, 0, 1</td></tr>
 <tr><td>Удалённое уходит вниз стопки</td><td>240 мс</td><td>0.3, 0, 1, 1</td></tr>
 <tr><td>Галочка</td><td>300 мс</td><td>0.2, 0, 0, 1</td></tr>
-<tr><td>Меньше движения</td><td>затухание 150 мс</td><td>линейно</td></tr></table></div>
+<tr><td>Строка помощника → кружок · обратно</td><td>200 · 240 мс</td><td>0.2, 0, 0, 1</td></tr>
+<tr><td>Меньше движения</td><td>затухание 150 мс</td><td>линейно</td></tr></table></div></div>
+
+<div class="fact"><h3>Строка помощника · вариант C (Ф-82)</h3>
+<p class="cap" style="color:var(--pg-ink2);font-size:13px;margin-bottom:6px">В коде — <code>assistantEntry</code> в <code>tokens-v5.ts</code>; A и B — в <code>assistantEntryLegacy</code> (не выбраны).</p>
+<div class="sw">
+<div><i style="background:#FBF8F2"></i><span><b>фон · светлая</b>paper #FBF8F2</span></div>
+<div><i style="background:#1E1D23"></i><span><b>фон · тёмная</b>paper #1E1D23</span></div>
+<div><i style="background:#1A191E"></i><span><b>обводка 1,5</b>ink</span></div>
+<div><i style="background:#E0592C"></i><span><b>точка 9</b>place.assistant</span></div>
+</div>
+<div class="scroll-x"><table class="tt" style="margin-top:10px;min-width:300px"><tr><th></th><th>dp / мс</th></tr>
+<tr><td>Строка · кружок</td><td>48 · 48 (крупный шрифт 56 · 56), радиус 24 (28)</td></tr>
+<tr><td>Где</td><td>на листе, низ на 10 выше вкладок (102 от низа экрана); кружок справа</td></tr>
+<tr><td>Отступ сбоку</td><td>12 · 8 (≤ 340) · 16 (≥ 420)</td></tr>
+<tr><td>Свернуть</td><td>вниз &gt; 24 подряд · 200 мс, 0.2, 0, 0, 1</td></tr>
+<tr><td>Раскрыть</td><td>600 мс после остановки · вверх &gt; 24 · конец списка ≤ 24 · 240 мс</td></tr>
+<tr><td>Меньше движения</td><td>затухание 150 мс, без сжатия</td></tr>
+<tr><td>Запас снизу у списка</td><td>70 (крупный шрифт 78)</td></tr>
+<tr><td>Клавиатура</td><td>строка на 8 над ней, «Ляжет в …» 28 + 6</td></tr>
+<tr><td>Текст</td><td>подсказка Onest 500 16 (15 на 320, 19 при крупном), <code>ink3</code> — 5,2 : 1 светлая, 6,3 : 1 тёмная</td></tr>
+<tr><td>«Записал…» / ответ</td><td>на 8 выше строки (низ 158; крупный 166), 3 с</td></tr></table></div></div>
+
 
 </div>
 </section>
@@ -1087,6 +1783,7 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 <div class="fact"><h3>Вкладки</h3><ul><li>У всех пяти — цветная капсула и слово.</li><li>Активная: шире, обведена, слово жирное.</li><li>Подпись 12, на 320 — 11,5, при крупном шрифте не больше 13.</li></ul></div>
 <div class="fact"><h3>Цифры и правки</h3><ul><li>Одна крупная цифра на экран, табличные цифры везде.</li><li>План дня: высота блока = длительность (1 dp на минуту, минимум 40), пустое — «свободно 2 ч».</li><li>Правка помощника в тексте: старое зачёркнуто, новое подсвечено маркером.</li></ul></div>
 <div class="fact"><h3>Уведомления и удаление</h3><ul><li>Уведомление сверху, 3 с, три точки показывают время.</li><li>Удаление — «Удалено · Восстановить», без «Да».</li><li>Компактное подтверждение — только для необратимого.</li><li>Метки «ИИ» нет нигде. Без заглавных букв.</li></ul></div>
+<div class="fact"><h3>Строка помощника · C (Ф-82)</h3><ul><li>Лежит на листе над вкладками; при прокрутке вниз — кружок, при остановке (0,6 с) и в конце списка — снова строка.</li><li>Есть на всех вкладках, кроме «Помощника» (и на «Ещё»), и внутри мест (заметка, категория, чек) — с подсказкой про открытое.</li><li>Нет: настройки, поиск, «История», «Переписки с ChatGPT», документ A4, первый запуск, шторки, подтверждения.</li><li>Терракотовая только точка помощника; микрофон и «Записать» — чёрные.</li><li>Запас снизу у списков 70: последняя строка видна. «Записал…» — на 8 над строкой.</li></ul></div>
 </div>
 </section>
 </div>
