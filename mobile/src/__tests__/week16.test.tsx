@@ -312,6 +312,9 @@ describe('account deletion', () => {
     await settle(() => screen.queryByText('• Через поддержку вернуть нельзя.') !== null);
     expect(screen.getByTestId('delete-irreversible')).toHaveTextContent(/Через 7 дней это уже не отменить/);
     await fireEvent.press(screen.getByTestId('delete-confirm'));
+    // v5 §11.9: the compact confirmation at the bottom — «Не удалять» / «Удалить все данные».
+    expect(s.callsTo('POST /me/deletion')).toHaveLength(0);
+    await fireEvent.press(screen.getByTestId('compact-confirm-ok'));
     await settle(() => r.getPathname() === '/account-deleting');
     expect(s.callsTo('POST /me/deletion')[0]?.body).toEqual({ confirm: true });
     expect(screen.getByTestId('deleting-message')).toHaveTextContent('Аккаунт удаляется. До 19 ноября можно передумать: откройте приложение.');

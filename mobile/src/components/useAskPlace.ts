@@ -1,6 +1,7 @@
 import { usePathname } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
+import { useChrome } from '@/store/chrome';
 import { useConnectivity } from '@/store/connectivity';
 
 import { useCurrentPage } from './useCurrentPage';
@@ -19,6 +20,7 @@ export function useAskPlace(): AskPlace {
   const pathname = usePathname();
   const current = useCurrentPage();
   const online = useConnectivity((s) => s.online);
+  const hint = useChrome((s) => s.askHint);
   if (current.kind === 'assistant') return { variant: 'full', placeholder: online ? t('line.placeholder_assistant') : t('ask.offline') };
   if (current.kind === 'today') return { variant: 'strip', placeholder: t('ask.today') };
   if (pathname === '/more') return { variant: 'strip', placeholder: t('ask.more') };
@@ -26,6 +28,7 @@ export function useAskPlace(): AskPlace {
   if (current.kind === 'page' && !pathname.startsWith('/stack/')) {
     const k = current.page.templateKey;
     if (k === 'documents') return null;
+    if (k === 'expenses' && hint) return { variant: 'strip', placeholder: hint };
     if (k === 'notes' || k === 'expenses' || k === 'tasks') return { variant: 'strip', placeholder: t(`ask.${k}`) };
     return { variant: 'strip', placeholder: t('ask.today') };
   }

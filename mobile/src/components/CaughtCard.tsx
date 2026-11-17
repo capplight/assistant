@@ -30,36 +30,40 @@ export function litSegments(text: string, parts: string[]): { text: string; lit:
 }
 
 /**
- * «Поймал так» (design-system v2 AssistantCapsule «ввод»): «ПОЙМАЛ ТАК / Будильник · завтра, 08:00 · Дела» above the
- * line while a reminder phrase is typed. «в 7» without «утра / вечера» says it will ask (the ConfirmCard asks).
+ * v5 «Ляжет в …» (design-system §11.12 «Клавиатура», Ф-78): while a phrase the phone's code understood is typed, a
+ * capsule 28 high above the strip — «Ляжет в Дела · будильник · завтра, 08:00». A preview only: nothing is set from
+ * it; the server reads the sent phrase as before (ConfirmCard). Unknown parts are left out, never guessed.
  */
 export function CaughtCard({ c }: { c: Caught }) {
   const theme = useTheme();
   const { t } = useTranslation();
   const time = c.time ? (Number(c.time.slice(0, 2)) <= 12 && !/утра|вечера|дня/.test(c.parts.join(' ')) && c.time.endsWith(':00') ? t('line.caught_ask', { time: c.time }) : c.time) : null;
   const when = [c.day ? t(`line.caught_day.${c.day}`) : null, time].filter(Boolean).join(', ');
-  const line = [c.alarm ? t('line.caught_alarm') : t('line.caught_reminder'), when, t('tpl.short.tasks')].filter(Boolean).join(' · ');
+  const kind = (c.alarm ? t('line.caught_alarm') : t('line.caught_reminder')).toLowerCase();
+  const line = [t('ask.goes_to', { place: t('tpl.short.tasks') }), kind, when].filter(Boolean).join(' · ');
   return (
     <View
       testID="caught-card"
       accessibilityLiveRegion="polite"
       style={[
         styles.row,
-        { gap: theme.space[3], marginHorizontal: theme.size.tabBarInset, marginBottom: theme.space[2], padding: theme.space[3], borderRadius: theme.radius.xl, backgroundColor: theme.colors.surfaceRaised },
-        theme.elevation.floating,
+        {
+          alignSelf: 'flex-start',
+          gap: 8,
+          minHeight: 28,
+          paddingHorizontal: 12,
+          borderRadius: 14,
+          marginLeft: theme.m.ask.inset + 2,
+          marginRight: theme.m.ask.inset,
+          marginBottom: 6,
+          backgroundColor: theme.colors.paper2,
+        },
       ]}
     >
-      <View style={[styles.square, { width: 36, height: 36, borderRadius: theme.radius.sm, backgroundColor: theme.colors.brandTint }]}>
-        <Icon icon={c.alarm ? AlarmClock : BellRing} size="sm" color="brand" />
-      </View>
-      <View style={styles.flex}>
-        <AppText variant="eyebrow" color="brand">
-          {t('line.caught')}
-        </AppText>
-        <AppText testID="caught-line" variant="bodyStrong">
-          {line}
-        </AppText>
-      </View>
+      <Icon icon={c.alarm ? AlarmClock : BellRing} size="sm" color="ink2" />
+      <AppText testID="caught-line" style={{ flexShrink: 1, color: theme.colors.ink2, fontFamily: theme.type.sheetMeta.fontFamily, fontSize: 14, lineHeight: 18 }}>
+        {line}
+      </AppText>
     </View>
   );
 }

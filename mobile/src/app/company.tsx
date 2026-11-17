@@ -120,9 +120,10 @@ export default function CompanyScreen() {
 
   return (
     <View style={styles.root}>
-      <Screen testID="company-screen">
+      {/* screens-v5-extra: a second-level stone screen, the sheet collapsed. */}
+      <Screen testID="company-screen" mode="strip">
+        <Header title={t('kp.company_title')} back={{ testID: 'company-back', label: t('kp.back'), onPress: () => (router.canGoBack() ? router.back() : router.replace('/')) }} />
         <View style={{ gap: theme.space[4] }}>
-          <Header title={t('kp.company_title')} back={{ testID: 'company-back', label: t('kp.back'), onPress: () => (router.canGoBack() ? router.back() : router.replace('/')) }} />
           <AppText variant="callout">{t('kp.company_hint')}</AppText>
           {field('name')}
           <View style={{ gap: theme.space[1] }}>

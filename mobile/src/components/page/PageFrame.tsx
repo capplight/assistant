@@ -14,6 +14,7 @@ import { useNotesLook } from '@/store/notesLook';
 import { useChrome } from '@/store/chrome';
 import { useView } from '@/store/view';
 import { placeOfTemplate, useTheme, type PlaceKey } from '@/theme';
+import type { SheetAction as StripAction, SheetBack } from '../ui/PlaceScreen';
 
 import { AppText } from '../AppText';
 import { ActionList, Button, Header, Icon, Sheet, ViewToggle, type SheetAction } from '../ui';
@@ -33,7 +34,15 @@ import { entryRow, shownEntries, sortEntries } from './rows';
  * the assistant line, tabs — is the main layout's footer, outside the tool.
  */
 /** What a page tool puts on the coloured sheet (v5 «Расходы»: month · the big number · the phrase). */
-export type SheetSlot = { metaNode?: ReactNode; sheetExtra?: ReactNode; phrase?: string; sub?: string; hideTitle?: boolean };
+export type SheetSlot = {
+  metaNode?: ReactNode;
+  sheetExtra?: ReactNode;
+  phrase?: string;
+  sub?: string;
+  hideTitle?: boolean;
+  /** A sub-screen of the tool (a category, a receipt): the sheet opens collapsed with its own title and «‹ back». */
+  strip?: { title: string; back: SheetBack; actions?: StripAction[] };
+};
 const SheetSlotContext = createContext<((s: SheetSlot | null) => void) | null>(null);
 
 /**
@@ -247,6 +256,7 @@ export function PageFrame({ page }: { page: Page }) {
       metaNode={slot?.metaNode}
       sheetExtra={slot?.sheetExtra}
       hideTitle={slot?.hideTitle}
+      {...(slot?.strip ? { mode: 'strip' as const, title: slot.strip.title, back: slot.strip.back, actions: slot.strip.actions ?? [] } : {})}
       paperPadding={isNotes ? 14 : undefined}
     >
       {/* «Я в магазине» is the list alone: no sheet header (template-screens 3). */}

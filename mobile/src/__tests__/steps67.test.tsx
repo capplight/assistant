@@ -129,6 +129,8 @@ describe('«Принести переписку» (step 7)', () => {
     await settle(() => screen.queryByTestId('aiimp-done') !== null);
     expect(screen.getByTestId('aiimp-summary')).toHaveTextContent('Принёс 312 разговоров из ChatGPT. Повторов не взял: 3.');
     await fireEvent.press(screen.getByTestId('aiimp-undo'));
+    // v5: «Удалить импорт» asks once, compactly.
+    await fireEvent.press(screen.getByTestId('compact-confirm-ok'));
     await settle(() => s.callsTo('POST /actions/aimp9/undo').length === 1);
   });
 

@@ -111,3 +111,75 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
   dot: { width: 9, height: 9, borderRadius: 5 },
 });
+
+/**
+ * screens-v5 «Заметка · изменил помощник»: the plate on top of an opened record while the mark lives (24 h) —
+ * «● изменил помощник · 12:40 · Отменить» and one line of what changed (the action's summary). The old and new
+ * words are not on the phone (the action has no diff), so the text itself is not marked.
+ */
+export function ChangedPlate({ at, actionId, testID = 'changed-plate' }: { at: string | null | undefined; actionId: string | null | undefined; testID?: string }) {
+  const theme = useTheme();
+  const { t, i18n } = useTranslation();
+  const known = useTasks((s) => (actionId ? s.actions[actionId] : undefined));
+  const [fetched, setFetched] = useState<ActionOut | null>(null);
+  const [busy, setBusy] = useState(false);
+  const fresh = markFresh(at);
+  const action = known ?? fetched;
+  const missing = fresh && !!actionId && !known;
+  useEffect(() => {
+    if (!missing || !actionId) return;
+    let alive = true;
+    void getApi()
+      .action(actionId)
+      .then((a) => {
+        if (!a || !alive) return;
+        rememberActions([a]);
+        setFetched(a);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [actionId, missing]);
+  if (!fresh) return null;
+  let time = '';
+  try {
+    time = new Date(at!).toLocaleTimeString(i18n.language, { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    time = at!.slice(11, 16);
+  }
+  const summary = action ? (i18n.language === 'kk' && action.summary.kk) || action.summary.ru : null;
+  const canUndo = !!actionId && (!action || (action.undoable && !action.undone_at));
+  const undo = async () => {
+    if (!actionId) return;
+    setBusy(true);
+    const r = await undoServerAction(actionId);
+    setBusy(false);
+    if (r.result === 'failed') useToast.getState().show(t('errors.generic'), 4000);
+    else if (r.result === 'expired') useToast.getState().show(t('changes.expired'), 4000);
+  };
+  return (
+    <View testID={testID} style={{ backgroundColor: theme.colors.paper2, borderRadius: 16, paddingVertical: 12, paddingHorizontal: 14, gap: 6, marginBottom: 18 }}>
+      <View style={[styles.row, { gap: 6 }]}>
+        <View style={[styles.dot, { backgroundColor: theme.colors.place.assistant }]} />
+        <AppText variant="mark" color="assistantText" style={{ flex: 1 }}>
+          {`${t('changed.mark')} · ${time}`}
+        </AppText>
+        {canUndo ? (
+          <Pressable
+            testID={`${testID}-undo`}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.undo')}
+            disabled={busy}
+            onPress={() => void undo()}
+            hitSlop={hitSlopFor(24)}
+            style={({ pressed }) => [{ opacity: busy ? 0.4 : 1 }, pressedStyle(pressed)]}
+          >
+            <AppText style={{ color: theme.colors.assistantText, fontFamily: theme.type.headline.fontFamily, fontSize: 15, lineHeight: 18 }}>{t('common.undo')}</AppText>
+          </Pressable>
+        ) : null}
+      </View>
+      {summary ? <AppText variant="small">{summary}</AppText> : null}
+    </View>
+  );
+}

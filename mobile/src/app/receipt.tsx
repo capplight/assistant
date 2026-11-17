@@ -6,6 +6,7 @@ import { AppState, StyleSheet, View } from 'react-native';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/Screen';
+import { Header } from '@/components/ui/Header';
 import { QrCamera } from '@/components/page/QrCamera';
 import { getMedia, type Permission } from '@/expenses/media';
 import { saveReceipt, saveReceiptQr, saveStatement } from '@/expenses/receipts';
@@ -125,11 +126,13 @@ export default function ReceiptScreen() {
 
   const blocked = perm === 'blocked';
   return (
-    <Screen testID="receipt-screen">
+    // screens-v5-extra «Чек · нужна камера»: the green strip «‹ Расходы · Фото чека», the words on the paper.
+    <Screen testID="receipt-screen" place="expenses" mode="strip">
+      <Header title={t('exp.receipt_photo')} back={{ onPress: leave, label: t('tpl.short.expenses'), testID: 'receipt-back' }} />
       <View style={{ gap: theme.space[4] }}>
         {badQr ? (
           <>
-            <AppText variant="largeTitle" accessibilityRole="header">
+            <AppText variant="title1" accessibilityRole="header">
               {t('exp.qr_not_receipt_title')}
             </AppText>
             <AppText testID="receipt-qr-bad">{t('exp.qr_not_receipt')}</AppText>
@@ -145,7 +148,7 @@ export default function ReceiptScreen() {
           </>
         ) : needsCamera && perm !== 'granted' && perm !== null ? (
           <>
-            <AppText variant="largeTitle" accessibilityRole="header">
+            <AppText variant="title1" accessibilityRole="header">
               {t('exp.camera_title')}
             </AppText>
             <AppText testID="receipt-camera-why">{t(kind === 'qr' ? 'exp.camera_why_qr' : 'exp.camera_why')}</AppText>

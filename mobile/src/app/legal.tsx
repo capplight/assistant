@@ -4,7 +4,6 @@ import { View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { Screen } from '@/components/Screen';
-import { Card } from '@/components/ui/Card';
 import { Header } from '@/components/ui/Header';
 import { useConsentTexts } from '@/consent/useConsentTexts';
 import { CONSENT_RETENTION_DAYS_PLACEHOLDER } from '@/i18n';
@@ -31,15 +30,18 @@ export default function LegalScreen() {
   const title = { policy: t('legal.policy'), terms: t('legal.terms'), consents: t('legal.consents') }[doc];
 
   const block = (heading: string, body: string[], version?: string, testID?: string) => (
-    <Card testID={testID} style={{ gap: theme.space[2] }}>
-      <AppText variant="headline" accessibilityRole="header">
+    // screens-v5-extra «Политика · чтение»: plain paper, sections as 17 heads, the text 17/27 like a note.
+    <View testID={testID} style={{ gap: theme.space[2], marginTop: theme.space[3] }}>
+      <AppText variant="section" accessibilityRole="header">
         {heading}
       </AppText>
       {body.map((b, i) => (
-        <AppText key={i}>{b}</AppText>
+        <AppText key={i} variant="noteBody">
+          {b}
+        </AppText>
       ))}
       {version ? <AppText variant="footnote">{t('legal.version', { v: version })}</AppText> : null}
-    </Card>
+    </View>
   );
 
   let content;
@@ -88,7 +90,7 @@ export default function LegalScreen() {
   }
 
   return (
-    <Screen testID={`legal-${doc}`}>
+    <Screen testID={`legal-${doc}`} mode="strip">
       <Header title={title} back={{ onPress: back }} />
       <View style={{ gap: theme.space[3] }}>{content}</View>
     </Screen>

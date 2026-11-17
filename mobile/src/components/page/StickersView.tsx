@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Check, Ellipsis, StickyNote as StickyNoteIcon } from 'lucide-react-native';
+import { ArrowDown, ArrowUp, Check, Ellipsis, Film, StickyNote as StickyNoteIcon } from 'lucide-react-native';
 import { AiLabel } from '@/components/AiLabel';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -24,7 +24,7 @@ import { AppText } from '../AppText';
 import type { MenuExtra } from '../RecordMenuSheet';
 import type { RowMoves } from '../RecordRow';
 import { StackCards } from '../StackCards';
-import { autoNoteColor, Icon, pressedStyle, SegmentedControl, Sheet, StickyNote } from '../ui';
+import { autoNoteColor, Chip, Icon, pressedStyle, SegmentedControl, Sheet, StickyNote, type LucideIcon } from '../ui';
 import { useScreenReader } from '../useScreenReader';
 import { BoardView } from './BoardView';
 import { EntryList, type EntryCtx } from './EntryList';
@@ -46,6 +46,19 @@ export { stickerLabel };
  * there is no `Ряды | Доска` and a page saved as a board shows as rows. With it on, ≥150 % and a screen reader
  * show the board as rows by its places, and «Выше / Ниже» swap two stickers' places.
  */
+type NotesFilter = 'all' | 'pinned' | 'material';
+const NOTES_FILTERS: { key: NotesFilter; label: string; icon?: LucideIcon }[] = [
+  { key: 'all', label: 'notes.filter_all' },
+  { key: 'pinned', label: 'notes.filter_pinned' },
+  { key: 'material', label: 'notes.filter_material', icon: Film },
+];
+const MATERIAL = new Set(['share', 'files', 'camera']);
+function passes(f: NotesFilter, e: { record: { source: string }; link?: { pinned?: boolean } | null }): boolean {
+  if (f === 'pinned') return !!e.link?.pinned;
+  if (f === 'material') return MATERIAL.has(e.record.source);
+  return true;
+}
+
 export function StickersView({ page, entries, frameTop, ordering }: ViewProps) {
   const theme = useTheme();
   const layout = useLayout();
@@ -80,7 +93,9 @@ export function StickersView({ page, entries, frameTop, ordering }: ViewProps) {
     () => new Set(all.filter((e) => e.link?.groupKey && pileTitles.has(e.link.groupKey)).map((e) => e.record.id)),
     [all, pileTitles],
   );
-  const inRows = useMemo(() => all.filter((e) => !inPile.has(e.record.id)), [all, inPile]);
+  // screens-v5 «Заметки»: «Все · Важные · Из материала» (pinned / brought from a share, a file or a photo).
+  const [filter, setFilter] = useState<NotesFilter>('all');
+  const inRows = useMemo(() => all.filter((e) => !inPile.has(e.record.id) && passes(filter, e)), [all, inPile, filter]);
   const laid = useMemo(
     () =>
       board
@@ -157,6 +172,21 @@ export function StickersView({ page, entries, frameTop, ordering }: ViewProps) {
   const header = (
     <View style={{ marginBottom: theme.space[3], gap: theme.space[3] }}>
       {frameTop}
+      {!board || boardAsRows ? (
+        <View testID="notes-filters" accessibilityRole="tablist" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+          {NOTES_FILTERS.map((f) => (
+            <Chip
+              key={f.key}
+              testID={`notes-filter-${f.key}`}
+              label={t(f.label)}
+              icon={f.icon}
+              variant={filter === f.key ? 'selected' : 'neutral'}
+              selected={filter === f.key}
+              onPress={() => setFilter(f.key)}
+            />
+          ))}
+        </View>
+      ) : null}
       {boardOn ? <ModeSwitch board={board} onPick={(on) => void changeView(page, { kind: 'board', on })} /> : null}
       {boardAsRows ? (
         <AppText testID="notes-board-rows" variant="callout" accessibilityLiveRegion="polite">

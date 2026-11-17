@@ -1,8 +1,9 @@
 import { router } from 'expo-router';
-import { ArrowDown, ArrowUp, ChevronDown } from 'lucide-react-native';
+import { ArrowDown, ArrowUp, ChevronDown, Plus } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import Svg, { Defs, Path, Pattern, Rect } from 'react-native-svg';
 
 import type { ExpenseOut } from '@/api/types';
 import { formatMinor, inPeriod, minorToDecimal, periodOf, shiftPeriod, toMinor, type Period } from '@/expenses/calc';
@@ -14,6 +15,7 @@ import { addExpense, changeExpense, deleteExpense, reorderCategories } from '@/e
 import { useExpenses } from '@/expenses/store';
 import { pullBudget } from '@/expenses/budget';
 import { budgetMinor, useBudget } from '@/store/budget';
+import { useChrome } from '@/store/chrome';
 import { useView } from '@/store/view';
 import { kickSync, syncBlocked } from '@/services';
 import { localDate } from '@/tasks/rows';
@@ -167,7 +169,33 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
     onToCheck: () => setOnlyToCheck((v) => !v),
   };
   const ovSheet = useOverviewSheet(ovProps);
-  useSheetSlot({ metaNode: ovSheet.metaNode, sheetExtra: ovSheet.sheetExtra, hideTitle: true }, ovSheet.key);
+  // screens-v5 «Расходы · категория» / «Чек»: sub-screens of the page, the sheet collapsed to «‹ Расходы».
+  const [sub, setSub] = useState<{ kind: 'category'; key: string } | { kind: 'receipt'; id: string } | null>(null);
+  const subBar = sub?.kind === 'category' ? (catBars.find((x) => (x.key || '') === sub.key) ?? null) : null;
+  const subCat = sub?.kind === 'category' ? categoryByKey(server, sub.key || null) : null;
+  const subChip = subCat ? (chips.find((c) => c.key === subCat.key) ?? null) : null;
+  const receipt = sub?.kind === 'receipt' ? (live.find((e) => e.id === sub.id) ?? null) : null;
+  const backToMonth = { label: t('tpl.short.expenses'), onPress: () => setSub(null), testID: 'exp-sub-back' };
+  const slot =
+    sub?.kind === 'category'
+      ? {
+          strip: {
+            title: subBar?.title ?? t('exp.no_category'),
+            back: backToMonth,
+            actions: [{ key: 'add', testID: 'exp-sub-add', icon: Plus, label: t('exp.new_expense'), onPress: () => openEntry(subChip) }],
+          },
+        }
+      : sub?.kind === 'receipt'
+        ? { strip: { title: t('exp.receipt'), back: backToMonth } }
+        : { metaNode: ovSheet.metaNode, sheetExtra: ovSheet.sheetExtra, hideTitle: true };
+  useSheetSlot(slot, sub ? `${sub.kind}:${sub.kind === 'category' ? sub.key : sub.id}:${subBar?.title ?? ''}` : ovSheet.key);
+  const askHint = sub?.kind === 'category' ? t('ask.category', { category: subBar?.title ?? '' }) : sub?.kind === 'receipt' ? t('ask.receipt') : null;
+  useEffect(() => {
+    useChrome.getState().setAskHint(askHint);
+  }, [askHint]);
+  useEffect(() => () => useChrome.getState().setAskHint(null), []);
+  // The sub-screen of something that went away (deleted, another period) closes.
+  if (sub && ((sub.kind === 'category' && !subBar) || (sub.kind === 'receipt' && !receipt))) setSub(null);
   const listRef = useRef<FlatList<FeedDay>>(null);
   const place = usePlaceList((y, animated) => listRef.current?.scrollToOffset({ offset: y, animated }));
 
@@ -241,7 +269,7 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
                   first={i === 0}
                   testID={`exp-bar-${bar.key || 'none'}`}
                   accessibilityLabel={`${bar.title}: ${formatMinor(bar.minor)}, ${t('exp.share_of_all', { n: Math.round(bar.share) })}`}
-                  onPress={() => openEntry(chip)}
+                  onPress={() => (chip || bar.key ? setSub({ kind: 'category', key: bar.key || '' }) : openEntry(chip))}
                 >
                   <CategorySquare color={look.color} />
                   <AppText numberOfLines={1} style={styles.flex}>
@@ -320,6 +348,15 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
     ) : null;
 
   const menuEntry = menu ? live.find((e) => e.id === menu) : undefined;
+  const subDays = sub?.kind === 'category'
+    ? days
+        .map((d) => {
+          const entries2 = d.entries.filter((e) => (e.category_key ?? '') === sub.key);
+          const total = entries2.reduce((acc, e) => acc + (toMinor(e.amount) ?? 0n) * (e.direction === 'refund' ? -1n : 1n), 0n);
+          return { ...d, entries: entries2, total };
+        })
+        .filter((d) => d.entries.length > 0)
+    : days;
   const recordOf = (e: ExpenseOut) => (entries ?? []).find((x) => x.record.serverId && x.record.serverId === e.item_id)?.record ?? null;
   const column = { ...readableColumn() };
   const two = layout.twoPane;
@@ -328,10 +365,21 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
     <FlatList
       ref={listRef}
       testID="exp-list"
-      data={days}
+      data={sub?.kind === 'receipt' ? [] : sub?.kind === 'category' ? subDays : days}
       keyExtractor={(d) => d.date}
       renderItem={renderDay}
       ListHeaderComponent={
+        receipt ? (
+          <ReceiptView e={receipt} today={today} onCategory={() => setMenu(receipt.id)} />
+        ) : subBar ? (
+          <CategoryHead
+            title={subBar.title}
+            period={periodTitle(period, lang)}
+            minor={subBar.minor}
+            share={subBar.share}
+            color={categoryLook(theme, subBar.key || null).color}
+          />
+        ) : (
         <View style={{ gap: theme.space[4] }}>
           {two ? null : (
             <>
@@ -341,8 +389,9 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
           )}
           {feedTitle}
         </View>
+        )
       }
-      ListFooterComponent={footer ?? undefined}
+      ListFooterComponent={sub ? undefined : (footer ?? undefined)}
       contentContainerStyle={[column, { paddingTop: place ? place.inset : theme.space[4], paddingBottom: theme.m.ask.listBottomPadding + theme.space[2] }]}
       onScroll={place?.onScroll}
       onScrollEndDrag={place?.onScrollEndDrag}
@@ -439,6 +488,14 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
           chips={chips}
           hasRecord={!!recordOf(menuEntry)}
           startEditing={editFirst}
+          onOpenReceipt={
+            (menuEntry.line_items?.length ?? 0) > 0 && sub?.kind !== 'receipt'
+              ? () => {
+                  setMenu(null);
+                  setSub({ kind: 'receipt', id: menuEntry.id });
+                }
+              : undefined
+          }
           onOpenRecord={() => {
             const rec = recordOf(menuEntry);
             setMenu(null);
@@ -458,6 +515,94 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
           <AppText>{t('exp.kaspi_3')}</AppText>
         </Sheet>
       ) : null}
+    </View>
+  );
+}
+
+/**
+ * screens-v5 «Расходы · категория»: the green sheet collapsed «‹ Расходы · Транспорт»; on the paper «■ Транспорт ·
+ * ноябрь», the ONE big number, its share of the month, a bar in the category colour; then its days.
+ */
+function CategoryHead({ title, period, minor, share, color }: { title: string; period: string; minor: bigint; share: number; color: string }) {
+  const theme = useTheme();
+  const { t } = useTranslation();
+  return (
+    <View testID="exp-category">
+      <View style={[styles.rowCenter, { gap: 8 }]}>
+        <CategorySquare color={color} />
+        <AppText variant="footnote">{`${title} · ${period}`}</AppText>
+      </View>
+      <View style={{ marginTop: 8 }}>
+        <BigNumber testID="exp-category-total" value={bareSum(formatMinor(minor))} currency="₸" />
+      </View>
+      <AppText variant="small" style={{ marginTop: 6 }}>
+        {t('exp.share_of_all', { n: Math.round(share) })}
+      </AppText>
+      <View style={{ marginTop: 12 }}>
+        <Bar value={share / 100} height={10} color={color} track={theme.colors.paper2} />
+      </View>
+    </View>
+  );
+}
+
+/**
+ * screens-v5 «Расходы · чек»: the total as the one big number with its category chip, «Вчера, 19:20 · из фото чека ·
+ * 7 позиций», the receipt as a paper tape on `paper2` (tabular lines, a dashed «Итого», a torn edge).
+ */
+function ReceiptView({ e, today, onCategory }: { e: ExpenseOut; today: string; onCategory: () => void }) {
+  const theme = useTheme();
+  const { t, i18n } = useTranslation();
+  const lang = i18n.language;
+  const server = useExpenses((s) => s.categories);
+  const cat = categoryByKey(server, e.category_key);
+  const lines = e.line_items ?? [];
+  const total = formatMinor(toMinor(e.amount) ?? 0n, e.currency);
+  const time = e.created_at ? e.created_at.slice(11, 16) : '';
+  const caption = [`${dayLabel(e.spent_on, today, lang, t)}${time ? `, ${time}` : ''}`, sourceWord(e.source, t), t('exp.receipt_lines', { n: lines.length })]
+    .filter(Boolean)
+    .join(' · ');
+  const tape = theme.colors.paper2;
+  return (
+    <View testID="exp-receipt">
+      <View style={[styles.rowCenter, { alignItems: 'flex-end', gap: 8 }]}>
+        <View style={styles.flex}>
+          <BigNumber testID="exp-receipt-total" value={bareSum(total)} currency="₸" />
+        </View>
+        <Chip
+          testID="exp-receipt-category"
+          label={cat ? categoryTitle(cat, lang) : t('exp.no_category')}
+          onPress={onCategory}
+          icon={undefined}
+          style={{ minHeight: 34 }}
+        />
+      </View>
+      <AppText variant="footnote" style={{ marginTop: 6 }}>
+        {caption}
+      </AppText>
+      <View style={{ marginTop: 14, backgroundColor: tape, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingTop: 14, paddingHorizontal: 16, paddingBottom: 6 }}>
+        <AppText style={{ fontFamily: theme.type.headline.fontFamily, fontSize: 14.5, lineHeight: 19 }}>{e.payee ?? lineTitle(e, server, lang, t('exp.no_category'))}</AppText>
+        <View style={{ marginTop: 8 }}>
+          {lines.map((l, i) => (
+            <View key={`${i}:${l.name}`} style={[styles.rowCenter, { paddingVertical: 5, gap: 8 }]}>
+              <AppText style={[styles.flex, { fontSize: 14.5, lineHeight: 19 }]}>{l.qty ? `${l.name} × ${l.qty}` : l.name}</AppText>
+              {l.total ? <AppText style={[styles.tabular, { fontSize: 14.5, lineHeight: 19 }]}>{bareSum(formatMinor(toMinor(l.total) ?? 0n, e.currency))}</AppText> : null}
+            </View>
+          ))}
+          <View style={[styles.rowCenter, { paddingTop: 8, paddingBottom: 4, borderTopWidth: 1.5, borderStyle: 'dashed', borderTopColor: theme.colors.line2, gap: 8 }]}>
+            <AppText style={[styles.flex, { fontFamily: theme.type.title.fontFamily, fontSize: 14.5 }]}>{t('exp.receipt_total')}</AppText>
+            <AppText style={[styles.tabular, { fontFamily: theme.type.title.fontFamily, fontSize: 14.5 }]}>{bareSum(total)}</AppText>
+          </View>
+        </View>
+      </View>
+      {/* The torn edge of the tape. */}
+      <Svg width="100%" height={10} preserveAspectRatio="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        <Defs>
+          <Pattern id="zig" width={14} height={10} patternUnits="userSpaceOnUse">
+            <Path d="M0 0 L7 10 L14 0 Z" fill={tape} />
+          </Pattern>
+        </Defs>
+        <Rect x="0" y="0" width="100%" height="10" fill="url(#zig)" />
+      </Svg>
     </View>
   );
 }
@@ -705,6 +850,7 @@ function ExpenseSheet({
   hasRecord,
   startEditing = false,
   onOpenRecord,
+  onOpenReceipt,
   onClose,
 }: {
   e: ExpenseOut;
@@ -713,6 +859,8 @@ function ExpenseSheet({
   hasRecord: boolean;
   startEditing?: boolean;
   onOpenRecord: () => void;
+  /** A receipt with lines: «Открыть чек» (screens-v5 «Расходы · чек»). */
+  onOpenReceipt?: () => void;
   onClose: () => void;
 }) {
   const theme = useTheme();
@@ -800,6 +948,7 @@ function ExpenseSheet({
               ]
             : []),
           ...(editing ? [] : [{ key: 'amount', testID: 'exp-sheet-amount', label: t('exp.sheet_amount'), onPress: () => setEditing(true) }]),
+          ...(onOpenReceipt ? [{ key: 'receipt', testID: 'exp-sheet-receipt', label: t('exp.open_receipt'), onPress: onOpenReceipt }] : []),
           ...(hasRecord ? [{ key: 'open', testID: 'exp-sheet-open', label: t('exp.sheet_open'), onPress: onOpenRecord }] : []),
           {
             key: 'delete',

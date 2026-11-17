@@ -1,4 +1,3 @@
-import { FileText } from 'lucide-react-native';
 import { StyleSheet, View } from 'react-native';
 
 import { useTheme } from '@/theme';
@@ -7,34 +6,22 @@ import { AppText } from '../AppText';
 import type { LucideIcon } from '../ui/Icon';
 
 /**
- * An empty page (design-system §3 EmptyState): icon 48 `iconSecondary` in an 88 `surfaceSunken` circle, the
- * phrase `body` ink2, the examples to say under it. No border, no fake cards.
+ * An empty page v5 (screens-v5-extra «… · пусто»): no illustration — a short heading and one line how to add,
+ * left-aligned on the paper (the strip of the assistant is right below). The icon is kept for old callers only.
  */
-export function PageEmpty({ lines, title, icon: Cmp = FileText }: { lines: string[]; title?: string; icon?: LucideIcon }) {
+export function PageEmpty({ lines, title }: { lines: string[]; title?: string; icon?: LucideIcon }) {
   const theme = useTheme();
-  const d = theme.size.emptyIconCircle;
   const [first, ...rest] = lines;
   return (
-    <View testID="page-empty" style={[styles.wrap, { gap: theme.space[3], paddingVertical: theme.space[8] }]}>
-      <View
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-        style={[styles.circle, { width: d, height: d, borderRadius: d / 2, backgroundColor: theme.colors.surfaceSunken }]}
-      >
-        <Cmp size={theme.size.emptyIcon} color={theme.colors.iconSecondary} strokeWidth={theme.icon.strokeWidth} />
-      </View>
+    <View testID="page-empty" style={[styles.wrap, { gap: 6, paddingTop: theme.space[2], paddingBottom: theme.space[6] }]}>
       {title ? (
-        <AppText variant="title2" accessibilityRole="header" style={styles.text}>
+        <AppText variant="title1" accessibilityRole="header" style={{ fontSize: 24, lineHeight: 29 }}>
           {title}
         </AppText>
       ) : null}
-      {first ? (
-        <AppText color="ink2" style={styles.text}>
-          {first}
-        </AppText>
-      ) : null}
+      {first ? <AppText variant="small" style={{ fontSize: 16, lineHeight: 23 }}>{first}</AppText> : null}
       {rest.map((l) => (
-        <AppText key={l} variant="callout" style={styles.text}>
+        <AppText key={l} variant="small">
           {l}
         </AppText>
       ))}
@@ -43,7 +30,5 @@ export function PageEmpty({ lines, title, icon: Cmp = FileText }: { lines: strin
 }
 
 const styles = StyleSheet.create({
-  wrap: { alignItems: 'center' },
-  circle: { alignItems: 'center', justifyContent: 'center' },
-  text: { textAlign: 'center', maxWidth: 420 },
+  wrap: { alignItems: 'flex-start' },
 });

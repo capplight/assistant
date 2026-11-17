@@ -12,6 +12,7 @@ import { errorMessage, NetworkError } from '@/api/errors';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/Screen';
+import { Header } from '@/components/ui/Header';
 import { useOnboarding } from '@/store/onboarding';
 import { useSession } from '@/store/session';
 import { useToast } from '@/store/toast';
@@ -150,10 +151,12 @@ export default function PhoneScreen() {
   ) : null;
 
   return (
-    <Screen testID="phone-screen">
+    // screens-v5-extra «Номер телефона»: a stone service screen, opened collapsed.
+    <Screen testID="phone-screen" mode="strip">
+      <Header title="" back={{ onPress: () => (router.canGoBack() ? router.back() : router.replace('/')), label: t('common.back'), testID: 'phone-back' }} />
       {step === 'phone' ? (
         <View style={{ gap: theme.space[4] }}>
-          <AppText variant="largeTitle" accessibilityRole="header">
+          <AppText variant="title1" accessibilityRole="header">
             {expired ? t('phone.expired_title') : t('phone.title')}
           </AppText>
           {expired ? <AppText testID="phone-expired">{t('phone.expired_body')}</AppText> : null}
@@ -202,7 +205,7 @@ export default function PhoneScreen() {
 
       {step === 'code' ? (
         <View style={{ gap: theme.space[4] }}>
-          <AppText variant="largeTitle" accessibilityRole="header">
+          <AppText variant="title1" accessibilityRole="header">
             {t('phone.code_title')}
           </AppText>
           <AppText>{t('phone.code_sent', { phone })}</AppText>
@@ -240,7 +243,7 @@ export default function PhoneScreen() {
 
       {step === 'name' ? (
         <View style={{ gap: theme.space[4] }}>
-          <AppText variant="largeTitle" accessibilityRole="header">
+          <AppText variant="title1" accessibilityRole="header">
             {t('phone.name_title')}
           </AppText>
           <TextInput

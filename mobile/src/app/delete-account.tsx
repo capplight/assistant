@@ -8,6 +8,8 @@ import type { DeletionStateOut } from '@/api/types';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/Screen';
+import { Header } from '@/components/ui/Header';
+import { CompactConfirm } from '@/components/ui/Floating';
 import { useOnboarding } from '@/store/onboarding';
 import { MAX_FONT_SCALE, useTheme } from '@/theme';
 
@@ -29,6 +31,7 @@ export default function DeleteAccountScreen() {
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [asking, setAsking] = useState(false);
 
   useEffect(() => {
     void loadDeletionState().then((s) => {
@@ -95,7 +98,7 @@ export default function DeleteAccountScreen() {
       onPress={onPress}
       style={{
         minHeight: theme.size.buttonHeight,
-        borderRadius: theme.radius.md,
+        borderRadius: theme.size.buttonHeight / 2,
         backgroundColor: theme.colors.danger,
         alignItems: 'center',
         justifyContent: 'center',
@@ -111,9 +114,10 @@ export default function DeleteAccountScreen() {
   );
 
   return (
-    <Screen testID="delete-account-screen">
-      <Button testID="delete-cancel" label={t('account.cancel')} variant="text" minHeight={theme.size.minTouch} onPress={() => router.back()} style={{ alignSelf: 'flex-start' }} />
-      <AppText variant="largeTitle" accessibilityRole="header" style={{ marginBottom: theme.space[3] }}>
+    // screens-v5-extra «Удалить аккаунт»: the stone strip «‹ Настройки · Удаление».
+    <Screen testID="delete-account-screen" mode="strip">
+      <Header title={t('account.delete_short')} back={{ onPress: () => router.back(), label: t('more.settings'), testID: 'delete-cancel' }} />
+      <AppText variant="title1" accessibilityRole="header" style={{ marginBottom: theme.space[3] }}>
         {t('account.delete')}
       </AppText>
       <AppText>{t('account.first_download')}</AppText>
@@ -172,8 +176,21 @@ export default function DeleteAccountScreen() {
           </View>
         )
       ) : (
-        alarmButton('delete-confirm', t('account.yes_delete'), () => void run(() => confirmDeletion({ confirm: true })), busy || !state)
+        // v5 §11.9: the one irreversible step asks once more, compactly, at the bottom (the screen stays visible).
+        alarmButton('delete-confirm', t('account.yes_delete'), () => setAsking(true), busy || !state)
       )}
+      <CompactConfirm
+        visible={asking}
+        title={t('account.confirm_title')}
+        body={t('account.confirm_body')}
+        cancelLabel={t('account.confirm_keep')}
+        confirmLabel={t('account.confirm_yes')}
+        onCancel={() => setAsking(false)}
+        onConfirm={() => {
+          setAsking(false);
+          void run(() => confirmDeletion({ confirm: true }));
+        }}
+      />
       {error ? (
         <AppText testID="delete-error" color="danger" accessibilityLiveRegion="polite" style={{ marginTop: theme.space[2] }}>
           {error}

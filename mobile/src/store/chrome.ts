@@ -19,6 +19,9 @@ type State = {
   askCollapsed: boolean;
   /** The strip must stay open: focused, typing, voice, a notice or an answer on screen. */
   askPinned: boolean;
+  /** The strip's hint set by the open place itself («Записать в Транспорт…», «Спросите про этот чек…»). */
+  askHint: string | null;
+  setAskHint: (h: string | null) => void;
   /** «+» on a page sheet asks the assistant line to open its «Добавить» sheet (photo, file, reminder). */
   addRequest: number;
   requestAdd: () => void;
@@ -38,6 +41,8 @@ export const useChrome = create<State>()((set) => ({
   askPinned: false,
   place: 'stone',
   addRequest: 0,
+  askHint: null,
+  setAskHint: (askHint) => set((s) => (s.askHint === askHint ? s : { askHint })),
   requestAdd: () => set((s) => ({ addRequest: s.addRequest + 1 })),
   setPlace: (place) => set((s) => (s.place === place ? s : { place })),
   setTabBarHeight: (tabBarHeight) => set((s) => (s.tabBarHeight === tabBarHeight ? s : { tabBarHeight })),

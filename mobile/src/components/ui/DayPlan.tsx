@@ -122,7 +122,7 @@ export function DayPlan({ items, now, testID = 'day-plan' }: { items: readonly P
         if (p.kind === 'free') {
           const label = p.minutes >= 60 ? t('plan.free', { time: dur(p.minutes) }) : dur(p.minutes);
           return (
-            <View key={`free-${p.start}`} testID="plan-free" style={[styles.free, { height: p.height, borderColor: c.line2, marginBottom: P.blockGap }]}>
+            <View key={`free-${p.start}`} testID="plan-free" style={[styles.free, { minHeight: p.height, borderColor: c.line2, marginBottom: P.blockGap }]}>
               <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
                 <Defs>
                   <Pattern id={`h${i}`} width={8} height={8} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
@@ -191,3 +191,24 @@ const styles = StyleSheet.create({
   free: { borderRadius: P.radius, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   nowTag: { position: 'absolute', top: -11, paddingHorizontal: 7, paddingVertical: 4, borderRadius: 9 },
 });
+
+/** A hatched «free time» block on its own (the empty day: «ничего не запланировано»). */
+export function FreeBlock({ label, height = 56 }: { label: string; height?: number }) {
+  const theme = useTheme();
+  const c = theme.colors;
+  return (
+    <View testID="plan-free" style={[styles.free, { minHeight: height, borderColor: c.line2 }]}>
+      <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
+        <Defs>
+          <Pattern id="hfree" width={8} height={8} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <Line x1={0} y1={0} x2={0} y2={8} stroke={c.line} strokeWidth={1.5} />
+          </Pattern>
+        </Defs>
+        <Rect x="0" y="0" width="100%" height="100%" fill="url(#hfree)" />
+      </Svg>
+      <View style={{ backgroundColor: c.paper, paddingHorizontal: 10, paddingVertical: 2, borderRadius: 10 }}>
+        <AppText style={{ fontFamily: theme.type.sheetMeta.fontFamily, fontSize: 14, lineHeight: 18, color: c.ink2 }}>{label}</AppText>
+      </View>
+    </View>
+  );
+}

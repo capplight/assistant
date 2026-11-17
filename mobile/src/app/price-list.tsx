@@ -50,9 +50,10 @@ export default function PriceListScreen() {
 
   return (
     <View style={styles.root}>
-      <Screen testID="prices-screen">
+      {/* screens-v5-extra: a second-level stone screen, the sheet collapsed. */}
+      <Screen testID="prices-screen" mode="strip">
+        <Header title={t('kp.prices_screen')} back={{ testID: 'prices-back', label: t('kp.back'), onPress: () => (router.canGoBack() ? router.back() : router.replace('/')) }} />
         <View style={{ gap: theme.space[4] }}>
-          <Header title={t('kp.prices_screen')} back={{ testID: 'prices-back', label: t('kp.back'), onPress: () => (router.canGoBack() ? router.back() : router.replace('/')) }} />
           <AppText testID="prices-count" variant="callout">
             {[t('kp.prices_count', { count: list.length }), updatedAt ? t('kp.prices_updated', { date: shortDate(updatedAt, i18n.language) }) : null].filter(Boolean).join(' · ')}
           </AppText>

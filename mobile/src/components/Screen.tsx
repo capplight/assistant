@@ -19,7 +19,9 @@ type Props = {
   testID?: string;
   /** v5: the sheet colour of the place (default stone — service screens). */
   place?: PlaceKey;
-} & Pick<PlaceScreenProps, 'peek' | 'phrase' | 'mode' | 'askRoom' | 'stripMeta' | 'sub' | 'paperTone' | 'scrollRef' | 'onScroll' | 'onContentSizeChange' | 'metaNode' | 'sheetExtra' | 'paperPadding' | 'hideTitle'>;
+} & Pick<PlaceScreenProps, 'peek' | 'phrase' | 'mode' | 'askRoom' | 'stripMeta' | 'sub' | 'paperTone' | 'scrollRef' | 'onScroll' | 'onContentSizeChange' | 'metaNode' | 'sheetExtra' | 'paperPadding' | 'hideTitle'> &
+  /** Overrides of what the first `<Header>` gives (a tool's own sub-screen: «‹ Расходы · Транспорт»). */
+  Partial<Pick<PlaceScreenProps, 'title' | 'back' | 'actions'>>;
 
 /**
  * Every screen in the v5 look (design-system §11): a `PlaceScreen`. When the first child is a `<Header>`, it becomes

@@ -8,6 +8,7 @@ import { restoreAccount, startOver, untilText, useAccount } from '@/account/data
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/Screen';
+import { Header } from '@/components/ui/Header';
 import { useTheme } from '@/theme';
 
 /**
@@ -39,9 +40,7 @@ export default function AccountDeletingScreen() {
 
   return (
     <Screen testID="account-deleting-screen">
-      <AppText variant="largeTitle" accessibilityRole="header" style={{ marginBottom: theme.space[3] }}>
-        {over ? t('account.gone_title') : t('account.deleting_title')}
-      </AppText>
+      <Header title={over ? t('account.gone_title') : t('account.deleting_title')} />
       <AppText testID="deleting-message">
         {over ? t('account.gone') : deleting?.message || t('account.deleting')}
       </AppText>

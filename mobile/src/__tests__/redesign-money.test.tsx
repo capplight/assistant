@@ -91,7 +91,11 @@ describe('«Расходы»: one total, the keys in a sheet, one «Требуе
     expect(screen.queryByTestId('exp-entry-sheet')).toBeNull();
     // Category colours: the row's bar is the category's own colour, not the brand.
     expect(screen.getByTestId('exp-bar-transport')).toBeTruthy();
+    // screens-v5 «Расходы · категория»: the row opens the category (sheet «‹ Расходы · Транспорт»); its «+» opens the keys.
     await fireEvent.press(screen.getByTestId('exp-bar-transport'));
+    await settle(() => screen.queryByTestId('exp-category') !== null);
+    expect(screen.getByTestId('exp-category-total')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('exp-sub-add'));
     await settle(() => screen.queryByTestId('exp-entry-sheet') !== null);
     expect(screen.getByTestId('exp-cat-transport').props.accessibilityState).toMatchObject({ checked: true });
   });

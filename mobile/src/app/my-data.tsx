@@ -8,6 +8,7 @@ import { liveLink, refreshExport, shareExport, startExport, untilText, useAccoun
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/Screen';
+import { Header } from '@/components/ui/Header';
 import { useTheme } from '@/theme';
 
 const POLL_MS = 5_000;
@@ -63,11 +64,9 @@ export default function MyDataScreen() {
   );
 
   return (
-    <Screen testID="my-data-screen">
-      <Button testID="my-data-back" label={t('common.back')} variant="text" minHeight={theme.size.minTouch} onPress={() => router.back()} style={{ alignSelf: 'flex-start' }} />
-      <AppText variant="largeTitle" accessibilityRole="header" style={{ marginBottom: theme.space[2] }}>
-        {t('account.my_data')}
-      </AppText>
+    // screens-v5-extra «Мои данные»: a second-level stone screen, the sheet collapsed.
+    <Screen testID="my-data-screen" mode="strip">
+      <Header title={t('account.my_data')} back={{ onPress: () => router.back(), label: t('more.settings'), testID: 'my-data-back' }} />
       <AppText color="ink2" style={{ marginBottom: theme.space[4] }}>
         {t('account.export_what')}
       </AppText>

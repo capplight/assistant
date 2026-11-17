@@ -10,6 +10,7 @@ import { AppText } from '@/components/AppText';
 import { Screen } from '@/components/Screen';
 import { ProgressBar } from '@/components/ui/Brief';
 import { Button } from '@/components/ui/Button';
+import { CompactConfirm } from '@/components/ui/Floating';
 import { Card, cardEdge } from '@/components/ui/Card';
 import { Header } from '@/components/ui/Header';
 import { Icon } from '@/components/ui/Icon';
@@ -49,6 +50,7 @@ export default function AiImportScreen() {
   const imp: ImportOut | null = row?.importId ? (imports[row.importId] ?? null) : null;
   const [provider, setProvider] = useState<Provider>('chatgpt');
   const [busy, setBusy] = useState(false);
+  const [askUndo, setAskUndo] = useState(false);
   const running = importRunning(imp);
 
   useEffect(() => {
@@ -123,7 +125,8 @@ export default function AiImportScreen() {
         <View style={[styles.row, { gap: theme.space[2], flexWrap: 'wrap' }]}>
           <Button testID="aiimp-open" label={t('aiimp.open_chats')} size="small" onPress={() => router.navigate('/ai-chats')} />
           {imp.action_id ? (
-            <Button testID="aiimp-undo" label={t('aiimp.undo')} variant="text" labelColor="danger" onPress={() => void undoImport(imp)} />
+            // screens-v5-extra «Переписки · готово»: «Удалить импорт» asks once, compactly (the chats go to the trash).
+            <Button testID="aiimp-undo" label={t('aiimp.undo')} variant="link" size="small" onPress={() => setAskUndo(true)} />
           ) : null}
         </View>
       </Card>
@@ -131,7 +134,7 @@ export default function AiImportScreen() {
   }
 
   return (
-    <Screen testID="page-ai-import" edges={['top']}>
+    <Screen testID="page-ai-import" mode="strip">
       <Header title={t('aiimp.title')} meta={t('aiimp.meta')} back={{ onPress: () => (router.canGoBack() ? router.back() : router.replace('/more')), label: t('more.title'), testID: 'aiimp-back' }} />
       <View style={{ gap: theme.space[4] }}>
         {/* One row of three; at a large font one under another (each tile whole). */}
@@ -195,6 +198,18 @@ export default function AiImportScreen() {
         </AppText>
         <Button testID="aiimp-telegram" label={t('aiimp.telegram')} variant="text" onPress={() => router.push('/import')} />
       </View>
+      <CompactConfirm
+        visible={askUndo && !!imp}
+        title={t('aiimp.undo_confirm_title')}
+        body={t('aiimp.undo_confirm_body')}
+        cancelLabel={t('aiimp.undo_keep')}
+        confirmLabel={t('aiimp.undo')}
+        onCancel={() => setAskUndo(false)}
+        onConfirm={() => {
+          setAskUndo(false);
+          if (imp) void undoImport(imp);
+        }}
+      />
     </Screen>
   );
 }

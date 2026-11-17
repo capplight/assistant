@@ -16,6 +16,7 @@ import { getRecordActions, refreshRecord } from '@/services';
 import { useUndo } from '@/store/undo';
 import { useView } from '@/store/view';
 import { SimilarNote } from '@/components/SimilarNote';
+import { ChangedPlate } from '@/components/ChangedMark';
 import { MAX_FONT_SCALE, placeOfTemplate, useTheme } from '@/theme';
 import { usePageLabels } from '@/pages/usePageLabels';
 import { usePages } from '@/store/pages';
@@ -99,6 +100,7 @@ export default function RecordScreen() {
   return (
     <Screen testID="record-card" mode="strip" place={place} askRoom>
       {sheet}
+      <ChangedPlate at={record.assistantChangedAt} actionId={record.assistantActionId} />
       <AppText variant="title1" accessibilityRole="header" style={{ marginBottom: 4, fontSize: 26, lineHeight: 31 }}>
         {title}
       </AppText>

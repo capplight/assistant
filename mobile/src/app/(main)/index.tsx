@@ -17,7 +17,7 @@ import { useMinuteClock, useMissed } from '@/components/ReminderLists';
 import { PageTiles, ShoppingLine } from '@/components/TodaySheet';
 import { Button } from '@/components/ui/Button';
 import { CheckCircle } from '@/components/ui/Check';
-import { DayPlan, type PlanItem } from '@/components/ui/DayPlan';
+import { DayPlan, FreeBlock, type PlanItem } from '@/components/ui/DayPlan';
 import { Inset, Row, RowChevron, RowMeta, SectionHead } from '@/components/ui/Leaf';
 import { PlaceScreen } from '@/components/ui/PlaceScreen';
 import type { TimelineItem } from '@/components/ui/Timeline';
@@ -250,9 +250,11 @@ export default function TodayScreen() {
         {planItems.length > 0 ? (
           <DayPlan testID="today-plan" items={planItems} now={nowMin} />
         ) : (
-          <Inset testID="today-empty">
-            <AppText variant="callout">{last?.empty && last.example ? t('today.free_example', { example: last.example }) : t('today.plan_empty')}</AppText>
-          </Inset>
+          // screens-v5-extra «Сегодня · пусто»: one hatched «ничего не запланировано», an example phrase under it.
+          <View style={{ gap: 10 }}>
+            <FreeBlock label={t('today.nothing_planned')} />
+            <AppText testID="today-empty" variant="small">{last?.empty && last.example ? t('today.free_example', { example: last.example }) : t('today.plan_empty')}</AppText>
+          </View>
         )}
         {soon ? (
           <Row first testID={soon.testID ? `${soon.testID}-now` : undefined}>
