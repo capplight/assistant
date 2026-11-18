@@ -147,9 +147,9 @@ def test_asks_web():
 # --- web search: off by default, declared without a country, billed per search ---
 
 
-def test_web_search_is_off_by_default():
+def test_web_search_is_on_by_default():
     s = Settings(_env_file=None)  # type: ignore[call-arg]
-    assert s.web_search_enabled is False and s.web_search_max_uses == 3
+    assert s.web_search_enabled is True and s.web_search_max_uses == 3
 
 
 def _req(**kw) -> AdapterRequest:  # type: ignore[no-untyped-def]

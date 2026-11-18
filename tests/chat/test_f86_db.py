@@ -121,9 +121,9 @@ class _WebAdapter(FakeAdapter):
         return resp
 
 
-async def test_web_search_off_by_default_and_answered_from_knowledge(env):
+async def test_web_search_off_when_disabled_and_answered_from_knowledge(env):
     adapter = _WebAdapter("anthropic", [_reply("Обычно в ноябре в Стамбуле +12…+15°.")])
-    app = env.make_app(fake_router(env.maker, adapter))
+    app = env.make_app(fake_router(env.maker, adapter), web_search_enabled=False)
     async with client(app) as c:
         h = await signed_in(c)
         evs = await ask(c, h, "Какая погода в Стамбуле в ноябре? Поищи в интернете")
