@@ -23,7 +23,7 @@ import { MovePageSheet, type MoveMode } from '../MovePageSheet';
 import { RecordMenuSheet, type MenuExtra } from '../RecordMenuSheet';
 import { RecordRow, type RowMoves } from '../RecordRow';
 import { TaskRow } from '../TaskRow';
-import { usePlaceList } from '../ui/PlaceScreen';
+import { AnimatedList, usePlaceList } from '../ui/PlaceScreen';
 import { useDrag } from '../useDrag';
 import { dueText, shownEntries, type EntryRow, type Row } from './rows';
 
@@ -236,7 +236,7 @@ export function EntryList({
   return (
     <>
       <View style={{ flex: 1 }} {...drag.handlers}>
-        <FlatList<Line>
+        <AnimatedList<Line>
           ref={listRef}
           testID="page-records"
           data={lines}

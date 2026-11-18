@@ -5,7 +5,10 @@ import { useTranslation } from 'react-i18next';
 import {
   AccessibilityInfo,
   Animated,
+  AppState,
+  BackHandler,
   Easing,
+  Keyboard,
   Pressable,
   StyleSheet,
   Text,
@@ -33,7 +36,6 @@ import { useVoiceRecorder } from '@/voice/useVoiceRecorder';
 
 import { AddSheet } from './AddSheet';
 import { CaughtCard, litSegments } from './CaughtCard';
-import { LineChips } from './LineChips';
 import { AppText } from './AppText';
 import { Button } from './ui/Button';
 import { useCurrentPage } from './useCurrentPage';
@@ -92,6 +94,11 @@ export function AssistantLine({
   // makes that place's own thing and never opens this sheet.
   // v2 «ввод»: a brand ring while the field has the focus; the chips show while it is empty.
   const [focused, setFocused] = useState(false);
+  // A7: Android «Назад» closes the keyboard without a blur — the line goes back to rest all the same.
+  useEffect(() => {
+    const sub = Keyboard.addListener('keyboardDidHide', () => setFocused(false));
+    return () => sub.remove();
+  }, []);
   // «Я в магазине»: only a «Написать» strip and the mic until the person starts writing.
   const [opened, setOpened] = useState(false);
   const folded = compact && !opened && text.trim().length === 0;
@@ -116,13 +123,37 @@ export function AssistantLine({
   };
   const voice = useVoiceRecorder(onVoiceFinished);
   const listening = voice.status === 'listening';
+  // QA v5-device-2 A7: the dim of «Слушаю…» follows the microphone itself, never a flag set ahead of it — a denied
+  // permission or a failed start left the screen dark and «frozen». Off again when this line goes away.
+  useEffect(() => {
+    setListening(listening);
+  }, [listening, setListening]);
+  useEffect(() => () => setListening(false), [setListening]);
+  // The app goes to the background or «Назад»: the recording ends (what was said is kept), the dim goes.
+  const voiceRef = useRef(voice);
+  useEffect(() => {
+    voiceRef.current = voice;
+  });
+  useEffect(() => {
+    if (!listening) return;
+    const app = AppState.addEventListener('change', (st) => {
+      if (st !== 'active') void voiceRef.current.finish();
+    });
+    const back = BackHandler.addEventListener('hardwareBackPress', () => {
+      void voiceRef.current.cancel();
+      return true;
+    });
+    return () => {
+      app.remove();
+      back.remove();
+    };
+  }, [listening]);
 
   // A tip's [Да] on «Сегодня» (today.md `put_phrase`, `open_mic`): the person still sends it.
   const start = useRef(() => undefined as void);
   useEffect(() => {
     start.current = () => {
       if (consentGiven && !noAi) {
-        setListening(true);
         void voice.start();
       } else inputRef.current?.focus();
     };
@@ -146,7 +177,6 @@ export function AssistantLine({
   const startVoice = async () => {
     // Consent gate: no recording before S05; never in «Без ИИ» (voice needs AI, R-05).
     if (!consentGiven || noAi) return;
-    setListening(true);
     await voice.start();
   };
 
@@ -347,7 +377,6 @@ export function AssistantLine({
   useEffect(() => {
     if (strip) useChrome.getState().setAskPinned(pinned);
   }, [strip, pinned]);
-  const showChips = scope !== 'all' && focused && text.trim().length === 0 && !listening && consentGiven;
 
   const plus = (
     <Pressable
@@ -440,17 +469,7 @@ export function AssistantLine({
   return (
     <>
       {seen && (seen.day || seen.time) ? <CaughtCard c={seen} /> : null}
-      {showChips ? (
-        <LineChips
-          kind={
-            current.kind === 'page' ? current.page.templateKey : current.kind === 'assistant' ? 'assistant' : 'today'
-          }
-          onPick={(phrase) => {
-            setText(phrase);
-            inputRef.current?.focus();
-          }}
-        />
-      ) : null}
+      {/* QA v5-device-2 A2 (Ф-85): no ready-made chips above the line, in any state (`assistantEntry.suggestions: false`). */}
       <AskFold
         testID={testID}
         enabled={strip && !listening && voice.status !== 'denied'}
@@ -507,6 +526,13 @@ function AskFold({
   const [reduced, setReduced] = useState(false);
   const [width, setWidth] = useState(0);
   const [p] = useState(() => new Animated.Value(1));
+  // QA v5-device-2 A1: no shadow while the shape changes (on Android the old shape's elevation drew a «second circle»).
+  const [moving, setMoving] = useState(false);
+  const [seenFold, setSeenFold] = useState(collapsed);
+  if (seenFold !== collapsed) {
+    setSeenFold(collapsed);
+    setMoving(true);
+  }
   useEffect(() => {
     let alive = true;
     void AccessibilityInfo.isReduceMotionEnabled?.()
@@ -525,7 +551,7 @@ function AskFold({
       easing: reduced ? Easing.linear : Easing.bezier(0.2, 0, 0, 1),
       useNativeDriver: false,
     });
-    a.start();
+    a.start(() => setMoving(false));
     return () => a.stop();
   }, [collapsed, reduced, p]);
 
@@ -536,68 +562,69 @@ function AskFold({
       </View>
     );
 
-  const textOpacity = p.interpolate({ inputRange: [0.55, 1], outputRange: [0, 1], extrapolate: 'clamp' });
+  // 260 ms collapse: the words and the mic go in the first 90 ms, the icon (and its 9 dp dot) comes at 150–260 ms.
+  const textOpacity = p.interpolate({
+    inputRange: [1 - 90 / motionV5.askCollapse, 1],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
   const iconOpacity = reduced
     ? p.interpolate({ inputRange: [0, 1], outputRange: [1, 0] })
-    : p.interpolate({ inputRange: [0, 0.4], outputRange: [1, 0], extrapolate: 'clamp' });
+    : p.interpolate({ inputRange: [0, 1 - 150 / motionV5.askCollapse], outputRange: [1, 0], extrapolate: 'clamp' });
   return (
     <View
       onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
       pointerEvents="box-none"
       style={{ marginHorizontal: inset, alignItems: 'flex-end' }}
     >
+      {/* ONE layer morphs: the strip narrows to a 48 circle at the right edge (radius h/2 all the time, the one 1.5
+          ink border of the strip); the circle's icon is inside it. Never a strip and a circle at once. */}
       <Animated.View
         testID={testID}
-        pointerEvents={collapsed ? 'none' : 'auto'}
-        accessibilityElementsHidden={collapsed}
-        importantForAccessibility={collapsed ? 'no-hide-descendants' : 'auto'}
         style={[
           style,
           styles.clip,
+          moving ? styles.flat : null,
           reduced || width === 0
-            ? { width: '100%', opacity: reduced ? p : 1 }
+            ? {
+                width: '100%',
+                opacity: reduced ? p.interpolate({ inputRange: [0, 1], outputRange: [collapsed ? 1 : 0, 1] }) : 1,
+              }
             : { width: p.interpolate({ inputRange: [0, 1], outputRange: [height, width] }) },
         ]}
       >
         <Animated.View
-          style={{ width: width > 0 ? width - 0 : '100%', alignSelf: 'flex-end', opacity: reduced ? 1 : textOpacity }}
+          pointerEvents={collapsed ? 'none' : 'auto'}
+          accessibilityElementsHidden={collapsed}
+          importantForAccessibility={collapsed ? 'no-hide-descendants' : 'auto'}
+          style={{ width: width > 0 ? width : '100%', alignSelf: 'flex-end', opacity: reduced ? 1 : textOpacity }}
         >
           {children}
         </Animated.View>
+        {collapsed ? (
+          <Animated.View style={[styles.bubbleWrap, { width: height, height, opacity: iconOpacity }]}>
+            <Pressable
+              testID={`${testID}-bubble`}
+              accessibilityRole="button"
+              accessibilityLabel={bubbleLabel}
+              accessibilityHint={t('ask.bubble_hint')}
+              onPress={() => {
+                useChrome.getState().setAskCollapsed(false);
+                onOpen();
+              }}
+              style={[styles.bubble, { width: height, height, borderRadius: height / 2 }]}
+            >
+              <MessageSquareText size={22} color={theme.colors.ink} strokeWidth={theme.icon.strokeWidth} />
+              <View
+                style={[
+                  styles.bubbleDot,
+                  { backgroundColor: theme.colors.place.assistant, borderColor: theme.colors.paper },
+                ]}
+              />
+            </Pressable>
+          </Animated.View>
+        ) : null}
       </Animated.View>
-      {collapsed ? (
-        <Animated.View style={[styles.bubbleWrap, { opacity: iconOpacity }]}>
-          <Pressable
-            testID={`${testID}-bubble`}
-            accessibilityRole="button"
-            accessibilityLabel={bubbleLabel}
-            accessibilityHint={t('ask.bubble_hint')}
-            onPress={() => {
-              useChrome.getState().setAskCollapsed(false);
-              onOpen();
-            }}
-            style={[
-              styles.bubble,
-              {
-                width: height,
-                height,
-                borderRadius: height / 2,
-                backgroundColor: theme.colors.paper,
-                borderColor: theme.colors.ink,
-              },
-              askBar.elevation,
-            ]}
-          >
-            <MessageSquareText size={22} color={theme.colors.ink} strokeWidth={theme.icon.strokeWidth} />
-            <View
-              style={[
-                styles.bubbleDot,
-                { backgroundColor: theme.colors.place.assistant, borderColor: theme.colors.paper },
-              ]}
-            />
-          </Pressable>
-        </Animated.View>
-      ) : null}
     </View>
   );
 }
@@ -612,8 +639,9 @@ const styles = StyleSheet.create({
   round: { alignItems: 'center', justifyContent: 'center' },
   dot: { width: askBar.dot, height: askBar.dot, borderRadius: askBar.dot / 2 },
   clip: { overflow: 'hidden' },
-  bubbleWrap: { position: 'absolute', right: 0, bottom: 0 },
-  bubble: { alignItems: 'center', justifyContent: 'center', borderWidth: askBar.border },
+  bubbleWrap: { position: 'absolute', right: 0, top: 0, alignItems: 'center', justifyContent: 'center' },
+  bubble: { alignItems: 'center', justifyContent: 'center' },
+  flat: { elevation: 0, shadowOpacity: 0 },
   bubbleDot: {
     position: 'absolute',
     right: 3,

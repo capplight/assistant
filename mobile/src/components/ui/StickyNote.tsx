@@ -1,10 +1,26 @@
 import { Pin } from 'lucide-react-native';
 import { Children, useState, type ReactNode } from 'react';
-import { Pressable, StyleSheet, View, type AccessibilityActionEvent, type AccessibilityActionInfo, type LayoutChangeEvent } from 'react-native';
+import {
+  Pressable,
+  StyleSheet,
+  View,
+  type AccessibilityActionEvent,
+  type AccessibilityActionInfo,
+  type LayoutChangeEvent,
+} from 'react-native';
 
 import Svg, { Path } from 'react-native-svg';
 
-import { gridItemWidth, noteInk, STICKER_PICKER_KEYS, useLayout, useTheme, type NoteColorKey } from '@/theme';
+import {
+  gridItemWidth,
+  noteInk,
+  STICKER_KEYS,
+  stickerOf,
+  useLayout,
+  useTheme,
+  type StickerColor,
+  type StickerKey,
+} from '@/theme';
 
 import { AppText } from '../AppText';
 import { Icon } from './Icon';
@@ -15,7 +31,7 @@ type NoteProps = {
   title?: string;
   /** One meta line (`footnote` ink3), e.g. the date. */
   date?: string;
-  color?: NoteColorKey;
+  color?: StickerColor;
   pinned?: boolean;
   onPress?: () => void;
   /** The menu opens on long press — no «⋯» on the card (design-system §3 StickyNote). */
@@ -39,9 +55,9 @@ type NoteProps = {
  * A note nobody coloured still shows in one of the 7 colours (Ф-52 «разноцветные, как в макете»): picked from its id,
  * so it keeps its colour; the person's own choice always wins. Display only — nothing is saved.
  */
-export function autoNoteColor(seed: string): NoteColorKey {
-  // v5: one stored key per sticker colour (sand, rose, mist, graphite), never a place hue.
-  const fills = STICKER_PICKER_KEYS.filter((k) => k !== 'white');
+export function autoNoteColor(seed: string): StickerKey {
+  // Ф-85: one of the 7 pastels (never paper, never a place hue); the wall itself uses the round (`roundStickerColors`).
+  const fills = STICKER_KEYS.filter((k) => k !== 'paper');
   let h = 0;
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
   return fills[h % fills.length]!;
@@ -70,13 +86,15 @@ export function StickyNote({
   testID,
 }: NoteProps) {
   const theme = useTheme();
-  const white = color === 'white';
+  const white = stickerOf(color) === 'paper';
   const ink = noteInk[theme.scheme];
   const list = look === 'list';
   const titleStyle = list
     ? { fontFamily: theme.type.headline.fontFamily, fontSize: 17, lineHeight: 22, color: ink.ink }
     : { fontFamily: theme.type.headline.fontFamily, fontSize: 16, lineHeight: 20, color: ink.ink };
-  const textStyle = list ? { fontSize: 15, lineHeight: 21, color: ink.ink2 } : { fontSize: 14, lineHeight: 20, color: ink.ink2 };
+  const textStyle = list
+    ? { fontSize: 15, lineHeight: 21, color: ink.ink2 }
+    : { fontSize: 14, lineHeight: 20, color: ink.ink2 };
   const dateText = date ? (
     <AppText variant="caption" style={{ color: ink.ink2, fontFamily: theme.type.footnote.fontFamily }}>
       {date}
@@ -96,9 +114,11 @@ export function StickyNote({
         {
           backgroundColor: theme.notes[color],
           borderRadius: 20,
+          // QA v5-device-2 A4 (`stickerLayout`): a list card is 16 / 14 and at least 64 high.
           paddingTop: 14,
-          paddingHorizontal: 14,
-          paddingBottom: 13,
+          paddingHorizontal: list ? 16 : 14,
+          paddingBottom: list ? 14 : 13,
+          minHeight: list ? 64 : undefined,
           gap: 4,
           overflow: 'hidden',
         },
@@ -108,8 +128,14 @@ export function StickyNote({
         pressedStyle(pressed),
       ]}
     >
-      {changed ? <Fold paper={theme.colors.paper} color={theme.colors.place.assistant} testID={testID ? `${testID}-changed` : undefined} /> : null}
-      {title || pinned || (list && date) ? (
+      {changed ? (
+        <Fold
+          paper={theme.colors.paper}
+          color={theme.colors.place.assistant}
+          testID={testID ? `${testID}-changed` : undefined}
+        />
+      ) : null}
+      {title || pinned ? (
         <View style={styles.head}>
           {title ? (
             <AppText variant="headline" style={[styles.flex, titleStyle]}>
@@ -118,18 +144,22 @@ export function StickyNote({
           ) : (
             <View style={styles.flex} />
           )}
-          {list && date ? dateText : null}
-          {pinned && !list ? <Icon testID={testID ? `${testID}-pin` : undefined} icon={Pin} size="sm" color={ink.ink2} /> : null}
+          {pinned && !list ? (
+            <Icon testID={testID ? `${testID}-pin` : undefined} icon={Pin} size="sm" color={ink.ink2} />
+          ) : null}
         </View>
       ) : null}
       <View style={list ? styles.listBody : undefined}>
-        <AppText variant="callout" numberOfLines={list ? 3 : 6} style={[textStyle, list ? styles.flex : null]}>
+        <AppText variant="callout" numberOfLines={list ? 2 : 6} style={[textStyle, list ? styles.flex : null]}>
           {text}
         </AppText>
-        {pinned && list ? <Icon testID={testID ? `${testID}-pin` : undefined} icon={Pin} size="sm" color={ink.ink2} /> : null}
+        {pinned && list ? (
+          <Icon testID={testID ? `${testID}-pin` : undefined} icon={Pin} size="sm" color={ink.ink2} />
+        ) : null}
       </View>
       {children}
-      {!list ? dateText : null}
+      {/* B6: the date is the last line, at the left, in both looks. */}
+      {dateText}
     </Pressable>
   );
 }
@@ -182,7 +212,16 @@ function Fold({ paper, color, testID }: { paper: string; color: string; testID?:
 }
 
 const styles = StyleSheet.create({
-  fold: { position: 'absolute', right: 0, top: 0, width: 24, height: 24, borderTopRightRadius: 20, overflow: 'hidden', zIndex: 1 },
+  fold: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    width: 24,
+    height: 24,
+    borderTopRightRadius: 20,
+    overflow: 'hidden',
+    zIndex: 1,
+  },
   head: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   listBody: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   flex: { flex: 1 },

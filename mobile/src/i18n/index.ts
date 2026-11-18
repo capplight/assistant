@@ -3,6 +3,7 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
 import kk from './locales/kk.json';
+import { ensurePluralRules } from './plural';
 import ru from './locales/ru.json';
 
 export type Language = 'ru' | 'kk';
@@ -26,6 +27,9 @@ export function detectDeviceLanguage(): Language {
 
 /** Server value `{N}` for the consent text (GET /consents/text). Placeholder until the backend provides it. */
 export const CONSENT_RETENTION_DAYS_PLACEHOLDER = 30;
+
+// B3: right plural forms on every JS engine («6 дел», not «6 дела»).
+ensurePluralRules();
 
 if (!i18n.isInitialized) {
   // eslint-disable-next-line import/no-named-as-default-member -- instance API is intended

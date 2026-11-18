@@ -1,4 +1,3 @@
-import { autoNoteColor } from '@/components/ui/StickyNote';
 import { act, fireEvent, renderRouter, screen, within } from 'expo-router/testing-library';
 import { Dimensions } from 'react-native';
 
@@ -239,19 +238,21 @@ describe('«Заметки» — the sticker wall «Ряды»', () => {
     expect(screen.queryByTestId('record-menu-n1')).toBeNull();
     expect(screen.getByTestId('record-n1').props.accessibilityLabel).toMatch(/^Стикер 1 из 3\. белый\. Код домофона/);
 
+    const autoBg = bg('record-n1');
     await fireEvent(screen.getByTestId('record-n1'), 'longPress');
     await fireEvent.press(screen.getByTestId('menu-color'));
     await settle(() => screen.queryByTestId('color-sheet') !== null);
     expect(screen.getByTestId('color-white').props.accessibilityState).toEqual({ checked: true });
     await fireEvent.press(screen.getByTestId('color-yellow'));
     await settle(() => bg('record-n1') === lightNoteColors.yellow);
-    expect(stripText()).toBe('Песок: Код домофона\n4512');
+    expect(stripText()).toBe('Лимон: Код домофона\n4512');
     const row = outbox.all().find((r) => r.kind === 'page.item_look')!;
     expect(row.payload).toMatchObject({ color: 'yellow' });
     // «Отменить» while it waits: it never goes, the colour is back.
     await fireEvent.press(screen.getByTestId('undo-strip-undo'));
     // Nothing chosen = the automatic colour of the note (v2: «разноцветные», Ф-52), not white.
-    await settle(() => bg('record-n1') === lightNoteColors[autoNoteColor('srv-n1')]);
+    // Ф-85: back to the automatic colour of the round (a pastel, never yellow here, never paper).
+    await settle(() => bg('record-n1') === autoBg);
     expect((await outbox.get(row.id))?.status).toBe('failed');
 
     s.on('PATCH /pages/*/items/*', (c) => ({
@@ -266,9 +267,9 @@ describe('«Заметки» — the sticker wall «Ряды»', () => {
     s.offline = false;
     await fireEvent(screen.getByTestId('record-n2'), 'longPress');
     await fireEvent.press(screen.getByTestId('menu-color'));
-    // v5 picker: five stickers; «туман» is stored as `blue` (old `green` shows as the same mist).
+    // Ф-85 picker: the 7 stored colours (lemon, sky, rose, mint, lilac, apricot, paper).
     await settle(() => screen.queryByTestId('color-blue') !== null);
-    expect(screen.queryByTestId('color-green')).toBeNull();
+    expect(screen.getByTestId('color-green')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('color-blue'));
     await act(async () => {
       await sync(outbox);

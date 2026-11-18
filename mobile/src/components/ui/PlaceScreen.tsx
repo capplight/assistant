@@ -134,7 +134,13 @@ export function usePlaceList(scrollTo: (y: number, animated: boolean) => void): 
   });
   useEffect(() => (api ? api.register((y, a) => fn.current(y, a)) : undefined), [api]);
   if (!api) return null;
-  return { inset: api.inset, onScroll: api.onScroll, onScrollEndDrag: api.onScrollEndDrag, onMomentumScrollEnd: api.onMomentumScrollEnd, scrollEventThrottle: 16 };
+  return {
+    inset: api.inset,
+    onScroll: api.onScroll,
+    onScrollEndDrag: api.onScrollEndDrag,
+    onMomentumScrollEnd: api.onMomentumScrollEnd,
+    scrollEventThrottle: 16,
+  };
 }
 
 /** Hand the inner ScrollView to the caller's ref (object or callback). */
@@ -148,7 +154,19 @@ function placeColors(theme: Theme, place: PlaceKey) {
 }
 
 /** Round 40 icon on a sheet, 48 target. */
-export function SheetIcon({ icon: Cmp, label, onPress, color, testID }: { icon: LucideIcon; label: string; onPress: () => void; color: string; testID?: string }) {
+export function SheetIcon({
+  icon: Cmp,
+  label,
+  onPress,
+  color,
+  testID,
+}: {
+  icon: LucideIcon;
+  label: string;
+  onPress: () => void;
+  color: string;
+  testID?: string;
+}) {
   const theme = useTheme();
   return (
     <Pressable
@@ -158,7 +176,11 @@ export function SheetIcon({ icon: Cmp, label, onPress, color, testID }: { icon: 
       onPress={onPress}
       hitSlop={4}
       // A 40 dp circle to the eye, a 48 dp target (the margins keep the 40 dp layout of the mock).
-      style={({ pressed }) => [styles.icon, { width: 48, height: 48, margin: -(48 - S.iconButton) / 2, borderRadius: 24 }, pressedStyle(pressed)]}
+      style={({ pressed }) => [
+        styles.icon,
+        { width: 48, height: 48, margin: -(48 - S.iconButton) / 2, borderRadius: 24 },
+        pressedStyle(pressed),
+      ]}
     >
       <Cmp size={22} color={color} strokeWidth={theme.icon.strokeWidth} />
     </Pressable>
@@ -166,7 +188,17 @@ export function SheetIcon({ icon: Cmp, label, onPress, color, testID }: { icon: 
 }
 
 /** «‹ Заметки»: 600 16 (17 / 700 on terracotta: no small text there), chevron 22. */
-export function SheetBackButton({ back, color, strip, place }: { back: SheetBack; color: string; strip?: boolean; place: PlaceKey }) {
+export function SheetBackButton({
+  back,
+  color,
+  strip,
+  place,
+}: {
+  back: SheetBack;
+  color: string;
+  strip?: boolean;
+  place: PlaceKey;
+}) {
   const theme = useTheme();
   const big = place === 'assistant';
   return (
@@ -176,12 +208,21 @@ export function SheetBackButton({ back, color, strip, place }: { back: SheetBack
       accessibilityLabel={back.label}
       onPress={back.onPress}
       hitSlop={4}
-      style={({ pressed }) => [styles.back, { minHeight: theme.size.minTouch, marginLeft: strip ? 0 : -8 }, pressedStyle(pressed)]}
+      style={({ pressed }) => [
+        styles.back,
+        { minHeight: theme.size.minTouch, marginLeft: strip ? 0 : -8 },
+        pressedStyle(pressed),
+      ]}
     >
       <ChevronLeft size={22} color={color} strokeWidth={theme.icon.strokeWidth} />
       <AppText
         numberOfLines={1}
-        style={{ color, fontFamily: big ? theme.type.button.fontFamily : theme.type.sheetMeta.fontFamily, fontSize: big ? 17 : strip ? 15 : 16, lineHeight: 20 }}
+        style={{
+          color,
+          fontFamily: big ? theme.type.button.fontFamily : theme.type.sheetMeta.fontFamily,
+          fontSize: big ? 17 : strip ? 15 : 16,
+          lineHeight: 20,
+        }}
       >
         {back.label}
       </AppText>
@@ -194,11 +235,20 @@ export function StackPeek({ places }: { places: readonly [PlaceKey, PlaceKey] })
   const theme = useTheme();
   const dim = theme.scheme === 'dark' ? 'rgba(0,0,0,0.38)' : null;
   return (
-    <View style={{ height: S.peek }} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+    <View
+      style={{ height: S.peek }}
+      pointerEvents="none"
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
       {places.map((p, i) => (
         <View
           key={p + i}
-          style={[styles.peek, i === 0 ? { left: 40, right: 40, top: 0 } : { left: 22, right: 22, top: 7 }, { backgroundColor: theme.colors.place[p] }]}
+          style={[
+            styles.peek,
+            i === 0 ? { left: 40, right: 40, top: 0 } : { left: 22, right: 22, top: 7 },
+            { backgroundColor: theme.colors.place[p] },
+          ]}
         >
           {i === 1 ? <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.06)' }]} /> : null}
           {dim ? <View style={[StyleSheet.absoluteFill, { backgroundColor: dim }]} /> : null}
@@ -321,9 +371,11 @@ export function PlaceScreen({
   // After release: settle in one of the two states (200 ms snap).
   const external = useRef<((y: number, animated: boolean) => void) | null>(null);
   const [hasList, setHasList] = useState(false);
-  const settle = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+  const settle = (e: NativeSyntheticEvent<NativeScrollEvent>, drag = false) => {
     if (strip || bare) return;
     const n = e.nativeEvent;
+    // QA v5-device-2 A6: the snap waits for the fling to end — a scrollTo during the momentum made the sheet jump.
+    if (drag && Math.abs(n.velocity?.y ?? 0) > 0.05) return;
     const at = n.contentOffset.y;
     // QA A4: content that fits once the sheet is collapsed is not a reason to collapse — it goes back expanded.
     const fits = sheetFits(n.contentSize.height, n.layoutMeasurement.height, range);
@@ -334,8 +386,10 @@ export function PlaceScreen({
     }
   };
 
+  // A6/A7: the sheet follows the scroll on the UI thread (native driver, transforms and opacity only — no layout
+  // and no setState per frame); JS only hears the scroll for the strip rules and the collapsed flag.
   const handleScroll = Animated.event([{ nativeEvent: { contentOffset: { y } } }], {
-    useNativeDriver: false,
+    useNativeDriver: true,
     listener: (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       if (askRoom) {
         const n = e.nativeEvent;
@@ -345,9 +399,16 @@ export function PlaceScreen({
     },
   });
 
-  const height = strip ? collapsedH : y.interpolate({ inputRange: [0, range], outputRange: [H, collapsedH], extrapolate: 'clamp' });
+  // The sheet keeps its full height H and slides up by the scroll (clamped to the range): its bottom edge moves 1:1 with
+  // the paper, the top row (the strip, the rounded cap) slides back down by the same amount, so it stays in place.
+  const shift = strip ? 0 : y.interpolate({ inputRange: [0, range], outputRange: [0, range], extrapolate: 'clamp' });
+  const lift = strip ? 0 : y.interpolate({ inputRange: [0, range], outputRange: [0, -range], extrapolate: 'clamp' });
+  const sheetH = strip ? collapsedH : H;
+  // B1: the phrase, the week and the big number are gone by 60 % of the way, the strip title comes from 70 %.
   const fullOpacity = y.interpolate({ inputRange: [0, range * 0.6], outputRange: [1, 0], extrapolate: 'clamp' });
-  const stripOpacity = strip ? 1 : y.interpolate({ inputRange: [range * 0.4, range], outputRange: [0, 1], extrapolate: 'clamp' });
+  const stripOpacity = strip
+    ? 1
+    : y.interpolate({ inputRange: [range * 0.7, range], outputRange: [0, 1], extrapolate: 'clamp' });
 
   const icons = (
     <View style={styles.row}>
@@ -362,7 +423,7 @@ export function PlaceScreen({
   const listApi: PlaceListApi = {
     inset: sheetInset(H),
     onScroll: handleScroll as unknown as PlaceListApi['onScroll'],
-    onScrollEndDrag: settle,
+    onScrollEndDrag: (e) => settle(e, true),
     onMomentumScrollEnd: settle,
     register: (fn) => {
       external.current = fn;
@@ -379,7 +440,12 @@ export function PlaceScreen({
   const body = (
     <View
       style={[
-        { backgroundColor: listMode ? 'transparent' : paperBg, paddingHorizontal: pad, paddingTop: listMode ? 0 : S.paperPadTop, paddingBottom: (scroll ? theme.space[6] : 0) + (listMode ? 0 : askPad) },
+        {
+          backgroundColor: listMode ? 'transparent' : paperBg,
+          paddingHorizontal: pad,
+          paddingTop: listMode ? 0 : S.paperPadTop,
+          paddingBottom: (scroll ? theme.space[6] : 0) + (listMode ? 0 : askPad),
+        },
         scroll ? null : styles.flex,
         contentContainerStyle,
       ]}
@@ -389,9 +455,17 @@ export function PlaceScreen({
   );
 
   return (
-    <View testID={testID} style={[styles.flex, { backgroundColor: theme.colors.tray, paddingTop: m.top, paddingBottom: bottomRoom }]}>
+    <View
+      testID={testID}
+      style={[styles.flex, { backgroundColor: theme.colors.tray, paddingTop: m.top, paddingBottom: bottomRoom }]}
+    >
       {peek ? <StackPeek places={peek} /> : null}
-      <View style={[styles.flex, { borderBottomLeftRadius: S.radius, borderBottomRightRadius: S.radius, overflow: 'hidden' }]}>
+      <View
+        style={[
+          styles.flex,
+          { borderBottomLeftRadius: S.radius, borderBottomRightRadius: S.radius, overflow: 'hidden' },
+        ]}
+      >
         {scroll ? (
           <Animated.ScrollView
             ref={setRef}
@@ -401,7 +475,7 @@ export function PlaceScreen({
             overScrollMode="never"
             scrollEventThrottle={16}
             onScroll={handleScroll}
-            onScrollEndDrag={settle}
+            onScrollEndDrag={(e) => settle(e, true)}
             onMomentumScrollEnd={settle}
             onLayout={(e: LayoutChangeEvent) => (viewport.current.h = e.nativeEvent.layout.height)}
             onContentSizeChange={(w: number, h: number) => {
@@ -419,7 +493,15 @@ export function PlaceScreen({
             {listMode ? (
               <Animated.View
                 pointerEvents="none"
-                style={[styles.backdrop, { top: strip ? collapsedH - S.overlap : y.interpolate({ inputRange: [0, range], outputRange: [H - S.overlap, collapsedH - S.overlap], extrapolate: 'clamp' }), backgroundColor: paperBg }]}
+                style={[
+                  styles.backdrop,
+                  {
+                    top: (strip ? collapsedH : H) - S.overlap,
+                    bottom: strip ? 0 : -range,
+                    backgroundColor: paperBg,
+                    transform: [{ translateY: lift }],
+                  },
+                ]}
               />
             ) : null}
             <View style={[styles.flex, { paddingTop: listMode ? 0 : H - S.overlap }]}>
@@ -427,7 +509,13 @@ export function PlaceScreen({
             </View>
           </PlaceListContext.Provider>
         )}
-        {footer ? <View style={{ backgroundColor: paperBg, paddingHorizontal: pad, paddingBottom: 14, paddingTop: theme.space[2] }}>{footer}</View> : null}
+        {footer ? (
+          <View
+            style={{ backgroundColor: paperBg, paddingHorizontal: pad, paddingBottom: 14, paddingTop: theme.space[2] }}
+          >
+            {footer}
+          </View>
+        ) : null}
         {askRoom ? <BottomPaperFade color={paperBg} height={askBar.bottomFade} /> : null}
 
         {/* The coloured sheet over the scroll; its bottom 28 dp are the paper's rounded corners. */}
@@ -436,94 +524,155 @@ export function PlaceScreen({
             <PaperCorners color={theme.colors.tray} />
           </View>
         ) : (
-        <Animated.View
-          pointerEvents="box-none"
-          nativeID="v5-sheet"
-          testID={headerTestID ?? (testID ? `${testID}-sheet` : 'place-sheet')}
-          style={[styles.sheet, { height }]}
-        >
-          {/* QA v5-device-1 A1: the colour fills only down to the paper's edge (H − 28); the last 28 dp are the two
-              rounded corners of the paper (a mask in the sheet colour), the middle shows the paper itself. */}
-          <View pointerEvents="none" style={[styles.fill, { bottom: S.overlap, backgroundColor: c.bg, borderTopLeftRadius: S.radius, borderTopRightRadius: S.radius }]} />
-          {strip ? null : (
-            <Animated.View
-              pointerEvents={collapsed ? 'none' : 'box-none'}
-              importantForAccessibility={collapsed ? 'no-hide-descendants' : 'auto'}
-              accessibilityElementsHidden={collapsed}
-              onLayout={(e: LayoutChangeEvent) => {
-                const h = Math.ceil(S.padTop + e.nativeEvent.layout.height + m.sheetPadBottom);
-                if (Math.abs(h - expandedH) > 0.5) setExpandedH(h);
-              }}
-              style={[styles.full, { top: S.padTop, paddingHorizontal: m.gutter, opacity: fullOpacity }]}
-            >
-              <View style={[styles.row, { minHeight: S.topRow, gap: 6 }]}>
-                {back ? <SheetBackButton back={back} color={c.ink} place={place} /> : null}
-                <View style={styles.flex}>
-                  {metaNode ??
-                    (meta ? (
-                      <AppText variant="sheetMeta" numberOfLines={1} style={{ color: c.ink2 }}>
-                        {meta}
-                      </AppText>
-                    ) : null)}
-                </View>
-                {accessory}
-                {icons}
-              </View>
-              {showPhrase ? (
-                <AppText
-                  testID="sheet-phrase"
-                  numberOfLines={2}
-                  nativeID="v5-capped"
-                  maxFontSizeMultiplier={m.heroMaxScale}
-                  accessibilityRole="header"
-                  style={[theme.type.phrase, { color: c.ink, fontSize: m.phraseSize, lineHeight: Math.round(m.phraseSize * 1.12), letterSpacing: -0.025 * m.phraseSize, marginTop: 4, maxWidth: 13.5 * m.phraseSize }]}
-                >
-                  {phrase}
-                </AppText>
-              ) : hideTitle ? (
-                // The name stays for screen readers (the strip shows it once collapsed).
-                <AppText testID={titleTestID} accessibilityRole="header" style={styles.srOnly}>
-                  {title}
-                </AppText>
-              ) : (
-                <AppText testID={titleTestID} accessibilityRole="header" style={[theme.type.title, { color: c.ink, marginTop: 2, fontSize: m.largeText ? 36 : 30, lineHeight: m.largeText ? 40 : 34 }]} nativeID="v5-capped" maxFontSizeMultiplier={1.2}>
-                  {title}
-                </AppText>
-              )}
-              {sub ? (
-                <AppText variant="sheetMeta" style={{ color: c.ink2, marginTop: 4, lineHeight: 20 }}>
-                  {sub}
-                </AppText>
-              ) : null}
-              {sheetExtra}
-            </Animated.View>
-          )}
-
           <Animated.View
-            pointerEvents={collapsed ? 'box-none' : 'none'}
-            importantForAccessibility={collapsed ? 'auto' : 'no-hide-descendants'}
-            accessibilityElementsHidden={!collapsed}
-            style={[styles.strip, { top: S.stripPadTop, minHeight: S.strip, paddingHorizontal: 10, opacity: stripOpacity }]}
+            pointerEvents="box-none"
+            nativeID="v5-sheet"
+            testID={headerTestID ?? (testID ? `${testID}-sheet` : 'place-sheet')}
+            style={[styles.sheet, { height: sheetH, transform: [{ translateY: lift }] }]}
           >
-            <View style={[styles.side, styles.left]}>
-              {stripLeft ? (
-                stripLeft
-              ) : back ? (
-                <SheetBackButton back={back} color={c.ink} strip place={place} />
-              ) : stripMeta ? (
-                <AppText variant="caption" numberOfLines={1} style={{ color: c.ink2, fontFamily: theme.type.sheetMeta.fontFamily, paddingLeft: 8 }}>
-                  {stripMeta}
-                </AppText>
-              ) : null}
-            </View>
-            <AppText testID={strip ? titleTestID : undefined} accessibilityRole="header" numberOfLines={1} nativeID="v5-capped" maxFontSizeMultiplier={1.3} style={[theme.type.stripTitle, styles.stripTitle, { color: c.ink }]}>
-              {title}
-            </AppText>
-            <View style={[styles.side, styles.right]}>{stripRight ?? icons}</View>
-          </Animated.View>
+            {/* QA v5-device-1 A1: the colour fills only down to the paper's edge (H − 28); the last 28 dp are the two
+              rounded corners of the paper (a mask in the sheet colour), the middle shows the paper itself. */}
+            <View
+              pointerEvents="none"
+              style={[styles.fill, { top: S.radius, bottom: S.overlap, backgroundColor: c.bg }]}
+            />
+            {/* The rounded top of the sheet stays at the top while the sheet slides up under it. */}
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.cap,
+                {
+                  height: 2 * S.radius,
+                  backgroundColor: c.bg,
+                  borderTopLeftRadius: S.radius,
+                  borderTopRightRadius: S.radius,
+                  transform: [{ translateY: shift }],
+                },
+              ]}
+            />
+            {strip ? null : (
+              <Animated.View
+                pointerEvents={collapsed ? 'none' : 'box-none'}
+                importantForAccessibility={collapsed ? 'no-hide-descendants' : 'auto'}
+                accessibilityElementsHidden={collapsed}
+                onLayout={(e: LayoutChangeEvent) => {
+                  const h = Math.ceil(S.padTop + e.nativeEvent.layout.height + m.sheetPadBottom);
+                  if (Math.abs(h - expandedH) > 0.5) setExpandedH(h);
+                }}
+                style={[styles.full, { top: S.padTop, paddingHorizontal: m.gutter, opacity: fullOpacity }]}
+              >
+                <View style={[styles.row, { minHeight: S.topRow, gap: 6 }]}>
+                  {back ? <SheetBackButton back={back} color={c.ink} place={place} /> : null}
+                  <View style={styles.flex}>
+                    {metaNode ??
+                      (meta ? (
+                        <AppText variant="sheetMeta" numberOfLines={1} style={{ color: c.ink2 }}>
+                          {meta}
+                        </AppText>
+                      ) : null)}
+                  </View>
+                  {accessory}
+                  {icons}
+                </View>
+                {showPhrase ? (
+                  <AppText
+                    testID="sheet-phrase"
+                    numberOfLines={2}
+                    nativeID="v5-capped"
+                    maxFontSizeMultiplier={m.heroMaxScale}
+                    accessibilityRole="header"
+                    style={[
+                      theme.type.phrase,
+                      {
+                        color: c.ink,
+                        fontSize: m.phraseSize,
+                        lineHeight: Math.round(m.phraseSize * 1.12),
+                        letterSpacing: -0.025 * m.phraseSize,
+                        marginTop: 4,
+                        maxWidth: 13.5 * m.phraseSize,
+                      },
+                    ]}
+                  >
+                    {phrase}
+                  </AppText>
+                ) : hideTitle ? (
+                  // The name stays for screen readers (the strip shows it once collapsed).
+                  <AppText testID={titleTestID} accessibilityRole="header" style={styles.srOnly}>
+                    {title}
+                  </AppText>
+                ) : (
+                  <AppText
+                    testID={titleTestID}
+                    accessibilityRole="header"
+                    style={[
+                      theme.type.title,
+                      {
+                        color: c.ink,
+                        marginTop: 2,
+                        fontSize: m.largeText ? 36 : 30,
+                        lineHeight: m.largeText ? 40 : 34,
+                      },
+                    ]}
+                    nativeID="v5-capped"
+                    maxFontSizeMultiplier={1.2}
+                  >
+                    {title}
+                  </AppText>
+                )}
+                {sub ? (
+                  <AppText variant="sheetMeta" style={{ color: c.ink2, marginTop: 4, lineHeight: 20 }}>
+                    {sub}
+                  </AppText>
+                ) : null}
+                {sheetExtra}
+              </Animated.View>
+            )}
 
-          <PaperCorners color={c.bg} />
-        </Animated.View>
+            <Animated.View
+              pointerEvents={collapsed ? 'box-none' : 'none'}
+              importantForAccessibility={collapsed ? 'auto' : 'no-hide-descendants'}
+              accessibilityElementsHidden={!collapsed}
+              style={[
+                styles.strip,
+                {
+                  top: S.stripPadTop,
+                  minHeight: S.strip,
+                  paddingHorizontal: 10,
+                  opacity: stripOpacity,
+                  transform: [{ translateY: shift }],
+                },
+              ]}
+            >
+              <View style={[styles.side, styles.left]}>
+                {stripLeft ? (
+                  stripLeft
+                ) : back ? (
+                  <SheetBackButton back={back} color={c.ink} strip place={place} />
+                ) : stripMeta ? (
+                  <AppText
+                    variant="caption"
+                    numberOfLines={1}
+                    style={{ color: c.ink2, fontFamily: theme.type.sheetMeta.fontFamily, paddingLeft: 8 }}
+                  >
+                    {stripMeta}
+                  </AppText>
+                ) : null}
+              </View>
+              <AppText
+                testID={strip ? titleTestID : undefined}
+                accessibilityRole="header"
+                numberOfLines={1}
+                nativeID="v5-capped"
+                maxFontSizeMultiplier={1.3}
+                style={[theme.type.stripTitle, styles.stripTitle, { color: c.ink }]}
+              >
+                {title}
+              </AppText>
+              <View style={[styles.side, styles.right]}>{stripRight ?? icons}</View>
+            </Animated.View>
+
+            <PaperCorners color={c.bg} />
+          </Animated.View>
         )}
       </View>
     </View>
@@ -539,12 +688,20 @@ const styles = StyleSheet.create({
   peek: { position: 'absolute', height: 30, borderTopLeftRadius: 18, borderTopRightRadius: 18, overflow: 'hidden' },
   sheet: { position: 'absolute', left: 0, right: 0, top: 0, overflow: 'hidden' },
   full: { position: 'absolute', left: 0, right: 0 },
+  cap: { position: 'absolute', left: 0, right: 0, top: 0 },
   strip: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center', gap: 6 },
   side: { flex: 1, flexDirection: 'row', alignItems: 'center', minWidth: 0 },
   left: { justifyContent: 'flex-start' },
   right: { justifyContent: 'flex-end' },
   stripTitle: { textAlign: 'center', flexShrink: 1, maxWidth: '50%' },
-  corners: { position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', justifyContent: 'space-between' },
+  corners: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
   fade: { position: 'absolute', left: 0, right: 0, bottom: 0 },
   backdrop: { position: 'absolute', left: 0, right: 0, bottom: 0 },
   fill: { position: 'absolute', left: 0, right: 0, top: 0 },
@@ -560,14 +717,11 @@ export function PlaceFlatList<T>(props: FlatListProps<T>) {
   const place = usePlaceList((y, animated) => ref.current?.scrollToOffset({ offset: y, animated }));
   const { contentContainerStyle, onScroll, onScrollEndDrag, onMomentumScrollEnd, ...rest } = props;
   return (
-    <FlatList<T>
+    <AnimatedList
       ref={ref}
       {...rest}
       scrollEventThrottle={16}
-      onScroll={(e) => {
-        place?.onScroll(e);
-        onScroll?.(e);
-      }}
+      onScroll={place ? place.onScroll : onScroll}
       onScrollEndDrag={(e) => {
         place?.onScrollEndDrag(e);
         onScrollEndDrag?.(e);
@@ -580,3 +734,6 @@ export function PlaceFlatList<T>(props: FlatListProps<T>) {
     />
   );
 }
+
+/** A FlatList that takes the native scroll event of the sheet (`usePlaceList().onScroll`). */
+export const AnimatedList = Animated.FlatList as unknown as typeof FlatList;

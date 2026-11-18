@@ -28,7 +28,7 @@ import { useMinuteClock } from '../ReminderLists';
 import { Button } from '../ui/Button';
 import { ActionList } from '../ui/Sheet';
 import { Bar, BigNumber, CategorySquare, Row, RowMeta } from '../ui/Leaf';
-import { usePlaceList } from '../ui/PlaceScreen';
+import { AnimatedList, usePlaceList } from '../ui/PlaceScreen';
 import { useSheetSlot } from './PageFrame';
 import { Card } from '../ui/Card';
 import { Chip } from '../ui/Chip';
@@ -357,7 +357,7 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
   const two = layout.twoPane;
 
   const list = (
-    <FlatList
+    <AnimatedList
       ref={listRef}
       testID="exp-list"
       data={sub?.kind === 'receipt' ? [] : sub?.kind === 'category' ? subDays : days}

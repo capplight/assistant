@@ -120,14 +120,22 @@ export function fromAction(a: ActionOut): ChatAction {
     pageServerId: a.page?.id ?? null,
     pageTitle: a.page?.title ?? null,
     changedItemIds: a.changed_item_ids,
-    changes: a.changes.map((c) => ({ itemId: c.item_id, title: c.title, text: c.text, reverted: c.reverted, key: c.key ?? null })),
+    changes: a.changes.map((c) => ({
+      itemId: c.item_id,
+      title: c.title,
+      text: c.text,
+      reverted: c.reverted,
+      key: c.key ?? null,
+    })),
     createdPageId: a.created_page_id,
     savedTo: (a.saved_to ?? []).map((s) => ({ pageServerId: s.page_id, title: s.title, itemIds: s.item_ids })),
     undoable: a.undoable,
     undone: !!a.undone_at,
     notice: a.notice ?? null,
     undoOf: a.undo_of,
-    group: a.group ? { id: a.group.id, size: a.group.size, actionIds: a.group.action_ids, notice: a.group.notice } : null,
+    group: a.group
+      ? { id: a.group.id, size: a.group.size, actionIds: a.group.action_ids, notice: a.group.notice }
+      : null,
   };
 }
 
@@ -141,7 +149,9 @@ function withPart(prev: ChatAction | undefined, next: ChatAction): ChatAction {
     return { ...next, group: next.group ?? prev?.group ?? null, ...(parts ? { parts } : {}) };
   }
   const known = prev.parts ?? [{ ...prev, parts: undefined }];
-  const parts = known.some((p) => p.id === next.id) ? known.map((p) => (p.id === next.id ? next : p)) : [...known, next];
+  const parts = known.some((p) => p.id === next.id)
+    ? known.map((p) => (p.id === next.id ? next : p))
+    : [...known, next];
   const first = parts[0]!;
   return { ...first, group: next.group ?? prev.group ?? null, parts };
 }
@@ -237,13 +247,18 @@ function apply(answerId: string, e: ChatEvent): void {
       const undone = e.undone;
       if (undone) {
         for (const m of store().messages) {
-          if (m.action?.id === undone.id) updateMessage(m.id, { action: { ...m.action, ...fromAction(undone), undone: true, undoable: false } });
+          if (m.action?.id === undone.id)
+            updateMessage(m.id, { action: { ...m.action, ...fromAction(undone), undone: true, undoable: false } });
         }
       }
       // Several `action` events in one reply are the same action growing: replace it (an undo keeps what it undid).
       const prev = store().messages.find((m) => m.id === answerId)?.action;
       const undid = undone ? [...new Set([...(prev?.undid ?? []), undone.id])] : prev?.undid;
-      const incoming: ChatAction = { ...fromAction(e.action), changedItemIds: e.changedItemIds, ...(undid ? { undid, undoOf: e.action.undo_of ?? undone?.id ?? null } : {}) };
+      const incoming: ChatAction = {
+        ...fromAction(e.action),
+        changedItemIds: e.changedItemIds,
+        ...(undid ? { undid, undoOf: e.action.undo_of ?? undone?.id ?? null } : {}),
+      };
       const action = undid ? incoming : withPart(prev, incoming);
       updateMessage(answerId, { action, answerKind: 'action', activity: null });
       // The result is on the page, not in a banner (R-52 п. 2); «Отменить» lives with the line.
@@ -276,7 +291,12 @@ function apply(answerId: string, e: ChatEvent): void {
         answerKind: e.answerKind ?? m.answerKind ?? null,
         // Step 6: `done.group` names the phrase's group (the one notice «Сделал 3 дела»).
         ...(e.group && m.action
-          ? { action: { ...m.action, group: { id: e.group.id, size: e.group.size, actionIds: e.group.action_ids, notice: e.group.notice } } }
+          ? {
+              action: {
+                ...m.action,
+                group: { id: e.group.id, size: e.group.size, actionIds: e.group.action_ids, notice: e.group.notice },
+              },
+            }
           : {}),
       }));
       return;
@@ -295,8 +315,8 @@ function apply(answerId: string, e: ChatEvent): void {
           : (e.code === 'stream_interrupted' || e.code === 'stale') && isChange(m)
             ? { status: 'interrupted', activity: null, notice: 'maybe_done', serverId: e.replyId ?? m.serverId ?? null }
             : e.retry
-            ? { status: 'interrupted', activity: null, newTurn: true, serverId: e.replyId ?? m.serverId ?? null }
-            : { status: 'failed', activity: null, notice: 'error' },
+              ? { status: 'interrupted', activity: null, newTurn: true, serverId: e.replyId ?? m.serverId ?? null }
+              : { status: 'failed', activity: null, notice: errorNotice(e.code) },
       );
       return;
   }
@@ -393,7 +413,10 @@ async function applyPatch(patch: PagePatchOut, answerId?: string): Promise<void>
   const groups = patch.view_state ? (titlesToGroups(patch.view_state.groups ?? null) ?? []) : null;
   await repo.setView(patch.page_id, patch.view_version, groups);
   // Week 11: the assistant changed the view («покажи таблицей», «сгруппируй по магазинам»).
-  const was = answerId && !(looks.get(answerId) ?? []).some((l) => l.pageServerId === patch.page_id) ? await lookBefore(patch.page_id) : null;
+  const was =
+    answerId && !(looks.get(answerId) ?? []).some((l) => l.pageServerId === patch.page_id)
+      ? await lookBefore(patch.page_id)
+      : null;
   if ((await applyAssistantView(patch)) && answerId && was) looks.set(answerId, [...(looks.get(answerId) ?? []), was]);
   notifyDataChanged();
   const action = answerId ? find(answerId)?.action : undefined;
@@ -460,7 +483,10 @@ async function runTurn(answerId: string): Promise<void> {
           const delay = chatTiming.resumeBackoffMs[attempt];
           if (delay === undefined) {
             // A change may still finish on the server after the drop: do not offer to ask again.
-            finish('interrupted', isChange(find(answerId)) || question.ask?.guess === 'action' ? { notice: 'maybe_done' } : {});
+            finish(
+              'interrupted',
+              isChange(find(answerId)) || question.ask?.guess === 'action' ? { notice: 'maybe_done' } : {},
+            );
             break;
           }
           await sleep(delay);
@@ -490,7 +516,16 @@ async function runTurn(answerId: string): Promise<void> {
           // The reply is gone (history cleared): a new turn.
           finish('interrupted', { newTurn: true, serverId: null });
         } else if (e instanceof ApiError) {
-          finish('failed', { notice: e.status === 429 ? 'limit' : 'error' });
+          finish('failed', {
+            notice:
+              e.status === 429
+                ? 'limit'
+                : e.status >= 500 || e.status === 408
+                  ? 'no_answer'
+                  : e.status === 400 || e.status === 422
+                    ? 'not_understood'
+                    : 'error',
+          });
         } else {
           finish('failed', { notice: 'error' });
         }
@@ -592,7 +627,14 @@ async function saveInstead(answerId: string, question: ChatMessage): Promise<voi
 
 function addLocalTurn(text: string, page: AskPage, reply: Partial<ChatMessage>): string {
   const now = Date.now();
-  const question: ChatMessage = { id: newId(), role: 'user', text, pageId: page.id, pageTitle: page.title, at: new Date(now).toISOString() };
+  const question: ChatMessage = {
+    id: newId(),
+    role: 'user',
+    text,
+    pageId: page.id,
+    pageTitle: page.title,
+    at: new Date(now).toISOString(),
+  };
   const answer: ChatMessage = {
     id: newId(),
     role: 'assistant',
@@ -641,6 +683,14 @@ function openDraft(out: ReminderParseOut, messageId: string | null, text?: strin
 }
 
 /** What the line did with a phrase: the caller opens search for `search`, and S04b after `saved`. */
+/** QA v5-device-2 C2: each failure its own words — «Помощник не ответил» (the model / a timeout) or «Не понял». */
+function errorNotice(code: string | null | undefined): ChatNotice {
+  const c = (code ?? '').toLowerCase();
+  if (/(parse|understand|invalid|unclear)/u.test(c)) return 'not_understood';
+  if (/(timeout|model|upstream|unavailable|overload|provider|internal)/u.test(c) || !c) return 'no_answer';
+  return 'error';
+}
+
 export type LineResult = 'search' | 'saved' | 'asked' | 'notice' | 'reminder';
 
 /**
@@ -714,7 +764,8 @@ export async function sendFromLine(text: string, page: AskPage): Promise<LineRes
 export async function retry(answerId: string): Promise<void> {
   const m = find(answerId);
   if (!m) return;
-  if (m.newTurn) store().updateMessage(answerId, { turnId: newId(), serverId: null, lastEventId: null, newTurn: false });
+  if (m.newTurn)
+    store().updateMessage(answerId, { turnId: newId(), serverId: null, lastEventId: null, newTurn: false });
   if (!chatAllowed()) {
     store().updateMessage(answerId, { status: 'queued' });
     return;
@@ -772,7 +823,11 @@ async function runUndo(messageId: string, a: ChatAction, itemIds: string[] | nul
     if (out.action) {
       const now = fromAction(out.action);
       store().updateMessage(messageId, (m) => ({
-        action: { ...now, changedItemIds: m.action?.changedItemIds ?? now.changedItemIds, undone: !itemIds || !now.undoable || now.undone },
+        action: {
+          ...now,
+          changedItemIds: m.action?.changedItemIds ?? now.changedItemIds,
+          undone: !itemIds || !now.undoable || now.undone,
+        },
       }));
     }
     if (out.partial && out.message_ru) useToast.getState().show(out.message_ru);
@@ -780,7 +835,12 @@ async function runUndo(messageId: string, a: ChatAction, itemIds: string[] | nul
   } catch (e) {
     if (e instanceof NetworkError || e instanceof SignInRequiredError) {
       if (!keys) await restoreBefore(messageId, itemIds);
-      const payload: ActionUndoPayload = { actionId: a.id, clientId, ...(itemIds ? { itemIds } : {}), ...(keys ? { settingKeys: keys } : {}) };
+      const payload: ActionUndoPayload = {
+        actionId: a.id,
+        clientId,
+        ...(itemIds ? { itemIds } : {}),
+        ...(keys ? { settingKeys: keys } : {}),
+      };
       await (await getOutbox()).enqueue('action.undo', payload);
       return;
     }
@@ -816,8 +876,17 @@ async function undoGroup(messageId: string, a: ChatAction): Promise<void> {
   const mark = (ids: Set<string>, undone: boolean) =>
     store().updateMessage(messageId, (m) => {
       if (!m.action) return {};
-      const ps = (m.action.parts ?? parts).map((p) => (ids.has(p.id) ? { ...p, undone, undoable: !undone && p.undoable } : p));
-      return { action: { ...m.action, ...(ids.has(m.action.id) ? { undone, undoable: !undone && m.action.undoable } : {}), undone: ps.every((p) => p.undone), parts: ps } };
+      const ps = (m.action.parts ?? parts).map((p) =>
+        ids.has(p.id) ? { ...p, undone, undoable: !undone && p.undoable } : p,
+      );
+      return {
+        action: {
+          ...m.action,
+          ...(ids.has(m.action.id) ? { undone, undoable: !undone && m.action.undoable } : {}),
+          undone: ps.every((p) => p.undone),
+          parts: ps,
+        },
+      };
     });
   const all = new Set(parts.map((p) => p.id));
   mark(all, true);
@@ -834,7 +903,8 @@ async function undoGroup(messageId: string, a: ChatAction): Promise<void> {
     if (e instanceof NetworkError || e instanceof SignInRequiredError) {
       // Offline: each action's own undo waits in the outbox (the same result when it goes).
       const outbox = await getOutbox();
-      for (const p of parts) await outbox.enqueue('action.undo', { actionId: p.id, clientId: newId() } satisfies ActionUndoPayload);
+      for (const p of parts)
+        await outbox.enqueue('action.undo', { actionId: p.id, clientId: newId() } satisfies ActionUndoPayload);
       return;
     }
     mark(all, false);
@@ -942,8 +1012,12 @@ export function fromHistory(list: ChatMessageOut[], local: readonly ChatMessage[
         serverId: m.id,
       };
     }
-    const question = m.reply_to ? (userLocalId.get(m.reply_to) ?? local.find((x) => x.serverId === m.reply_to)?.id) : undefined;
-    const pair = local.find((x) => x.role === 'assistant' && (x.serverId === m.id || (question && x.replyTo === question)));
+    const question = m.reply_to
+      ? (userLocalId.get(m.reply_to) ?? local.find((x) => x.serverId === m.reply_to)?.id)
+      : undefined;
+    const pair = local.find(
+      (x) => x.role === 'assistant' && (x.serverId === m.id || (question && x.replyTo === question)),
+    );
     return {
       id: pair?.id ?? `srv-${m.id}`,
       role: 'assistant',

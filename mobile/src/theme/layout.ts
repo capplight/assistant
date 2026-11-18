@@ -191,8 +191,8 @@ export const motionV5 = {
   confirm: 220,
   check: 300,
   /** Ф-82: the assistant strip → circle, circle → strip. */
-  askCollapse: 200,
-  askExpand: 240,
+  askCollapse: 260,
+  askExpand: 280,
 } as const;
 
 /** Top notice (Ф-65…Ф-67): an inverse capsule 10 from the edges, ≥ 54 high, radius 18, three dots, ≤ 2 lines. */

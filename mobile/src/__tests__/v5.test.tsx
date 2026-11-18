@@ -130,9 +130,10 @@ describe('colours (tokens-v5)', () => {
     expect(lightColors.ink3).toBe('#6B6774');
     for (const scheme of ['light', 'dark'] as const)
       for (const fill of Object.values(stickerColors[scheme])) expect(contrast(stickerInk[scheme].ink2, fill)).toBeGreaterThanOrEqual(4.5);
-    expect(legacyStickerMap).toEqual({ white: 'paper', yellow: 'sand', peach: 'rose', pink: 'rose', lilac: 'graphite', blue: 'mist', green: 'mist' });
-    expect(stickerOf('green')).toBe('mist');
-    expect(stickerOf('sand')).toBe('sand');
+    // Ф-85 (tokens-v5 `legacyStickerMap`): v2 keys and the Ф-79 keys → the 8 colours.
+    expect(legacyStickerMap).toEqual({ white: 'paper', yellow: 'lemon', peach: 'apricot', pink: 'rose', lilac: 'lilac', blue: 'sky', green: 'mint', sand: 'lemon', mist: 'aqua', graphite: 'lilac' });
+    expect(stickerOf('green')).toBe('mint');
+    expect(stickerOf('sand')).toBe('lemon');
     expect(stickerOf(null)).toBe('paper');
   });
 });

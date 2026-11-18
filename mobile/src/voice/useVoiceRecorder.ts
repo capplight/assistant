@@ -90,7 +90,15 @@ export function useVoiceRecorder(onFinished: (fragments: Fragment[]) => void | P
     session.current = s;
     setStatus('listening');
     setContinuing(false);
-    await s.start();
+    try {
+      await s.start();
+    } catch (e) {
+      // The recorder could not start: back to rest at once (no «Слушаю…» and no dim left on screen).
+      console.warn('voice start failed', e);
+      session.current = null;
+      setStatus('idle');
+      await setAudioModeAsync({ allowsRecording: false }).catch(() => undefined);
+    }
   }, [adapter]);
 
   useEffect(() => {

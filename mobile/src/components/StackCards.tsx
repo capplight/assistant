@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Ellipsis, FilePlus, FolderOpen, Layers } from 'lucide-react-native';
+import { ChevronRight, Ellipsis, FilePlus, FolderOpen, Layers } from 'lucide-react-native';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -33,7 +33,10 @@ export function stackCount(c: CollectionOut, entries: PageEntry[] | null): numbe
 }
 
 /** «было 37, убрал 23 повтора» (2-design 3.4), only when repeats were removed. */
-export function beforeAfterText(c: CollectionOut, t: (k: string, o?: Record<string, unknown>) => string): string | null {
+export function beforeAfterText(
+  c: CollectionOut,
+  t: (k: string, o?: Record<string, unknown>) => string,
+): string | null {
   const ba = c.before_after;
   if (!ba || !ba.removed || ba.removed <= 0) return null;
   const before = ba.before ?? (ba.after !== null ? ba.after + ba.removed : null);
@@ -47,18 +50,33 @@ export function beforeAfterText(c: CollectionOut, t: (k: string, o?: Record<stri
  * «Похожие записи: N [Посмотреть]» when there are groups to decide. The page's own list below is
  * unchanged: the person's order stays as it is.
  */
-export function StackCards({ page, entries, piles = false }: { page: Page; entries: PageEntry[] | null; piles?: boolean }) {
+export function StackCards({
+  page,
+  entries,
+  piles = false,
+}: {
+  page: Page;
+  entries: PageEntry[] | null;
+  piles?: boolean;
+}) {
   const theme = useTheme();
   const { t, i18n } = useTranslation();
-  const src = useDedup(useShallow((s) => ({ collections: s.collections, gone: s.goneCollections, groups: s.groups, decided: s.decided })));
+  const src = useDedup(
+    useShallow((s) => ({ collections: s.collections, gone: s.goneCollections, groups: s.groups, decided: s.decided })),
+  );
   const [menu, setMenu] = useState<CollectionOut | null>(null);
-  const stacks = stacksOf(src.collections, src.gone, page.serverId, (page.groups ?? []).map((g) => g.title));
+  const stacks = stacksOf(
+    src.collections,
+    src.gone,
+    page.serverId,
+    (page.groups ?? []).map((g) => g.title),
+  );
   const repeats = page.templateKey === 'notes' ? repeatsCount(visibleGroups(src.groups, src.decided)) : 0;
   if (stacks.length === 0 && repeats === 0) return null;
   // Week 11а piles (template-screens 2.1): two side by side, the rest as chips; one column at ≥150%.
   const bigCount = theme.largeFont ? stacks.length : piles ? 2 : 3;
   const big = stacks.slice(0, bigCount);
-  const grid = piles && !theme.largeFont;
+  const grid = false;
   // A pile shows its top sticker: its colour and two lines of it.
   const topOf = (c: CollectionOut) => (entries ?? []).find((e) => e.link?.groupKey === c.title) ?? null;
   const chips = stacks.slice(bigCount);
@@ -85,70 +103,156 @@ export function StackCards({ page, entries, piles = false }: { page: Page; entri
         </AppText>
       ) : null}
       <View style={grid ? [styles.row, { alignItems: 'stretch', gap: theme.space[3] }] : { gap: theme.space[3] }}>
-      {big.map((c) => {
-        const name = stackTitle(c, i18n.language);
-        const count = stackCount(c, entries);
-        const ba = beforeAfterText(c, t);
-        const top = piles ? topOf(c) : null;
-        const bg = piles ? theme.notes[top?.link?.color ?? 'white'] : theme.colors.surface;
-        const preview = top ? (top.record.text ?? top.record.title ?? '').trim() : '';
-        return (
-          <View key={c.id} testID={piles ? `pile-${c.id}` : undefined} style={[{ paddingBottom: theme.space[1] }, grid ? styles.flex : null]}>
-            <View
-              style={[
-                grid ? styles.flex : null,
-                theme.elevation.card,
-                {
-                  backgroundColor: bg,
-                  borderRadius: piles ? theme.radius.md : theme.radius.lg,
-                  padding: theme.space[3],
-                  gap: theme.space[1],
-                },
-              ]}
-            >
-              <Pressable
-                testID={`stack-${c.id}`}
-                accessibilityRole="button"
-                accessibilityLabel={`${t('stack.count_a11y', { title: name, count })}${ba ? `. ${ba}` : ''}`}
-                onPress={() => open(c)}
-                onLongPress={() => setMenu(c)}
-                delayLongPress={400}
-                style={{ minHeight: theme.size.minTouch, gap: theme.space[1] }}
-              >
-                <View style={[styles.row, { gap: theme.space[2] }]}>
-                  <PageIcon name={stackIcon(c)} color={theme.colors.ink2} size={20} />
-                  <AppText variant="headline" style={styles.flex}>
-                    {name}
-                  </AppText>
-                  <AppText variant="headline" color="ink2">
-                    {String(count)}
-                  </AppText>
-                </View>
-                {ba ? <AppText variant="footnote">{ba}</AppText> : null}
-                {preview ? (
-                  <AppText variant="callout" color="ink" numberOfLines={2}>
-                    {preview}
-                  </AppText>
-                ) : null}
-              </Pressable>
-              <View style={[styles.row, { justifyContent: 'flex-end' }]}>
-                <Pressable
-                  testID={`stack-menu-${c.id}`}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('stack.menu_a11y', { title: name })}
-                  onPress={() => setMenu(c)}
-                  style={[styles.center, { width: theme.size.minTouch, height: theme.size.minTouch }]}
+        {big.map((c) => {
+          const name = stackTitle(c, i18n.language);
+          const count = stackCount(c, entries);
+          const ba = beforeAfterText(c, t);
+          const top = piles ? topOf(c) : null;
+          const bg = piles ? theme.notes[top?.link?.color ?? 'white'] : theme.colors.surface;
+          const preview = top ? (top.record.text ?? top.record.title ?? '').trim() : '';
+          if (piles)
+            // QA v5-device-2 B5: a pile is one 64 row (icon, name 16/700, count, «⋯», «›»), two 4 dp edges under it.
+            return (
+              <View key={c.id} testID={`pile-${c.id}`} style={{ paddingBottom: 8 }}>
+                <View
+                  style={[
+                    styles.row,
+                    { backgroundColor: bg, borderRadius: 16, minHeight: 64, paddingLeft: 14 },
+                    bg === theme.notes.white ? { borderWidth: 1, borderColor: theme.colors.line } : null,
+                  ]}
                 >
-                  <Icon icon={Ellipsis} size="sm" color="iconSecondary" />
-                </Pressable>
+                  <Pressable
+                    testID={`stack-${c.id}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${t('stack.count_a11y', { title: name, count })}${ba ? `. ${ba}` : ''}`}
+                    onPress={() => open(c)}
+                    onLongPress={() => setMenu(c)}
+                    delayLongPress={400}
+                    style={[styles.row, styles.flex, { minHeight: 64, gap: 12 }]}
+                  >
+                    <PageIcon name={stackIcon(c)} color={theme.colors.ink} size={22} />
+                    <AppText
+                      numberOfLines={1}
+                      style={[
+                        styles.flex,
+                        { fontFamily: theme.type.headline.fontFamily, fontSize: 16, lineHeight: 20 },
+                      ]}
+                    >
+                      {name}
+                    </AppText>
+                    <AppText color="ink3">{String(count)}</AppText>
+                  </Pressable>
+                  <Pressable
+                    testID={`stack-menu-${c.id}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('stack.menu_a11y', { title: name })}
+                    onPress={() => setMenu(c)}
+                    style={[styles.center, { width: theme.size.minTouch, height: theme.size.minTouch }]}
+                  >
+                    <Icon icon={Ellipsis} size="sm" color="iconSecondary" />
+                  </Pressable>
+                  <Pressable
+                    accessibilityElementsHidden
+                    importantForAccessibility="no-hide-descendants"
+                    onPress={() => open(c)}
+                    style={[styles.center, { width: 28, height: 64, marginRight: 6 }]}
+                  >
+                    <ChevronRight size={20} color={theme.colors.ink3} strokeWidth={2} />
+                  </Pressable>
+                </View>
+                <View
+                  style={{
+                    height: 4,
+                    marginHorizontal: 10,
+                    borderBottomLeftRadius: 8,
+                    borderBottomRightRadius: 8,
+                    backgroundColor: theme.colors.line,
+                  }}
+                />
+                <View
+                  style={{
+                    height: 4,
+                    marginHorizontal: 20,
+                    borderBottomLeftRadius: 8,
+                    borderBottomRightRadius: 8,
+                    backgroundColor: theme.colors.paper2,
+                  }}
+                />
               </View>
+            );
+          return (
+            <View
+              key={c.id}
+              testID={piles ? `pile-${c.id}` : undefined}
+              style={[{ paddingBottom: theme.space[1] }, grid ? styles.flex : null]}
+            >
+              <View
+                style={[
+                  grid ? styles.flex : null,
+                  theme.elevation.card,
+                  {
+                    backgroundColor: bg,
+                    borderRadius: piles ? theme.radius.md : theme.radius.lg,
+                    padding: theme.space[3],
+                    gap: theme.space[1],
+                  },
+                ]}
+              >
+                <Pressable
+                  testID={`stack-${c.id}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${t('stack.count_a11y', { title: name, count })}${ba ? `. ${ba}` : ''}`}
+                  onPress={() => open(c)}
+                  onLongPress={() => setMenu(c)}
+                  delayLongPress={400}
+                  style={{ minHeight: theme.size.minTouch, gap: theme.space[1] }}
+                >
+                  <View style={[styles.row, { gap: theme.space[2] }]}>
+                    <PageIcon name={stackIcon(c)} color={theme.colors.ink2} size={20} />
+                    <AppText variant="headline" style={styles.flex}>
+                      {name}
+                    </AppText>
+                    <AppText variant="headline" color="ink2">
+                      {String(count)}
+                    </AppText>
+                  </View>
+                  {ba ? <AppText variant="footnote">{ba}</AppText> : null}
+                  {preview ? (
+                    <AppText variant="callout" color="ink" numberOfLines={2}>
+                      {preview}
+                    </AppText>
+                  ) : null}
+                </Pressable>
+                <View style={[styles.row, { justifyContent: 'flex-end' }]}>
+                  <Pressable
+                    testID={`stack-menu-${c.id}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('stack.menu_a11y', { title: name })}
+                    onPress={() => setMenu(c)}
+                    style={[styles.center, { width: theme.size.minTouch, height: theme.size.minTouch }]}
+                  >
+                    <Icon icon={Ellipsis} size="sm" color="iconSecondary" />
+                  </Pressable>
+                </View>
+              </View>
+              {/* the sheet under it (+4): a stack, not a folder; a pile of stickers has two */}
+              <View
+                style={[
+                  styles.under,
+                  {
+                    borderRadius: piles ? theme.radius.md : theme.radius.lg,
+                    backgroundColor: theme.colors.surfaceSunken,
+                  },
+                ]}
+              />
+              {piles ? (
+                <View
+                  style={[styles.under2, { borderRadius: theme.radius.md, backgroundColor: theme.colors.separator }]}
+                />
+              ) : null}
             </View>
-            {/* the sheet under it (+4): a stack, not a folder; a pile of stickers has two */}
-            <View style={[styles.under, { borderRadius: piles ? theme.radius.md : theme.radius.lg, backgroundColor: theme.colors.surfaceSunken }]} />
-            {piles ? <View style={[styles.under2, { borderRadius: theme.radius.md, backgroundColor: theme.colors.separator }]} /> : null}
-          </View>
-        );
-      })}
+          );
+        })}
       </View>
       {chips.length > 0 ? (
         <View style={[styles.row, { flexWrap: 'wrap', gap: theme.space[2] }]}>

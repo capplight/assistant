@@ -1,8 +1,8 @@
 import { router, useFocusEffect } from 'expo-router';
-import { Copy, Search } from 'lucide-react-native';
-import { useCallback } from 'react';
+import { Copy, Search, Share2 } from 'lucide-react-native';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 
 import { dayOffset, dayText, timeText } from '@/alarms/format';
@@ -14,7 +14,10 @@ import { AppText } from '@/components/AppText';
 import { PendingAnswerCard } from '@/components/PendingAnswerCard';
 import { useMinuteClock, useMissed } from '@/components/ReminderLists';
 import { PageTiles, ShoppingLine } from '@/components/TodaySheet';
+import { BackToToday, DayFade, DayRows, EmptyDay, PlaceRows } from '@/components/today/DayView';
 import { FirstPhrases, RecentSaved, WeekStrip } from '@/components/today/EmptyToday';
+import { useChrome } from '@/store/chrome';
+import { useView } from '@/store/view';
 import { Button } from '@/components/ui/Button';
 import { CheckCircle } from '@/components/ui/Check';
 import { DayPlan, type PlanItem } from '@/components/ui/DayPlan';
@@ -79,9 +82,25 @@ export default function TodayScreen() {
   const notesPage = pages.find((p) => p.templateKey === 'notes');
   const noteEntries = usePageEntries(notesPage);
 
+  // Ф-85 / QA v5-device-2 A8: a day of the week is shown in place (null = today). Back on the tab, or a second tap
+  // on it, is today again; the week can be swiped to the next / previous one.
+  const [chosen, setChosen] = useState<string | null>(null);
+  const [weekShift, setWeekShift] = useState(0);
+  const [dir, setDir] = useState(1);
+  const todayTap = useChrome((s) => s.todayTap);
+  const [seenTap, setSeenTap] = useState(todayTap);
+  if (seenTap !== todayTap) {
+    setSeenTap(todayTap);
+    setChosen(null);
+    setWeekShift(0);
+  }
   useFocusEffect(
     useCallback(() => {
       void refreshToday();
+      return () => {
+        setChosen(null);
+        setWeekShift(0);
+      };
     }, []),
   );
 
@@ -283,22 +302,151 @@ export default function TodayScreen() {
       : counts
         ? `${head}\n${counts}.`
         : head;
-  const week = weekOf(today).map((d) => ({
+  // --- the day view: what is on any day of the shown week ---
+  const shownWeek = weekOf(addDays(today, 7 * weekShift));
+  const weekEnd = shownWeek[6]!;
+  const horizonDays = Math.max(8, Math.round((Date.parse(`${weekEnd}T00:00:00`) - dayStart) / DAY) + 2);
+  const ringsAhead = horizonDays > 8 ? upcoming({ ...alarmSrc, now }, dayStart + horizonDays * DAY - now) : null;
+  const allTodos = liveTasks(tasks, 'todo');
+  const notesOf = (d: string) =>
+    (records ?? []).filter((r) => r.kind !== 'ai_chat' && !r.deletedAt && localDate(r.createdAt) === d);
+  const spentOf = (d: string) => live.filter((e) => e.spent_on === d && e.direction === 'expense');
+  const doneOf = (d: string) => allTodos.filter((x) => isDone(x, ticks) && localDate(doneAt(x, ticks)) === d);
+  const ringsOf = (d: string) =>
+    (ringsAhead ?? upcoming({ ...alarmSrc, now }, dayStart + 8 * DAY - now)).filter((r) => localDate(r.fireAt) === d);
+  const countOf = (d: string): number => {
+    if (d === today) return todayLoad + rings.length;
+    if (d < today) return doneOf(d).length + notesOf(d).length + spentOf(d).length;
+    return ringsOf(d).length + openTodos.filter((x) => x.due_date === d).length;
+  };
+  const day = chosen && chosen !== today ? chosen : null;
+  const week = shownWeek.map((d) => ({
     date: d,
     label: weekdayOf(d, 'short').replace(/\.$/u, ''),
     num: String(Number(d.slice(8))),
     name: weekdayOf(d, 'long'),
-    count: d === today ? todayLoad + rings.length : (load[d] ?? 0),
+    count: countOf(d),
     past: d < today,
     today: d === today,
+    selected: day === d,
   }));
   const openDay = (d: string) => {
-    if (!tasksPage) return;
-    router.navigate({
-      pathname: '/page/[id]',
-      params: { id: tasksPage.id, ...(d > today ? { segment: 'soon' } : {}) },
-    });
+    setDir(d > (day ?? today) ? 1 : -1);
+    setChosen(d === today ? null : d);
   };
+  const stepWeek = (step: -1 | 1) => {
+    setDir(step);
+    setWeekShift((w) => w + step);
+  };
+  const backToToday = () => {
+    setDir((day ?? today) > today ? -1 : 1);
+    setChosen(null);
+    setWeekShift(0);
+  };
+  const wd = day ? new Date(`${day}T00:00:00`).getDay() : 0;
+  const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
+  let dayMeta = '';
+  if (day) {
+    try {
+      dayMeta = cap(
+        new Date(`${day}T00:00:00`).toLocaleDateString(i18n.language, {
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long',
+        }),
+      );
+    } catch {
+      dayMeta = day;
+    }
+  }
+  const dayPlanRows =
+    day && day > today
+      ? ringsOf(day).map((r) => ({ key: `dr-${r.group}`, time: timeText(r.fireAt), title: r.title }))
+      : [];
+  const dayUntimed =
+    day && day > today
+      ? openTodos.filter((x) => x.due_date === day).map((x) => ({ key: `dt-${x.id}`, time: '', title: x.title }))
+      : [];
+  const dayDone =
+    day && day < today ? doneOf(day).map((x) => ({ key: `dd-${x.id}`, time: '', title: x.title, done: true })) : [];
+  const daySaved = day && day < today ? notesOf(day).map((r) => ({ key: `ds-${r.id}`, title: recordTitle(r, t) })) : [];
+  const daySpent =
+    day && day < today
+      ? spentOf(day).map((e) => ({
+          key: `de-${e.id}`,
+          title: e.note || t('exp.add_short'),
+          meta: formatMinor(BigInt(Math.round(Number(e.amount) * 100))),
+        }))
+      : [];
+  const dayDue = day && day < today ? allTodos.filter((x) => x.due_date === day) : [];
+  const dayPhrase = !day
+    ? null
+    : day > today
+      ? dayPlanRows.length + dayUntimed.length === 0
+        ? t(`today.dv_free_${wd}`)
+        : t('today.dv_future_phrase', {
+            day: t(`today.dv_name_${wd}`),
+            counts: [
+              dayUntimed.length > 0 ? t('today.phrase_tasks', { count: dayUntimed.length }) : null,
+              dayPlanRows.length > 0 ? t('today.phrase_rings', { count: dayPlanRows.length }) : null,
+            ]
+              .filter(Boolean)
+              .join(', '),
+          })
+      : dayDone.length + daySaved.length + daySpent.length === 0
+        ? t(`today.dv_past_${wd}`)
+        : dayDue.length > 0
+          ? t('today.dv_past_phrase', {
+              day: t(`today.dv_name_${wd}`),
+              done: dayDue.filter((x) => isDone(x, ticks)).length,
+              all: dayDue.length,
+            })
+          : `${t(`today.dv_name_${wd}`)}.`;
+  // «Добавить на пятницу…» in the strip while a future day is shown.
+  const askHint = day && day > today ? t(`today.dv_ask_${wd}`) : null;
+  useEffect(() => {
+    useChrome.getState().setAskHint(askHint);
+    return () => useChrome.getState().setAskHint(null);
+  }, [askHint]);
+  const dayContent = !day ? null : day > today ? (
+    dayPlanRows.length + dayUntimed.length === 0 ? (
+      <EmptyDay
+        weekday={wd}
+        past={false}
+        onAdd={() => useView.getState().requestLine({ kind: 'text', text: t(`today.dv_input_${wd}`) })}
+      />
+    ) : (
+      <View>
+        <DayRows first title={t('today.dv_plan')} rows={dayPlanRows} testID="today-day-plan" />
+        <DayRows
+          first={dayPlanRows.length === 0}
+          title={t('today.dv_untimed')}
+          rows={dayUntimed}
+          testID="today-day-untimed"
+        />
+      </View>
+    )
+  ) : dayDone.length + daySaved.length + daySpent.length === 0 ? (
+    <EmptyDay weekday={wd} past onAdd={() => undefined} />
+  ) : (
+    <View>
+      <DayRows first title={t('today.dv_done')} rows={dayDone} testID="today-day-done" />
+      <PlaceRows
+        first={dayDone.length === 0}
+        title={t('today.dv_saved')}
+        rows={daySaved}
+        place="notes"
+        testID="today-day-saved"
+      />
+      <PlaceRows
+        first={dayDone.length + daySaved.length === 0}
+        title={t('today.dv_spent')}
+        rows={daySpent}
+        place="expenses"
+        testID="today-day-spent"
+      />
+    </View>
+  );
   // The nearest day with things on it (tomorrow first), as «время — дело» rows.
   let nearDay: string | null = null;
   for (let i = 1; i <= 7 && !nearDay; i += 1) if ((load[addDays(today, i)] ?? 0) > 0) nearDay = addDays(today, i);
@@ -354,6 +502,7 @@ export default function TodayScreen() {
 
   const forgetRows = emptyDay ? forgetList.slice(0, 3) : nearest;
   const forgetCount = emptyDay ? forgetOpen : nearest.length;
+  const forgetMore = Math.max(0, forgetCount - forgetRows.filter((x) => !isDone(x, ticks)).length);
   const notForget = (
     <>
       {forgetRows.length > 0 ? (
@@ -399,6 +548,19 @@ export default function TodayScreen() {
               </Row>
             );
           })}
+          {/* QA v5-device-2 B8: «Не забыть 6» with 3 rows — the rest is one row «Ещё 3 · Все дела ›». */}
+          {forgetMore > 0 && tasksPage ? (
+            <Row
+              testID="today-forget-more"
+              onPress={() => openPage('tasks')}
+              accessibilityLabel={`${t('today.more_n', { count: forgetMore })}, ${t('today.all_tasks_short')}`}
+            >
+              <AppText style={{ flex: 1, fontFamily: theme.type.bodyStrong.fontFamily }} numberOfLines={1}>
+                {`${t('today.more_n', { count: forgetMore })} · ${t('today.all_tasks_short')}`}
+              </AppText>
+              <RowChevron />
+            </Row>
+          ) : null}
         </View>
       ) : null}
     </>
@@ -411,120 +573,265 @@ export default function TodayScreen() {
       place="today"
       peek={['assistant', 'notes']}
       title={t('today.today')}
-      meta={dateLine}
+      meta={day ? dayMeta : dateLine}
       stripMeta={stripDate}
-      phrase={phrase}
-      sheetExtra={emptyDay ? <WeekStrip days={week} onDay={openDay} /> : undefined}
+      phrase={dayPhrase ?? phrase}
+      sheetExtra={<WeekStrip days={week} onDay={openDay} onWeek={stepWeek} />}
       askRoom
-      actions={[
-        {
-          key: 'search',
-          icon: Search,
-          label: t('today.search'),
-          onPress: () => router.navigate('/search'),
-          testID: 'today-search',
-        },
-      ]}
+      accessory={day ? <BackToToday onPress={backToToday} /> : undefined}
+      actions={
+        day
+          ? []
+          : [
+              {
+                key: 'search',
+                icon: Search,
+                label: t('today.search'),
+                onPress: () => router.navigate('/search'),
+                testID: 'today-search',
+              },
+            ]
+      }
     >
       <PendingAnswerCard />
-      {missedRows.length > 0 ? (
-        <View testID="today-missed" style={{ marginBottom: theme.space[3] }}>
-          <SectionHead first title={t('today.missed_title')} right={String(missedRows.length)} />
-          {missedRows.map((p, i) => {
-            const row = missed[i]!;
-            // QA v5-device-1 B1: a 56 dp time column with «09:00» only (a past day as «пн» above it), the title on
-            // one line, «Сделано / Перенести» 38 high, no red.
-            const otherDay = dayOffset(row.at, now) !== 0;
-            let weekday = '';
-            try {
-              weekday = new Date(row.at).toLocaleDateString(i18n.language, { weekday: 'short' });
-            } catch {
-              weekday = '';
-            }
-            return (
-              <View
-                key={p.key}
-                testID={p.testID}
-                accessible
-                accessibilityLabel={p.label}
-                style={{
-                  borderTopWidth: i === 0 ? 0 : 1,
-                  borderTopColor: theme.colors.line,
-                  paddingVertical: 10,
-                  gap: 8,
-                }}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 0 }}>
-                  <View style={{ width: planGeometry.timeColumn }}>
-                    {otherDay && weekday ? (
-                      <AppText variant="footnote" numberOfLines={1}>
-                        {weekday}
+      {day ? (
+        <DayFade dayKey={day} dir={dir}>
+          {dayContent}
+        </DayFade>
+      ) : (
+        <DayFade dayKey={today} dir={dir}>
+          {missedRows.length > 0 ? (
+            <View testID="today-missed" style={{ marginBottom: theme.space[3] }}>
+              <SectionHead first title={t('today.missed_title')} right={String(missedRows.length)} />
+              {missedRows.map((p, i) => {
+                const row = missed[i]!;
+                // QA v5-device-1 B1: a 56 dp time column with «09:00» only (a past day as «пн» above it), the title on
+                // one line, «Сделано / Перенести» 38 high, no red.
+                const otherDay = dayOffset(row.at, now) !== 0;
+                let weekday = '';
+                try {
+                  weekday = new Date(row.at).toLocaleDateString(i18n.language, { weekday: 'short' });
+                } catch {
+                  weekday = '';
+                }
+                return (
+                  <View
+                    key={p.key}
+                    testID={p.testID}
+                    accessible
+                    accessibilityLabel={p.label}
+                    style={{
+                      borderTopWidth: i === 0 ? 0 : 1,
+                      borderTopColor: theme.colors.line,
+                      paddingVertical: 10,
+                      gap: 8,
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 0 }}>
+                      <View style={{ width: planGeometry.timeColumn }}>
+                        {otherDay && weekday ? (
+                          <AppText variant="footnote" numberOfLines={1}>
+                            {weekday}
+                          </AppText>
+                        ) : null}
+                        <AppText numberOfLines={1} nativeID="v5-one-line" style={theme.type.planTime}>
+                          {timeText(row.at)}
+                        </AppText>
+                      </View>
+                      <AppText numberOfLines={1} style={{ flex: 1 }}>
+                        {p.title}
                       </AppText>
-                    ) : null}
-                    <AppText numberOfLines={1} nativeID="v5-one-line" style={theme.type.planTime}>
-                      {timeText(row.at)}
-                    </AppText>
+                    </View>
+                    <ButtonRow style={{ paddingLeft: planGeometry.timeColumn }}>
+                      <Button
+                        testID={`missed-done-${row.key}`}
+                        label={t('today.missed_done')}
+                        size="small"
+                        minHeight={38}
+                        onPress={() => void markMissedDone(row, t)}
+                      />
+                      <Button
+                        testID={`missed-move-${row.key}`}
+                        label={t('today.move_btn')}
+                        size="small"
+                        minHeight={38}
+                        variant="secondary"
+                        onPress={p.onPress}
+                      />
+                    </ButtonRow>
                   </View>
-                  <AppText numberOfLines={1} style={{ flex: 1 }}>
-                    {p.title}
-                  </AppText>
+                );
+              })}
+            </View>
+          ) : null}
+
+          {emptyDay ? (
+            // Ф-84 «Сводка»: missed → «Не забыть» → (first days) «Три первые фразы» → the nearest day → «Недавно
+            // сохранили». A section with nothing to show is not there (no empty blocks).
+            <View testID="today-list">
+              {notForget}
+              {steps.show ? (
+                <FirstPhrases
+                  first={missedRows.length === 0 && forgetRows.length === 0}
+                  steps={[
+                    { key: 'note', place: 'notes', done: hasRecord },
+                    { key: 'rem', place: 'tasks', done: hasReminder },
+                    { key: 'exp', place: 'expenses', done: hasExpense },
+                  ]}
+                />
+              ) : null}
+              {nearDay && nearRows.length > 0 ? (
+                <View testID="today-nearest">
+                  <SectionHead
+                    first={missedRows.length === 0 && forgetRows.length === 0 && !steps.show}
+                    title={nearTitle}
+                    link={tasksPage ? t('today.all_tasks_short') : undefined}
+                    onLink={() => openDay(nearDay)}
+                    linkTestID="today-all-tasks"
+                  />
+                  {nearRows.map((r, i) => (
+                    <Row key={r.key} first={i === 0}>
+                      <AppText
+                        numberOfLines={1}
+                        nativeID="v5-one-line"
+                        style={[theme.type.planTime, { width: planGeometry.timeColumn }]}
+                      >
+                        {r.time}
+                      </AppText>
+                      <AppText numberOfLines={1} style={{ flex: 1 }}>
+                        {r.title}
+                      </AppText>
+                    </Row>
+                  ))}
                 </View>
-                <ButtonRow style={{ paddingLeft: planGeometry.timeColumn }}>
+              ) : null}
+              <RecentSaved
+                rows={recentRows}
+                onOpen={(id) =>
+                  router.navigate({
+                    pathname: '/record/[id]',
+                    params: { id, ...(notesPage ? { from: notesPage.id } : {}) },
+                  })
+                }
+                onAll={() => openPage('notes')}
+              />
+              {missedRows.length === 0 &&
+              forgetRows.length === 0 &&
+              !steps.show &&
+              nearRows.length === 0 &&
+              recentRows.length === 0 ? (
+                <AppText testID="today-empty" variant="small">
+                  {last?.empty && last.example
+                    ? t('today.free_example', { example: last.example })
+                    : t('today.plan_empty')}
+                </AppText>
+              ) : null}
+            </View>
+          ) : (
+            <View testID="today-list">
+              <SectionHead
+                first={missedRows.length === 0}
+                title={t('today.plan')}
+                link={tasksPage ? t('today.all_tasks_short') : undefined}
+                onLink={() => openPage('tasks')}
+                linkTestID="today-all-tasks"
+                testID="today-plan-head"
+              />
+              <DayPlan testID="today-plan" items={planItems} now={nowMin} />
+              {/* QA B6: one «now» — the black block in the plan; its «+10 мин» / «Готово» right under it, no second title. */}
+              {soon ? (
+                <ButtonRow
+                  testID={soon.testID ? `${soon.testID}-now` : undefined}
+                  style={{ paddingLeft: planGeometry.timeColumn, marginTop: 4 }}
+                >
                   <Button
-                    testID={`missed-done-${row.key}`}
-                    label={t('today.missed_done')}
+                    testID={soon.testID ? `${soon.testID}-snooze` : undefined}
+                    label={t('today.snooze_10')}
+                    variant="secondary"
                     size="small"
                     minHeight={38}
-                    onPress={() => void markMissedDone(row, t)}
+                    onPress={soon.onSnooze}
                   />
                   <Button
-                    testID={`missed-move-${row.key}`}
-                    label={t('today.move_btn')}
+                    testID={soon.testID ? `${soon.testID}-done` : undefined}
+                    label={t('today.done_btn')}
+                    variant="primary"
                     size="small"
                     minHeight={38}
-                    variant="secondary"
-                    onPress={p.onPress}
+                    onPress={soon.onDone}
                   />
                 </ButtonRow>
-              </View>
-            );
-          })}
-        </View>
-      ) : null}
+              ) : null}
+              {notForget}
+            </View>
+          )}
 
-      {emptyDay ? (
-        // Ф-84 «Сводка»: missed → «Не забыть» → (first days) «Три первые фразы» → the nearest day → «Недавно
-        // сохранили». A section with nothing to show is not there (no empty blocks).
-        <View testID="today-list">
-          {notForget}
-          {steps.show ? (
-            <FirstPhrases
-              first={missedRows.length === 0 && forgetRows.length === 0}
-              steps={[
-                { key: 'note', place: 'notes', done: hasRecord },
-                { key: 'rem', place: 'tasks', done: hasReminder },
-                { key: 'exp', place: 'expenses', done: hasExpense },
-              ]}
+          {toBuy.length > 0 ? (
+            <ShoppingLine
+              titles={toBuy.map((x) => x.title)}
+              hint={shopPage ? t('today.shopping_hint') : undefined}
+              onPress={
+                shopPage ? () => router.navigate({ pathname: '/page/[id]', params: { id: shopPage.id } }) : undefined
+              }
             />
           ) : null}
-          {nearDay && nearRows.length > 0 ? (
-            <View testID="today-nearest">
+
+          {waiting ? (
+            <View testID="today-waiting">
+              {repeats > 0 || proposals.length > 0 ? <SectionHead title={t('today.waiting')} /> : null}
+              {repeats > 0 ? (
+                <Row
+                  first
+                  testID="waiting-repeats"
+                  onPress={() => router.push('/duplicates')}
+                  accessibilityLabel={t('today.repeats', { count: repeats })}
+                >
+                  <Copy size={22} color={theme.colors.ink} strokeWidth={theme.icon.strokeWidth} />
+                  <View style={{ flex: 1 }}>
+                    <AppText>{t('today.repeats', { count: repeats })}</AppText>
+                    <AppText variant="footnote">{t('today.repeats_hint')}</AppText>
+                  </View>
+                  <RowChevron />
+                </Row>
+              ) : null}
+              <View style={{ gap: theme.space[2], marginTop: theme.space[2] }}>
+                {proposals.map((s) => (
+                  <SuggestionCard key={s.id} s={s} />
+                ))}
+                {tip ? <TipRow s={tip} /> : null}
+              </View>
+            </View>
+          ) : null}
+
+          {/* П3 (approved): no spending today → no «Потрачено сегодня». */}
+          {todayMinor > 0n ? (
+            <View testID="tile-spent">
               <SectionHead
-                first={missedRows.length === 0 && forgetRows.length === 0 && !steps.show}
-                title={nearTitle}
-                link={tasksPage ? t('today.all_tasks_short') : undefined}
-                onLink={() => openDay(nearDay)}
-                linkTestID="today-all-tasks"
+                title={t('today.spent_today_title')}
+                link={formatMinor(todayMinor)}
+                onLink={openExpenses}
+                testID="today-spent"
               />
-              {nearRows.map((r, i) => (
+              {leftMinor !== null ? (
+                <AppText variant="footnote" color={leftMinor < 0n ? 'danger' : 'ink3'}>
+                  {leftMinor >= 0n
+                    ? t('today.budget_left', { sum: formatMinor(leftMinor) })
+                    : t('today.budget_over', { sum: formatMinor(-leftMinor) })}
+                </AppText>
+              ) : null}
+            </View>
+          ) : null}
+
+          {!emptyDay && tomorrowRows.length > 0 ? (
+            <View testID="today-tomorrow">
+              <SectionHead
+                title={t('today.tomorrow')}
+                link={tasksPage ? t('today.all_tasks_short') : undefined}
+                onLink={() => openPage('tasks')}
+              />
+              {tomorrowRows.map((r, i) => (
                 <Row key={r.key} first={i === 0}>
-                  <AppText
-                    numberOfLines={1}
-                    nativeID="v5-one-line"
-                    style={[theme.type.planTime, { width: planGeometry.timeColumn }]}
-                  >
-                    {r.time}
-                  </AppText>
+                  <AppText style={[theme.type.planTime, { width: 48 }]}>{r.time}</AppText>
                   <AppText numberOfLines={1} style={{ flex: 1 }}>
                     {r.title}
                   </AppText>
@@ -532,139 +839,9 @@ export default function TodayScreen() {
               ))}
             </View>
           ) : null}
-          <RecentSaved
-            rows={recentRows}
-            onOpen={(id) =>
-              router.navigate({
-                pathname: '/record/[id]',
-                params: { id, ...(notesPage ? { from: notesPage.id } : {}) },
-              })
-            }
-            onAll={() => openPage('notes')}
-          />
-          {missedRows.length === 0 &&
-          forgetRows.length === 0 &&
-          !steps.show &&
-          nearRows.length === 0 &&
-          recentRows.length === 0 ? (
-            <AppText testID="today-empty" variant="small">
-              {last?.empty && last.example ? t('today.free_example', { example: last.example }) : t('today.plan_empty')}
-            </AppText>
-          ) : null}
-        </View>
-      ) : (
-        <View testID="today-list">
-          <SectionHead
-            first={missedRows.length === 0}
-            title={t('today.plan')}
-            link={tasksPage ? t('today.all_tasks_short') : undefined}
-            onLink={() => openPage('tasks')}
-            linkTestID="today-all-tasks"
-            testID="today-plan-head"
-          />
-          <DayPlan testID="today-plan" items={planItems} now={nowMin} />
-          {/* QA B6: one «now» — the black block in the plan; its «+10 мин» / «Готово» right under it, no second title. */}
-          {soon ? (
-            <ButtonRow
-              testID={soon.testID ? `${soon.testID}-now` : undefined}
-              style={{ paddingLeft: planGeometry.timeColumn, marginTop: 4 }}
-            >
-              <Button
-                testID={soon.testID ? `${soon.testID}-snooze` : undefined}
-                label={t('today.snooze_10')}
-                variant="secondary"
-                size="small"
-                minHeight={38}
-                onPress={soon.onSnooze}
-              />
-              <Button
-                testID={soon.testID ? `${soon.testID}-done` : undefined}
-                label={t('today.done_btn')}
-                variant="primary"
-                size="small"
-                minHeight={38}
-                onPress={soon.onDone}
-              />
-            </ButtonRow>
-          ) : null}
-          {notForget}
-        </View>
+          <PageTiles tiles={tiles} />
+        </DayFade>
       )}
-
-      {toBuy.length > 0 ? (
-        <ShoppingLine
-          titles={toBuy.map((x) => x.title)}
-          hint={shopPage ? t('today.shopping_hint') : undefined}
-          onPress={
-            shopPage ? () => router.navigate({ pathname: '/page/[id]', params: { id: shopPage.id } }) : undefined
-          }
-        />
-      ) : null}
-
-      {waiting ? (
-        <View testID="today-waiting">
-          <SectionHead title={t('today.waiting')} />
-          {repeats > 0 ? (
-            <Row
-              first
-              testID="waiting-repeats"
-              onPress={() => router.push('/duplicates')}
-              accessibilityLabel={t('today.repeats', { count: repeats })}
-            >
-              <Copy size={22} color={theme.colors.ink} strokeWidth={theme.icon.strokeWidth} />
-              <View style={{ flex: 1 }}>
-                <AppText>{t('today.repeats', { count: repeats })}</AppText>
-                <AppText variant="footnote">{t('today.repeats_hint')}</AppText>
-              </View>
-              <RowChevron />
-            </Row>
-          ) : null}
-          <View style={{ gap: theme.space[2], marginTop: theme.space[2] }}>
-            {proposals.map((s) => (
-              <SuggestionCard key={s.id} s={s} />
-            ))}
-            {tip ? <TipRow s={tip} /> : null}
-          </View>
-        </View>
-      ) : null}
-
-      {/* П3 (approved): no spending today → no «Потрачено сегодня». */}
-      {todayMinor > 0n ? (
-        <View testID="tile-spent">
-          <SectionHead
-            title={t('today.spent_today_title')}
-            link={formatMinor(todayMinor)}
-            onLink={openExpenses}
-            testID="today-spent"
-          />
-          {leftMinor !== null ? (
-            <AppText variant="footnote" color={leftMinor < 0n ? 'danger' : 'ink3'}>
-              {leftMinor >= 0n
-                ? t('today.budget_left', { sum: formatMinor(leftMinor) })
-                : t('today.budget_over', { sum: formatMinor(-leftMinor) })}
-            </AppText>
-          ) : null}
-        </View>
-      ) : null}
-
-      {!emptyDay && tomorrowRows.length > 0 ? (
-        <View testID="today-tomorrow">
-          <SectionHead
-            title={t('today.tomorrow')}
-            link={tasksPage ? t('today.all_tasks_short') : undefined}
-            onLink={() => openPage('tasks')}
-          />
-          {tomorrowRows.map((r, i) => (
-            <Row key={r.key} first={i === 0}>
-              <AppText style={[theme.type.planTime, { width: 48 }]}>{r.time}</AppText>
-              <AppText numberOfLines={1} style={{ flex: 1 }}>
-                {r.title}
-              </AppText>
-            </Row>
-          ))}
-        </View>
-      ) : null}
-      <PageTiles tiles={tiles} />
     </PlaceScreen>
   );
 }
@@ -677,33 +854,58 @@ function TodoCheck({ id, checked, title }: { id: string; checked: boolean; title
 }
 
 /** A tip as one row (QA B5): its words, «Да …» when it has one and «Не сейчас» as links — no plate. */
+/**
+ * QA v5-device-2 B4: a tip is one calm card on paper2 (r16, padding 16) — the share icon, the words 15 ink2, the links
+ * at the left edge of the words; no «Ждёт вас» heading over a single tip. After «Не сейчас» it does not come back.
+ */
 function TipRow({ s }: { s: SuggestionOut }) {
   const theme = useTheme();
   const { t } = useTranslation();
   const yes = canSayYes(s);
+  const link = (testID: string, label: string, onPress: () => void) => (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      hitSlop={10}
+      style={({ pressed }) => ({ minHeight: 32, justifyContent: 'center', opacity: pressed ? 0.6 : 1 })}
+    >
+      <AppText
+        nativeID="v5-one-line"
+        numberOfLines={1}
+        style={{
+          fontFamily: theme.type.headline.fontFamily,
+          fontSize: 15,
+          lineHeight: 18,
+          textDecorationLine: 'underline',
+        }}
+      >
+        {label}
+      </AppText>
+    </Pressable>
+  );
   return (
     <View
       testID={`suggestion-${s.id}`}
-      style={{ borderTopWidth: 1, borderTopColor: theme.colors.line, paddingVertical: 10, gap: 4 }}
+      style={{
+        backgroundColor: theme.colors.paper2,
+        borderRadius: 16,
+        padding: 16,
+        flexDirection: 'row',
+        gap: 12,
+        alignItems: 'flex-start',
+      }}
     >
-      <AppText variant="small">{s.text_ru.replace(/„/g, '«').replace(/[“”]/g, '»')}</AppText>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.space[2] }}>
-        {yes ? (
-          <Button
-            testID={`suggestion-yes-${s.id}`}
-            size="small"
-            variant="link"
-            label={s.yes_label ?? t('common.yes')}
-            onPress={() => void sayYes(s)}
-          />
-        ) : null}
-        <Button
-          testID={`suggestion-no-${s.id}`}
-          size="small"
-          variant="link"
-          label={s.no_label ?? t('common.not_now')}
-          onPress={() => void sayNo(s)}
-        />
+      <Share2 size={22} color={theme.colors.ink} strokeWidth={theme.icon.strokeWidth} />
+      <View style={{ flex: 1, gap: 6 }}>
+        <AppText style={{ fontSize: 15, lineHeight: 21, color: theme.colors.ink2 }}>
+          {s.text_ru.replace(/„/g, '«').replace(/[“”]/g, '»')}
+        </AppText>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 18, rowGap: 4 }}>
+          {yes ? link(`suggestion-yes-${s.id}`, s.yes_label ?? t('common.yes'), () => void sayYes(s)) : null}
+          {link(`suggestion-no-${s.id}`, s.no_label ?? t('common.not_now'), () => void sayNo(s))}
+        </View>
       </View>
     </View>
   );

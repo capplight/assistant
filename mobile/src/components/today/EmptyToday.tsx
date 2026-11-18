@@ -1,4 +1,5 @@
 import { ArrowUp, Check } from 'lucide-react-native';
+import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 
@@ -9,32 +10,67 @@ import { withoutLastWord } from '@/today/empty';
 import { useView } from '@/store/view';
 
 /**
- * Ф-84, `today-empty-options.html` «Итог» (option 2): the week on the yellow sheet — seven days, today in black,
- * up to three dots under a day with real to-dos / reminders; past days are muted. A tap opens the day in «Дела».
+ * Ф-84 / Ф-85 (`today-day-view.html`, tokens `dayView`): the week on the yellow sheet. The chosen day is the dark
+ * pill; today, when another day is chosen, has a 1.5 ring. Dots under the number: the day has something (up to 3).
+ * A tap shows the day right here; a sideways swipe on the week goes to the week before / after.
  */
+export type WeekDay = {
+  date: string;
+  label: string;
+  num: string;
+  name: string;
+  count: number;
+  past: boolean;
+  today: boolean;
+  selected?: boolean;
+};
+
 export function WeekStrip({
   days,
   onDay,
+  onWeek,
 }: {
-  days: { date: string; label: string; num: string; name: string; count: number; past: boolean; today: boolean }[];
+  days: WeekDay[];
   onDay: (date: string) => void;
+  onWeek?: (step: -1 | 1) => void;
 }) {
   const theme = useTheme();
   const { t } = useTranslation();
   const c = onPlace(theme.colors, 'today');
   const bg = theme.colors.place.today;
   const small = theme.m.size === 'small';
+  const anyChosen = days.some((d) => d.selected);
+  const startX = useRef<number | null>(null);
   return (
     <View
       testID="today-week"
       nativeID="v5-week"
       accessibilityLabel={t('today.week')}
+      accessibilityActions={
+        onWeek
+          ? [
+              { name: 'decrement', label: t('today.week_prev') },
+              { name: 'increment', label: t('today.week_next') },
+            ]
+          : undefined
+      }
+      onAccessibilityAction={onWeek ? (e) => onWeek(e.nativeEvent.actionName === 'decrement' ? -1 : 1) : undefined}
+      onTouchStart={(e) => (startX.current = e.nativeEvent.pageX)}
+      onTouchEnd={(e) => {
+        const from = startX.current;
+        startX.current = null;
+        if (from === null || !onWeek) return;
+        const dx = e.nativeEvent.pageX - from;
+        if (Math.abs(dx) > 48) onWeek(dx < 0 ? 1 : -1);
+      }}
       style={{ flexDirection: 'row', gap: 2, marginTop: small ? 10 : 14, marginHorizontal: small ? -4 : -6 }}
     >
       {days.map((d) => {
-        const dots = d.past ? 0 : Math.min(3, d.count);
+        const on = anyChosen ? !!d.selected : d.today;
+        const ring = anyChosen && d.today && !d.selected;
+        const dots = Math.min(3, d.count);
         const label =
-          d.count > 0 && !d.past
+          d.count > 0
             ? t('today.week_day', { day: d.name, count: d.count })
             : t('today.week_day_free', { day: d.name });
         return (
@@ -42,7 +78,7 @@ export function WeekStrip({
             key={d.date}
             testID={`week-${d.date}`}
             accessibilityRole="button"
-            accessibilityState={{ selected: d.today }}
+            accessibilityState={{ selected: on }}
             accessibilityLabel={label}
             accessibilityHint={t('today.week_hint')}
             onPress={() => onDay(d.date)}
@@ -50,13 +86,19 @@ export function WeekStrip({
               {
                 flex: 1,
                 minWidth: 0,
-                minHeight: 48,
+                minHeight: 56,
                 alignItems: 'center',
                 gap: 4,
                 paddingVertical: 7,
-                borderRadius: 15,
+                borderRadius: 18,
               },
-              d.today ? { backgroundColor: c.ink } : pressed ? { backgroundColor: 'rgba(0,0,0,0.06)' } : null,
+              on
+                ? { backgroundColor: c.ink }
+                : ring
+                  ? { borderWidth: 1.5, borderColor: c.ink }
+                  : pressed
+                    ? { backgroundColor: 'rgba(0,0,0,0.06)' }
+                    : null,
             ]}
           >
             <AppText
@@ -67,7 +109,7 @@ export function WeekStrip({
                 fontFamily: theme.type.sheetMeta.fontFamily,
                 fontSize: 13,
                 lineHeight: 15,
-                color: d.today ? bg : c.ink2,
+                color: on ? bg : c.ink2,
               }}
             >
               {d.label}
@@ -77,21 +119,18 @@ export function WeekStrip({
               nativeID="v5-one-line"
               maxFontSizeMultiplier={1.5}
               style={{
-                fontFamily: d.past ? theme.type.sheetMeta.fontFamily : theme.type.stripTitle.fontFamily,
+                fontFamily: d.past && !on ? theme.type.sheetMeta.fontFamily : theme.type.stripTitle.fontFamily,
                 fontSize: small ? 17 : 18,
                 lineHeight: small ? 19 : 20,
                 fontVariant: ['tabular-nums'],
-                color: d.today ? bg : d.past ? c.ink2 : c.ink,
+                color: on ? bg : d.past ? c.ink2 : c.ink,
               }}
             >
               {d.num}
             </AppText>
             <View testID={`week-dots-${d.date}`} style={{ flexDirection: 'row', gap: 3, height: 5 }}>
               {Array.from({ length: dots }, (_, i) => (
-                <View
-                  key={i}
-                  style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: d.today ? bg : c.ink }}
-                />
+                <View key={i} style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: on ? bg : c.ink }} />
               ))}
             </View>
           </Pressable>

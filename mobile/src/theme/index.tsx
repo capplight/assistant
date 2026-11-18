@@ -5,7 +5,7 @@ import { persist } from 'zustand/middleware';
 
 import { persistStorage } from '@/store/storage';
 
-import { darkColors, darkNoteColors, lightColors, lightNoteColors, type ColorTokens, type NoteColorKey } from './colors';
+import { darkColors, darkNoteColors, lightColors, lightNoteColors, type ColorTokens, type StickerColor } from './colors';
 import { elevation, icon, motion, radius, size, space, type Elevation } from './layout';
 import { useLayoutMetrics, type LayoutMetrics, type Scheme } from './metrics';
 import { gutterFor } from './responsive';
@@ -34,7 +34,7 @@ export type Theme = {
   scheme: Scheme;
   colors: ColorTokens;
   /** Sticker colours of this scheme. */
-  notes: Record<NoteColorKey, string>;
+  notes: Record<StickerColor, string>;
   type: typeof type;
   space: typeof space;
   size: typeof size;

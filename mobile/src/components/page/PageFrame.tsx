@@ -1,4 +1,4 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import {
   ArrowUpDown,
   Camera,
@@ -14,9 +14,9 @@ import {
   Wallet,
   X,
 } from 'lucide-react-native';
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { AppState, BackHandler, View } from 'react-native';
 
 import { renamePage } from '@/pages/service';
 import { usePageLabels } from '@/pages/usePageLabels';
@@ -103,6 +103,31 @@ export function PageFrame({ page }: { page: Page }) {
   const clearHighlight = useView((st) => st.clearHighlight);
   const setVisible = useView((st) => st.setVisible);
   const [ordering, setOrdering] = useState(false);
+  // QA v5-device-2 A5: the order mode closes by itself — leaving the screen or the tab, the app going to the
+  // background, «Назад», another page in this screen, 60 s without a touch. Every «Выше / Ниже» is saved at once,
+  // so «Готово» only closes it and nothing is lost.
+  const [orderPage, setOrderPage] = useState(page.id);
+  if (orderPage !== page.id) {
+    setOrderPage(page.id);
+    setOrdering(false);
+  }
+  useFocusEffect(useCallback(() => () => setOrdering(false), []));
+  useEffect(() => {
+    if (!ordering) return;
+    const app = AppState.addEventListener('change', (st) => {
+      if (st !== 'active') setOrdering(false);
+    });
+    const back = BackHandler.addEventListener('hardwareBackPress', () => {
+      setOrdering(false);
+      return true;
+    });
+    const idle = setTimeout(() => setOrdering(false), 60_000);
+    return () => {
+      app.remove();
+      back.remove();
+      clearTimeout(idle);
+    };
+  }, [ordering, entries]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [budgetOpen, setBudgetOpen] = useState(false);
@@ -324,12 +349,13 @@ export function PageFrame({ page }: { page: Page }) {
         />
       ) : null}
       {ordering ? (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.space[2], flexWrap: 'wrap' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.space[2] }}>
           <AppText
             testID="page-order-hint"
             variant="callout"
+            numberOfLines={1}
             accessibilityLiveRegion="polite"
-            style={{ flex: 1, minWidth: '50%' }}
+            style={{ flex: 1 }}
           >
             {t('page.order_hint')}
           </AppText>
@@ -337,6 +363,7 @@ export function PageFrame({ page }: { page: Page }) {
             testID="page-order"
             label={t('page.order_done')}
             size="small"
+            minHeight={42}
             accessibilityState={{ selected: true }}
             onPress={() => setOrdering(false)}
           />

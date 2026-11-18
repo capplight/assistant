@@ -109,7 +109,14 @@ const lightV5: V5Tokens = {
   ink: '#1A191E',
   ink2: '#55525C',
   ink3: '#6B6774',
-  place: { today: '#F6D35B', notes: '#A9CCF4', assistant: '#E0592C', expenses: '#B6D89C', tasks: '#CDBFF5', stone: '#D8D2C6' },
+  place: {
+    today: '#F6D35B',
+    notes: '#A9CCF4',
+    assistant: '#E0592C',
+    expenses: '#B6D89C',
+    tasks: '#CDBFF5',
+    stone: '#D8D2C6',
+  },
   onSheet: '#1A191E',
   onSheet2: '#3D3A42',
   onStone: '#1A191E',
@@ -141,7 +148,14 @@ const darkV5: V5Tokens = {
   ink: '#F1EEE8',
   ink2: '#C2BDC8',
   ink3: '#A29DAA',
-  place: { today: '#C9A23A', notes: '#5E93DC', assistant: '#E0592C', expenses: '#6FA35C', tasks: '#9683E6', stone: '#42404A' },
+  place: {
+    today: '#C9A23A',
+    notes: '#5E93DC',
+    assistant: '#E0592C',
+    expenses: '#6FA35C',
+    tasks: '#9683E6',
+    stone: '#42404A',
+  },
   onSheet: '#16151A',
   onSheet2: '#1F1D24',
   onStone: '#F1EEE8',
@@ -217,12 +231,43 @@ export const metricColors: Record<'light' | 'dark', Record<MetricKey, string>> =
 
 /* ---------------- stickers ---------------- */
 
-/** v5 sticker palette of 5, no place hues. */
-export type StickerKey = 'paper' | 'sand' | 'rose' | 'mist' | 'graphite';
-export const STICKER_KEYS: readonly StickerKey[] = ['paper', 'sand', 'rose', 'mist', 'graphite'];
+/**
+ * Ф-85 / QA v5-device-2 A3 (tokens-v5 `stickerColors`): multicoloured stickers, 7 pastels + paper (replaces the muted
+ * 5 of Ф-79). Light: much lighter than the place sheets; dark: deep tones, ≥ 1.7 : 1 from the paper.
+ * New notes take the next colour of STICKER_KEYS, skipping their two neighbours' colours.
+ */
+export type StickerKey = 'paper' | 'lemon' | 'apricot' | 'rose' | 'lilac' | 'sky' | 'aqua' | 'mint';
+export const STICKER_KEYS: readonly StickerKey[] = [
+  'lemon',
+  'sky',
+  'rose',
+  'mint',
+  'lilac',
+  'apricot',
+  'aqua',
+  'paper',
+];
 export const stickerColors: Record<'light' | 'dark', Record<StickerKey, string>> = {
-  light: { paper: '#FFFFFF', sand: '#EFE4CF', rose: '#F3D6DC', mist: '#D4E8E2', graphite: '#E2DFD8' },
-  dark: { paper: '#33313A', sand: '#4A4232', rose: '#4E3439', mist: '#2E4640', graphite: '#3C3B42' },
+  light: {
+    paper: '#FFFFFF',
+    lemon: '#FFEFA6',
+    apricot: '#FFD8B5',
+    rose: '#FFCFD8',
+    lilac: '#E4DAFF',
+    sky: '#CDE5FF',
+    aqua: '#C2EDE6',
+    mint: '#D6F0C2',
+  },
+  dark: {
+    paper: '#2A2930',
+    lemon: '#4F4419',
+    apricot: '#673F24',
+    rose: '#6A3040',
+    lilac: '#463B74',
+    sky: '#24476E',
+    aqua: '#1A4F4B',
+    mint: '#2D4E27',
+  },
 };
 export const stickerInk = {
   light: { ink: '#1A191E', ink2: '#4D4A52' },
@@ -236,30 +281,78 @@ export const stickerInk = {
 export type NoteColorKey = 'white' | 'yellow' | 'peach' | 'pink' | 'lilac' | 'blue' | 'green';
 /** Every stored key (the data domain). */
 export const NOTE_COLOR_KEYS: readonly NoteColorKey[] = ['white', 'yellow', 'peach', 'pink', 'lilac', 'blue', 'green'];
-/** v2 NoteColorKey → v5 StickerKey. */
-export const legacyStickerMap: Record<NoteColorKey, StickerKey> = {
+/** v2 NoteColorKey and the Ф-79 v5 keys → the current StickerKey (tokens-v5 `legacyStickerMap`). */
+export const legacyStickerMap: Record<string, StickerKey> = {
   white: 'paper',
-  yellow: 'sand',
-  peach: 'rose',
+  yellow: 'lemon',
+  peach: 'apricot',
   pink: 'rose',
-  lilac: 'graphite',
-  blue: 'mist',
-  green: 'mist',
+  lilac: 'lilac',
+  blue: 'sky',
+  green: 'mint',
+  sand: 'lemon',
+  mist: 'aqua',
+  graphite: 'lilac',
 };
-/** The colour picker: one stored key per v5 sticker (paper, sand, rose, mist, graphite). */
-export const STICKER_PICKER_KEYS: readonly NoteColorKey[] = ['white', 'yellow', 'pink', 'blue', 'lilac'];
-/** A stored key (old or new) → its v5 sticker. Unknown keys are paper. */
+/**
+ * The colour picker: the stored keys the server knows (views.md `color.note.*`), one per sticker — 7 of the 8
+ * (aqua has no stored key yet; it comes only by the automatic round).
+ */
+export const STICKER_PICKER_KEYS: readonly NoteColorKey[] = [
+  'yellow',
+  'blue',
+  'pink',
+  'green',
+  'lilac',
+  'peach',
+  'white',
+];
+/** A stored key (old or new) → its sticker. Unknown keys are paper. */
 export function stickerOf(key: string | null | undefined): StickerKey {
   if (!key) return 'paper';
   if ((STICKER_KEYS as readonly string[]).includes(key)) return key as StickerKey;
-  return legacyStickerMap[key as NoteColorKey] ?? 'paper';
+  return legacyStickerMap[key] ?? 'paper';
 }
 
+/** A colour of a sticker: a stored key or a sticker key. */
+export type StickerColor = NoteColorKey | StickerKey;
 const noteFills = (scheme: 'light' | 'dark') =>
-  Object.fromEntries(NOTE_COLOR_KEYS.map((k) => [k, stickerColors[scheme][legacyStickerMap[k]]])) as Record<NoteColorKey, string>;
-/** Stored key → fill (through `legacyStickerMap`). */
-export const lightNoteColors: Record<NoteColorKey, string> = noteFills('light');
-export const darkNoteColors: Record<NoteColorKey, string> = noteFills('dark');
+  Object.fromEntries(
+    [...NOTE_COLOR_KEYS, ...STICKER_KEYS].map((k) => [k, stickerColors[scheme][stickerOf(k)]]),
+  ) as Record<StickerColor, string>;
+/** Stored key (or sticker key) → fill (through `legacyStickerMap`). */
+export const lightNoteColors: Record<StickerColor, string> = noteFills('light');
+export const darkNoteColors: Record<StickerColor, string> = noteFills('dark');
+
+/**
+ * The automatic colours of notes nobody coloured (A3): by creation order the next colour of the round, skipping
+ * the colours of the two notes before it on the wall (left and above in two columns), so no two neighbours match.
+ * `ordered` is the wall order; `explicit` the stored colour (null = automatic); `createdAt` gives the round.
+ */
+export function roundStickerColors(
+  ordered: { id: string; explicit: string | null; createdAt: number }[],
+): Map<string, StickerKey> {
+  const autos = ordered
+    .filter((x) => !x.explicit)
+    .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
+  const rank = new Map(autos.map((x, i) => [x.id, i] as const));
+  const out = new Map<string, StickerKey>();
+  const shown: StickerKey[] = [];
+  ordered.forEach((x, i) => {
+    let key: StickerKey;
+    if (x.explicit) key = stickerOf(x.explicit);
+    else {
+      const avoid = new Set([shown[i - 1], shown[i - 2]].filter(Boolean));
+      const start = rank.get(x.id) ?? 0;
+      key = STICKER_KEYS[start % STICKER_KEYS.length]!;
+      for (let k = 0; k < STICKER_KEYS.length && avoid.has(key); k += 1)
+        key = STICKER_KEYS[(start + k + 1) % STICKER_KEYS.length]!;
+    }
+    shown.push(key);
+    out.set(x.id, key);
+  });
+  return out;
+}
 export const noteInk = stickerInk;
 
 /* ---------------- expense categories ---------------- */
@@ -270,8 +363,26 @@ export const noteInk = stickerInk;
  */
 export type CategoryKey = 'food' | 'transport' | 'home' | 'cafe' | 'health' | 'kids' | 'bills' | 'other';
 export const categoryColors: Record<'light' | 'dark', Record<CategoryKey, string>> = {
-  light: { food: '#2F7F70', transport: '#4F5D86', home: '#8C6A43', cafe: '#B05A78', health: '#9B3F4C', kids: '#737A35', bills: '#5B6A78', other: '#8A857B' },
-  dark: { food: '#5FB3A3', transport: '#8E9BC8', home: '#C29C70', cafe: '#DB8CA8', health: '#D97A86', kids: '#AEB65E', bills: '#9AA9B8', other: '#A8A397' },
+  light: {
+    food: '#2F7F70',
+    transport: '#4F5D86',
+    home: '#8C6A43',
+    cafe: '#B05A78',
+    health: '#9B3F4C',
+    kids: '#737A35',
+    bills: '#5B6A78',
+    other: '#8A857B',
+  },
+  dark: {
+    food: '#5FB3A3',
+    transport: '#8E9BC8',
+    home: '#C29C70',
+    cafe: '#DB8CA8',
+    health: '#D97A86',
+    kids: '#AEB65E',
+    bills: '#9AA9B8',
+    other: '#A8A397',
+  },
 };
 /** v5: category colour is never a background; the tint is only a faint square behind an icon. */
 export const categoryTintAlpha = { light: 0.14, dark: 0.22 } as const;
@@ -281,8 +392,22 @@ export const categoryText: Record<CategoryKey, string> = categoryColors.light;
 /** Page label colours → the place sheet colour of the page (only the small `PlaceTab` / icon). */
 export type PageColorKey = 'today' | 'notes' | 'tasks' | 'shopping' | 'expenses' | 'documents';
 export const pageColors: Record<'light' | 'dark', Record<PageColorKey, string>> = {
-  light: { today: lightV5.place.today, notes: lightV5.place.notes, tasks: lightV5.place.tasks, shopping: lightV5.place.stone, expenses: lightV5.place.expenses, documents: lightV5.place.stone },
-  dark: { today: darkV5.place.today, notes: darkV5.place.notes, tasks: darkV5.place.tasks, shopping: darkV5.place.stone, expenses: darkV5.place.expenses, documents: darkV5.place.stone },
+  light: {
+    today: lightV5.place.today,
+    notes: lightV5.place.notes,
+    tasks: lightV5.place.tasks,
+    shopping: lightV5.place.stone,
+    expenses: lightV5.place.expenses,
+    documents: lightV5.place.stone,
+  },
+  dark: {
+    today: darkV5.place.today,
+    notes: darkV5.place.notes,
+    tasks: darkV5.place.tasks,
+    shopping: darkV5.place.stone,
+    expenses: darkV5.place.expenses,
+    documents: darkV5.place.stone,
+  },
 };
 
 /** A page template → the place whose colour it carries. */

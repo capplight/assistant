@@ -114,7 +114,10 @@ export function AssistantMessage({ m, testID }: { m: ChatMessage; testID?: strin
   // QA v5-device-1 «Помощник» 2: a broken answer says why and offers «Повторить»; without a connection — the cloud
   // (§11.3). Not for the calm notices (limit, no AI, saved for later, «может, уже сделано»).
   const online = useConnectivity((st) => st.online);
-  const retryable = (m.status === 'interrupted' && m.notice !== 'maybe_done') || (m.status === 'failed' && !m.notice);
+  const retryable =
+    (m.status === 'interrupted' && m.notice !== 'maybe_done') ||
+    (m.status === 'failed' &&
+      (!m.notice || m.notice === 'error' || m.notice === 'no_answer' || m.notice === 'not_understood'));
   return (
     <View testID={testID} style={{ gap: theme.space[2], alignItems: 'stretch' }}>
       {m.saved ? (
@@ -183,16 +186,14 @@ export function AssistantMessage({ m, testID }: { m: ChatMessage; testID?: strin
           ) : null}
           <View style={retryable ? [styles.flex, { gap: 10 }] : undefined}>
             <AppText style={{ fontSize: 15.5, lineHeight: 22 }}>
-              {retryable && !online ? t('assistant.offline_title') : notice}
+              {notice}
             </AppText>
             {retryable ? (
               <View style={styles.row}>
                 <Button
                   testID={`chat-retry-${m.id}`}
                   label={t('answer.retry_short')}
-                  variant="secondary"
-                  size="small"
-                  minHeight={38}
+                  variant="link"
                   onPress={() => void retry(m.id)}
                 />
               </View>

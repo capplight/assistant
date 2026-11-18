@@ -22,6 +22,9 @@ type State = {
   /** The strip's hint set by the open place itself («Записать в Транспорт…», «Спросите про этот чек…»). */
   askHint: string | null;
   setAskHint: (h: string | null) => void;
+  /** A tap on the «Сегодня» tab while it is open (Ф-85: the day view goes back to today). */
+  todayTap: number;
+  tapToday: () => void;
   /** The place of the screen on top: bottom sheets carry its 6 dp strip. */
   place: PlaceKey;
   setPlace: (p: PlaceKey) => void;
@@ -38,6 +41,8 @@ export const useChrome = create<State>()((set) => ({
   askPinned: false,
   place: 'stone',
   askHint: null,
+  todayTap: 0,
+  tapToday: () => set((s) => ({ todayTap: s.todayTap + 1 })),
   setAskHint: (askHint) => set((s) => (s.askHint === askHint ? s : { askHint })),
   setPlace: (place) => set((s) => (s.place === place ? s : { place })),
   setTabBarHeight: (tabBarHeight) => set((s) => (s.tabBarHeight === tabBarHeight ? s : { tabBarHeight })),

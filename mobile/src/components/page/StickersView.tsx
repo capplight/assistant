@@ -17,7 +17,7 @@ import { recordTitle, sourceLine, statusLine } from '@/records/format';
 import { unverifiedCount } from '@/records/review';
 import { useFeatures } from '@/store/features';
 import { useNotesLook } from '@/store/notesLook';
-import { STICKER_PICKER_KEYS, stickerOf, useLayout, useTheme } from '@/theme';
+import { roundStickerColors, STICKER_PICKER_KEYS, stickerOf, useLayout, useTheme, type StickerKey } from '@/theme';
 import { ChangedMark, markFresh } from '@/components/ChangedMark';
 
 import { AppText } from '../AppText';
@@ -99,9 +99,9 @@ export function StickersView({ page, entries, frameTop, ordering }: ViewProps) {
   const laid = useMemo(
     () =>
       board
-        ? layoutBoard(all.map((e) => ({ id: e.record.id, tie: e.record.serverId ?? e.record.id, place: placeOf(e.link) }))).filter(
-            (l) => !inPile.has(l.id),
-          )
+        ? layoutBoard(
+            all.map((e) => ({ id: e.record.id, tie: e.record.serverId ?? e.record.id, place: placeOf(e.link) })),
+          ).filter((l) => !inPile.has(l.id))
         : [],
     [board, all, inPile],
   );
@@ -121,7 +121,9 @@ export function StickersView({ page, entries, frameTop, ordering }: ViewProps) {
     return [
       ...(heads ? [{ type: 'group' as const, key: '__pinned', title: t('notes.pinned_section') }] : []),
       ...pinned.map(entryRow),
-      ...(heads && rest.length > 0 && !(page.groups ?? []).length ? [{ type: 'group' as const, key: '__rest', title: t('notes.rest_section') }] : []),
+      ...(heads && rest.length > 0 && !(page.groups ?? []).length
+        ? [{ type: 'group' as const, key: '__rest', title: t('notes.rest_section') }]
+        : []),
       ...withGroups(rest, page.groups ?? []),
     ];
   }, [boardAsRows, inRows, laid, page.groups, t]);
@@ -147,6 +149,17 @@ export function StickersView({ page, entries, frameTop, ordering }: ViewProps) {
   // «Стикер 3 из 12»: the place among the stickers, headings not counted.
   const order = useMemo(() => rows.flatMap((r) => (r.type === 'entry' ? [r.entry.record.id] : [])), [rows]);
   const byId = useMemo(() => new Map((entries ?? []).map((e) => [e.record.id, e])), [entries]);
+  // A3 (Ф-85): notes nobody coloured take the next colour of the round, never the colour of a neighbour.
+  const autoColors = useMemo(
+    () =>
+      roundStickerColors(
+        order.flatMap((id) => {
+          const e = byId.get(id);
+          return e ? [{ id, explicit: e.link?.color ?? null, createdAt: e.record.createdAt }] : [];
+        }),
+      ),
+    [order, byId],
+  );
 
   const menuExtra = (record: LocalRecord): MenuExtra[] => {
     const entry = byId.get(record.id);
@@ -164,7 +177,8 @@ export function StickersView({ page, entries, frameTop, ordering }: ViewProps) {
       {
         testID: 'menu-pin',
         label: pinned ? t('notes.unpin') : t('notes.pin'),
-        onPress: () => void setRowLook(record, page, { pinned: !pinned }, t(pinned ? 'notes.unpinned' : 'notes.pinned', { what })),
+        onPress: () =>
+          void setRowLook(record, page, { pinned: !pinned }, t(pinned ? 'notes.unpinned' : 'notes.pinned', { what })),
       },
     ];
   };
@@ -203,13 +217,27 @@ export function StickersView({ page, entries, frameTop, ordering }: ViewProps) {
   );
 
   const renderEntry = (row: EntryRow, ctx: EntryCtx) => (
-    <Sticker entry={row.entry} ctx={ctx} index={order.indexOf(row.entry.record.id)} total={order.length} look={look} />
+    <Sticker
+      entry={row.entry}
+      ctx={ctx}
+      index={order.indexOf(row.entry.record.id)}
+      total={order.length}
+      look={look}
+      auto={autoColors.get(row.entry.record.id)}
+    />
   );
 
   return (
     <>
       {board && !boardAsRows ? (
-        <BoardView page={page} entries={all} hidden={inPile} header={header} menuExtra={menuExtra} empty={entries ? <EmptyWall /> : null} />
+        <BoardView
+          page={page}
+          entries={all}
+          hidden={inPile}
+          header={header}
+          menuExtra={menuExtra}
+          empty={entries ? <EmptyWall /> : null}
+        />
       ) : (
         <EntryList
           page={page}
@@ -219,7 +247,13 @@ export function StickersView({ page, entries, frameTop, ordering }: ViewProps) {
           renderEntry={renderEntry}
           renderGroup={(g) =>
             g.key === '__pinned' || g.key === '__rest' ? (
-              <AppText testID={`group-${g.key}`} variant="eyebrow" color="ink2" accessibilityRole="header" style={{ paddingTop: theme.space[3], paddingBottom: theme.space[2] }}>
+              <AppText
+                testID={`group-${g.key}`}
+                variant="eyebrow"
+                color="ink2"
+                accessibilityRole="header"
+                style={{ paddingTop: theme.space[3], paddingBottom: theme.space[2] }}
+              >
                 {g.title}
               </AppText>
             ) : null
@@ -241,7 +275,12 @@ export function StickersView({ page, entries, frameTop, ordering }: ViewProps) {
             setColorFor(null);
             const value = c === 'white' ? null : c;
             if ((e.link?.color ?? null) === value) return;
-            void setRowLook(e.record, page, { color: value }, t('notes.colored', { color: t(`notes.colors.${c}`), what: recordTitle(e.record, t) }));
+            void setRowLook(
+              e.record,
+              page,
+              { color: value },
+              t('notes.colored', { color: t(`notes.colors.${c}`), what: recordTitle(e.record, t) }),
+            );
           }}
         />
       ) : null}
@@ -249,7 +288,21 @@ export function StickersView({ page, entries, frameTop, ordering }: ViewProps) {
   );
 }
 
-function Sticker({ entry, ctx, index, total, look }: { entry: PageEntry; ctx: EntryCtx; index: number; total: number; look: 'grid' | 'list' }) {
+function Sticker({
+  entry,
+  ctx,
+  index,
+  total,
+  look,
+  auto,
+}: {
+  entry: PageEntry;
+  ctx: EntryCtx;
+  index: number;
+  total: number;
+  look: 'grid' | 'list';
+  auto?: StickerKey;
+}) {
   const theme = useTheme();
   const { t, i18n } = useTranslation();
   const rec = entry.record;
@@ -277,16 +330,26 @@ function Sticker({ entry, ctx, index, total, look }: { entry: PageEntry; ctx: En
   const title = recordTitle(rec, t);
   const status = statusLine(rec, t);
   const toCheck = unverifiedCount(rec) > 0;
-  const square = { width: theme.size.minTouch, height: theme.size.minTouch, alignItems: 'center', justifyContent: 'center' } as const;
+  const square = {
+    width: theme.size.minTouch,
+    height: theme.size.minTouch,
+    alignItems: 'center',
+    justifyContent: 'center',
+  } as const;
 
   return (
-    <View testID={`sticker-${rec.id}`} onLayout={ctx.onLayout} style={{ gap: theme.space[1] }}>
+    // A4: in the list the gap between the cards is 10 (the grid has its own row gap).
+    <View
+      testID={`sticker-${rec.id}`}
+      onLayout={ctx.onLayout}
+      style={{ gap: theme.space[1], marginBottom: look === 'list' ? 10 : 0 }}
+    >
       <StickyNote
         testID={`record-${rec.id}`}
         title={body ? first : undefined}
         text={body || first}
         date={sourceLine(rec, i18n.language, t)}
-        color={color ?? autoNoteColor(rec.serverId ?? rec.id)}
+        color={color ?? auto ?? autoNoteColor(rec.serverId ?? rec.id)}
         look={look}
         pinned={pinned}
         changed={markFresh(rec.assistantChangedAt)}
@@ -303,7 +366,12 @@ function Sticker({ entry, ctx, index, total, look }: { entry: PageEntry; ctx: En
         {toCheck ? (
           <View
             testID={`record-check-${rec.id}`}
-            style={{ alignSelf: 'flex-start', backgroundColor: theme.colors.highlightTint, borderRadius: theme.radius.round, paddingHorizontal: theme.space[2] }}
+            style={{
+              alignSelf: 'flex-start',
+              backgroundColor: theme.colors.highlightTint,
+              borderRadius: theme.radius.round,
+              paddingHorizontal: theme.space[2],
+            }}
           >
             <AppText variant="footnote" color="warning">
               {t('check.badge')}
@@ -369,7 +437,17 @@ function ModeSwitch({ board, onPick }: { board: boolean; onPick: (board: boolean
 }
 
 /** «Цвет»: the seven round swatches of v2 (incl. `lilac`) in the one sheet, each with its name (colour never carries meaning alone). */
-function ColorSheet({ title, current, onPick, onClose }: { title: string; current: NoteColor | null; onPick: (c: NoteColor) => void; onClose: () => void }) {
+function ColorSheet({
+  title,
+  current,
+  onPick,
+  onClose,
+}: {
+  title: string;
+  current: NoteColor | null;
+  onPick: (c: NoteColor) => void;
+  onClose: () => void;
+}) {
   const theme = useTheme();
   const { t } = useTranslation();
   const selected = current ?? 'white';
@@ -393,14 +471,30 @@ function ColorSheet({ title, current, onPick, onClose }: { title: string; curren
               accessibilityState={{ checked: on }}
               onPress={() => onPick(c)}
               style={({ pressed }) => [
-                { alignItems: 'center', gap: theme.space[1], minWidth: 72, minHeight: theme.size.minTouch, paddingVertical: theme.space[1] },
+                {
+                  alignItems: 'center',
+                  gap: theme.space[1],
+                  minWidth: 72,
+                  minHeight: theme.size.minTouch,
+                  paddingVertical: theme.space[1],
+                },
                 pressedStyle(pressed),
               ]}
             >
               <View
                 style={[
-                  { width: d, height: d, borderRadius: d / 2, backgroundColor: theme.notes[c], alignItems: 'center', justifyContent: 'center' },
-                  { borderWidth: on ? 2 : c === 'white' ? 1 : 0, borderColor: on ? theme.colors.ink : theme.colors.line },
+                  {
+                    width: d,
+                    height: d,
+                    borderRadius: d / 2,
+                    backgroundColor: theme.notes[c],
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  },
+                  {
+                    borderWidth: on ? 2 : c === 'white' ? 1 : 0,
+                    borderColor: on ? theme.colors.ink : theme.colors.line,
+                  },
                 ]}
               >
                 {on ? <Icon icon={Check} color="brand" /> : null}
@@ -427,7 +521,9 @@ function EmptyWall() {
   const theme = useTheme();
   return (
     <View testID="page-empty" style={{ paddingTop: theme.space[2] }}>
-      <AppText style={{ fontFamily: theme.type.bodyStrong.fontFamily, fontSize: 17, lineHeight: 23, marginBottom: 6 }}>{t('notes.empty')}</AppText>
+      <AppText style={{ fontFamily: theme.type.bodyStrong.fontFamily, fontSize: 17, lineHeight: 23, marginBottom: 6 }}>
+        {t('notes.empty')}
+      </AppText>
       {[t('notes.example_1'), t('notes.example_2')].map((ex, i) => (
         <Row key={ex} first={i === 0}>
           <PlaceTab place="notes" />

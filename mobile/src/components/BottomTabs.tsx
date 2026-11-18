@@ -7,6 +7,7 @@ import { ensureTemplatePage } from '@/pages/service';
 import { mainTabs } from '@/pages/tabs';
 import { usePageLabels } from '@/pages/usePageLabels';
 import { useFeatures } from '@/store/features';
+import { useChrome } from '@/store/chrome';
 import { selectSortedPages, usePages, type Page } from '@/store/pages';
 import { useToast } from '@/store/toast';
 import { useView } from '@/store/view';
@@ -99,6 +100,7 @@ export function BottomTabs({ bottomInset = 0 }: { bottomInset?: number }) {
       return;
     }
     // Also on a record card opened from this page: the tab leads back to the page.
+    if (tab.key === 'today' && pathname === '/') useChrome.getState().tapToday();
     if (tab.href && pathname !== tab.href) router.navigate(tab.href);
   };
   return (

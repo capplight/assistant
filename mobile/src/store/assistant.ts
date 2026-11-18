@@ -34,6 +34,10 @@ export type ChatStatus = 'streaming' | 'done' | 'queued' | 'interrupted' | 'defe
 export type ChatNotice =
   | 'limit'
   | 'error'
+  /** QA v5-device-2 C2: the model or the server did not answer in time («Помощник не ответил»). */
+  | 'no_answer'
+  /** The server could not read the phrase («Не понял»). */
+  | 'not_understood'
   | 'not_found'
   | 'no_ai'
   | 'offline_action'
