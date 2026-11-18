@@ -20,8 +20,9 @@ async def main() -> None:
     maker = get_sessionmaker()
     embedder = chunk_embedder_from_settings(settings,
                                             timeout=settings.search_embed_timeout_seconds)
-    service = ChatService(settings, maker, build_router(settings, maker), embedder,
-                          push=LogPushSender())  # fmt: skip
+    router = build_router(settings, maker)
+    await router.warm()  # provider SDKs load now, not inside the first answer's timeout
+    service = ChatService(settings, maker, router, embedder, push=LogPushSender())
     stop = asyncio.Event()
     install_signal_handlers(stop)
     try:

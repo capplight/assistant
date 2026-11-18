@@ -1,5 +1,6 @@
 """Per-task routes and model prices from routes.yaml (or settings.ai_routes_file)."""
 
+import logging
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
@@ -11,6 +12,7 @@ from assistant.ai.policy import BatchMode, validate_route
 from assistant.ai.types import BudgetClass, LLMTask, Tier, Usage
 from assistant.config import Settings
 
+log = logging.getLogger(__name__)
 DEFAULT_ROUTES_FILE = Path(__file__).with_name("routes.yaml")
 _MTOK = Decimal(1_000_000)
 
@@ -125,6 +127,20 @@ class RouteTable:
 
 
 def load_routes(settings: Settings, path: str | Path | None = None) -> RouteTable:
+    """An override file (AI_ROUTES_FILE) wins for every task it names. A task it does not name
+    (the file predates the task) takes the packaged routes.yaml entry, with a warning, instead of
+    failing every request of that task with «no AI route» (device test, 2026-11-18)."""
     file = Path(path or settings.ai_routes_file or DEFAULT_ROUTES_FILE)
     raw = yaml.safe_load(file.read_text(encoding="utf-8")) or {}
+    if file.resolve() != DEFAULT_ROUTES_FILE.resolve():
+        base = yaml.safe_load(DEFAULT_ROUTES_FILE.read_text(encoding="utf-8")) or {}
+        own = raw.get("tasks") or {}
+        missing = {k: v for k, v in (base.get("tasks") or {}).items() if k not in own}
+        if missing:
+            log.warning("routes %s has no entry for %s: using routes.yaml for them",
+                        file.name, ", ".join(sorted(missing)))
+            raw = {**raw, "tasks": {**own, **missing}}
+        for key in ("models", "prices"):  # a model or price the borrowed tasks may need
+            if key in base:
+                raw[key] = {**base[key], **(raw.get(key) or {})}
     return RouteTable(raw, settings)

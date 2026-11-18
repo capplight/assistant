@@ -73,7 +73,11 @@ async def get_db(ctx: Ctx) -> AsyncIterator[AsyncSession]:
             raise
 
 
-Db = Annotated[AsyncSession, Depends(get_db)]
+# scope="function": commit BEFORE the response goes out. With the default ("request") the commit
+# ran after the client already had the answer, so the very next call could miss what this one
+# wrote (a fresh session from /auth/anonymous or /auth/refresh -> 401 on the next request), and a
+# failed commit could not turn the already sent 200 into an error.
+Db = Annotated[AsyncSession, Depends(get_db, scope="function")]
 
 
 def client_ip_hash(request: Request, ctx: ApiContext) -> str | None:

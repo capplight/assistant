@@ -23,6 +23,7 @@ async def main() -> None:
     stt_key = (settings.stt_api_key.get_secret_value()
                or settings.groq_api_key.get_secret_value())
     router = build_router(settings, maker)
+    await router.warm()  # provider SDKs load now, not inside the first call's timeout
     token = settings.instagram_oembed_token.get_secret_value() or None
     links = LinkMetadataClient(instagram_access_token=token)
     deps = IngestDeps(storage=storage_from_settings(settings), ocr=make_ocr(settings.ocr_provider),

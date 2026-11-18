@@ -3,7 +3,8 @@
 import hashlib
 import hmac
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, FastAPI, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -111,7 +112,14 @@ def create_app(
     ctx.chat = ChatService(settings, sessionmaker, ctx.ai_router, ctx.embedder,
                            push=push)  # fmt: skip
 
-    app = FastAPI(title="Assistant API", version=API_VERSION)
+    @asynccontextmanager
+    async def _lifespan(_: FastAPI) -> AsyncIterator[None]:
+        # Provider SDKs load before the first request, not inside its timeout (Router.warm).
+        if ctx.ai_router is not None:
+            await ctx.ai_router.warm()
+        yield
+
+    app = FastAPI(title="Assistant API", version=API_VERSION, lifespan=_lifespan)
     app.state.ctx = ctx
     install_error_handlers(app)
 

@@ -198,6 +198,19 @@ class Router:
 
     # --- public ---
 
+    async def warm(self) -> None:
+        """Load every provider SDK before the first request (entry points call it at startup).
+        Lazily, the import ran inside the first call's timeout and blocked the event loop: the
+        first phrase after a restart timed out on every provider (device test 2026-11-18)."""
+        for name, adapter in self.adapters.items():
+            warm = getattr(adapter, "warm", None)  # fakes have none
+            if warm is None:
+                continue
+            try:
+                await asyncio.to_thread(warm)
+            except Exception as exc:  # a broken SDK fails its own calls later, not startup
+                log.warning("AI provider %s: SDK did not load: %s", name, error_text(exc))
+
     async def run(
         self, task: LLMTask, schema: type[T], inputs: TaskInputs, *, user_id: int | None,
         no_personal_data: bool = False, strong: StrongRequest | None = None,

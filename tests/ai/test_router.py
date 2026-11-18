@@ -443,3 +443,49 @@ async def test_avoid_skips_providers_that_failed_this_turn():
     env = make_env({"anthropic": a, "openai": o})
     res = await env.router.run(LLMTask.CHAT, Note, inputs(), user_id=1, avoid=("anthropic",))
     assert res.provider == "openai" and a.calls == 0
+
+
+async def test_warm_loads_provider_sdks_off_the_event_loop() -> None:
+    """Device test 2026-11-18: `import anthropic` (~10 s on Windows) ran lazily inside the first
+    call's timeout and froze the loop; entry points now warm the adapters at startup."""
+    import threading
+
+    from assistant.ai.adapters import AnthropicAdapter, GeminiAdapter, GroqAdapter, OpenAIAdapter
+
+    seen: list[str] = []
+
+    class Slow(FakeAdapter):
+        def warm(self) -> None:
+            seen.append("thread" if threading.current_thread() is not threading.main_thread()
+                        else "loop")  # fmt: skip
+
+    class Broken(FakeAdapter):
+        def warm(self) -> None:
+            raise ImportError("no SDK")
+
+    env = make_env({"anthropic": Slow("anthropic", []), "google": Broken("google", []),
+                    "openai": FakeAdapter("openai", [])})  # fmt: skip
+    await env.router.warm()  # a broken SDK does not stop startup; fakes without warm are fine
+    assert seen == ["thread"]
+    for cls in (AnthropicAdapter, OpenAIAdapter, GeminiAdapter, GroqAdapter):
+        assert callable(getattr(cls, "warm", None)), cls
+
+
+async def test_api_startup_warms_the_router(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from assistant.api.app import create_app
+    from tests.api.conftest import make_settings as api_settings
+    from tests.api.conftest import make_storage
+
+    warmed: list[bool] = []
+
+    class R:
+        async def warm(self) -> None:
+            warmed.append(True)
+
+    engine = create_async_engine("postgresql+asyncpg://nobody:nothing@127.0.0.1:1/none")
+    app = create_app(api_settings(), sessionmaker=async_sessionmaker(engine), ai_router=R(),
+                     storage=make_storage(tmp_path))  # type: ignore[arg-type]  # fmt: skip
+    async with app.router.lifespan_context(app):
+        assert warmed == [True]

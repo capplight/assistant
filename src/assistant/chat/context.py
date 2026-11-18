@@ -21,7 +21,7 @@ sessions; nothing stays open while the embedder or the model works.
 
 import re
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -257,6 +257,18 @@ VIEW_OFF_LINE = ("Вид страницы (поля, колонки, сорти�
                  "значок страницы менять можно: rename_page.")
 
 
+def today_facts(now: datetime, tz: str) -> Facts:
+    """Dates our code knows for the answer check: today (and its year, the time now), yesterday
+    and tomorrow. «что у меня завтра?» → «На завтра, 19 ноября, …»: the days next to today are
+    code's dates, not numbers the model made up (device test 2026-11-18)."""
+    out = Facts()
+    local = now.astimezone(ZoneInfo(tz))
+    out.add_date(local)
+    for d in (local.date() - timedelta(days=1), local.date() + timedelta(days=1)):
+        out.dates.add((d.day, d.month, d.year))
+    return out
+
+
 async def assemble(
     sessionmaker: async_sessionmaker[AsyncSession], embedder: ChunkEmbedder, turn: TurnInput, *,
     now: datetime | None = None, max_input_tokens: int = 12000, embed_timeout_s: float = 0.5,
@@ -423,9 +435,7 @@ async def assemble(
         history=[Message(role, line) for role, line in hist],
     )  # fmt: skip
     extra = facts_of(turn.text)
-    today = Facts()
-    today.add_date(now.astimezone(ZoneInfo(tz)))
-    extra.update(today)
+    extra.update(today_facts(now, tz))
     for p in pages:
         extra.numbers.add(Decimal(p.item_count))
     return Assembled(inputs, book, extra, tokens, page, prefetched=keep, tz=tz), env

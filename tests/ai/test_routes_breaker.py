@@ -77,3 +77,25 @@ def test_breaker_window_slides():
     clock.t += 61
     assert b.record_failure("p", "m") is False  # old errors expired
     assert b.state("p", "m") is BreakerState.CLOSED
+
+
+def test_override_file_without_a_task_borrows_it_from_routes_yaml(tmp_path, caplog):
+    """A stale AI_ROUTES_FILE (written before `memory_extract` existed) must not fail that task
+    with «no AI route» (device test 2026-11-18); what the file names still wins."""
+    stale = tmp_path / "routes-old.yaml"
+    stale.write_text(
+        "prices: {default: {in: 5, out: 25, cached_in: 5, cache_write: 5}}\n"
+        "defaults: {tier: light, timeout_s: 25, max_tokens: 4000, mask_contacts: true,\n"
+        "           chain: [primary, fallback]}\n"
+        "tasks:\n  chat: {budget_class: answers, timeout_s: 11}\n", encoding="utf-8")
+    s = make_settings(model_fast="claude-haiku-5-5", model_strong="claude-sonnet-5-5",
+                      ai_routes_file=str(stale))
+    with caplog.at_level("WARNING", logger="assistant.ai.routes"):
+        table = load_routes(s)
+    assert table.route(LLMTask.CHAT).timeout_s == 11
+    for task in LLMTask:
+        assert table.route(task).chain, task
+    assert table.route(LLMTask.MEMORY_EXTRACT).timeout_s == 25  # the file's defaults still apply
+    assert table.model("anthropic", Tier.LIGHT) == "claude-haiku-5-5"
+    assert table.has_price("claude-haiku-5-5")
+    assert "memory_extract" in caplog.text

@@ -110,6 +110,11 @@ class AnthropicAdapter:
         self._api_key = api_key
         self._client = client
 
+    def warm(self) -> None:
+        """Import the SDK at startup (in a thread), not inside the first call's timeout: on
+        Windows the import alone took ~10 s with the event loop frozen (device test 2026-11-18)."""
+        import anthropic  # noqa: F401
+
     def _get_client(self) -> Any:
         if self._client is None:
             from anthropic import AsyncAnthropic  # lazy: SDK only inside its adapter

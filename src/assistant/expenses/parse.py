@@ -67,15 +67,36 @@ def is_question(text: str) -> bool:
     return bool(_QUESTION.search(amounts.norm(text).strip()))
 
 
+_CURRENCY_WORD = re.compile(r"[₸$€₽]|тг\b|тенге|теңге")
+_BARE_MAX_WORDS = 3  # «кофе 1500», «такси до дома 2000»: a thing and its price, nothing more
+_BARE_MIN = Decimal(50)  # «молоко 2», «квартира 12» are not prices
+
+
+def _bare_spend(t: str) -> bool:
+    """«Кофе 1500» off «Расходы»: a short phrase of a spend word (code's category list) and one
+    price. Only routing: off the page code does not save it by itself (vector «5000 бензин»), the
+    reader (the model, the amount checked by code) decides."""
+    found = amounts.best_amount(t)
+    if found is None or found.value < _BARE_MIN:
+        return False
+    rest = (t[:found.start] + " " + t[found.end:]).split()
+    words = [w for w in rest if re.search(r"[^\W\d_]", w)]
+    if not words or len(words) > _BARE_MAX_WORDS or len(words) != len(rest):
+        return False
+    return category_of(" ".join(words)) is not None
+
+
 def mentions_expense(text: str, *, on_page: bool = False) -> bool:
-    """Routing only: the phrase states a spend with an amount («потратил 5000 на бензин»), or on
-    «Расходы» any phrase with an amount («5000 бензин»). A question is never an expense."""
+    """Routing only: the phrase states a spend with an amount («потратил 5000 на бензин», «кофе
+    1500 тг»), a bare price of a spend word («кофе 1500»), or on «Расходы» any phrase with an
+    amount («5000 бензин»). A question is never an expense."""
     t = amounts.norm(text).strip()
     if not t or len(t) > 300 or is_question(t):
         return False
     if not amounts.find_amounts(t):
         return False
-    return on_page or bool(_SPEND.search(t))
+    return (on_page or bool(_SPEND.search(t)) or bool(_CURRENCY_WORD.search(t))
+            or _bare_spend(t))  # fmt: skip
 
 
 # --- code (Ф-1, behind settings.expenses_rules_first) ---

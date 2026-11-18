@@ -261,3 +261,17 @@ async def test_answer_hook_reports_shown_text_and_resets_a_failed_attempt():
 
 def test_chat_reply_keeps_a_good_answer_without_optional_fields():
     assert ChatReply.model_validate_json('{"answer": "ок"}').citations == []
+
+
+def test_tomorrow_and_yesterday_are_code_dates() -> None:
+    """Device test 2026-11-18: «что у меня завтра?» → «На завтра, 19 ноября, ничего нет.» was cut
+    to «Часть чисел не нашёл…»: the day next to today is a date code computed."""
+    from datetime import UTC, datetime
+
+    from assistant.chat.context import today_facts
+    from assistant.chat.verify import check_sentence
+
+    extra = today_facts(datetime(2026, 11, 18, 20, 0, tzinfo=UTC), "Asia/Almaty")  # 19th there
+    assert check_sentence("На завтра, 20 ноября, записей нет.", {}, extra).ok
+    assert check_sentence("Вчера, 18 ноября, записей не было.", {}, extra).ok
+    assert not check_sentence("На 25 ноября записей нет.", {}, extra).ok

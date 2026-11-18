@@ -29,6 +29,7 @@ async def main() -> None:
     configure_logging(settings.log_level)
     maker = get_sessionmaker()
     router = build_router(settings, maker)
+    await router.warm()  # provider SDKs load now, not inside the first call's timeout
     stop = asyncio.Event()
     install_signal_handlers(stop)
     try:

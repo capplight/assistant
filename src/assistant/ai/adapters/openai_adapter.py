@@ -105,6 +105,11 @@ class OpenAIAdapter:
         self._api_key = api_key
         self._client = client
 
+    def warm(self) -> None:
+        """Import the SDK at startup (in a thread), not inside the first call's timeout: on
+        Windows the import alone took ~10 s with the event loop frozen (device test 2026-11-18)."""
+        import openai  # noqa: F401
+
     def _get_client(self) -> Any:
         if self._client is None:
             from openai import AsyncOpenAI  # lazy
@@ -226,6 +231,10 @@ class GroqAdapter:
         self._api_key = api_key
         self._client = client
         self._base_url = base_url  # fmt: skip
+
+    def warm(self) -> None:
+        """The same SDK as OpenAIAdapter: imported at startup, see OpenAIAdapter.warm."""
+        import openai  # noqa: F401
 
     def _get_client(self) -> Any:
         if self._client is None:

@@ -377,3 +377,25 @@ async def test_today_brief(env):  # noqa: F811
         assert [p["done"] for p in b["plan"]] == [False, True]
         assert [(w["kind"], w["title"]) for w in b["waiting"]] == [("overdue", "Позвонить в банк")]
         assert b["lines"]["ru"][0] == "Есть что проверить — ниже."
+
+
+async def test_bare_price_on_the_main_line_is_an_expense(env):  # noqa: F811
+    """Device test 2026-11-18: «Кофе 1500» said on the main line (not on «Расходы») was kept as
+    a note. Code routes it to the expense reader; the model reads it, code checks the amount."""
+    from assistant.expenses.parse import ExpenseReply
+
+    def expense(req):  # type: ignore[no-untyped-def]
+        assert req.schema_name == "ExpenseReply", req.schema_name
+        return ExpenseReply(is_expense=True, amount="1500", category="cafe_gifts", note="Кофе",
+                            day="none", method="none", direction="expense")  # fmt: skip
+
+    script = Script([expense])
+    async with client(env.make_app(router_with(env.maker, script),
+                                   expenses_rules_first=True)) as c:
+        h = await _first_launch(c)
+        ev = last(await _say(c, h, "Кофе 1500"), "action")
+        assert ev["action"]["kind"] == "create_expense"
+        assert ev["expenses"][0]["amount"] == "1500.00"
+        pages = await _pages(c, h)
+        assert ev["action"]["saved_to"][0]["page_id"] == pages["expenses"]["id"]
+        assert script.n("ExpenseReply") == 1

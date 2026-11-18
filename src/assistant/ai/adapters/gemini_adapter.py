@@ -57,6 +57,12 @@ class GeminiAdapter:
         self._client = client
         self._thinking = dict(thinking or {})
 
+    def warm(self) -> None:
+        """Import the SDK at startup (in a thread), not inside the first call's timeout: on
+        Windows the import alone took ~10 s with the event loop frozen (device test 2026-11-18)."""
+        import google.genai.errors  # noqa: F401
+        import google.genai.types  # noqa: F401
+
     def _get_client(self) -> Any:
         if self._client is None:
             from google import genai  # lazy
