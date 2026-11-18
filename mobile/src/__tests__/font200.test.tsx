@@ -176,6 +176,7 @@ const SCREENS: Case[] = [
   { route: 'kp/send', url: () => '/kp/send?doc=doc-1' },
   { route: 'kp/version', url: () => '/kp/version?doc=doc-1&n=1' },
   { route: 'kp/versions', url: () => '/kp/versions?doc=doc-1' },
+  { route: 'note-new', url: () => '/note-new' },
   { route: 'kp/[id]', url: () => '/kp/doc-1' },
   { route: 'legal', url: () => '/legal?doc=policy' },
   { route: 'settings', url: () => '/settings' },

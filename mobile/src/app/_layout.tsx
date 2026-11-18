@@ -30,7 +30,14 @@ import { useLayout, useTheme } from '@/theme';
 export { ErrorBoundary } from 'expo-router';
 
 export default function RootLayout() {
-  const [loaded, error] = useFonts({ Onest_400Regular, Onest_500Medium, Onest_600SemiBold, Onest_700Bold, Onest_800ExtraBold, Geologica_700Bold });
+  const [loaded, error] = useFonts({
+    Onest_400Regular,
+    Onest_500Medium,
+    Onest_600SemiBold,
+    Onest_700Bold,
+    Onest_800ExtraBold,
+    Geologica_700Bold,
+  });
   const theme = useTheme();
   useBackgroundSync();
   usePushAnswers();
@@ -98,12 +105,22 @@ function RootStack() {
         <Stack.Screen name="(onboarding)" options={{ gestureEnabled: false }} />
         <Stack.Screen name="chat" />
         {/* Ф-50 «КП: 3 экрана»: a new КП starts in a sheet over «Документы» (list · editor · send sheet). */}
-        <Stack.Screen name="kp/new" options={{ presentation: 'formSheet', sheetAllowedDetents: [0.92], sheetGrabberVisible: true, sheetCornerRadius: 28 }} />
+        <Stack.Screen
+          name="kp/new"
+          options={{
+            presentation: 'formSheet',
+            sheetAllowedDetents: [0.92],
+            sheetGrabberVisible: true,
+            sheetCornerRadius: 28,
+          }}
+        />
         <Stack.Screen name="phone" options={{ gestureEnabled: false }} />
         <Stack.Screen name="account-consent" options={{ gestureEnabled: false }} />
         <Stack.Screen name="alarm" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
         <Stack.Screen name="alarm-setup" />
         <Stack.Screen name="reminder-new" options={{ presentation: 'modal' }} />
+        {/* add-entry-model.md: the page «+» of «Заметки» / an own page — one big field and «Сохранить». */}
+        <Stack.Screen name="note-new" options={{ presentation: 'modal' }} />
         <Stack.Screen name="notify" options={{ gestureEnabled: false }} />
         <Stack.Screen name="page-settings/[id]" />
         <Stack.Screen name="receipt" options={{ presentation: 'fullScreenModal' }} />

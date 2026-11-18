@@ -1,5 +1,19 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowUpDown, Ellipsis, LayoutGrid, List, PencilLine, Plus, Search, SlidersHorizontal, X } from 'lucide-react-native';
+import {
+  ArrowUpDown,
+  Camera,
+  Ellipsis,
+  FileText,
+  LayoutGrid,
+  List,
+  PencilLine,
+  Plus,
+  QrCode,
+  Search,
+  SlidersHorizontal,
+  Wallet,
+  X,
+} from 'lucide-react-native';
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
@@ -11,13 +25,14 @@ import { usePageEntries } from '@/records/useRecords';
 import { useServerSearch } from '@/records/useServerSearch';
 import type { Page } from '@/store/pages';
 import { useNotesLook } from '@/store/notesLook';
-import { useChrome } from '@/store/chrome';
+import { useFeatures } from '@/store/features';
 import { useView } from '@/store/view';
 import { placeOfTemplate, useTheme, type PlaceKey } from '@/theme';
 import type { SheetAction as StripAction, SheetBack } from '../ui/PlaceScreen';
 
 import { AppText } from '../AppText';
 import { ActionList, Button, Header, Icon, Sheet, type SheetAction } from '../ui';
+import { BudgetSheet } from '../BudgetSheet';
 import { PageNameSheet } from '../PageNameSheet';
 import { Screen } from '../Screen';
 import { FindField, SearchMore } from '../SearchResults';
@@ -62,7 +77,10 @@ export function useSheetSlot(slot: SheetSlot | null, key: string): void {
 }
 
 /** Neighbour places peeking above the sheet of a tab root (design-system §11.1). */
-const PEEK: Partial<Record<PlaceKey, readonly [PlaceKey, PlaceKey]>> = { notes: ['expenses', 'today'], expenses: ['tasks', 'assistant'] };
+const PEEK: Partial<Record<PlaceKey, readonly [PlaceKey, PlaceKey]>> = {
+  notes: ['expenses', 'today'],
+  expenses: ['tasks', 'assistant'],
+};
 
 export function PageFrame({ page }: { page: Page }) {
   const [slot, setSlot] = useState<SheetSlot | null>(null);
@@ -71,7 +89,10 @@ export function PageFrame({ page }: { page: Page }) {
   const { title } = usePageLabels();
   const loaded = usePageEntries(page);
   // Sort by a field (S38 / the assistant): the phone orders the same way the server does.
-  const entries = useMemo(() => (loaded ? sortEntries(loaded, page.view?.sort ?? null) : null), [loaded, page.view?.sort]);
+  const entries = useMemo(
+    () => (loaded ? sortEntries(loaded, page.view?.sort ?? null) : null),
+    [loaded, page.view?.sort],
+  );
   const [renaming, setRenaming] = useState(false);
   // Tabs reuse one screen for all pages: what was typed on page A stays with page A.
   const [find, setFind] = useState({ pageId: page.id, q: '' });
@@ -84,6 +105,10 @@ export function PageFrame({ page }: { page: Page }) {
   const [ordering, setOrdering] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [budgetOpen, setBudgetOpen] = useState(false);
+  const statements = useFeatures((f) => f.statements_pdf);
+  const receiptQr = useFeatures((f) => f.receipt_qr);
+  const isExpenses = page.templateKey === 'expenses';
   const view = resolveView(page);
   const notesLook = useNotesLook((st) => st.look);
   const setNotesLook = useNotesLook((st) => st.set);
@@ -115,8 +140,58 @@ export function PageFrame({ page }: { page: Page }) {
     setSearchOpen(false);
     setFind({ pageId: page.id, q: '' });
   };
+  const closeMenu = (then: () => void) => () => {
+    setMenuOpen(false);
+    then();
+  };
+  const receipt = (kind: 'camera' | 'statement' | 'qr') =>
+    router.push({ pathname: '/receipt', params: { kind, page: page.id } });
+  // add-entry-model.md «Что в „⋯“»: «Расходы» — the statement (by its switch), the QR, the budget, «Настроить».
+  const expenseMenu: SheetAction[] = [
+    ...(statements
+      ? [
+          {
+            key: 'statement',
+            testID: 'exp-statement',
+            label: t('exp.statement_menu'),
+            icon: FileText,
+            onPress: closeMenu(() => receipt('statement')),
+          },
+        ]
+      : []),
+    ...(receiptQr
+      ? [
+          {
+            key: 'qr',
+            testID: 'exp-qr',
+            label: t('exp.bring_qr'),
+            icon: QrCode,
+            onPress: closeMenu(() => receipt('qr')),
+          },
+        ]
+      : []),
+    {
+      key: 'budget',
+      testID: 'exp-budget-menu',
+      label: t('budget.set'),
+      icon: Wallet,
+      onPress: closeMenu(() => setBudgetOpen(true)),
+    },
+  ];
   const menuActions: SheetAction[] = [
-    // QA B «Заметки» 1: at most two icons on the sheet — «Сеткой / Списком» lives in «⋯».
+    // add-entry-model.md: at most two icons on the sheet, «+» and «⋯»; «Найти на странице» is the first row of «⋯».
+    ...(isExpenses
+      ? expenseMenu
+      : [
+          {
+            key: 'find',
+            testID: 'page-search',
+            label: t('page.find'),
+            icon: Search,
+            onPress: closeMenu(() => router.navigate({ pathname: '/search', params: { page: page.id } })),
+          },
+        ]),
+    // QA B «Заметки» 1: «Сеткой / Списком» lives in «⋯».
     ...(isNotes
       ? [
           {
@@ -131,11 +206,27 @@ export function PageFrame({ page }: { page: Page }) {
           },
         ]
       : []),
-    ...(hasRecords && !searching
-      ? [{ key: 'order', testID: 'page-order', label: t('page.order'), icon: ArrowUpDown, onPress: () => (setMenuOpen(false), setOrdering(true)) }]
+    ...(hasRecords && !searching && !isExpenses
+      ? [
+          {
+            key: 'order',
+            testID: 'page-order',
+            label: t('page.order'),
+            icon: ArrowUpDown,
+            onPress: () => (setMenuOpen(false), setOrdering(true)),
+          },
+        ]
       : []),
     ...(page.templateKey === 'custom'
-      ? [{ key: 'rename', testID: 'page-rename', label: t('page.rename'), icon: PencilLine, onPress: () => (setMenuOpen(false), setRenaming(true)) }]
+      ? [
+          {
+            key: 'rename',
+            testID: 'page-rename',
+            label: t('page.rename'),
+            icon: PencilLine,
+            onPress: () => (setMenuOpen(false), setRenaming(true)),
+          },
+        ]
       : []),
     {
       key: 'settings',
@@ -149,61 +240,97 @@ export function PageFrame({ page }: { page: Page }) {
       },
     },
   ];
-  // One line (ux-audit P0-2): the title, 🔍 and ⋯; «Порядок», «Настроить» live in ⋯; the field opens on 🔍.
-  const header = (
-      <Header
-        testID="page-header"
-        title={title(page)}
-        // «Дела» are not a tab any more (VISION-2026-11): «‹ Сегодня» leads back to where they come from.
-        back={
-          page.templateKey === 'tasks'
-            ? fromMore
-              ? { onPress: () => router.navigate('/more'), label: t('more.title'), testID: 'page-back' }
-              : { onPress: () => router.navigate('/'), label: t('today.today'), testID: 'page-back' }
-            : undefined
-        }
-        meta={
-          isNotes && entries
-            ? t(notesLook === 'list' ? 'notes.count_list' : 'notes.count', { count: entries.length })
-            : page.templateKey === 'tasks'
-              ? todayLine(i18n.language)
-              : undefined
-        }
-        accessory={
-          page.templateKey === 'expenses' ? (
-            <Button testID="exp-enter" label={t('exp.add_short')} size="small" icon={<Icon icon={Plus} size="sm" color="onBrand" />} onPress={() => useView.getState().requestKeypad()} />
-          ) : undefined
-        }
-        titleTestID="page-title"
-        actions={[
-          ...(page.templateKey === 'expenses'
-            ? []
-            : [
-                {
-                  key: 'search',
-            testID: 'page-search',
-            icon: searchShown ? X : Search,
-            label: searchShown ? t('common.close') : t('page.find'),
-            onPress: () => (searchShown ? closeSearch() : router.navigate({ pathname: '/search', params: { page: page.id } })),
+  // add-entry-model.md: the page «+» makes this place's own thing — a note (also on an own page), a task (the reminder
+  // form until a task editor exists); «Расходы»: «+ Трата» (the capsule), the receipt camera 📷 and «⋯».
+  const add = () => {
+    if (page.templateKey === 'tasks') router.push('/reminder-new');
+    else router.push({ pathname: '/note-new', params: { page: page.id } });
+  };
+  const menuIcon: StripAction = {
+    key: 'menu',
+    testID: 'page-menu',
+    icon: Ellipsis,
+    label: t('move.menu_a11y', { what: title(page) }),
+    onPress: () => setMenuOpen(true),
+  };
+  const headerActions: StripAction[] = isExpenses
+    ? [
+        {
+          key: 'camera',
+          testID: 'exp-camera',
+          icon: Camera,
+          label: t('exp.camera_a11y'),
+          onPress: () => receipt('camera'),
+        },
+        menuIcon,
+      ]
+    : searchShown
+      ? [
+          { key: 'search', testID: 'page-search-close', icon: X, label: t('common.close'), onPress: closeSearch },
+          menuIcon,
+        ]
+      : [
+          {
+            key: 'add',
+            testID: 'page-add',
+            icon: Plus,
+            label: page.templateKey === 'tasks' ? t('add.task_new') : t('add.note_new'),
+            onPress: add,
           },
-              ]),
-          // screens-v5 «Заметки»: 🔍 and «+» on the sheet («+» opens «Добавить» of the assistant line).
-          // «+» opens «Добавить» (on «Расходы» the receipt photo and the statement live only there).
-          { key: 'add', testID: 'page-add', icon: Plus, label: t('line.plus_a11y'), onPress: () => useChrome.getState().requestAdd() },
-          ...(page.templateKey === 'expenses'
-            ? []
-            : [{ key: 'menu', testID: 'page-menu', icon: Ellipsis, label: t('move.menu_a11y', { what: title(page) }), onPress: () => setMenuOpen(true) }]),
-        ]}
-      />
+          menuIcon,
+        ];
+  const header = (
+    <Header
+      testID="page-header"
+      title={title(page)}
+      // «Дела» are not a tab any more (VISION-2026-11): «‹ Сегодня» leads back to where they come from.
+      back={
+        page.templateKey === 'tasks'
+          ? fromMore
+            ? { onPress: () => router.navigate('/more'), label: t('more.title'), testID: 'page-back' }
+            : { onPress: () => router.navigate('/'), label: t('today.today'), testID: 'page-back' }
+          : undefined
+      }
+      meta={
+        isNotes && entries
+          ? t(notesLook === 'list' ? 'notes.count_list' : 'notes.count', { count: entries.length })
+          : page.templateKey === 'tasks'
+            ? todayLine(i18n.language)
+            : undefined
+      }
+      accessory={
+        page.templateKey === 'expenses' ? (
+          <Button
+            testID="exp-enter"
+            label={t('exp.add_short')}
+            size="small"
+            icon={<Icon icon={Plus} size="sm" color="onBrand" />}
+            onPress={() => useView.getState().requestKeypad()}
+          />
+        ) : undefined
+      }
+      titleTestID="page-title"
+      actions={headerActions}
+    />
   );
   const top = (
     <View style={{ gap: theme.space[2] }}>
       {searchShown ? (
-        <FindField testID="page-find" label={t('page.find')} value={q} onChange={(value) => setFind({ pageId: page.id, q: value })} />
+        <FindField
+          testID="page-find"
+          label={t('page.find')}
+          value={q}
+          onChange={(value) => setFind({ pageId: page.id, q: value })}
+        />
       ) : null}
       {ordering ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.space[2], flexWrap: 'wrap' }}>
-          <AppText testID="page-order-hint" variant="callout" accessibilityLiveRegion="polite" style={{ flex: 1, minWidth: '50%' }}>
+          <AppText
+            testID="page-order-hint"
+            variant="callout"
+            accessibilityLiveRegion="polite"
+            style={{ flex: 1, minWidth: '50%' }}
+          >
             {t('page.order_hint')}
           </AppText>
           <Button
@@ -259,40 +386,48 @@ export function PageFrame({ page }: { page: Page }) {
 
   return (
     <SheetSlotContext.Provider value={setSlot}>
-    <Screen
-      testID={`page-${page.templateKey}`}
-      place={place}
-      peek={PEEK[place]}
-      scroll={false}
-      askRoom
-      phrase={slot?.phrase}
-      sub={slot?.sub}
-      metaNode={slot?.metaNode}
-      sheetExtra={slot?.sheetExtra}
-      hideTitle={slot?.hideTitle}
-      {...(slot?.strip ? { mode: 'strip' as const, title: slot.strip.title, back: slot.strip.back, actions: slot.strip.actions ?? [] } : {})}
-    >
-      {/* «Я в магазине» is the list alone: no sheet header (template-screens 3). */}
-      {shopping ? null : header}
-      <View testID={`page-view-${view.key}`} style={{ flex: 1 }}>
-        {middle}
-      </View>
-      {menuOpen ? (
-        <Sheet testID="page-menu-sheet" visible onClose={() => setMenuOpen(false)} title={title(page)}>
-          <ActionList actions={menuActions} />
-        </Sheet>
-      ) : null}
-      {renaming ? (
-        <PageNameSheet
-          initial={page.title ?? ''}
-          onClose={() => setRenaming(false)}
-          onSave={(name) => {
-            setRenaming(false);
-            void renamePage(page.id, name);
-          }}
-        />
-      ) : null}
-    </Screen>
+      <Screen
+        testID={`page-${page.templateKey}`}
+        place={place}
+        peek={PEEK[place]}
+        scroll={false}
+        askRoom
+        phrase={slot?.phrase}
+        sub={slot?.sub}
+        metaNode={slot?.metaNode}
+        sheetExtra={slot?.sheetExtra}
+        hideTitle={slot?.hideTitle}
+        {...(slot?.strip
+          ? {
+              mode: 'strip' as const,
+              title: slot.strip.title,
+              back: slot.strip.back,
+              actions: slot.strip.actions ?? [],
+            }
+          : {})}
+      >
+        {/* «Я в магазине» is the list alone: no sheet header (template-screens 3). */}
+        {shopping ? null : header}
+        <View testID={`page-view-${view.key}`} style={{ flex: 1 }}>
+          {middle}
+        </View>
+        {menuOpen ? (
+          <Sheet testID="page-menu-sheet" visible onClose={() => setMenuOpen(false)} title={title(page)}>
+            <ActionList actions={menuActions} />
+          </Sheet>
+        ) : null}
+        {budgetOpen ? <BudgetSheet visible onClose={() => setBudgetOpen(false)} /> : null}
+        {renaming ? (
+          <PageNameSheet
+            initial={page.title ?? ''}
+            onClose={() => setRenaming(false)}
+            onSave={(name) => {
+              setRenaming(false);
+              void renamePage(page.id, name);
+            }}
+          />
+        ) : null}
+      </Screen>
     </SheetSlotContext.Provider>
   );
 }

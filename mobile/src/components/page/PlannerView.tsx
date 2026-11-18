@@ -1,5 +1,5 @@
 import { useFeatures } from '@/store/features';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { AlarmClock, Bell, CalendarDays, CircleCheck, Clock, Ellipsis, PencilLine, ShoppingCart, Trash2 } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -70,7 +70,9 @@ export function PlannerView({ page, entries, frameTop, ordering }: ViewProps) {
   const tasksMap = useTasks((st) => st.tasks);
   const ticks = useTasks((st) => st.ticks);
   const edits = useTasks((st) => st.edits);
-  const [segment, setSegment] = useState<Segment>('today');
+  // Ф-84: a day of the week on «Сегодня» opens «Дела» on its segment (today → «Сегодня», later → «Скоро»).
+  const opened = useLocalSearchParams<{ segment?: string }>().segment;
+  const [segment, setSegment] = useState<Segment>(opened === 'soon' || opened === 'missed' ? opened : 'today');
   const [slotMenu, setSlotMenu] = useState<Slot | null>(null);
   const now = useMinuteClock();
   const missed = useMissed(now);

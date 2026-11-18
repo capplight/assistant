@@ -129,14 +129,16 @@ describe('«Расходы»: one total, the keys in a sheet, one «Требуе
     await settle(() => screen.queryByTestId('exp-board') !== null);
     expect(screen.queryByTestId('exp-bring')).toBeNull();
     expect(screen.queryByTestId('exp-kaspi')).toBeNull();
-    await fireEvent.press(screen.getByTestId('page-add'));
-    expect(screen.getByTestId('add-camera')).toBeTruthy();
-    expect(screen.getByTestId('add-photo')).toBeTruthy();
-    expect(screen.queryByTestId('add-qr')).toBeNull();
-    expect(screen.queryByTestId('add-file')).toBeNull();
+    // add-entry-model.md: «+ Трата», the receipt camera 📷 and «⋯» (the statement and the QR by their switches).
+    expect(screen.queryByTestId('page-add')).toBeNull();
+    expect(screen.getByTestId('exp-camera').props.accessibilityLabel).toBe('Сфотографировать чек');
+    await fireEvent.press(screen.getByTestId('page-menu'));
+    expect(screen.getByTestId('exp-budget-menu')).toBeTruthy();
+    expect(screen.queryByTestId('exp-qr')).toBeNull();
+    expect(screen.queryByTestId('exp-statement')).toBeNull();
     await act(async () => useFeatureStore.getState().set({ ...FEATURE_DEFAULTS, statements_pdf: true, receipt_qr: true }));
-    await settle(() => screen.queryByTestId('add-qr') !== null);
-    expect(screen.getByTestId('add-file')).toBeTruthy();
+    await settle(() => screen.queryByTestId('exp-qr') !== null);
+    expect(screen.getByTestId('exp-statement')).toHaveTextContent('Выписка из банка');
   });
 });
 

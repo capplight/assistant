@@ -3,7 +3,7 @@ import { AiLabel } from '@/components/AiLabel';
 import { Flag } from 'lucide-react-native';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AccessibilityInfo, findNodeHandle, ScrollView, StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, findNodeHandle, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import type { ActionOut } from '@/api/types';
 import { actionText, canReport, loadHistory, loadServerHistory, retry, undoAction } from '@/chat/service';
@@ -11,10 +11,9 @@ import { AppText } from '@/components/AppText';
 import { answerNotice } from '@/components/answerText';
 import { FeedbackSheet } from '@/components/FeedbackSheet';
 import { Screen } from '@/components/Screen';
-import { ChipRow } from '@/components/ui/Leaf';
+import { ChipRow, PlaceTab, SectionHead } from '@/components/ui/Leaf';
 import { SourceChips } from '@/components/SourceChips';
 import { Button } from '@/components/ui/Button';
-import { cardEdge } from '@/components/ui/Card';
 import { Chip } from '@/components/ui/Chip';
 import { Header } from '@/components/ui/Header';
 import { ActionList, Sheet } from '@/components/ui/Sheet';
@@ -25,7 +24,8 @@ import { useToast } from '@/store/toast';
 import { undoOf, undoServerAction } from '@/tasks/actions';
 import { rememberActions } from '@/tasks/service';
 import { useTasks } from '@/tasks/store';
-import { useTheme } from '@/theme';
+import { placeOfTemplate, useTheme, type PlaceKey } from '@/theme';
+import { usePages } from '@/store/pages';
 import { historyEntries, matchesFilter, type HistoryEntry, type HistoryFilter } from '@/chat/history';
 
 const DAY = 86_400_000;
@@ -38,7 +38,6 @@ type Status = 'done' | 'waiting' | 'undone' | null;
  * «Ответить» or «Вернуть». Opened on an answer (`focus`), it scrolls there. The line and the tabs stay below.
  */
 export default function HistoryScreen() {
-  const theme = useTheme();
   const { t, i18n } = useTranslation();
   const { focus, tab } = useLocalSearchParams<{ focus?: string; tab?: string }>();
   const messages = useAssistant((s) => s.messages);
@@ -120,10 +119,10 @@ export default function HistoryScreen() {
   return (
     // v5: «История» is the assistant's journal — the terracotta sheet; only the title and «‹ Ещё» on it (no small text).
     <Screen testID="history-screen" place="assistant" scrollRef={scrollRef}>
-        <Header title={t('history.title')} back={{ onPress: back, label: t('more.title'), testID: 'chat-collapse' }} />
-        <View testID="chat-screen" style={{ gap: theme.space[3] }}>
+      <Header title={t('history.title')} back={{ onPress: back, label: t('more.title'), testID: 'chat-collapse' }} />
+      <View testID="chat-screen">
         <AppText variant="small">{t('history.meta')}</AppText>
-        <ChipRow>
+        <ChipRow style={{ marginTop: 12, marginBottom: 4 }}>
           {chips.map((c) => (
             <Chip
               key={c.key}
@@ -144,14 +143,15 @@ export default function HistoryScreen() {
           const header = i === 0 || days[i - 1] !== day;
           const focused = !!focus && e.answer?.id === focus;
           return (
-            <View key={e.key} testID={e.answer ? `chat-msg-${e.answer.id}` : `did-${e.action?.id}`} onLayout={focused ? (ev) => setFocusY(ev.nativeEvent.layout.y) : undefined}>
-              {header ? (
-                <AppText variant="eyebrow" color="ink2" accessibilityRole="header" style={{ marginTop: theme.space[2], marginBottom: theme.space[2] }}>
-                  {day}
-                </AppText>
-              ) : null}
+            <View
+              key={e.key}
+              testID={e.answer ? `chat-msg-${e.answer.id}` : `did-${e.action?.id}`}
+              onLayout={focused ? (ev) => setFocusY(ev.nativeEvent.layout.y) : undefined}
+            >
+              {header ? <SectionHead first={i === 0} title={day} /> : null}
               <View ref={focused ? focusRef : undefined} accessible={focused || undefined}>
                 <HistoryItem
+                  first={header}
                   entry={e}
                   time={time(e.at)}
                   busy={busy}
@@ -163,7 +163,7 @@ export default function HistoryScreen() {
             </View>
           );
         })}
-        </View>
+      </View>
 
       <Sheet testID="answer-menu" visible={menuFor !== null} onClose={() => setMenuFor(null)}>
         <ActionList
@@ -194,7 +194,9 @@ function HistoryItem({
   recent,
   onUndo,
   onMore,
+  first,
 }: {
+  first?: boolean;
   entry: HistoryEntry;
   time: string;
   busy: string | null;
@@ -208,8 +210,8 @@ function HistoryItem({
   const a = entry.action;
   const chatAction = m?.action;
   const undone = !!a?.undone_at || !!chatAction?.undone;
-  const status: Status = entry.kind === 'waiting' ? 'waiting' : undone ? 'undone' : entry.kind === 'change' ? 'done' : null;
-  const dot = status === 'waiting' ? theme.colors.highlight : status === 'undone' ? theme.colors.iconSecondary : theme.colors.brand;
+  const status: Status =
+    entry.kind === 'waiting' ? 'waiting' : undone ? 'undone' : entry.kind === 'change' ? 'done' : null;
   const title = a
     ? (i18n.language === 'kk' && a.summary.kk) || a.summary.ru
     : chatAction
@@ -224,83 +226,141 @@ function HistoryItem({
   const who = a?.initiated_by === 'user' && !m ? t('did.by_you') : t('history.assistant');
   const meta = [pageTitle, who].filter(Boolean).join(' · ');
   const back = a?.undone_at ? undoOf(a.id) : undefined;
-  const canUndo = recent && ((a ? a.undoable && !a.undone_at : !!chatAction?.undoable && !chatAction.undone));
-  const badge =
-    status === 'done' ? { text: t('history.badge_done'), bg: theme.colors.brandTint, fg: theme.colors.brand } : status === 'waiting' ? { text: t('history.badge_waiting'), bg: theme.colors.highlight, fg: theme.colors.onHighlight } : status === 'undone' ? { text: t('history.badge_undone'), bg: theme.colors.surfaceSunken, fg: theme.colors.ink2 } : null;
+  const canUndo = recent && (a ? a.undoable && !a.undone_at : !!chatAction?.undoable && !chatAction.undone);
+  const pages = usePages((st) => st.pages);
+  const serverPage = a?.page?.id ?? chatAction?.pageServerId ?? null;
+  const page = serverPage ? pages.find((p) => p.serverId === serverPage) : undefined;
+  const place: PlaceKey = entry.kind === 'question' ? 'assistant' : page ? placeOfTemplate(page.templateKey) : 'stone';
+  const state = status === 'waiting' ? t('history.st_waiting') : undone ? t('history.st_undone') : null;
+  const said = entry.said ? t('history.you_said', { text: entry.said }) : t('history.by_hand');
+  const shownTitle = undone && chatAction ? t('chat.action_undone', { text: title }) : title;
 
   return (
-    <View style={{ gap: theme.space[2] }}>
-      <View style={[styles.row, { gap: theme.space[2] }]}>
-        <AppText variant="callout" style={{ minWidth: 44, fontFamily: theme.type.button.fontFamily, fontVariant: ['tabular-nums'] }}>
+    <View style={{ paddingVertical: 10, borderTopWidth: first ? 0 : 1, borderTopColor: theme.colors.line }}>
+      <AppText variant="footnote" numberOfLines={2}>
+        <AppText variant="footnote" style={{ fontVariant: ['tabular-nums'] }}>
           {time}
         </AppText>
-        <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: dot }} />
-        <AppText variant="callout" color="ink2" style={styles.flex} numberOfLines={2}>
-          {entry.said ? t('history.you_said', { text: entry.said }) : t('history.by_hand')}
-        </AppText>
-      </View>
-      <View
-        style={[
-          { marginLeft: 54, backgroundColor: theme.colors.surface, borderRadius: theme.radius.lg, padding: theme.space[3], gap: theme.space[1] },
-          theme.elevation.card,
-          cardEdge(theme),
-        ]}
-      >
-        <View style={[styles.row, { gap: theme.space[2], alignItems: 'flex-start' }]}>
+        {' · '}
+        <AppText variant="footnote">{said}</AppText>
+      </AppText>
+      <View style={[styles.row, { gap: 12, marginTop: 6 }]}>
+        <PlaceTab place={place} />
+        <View style={styles.flex}>
           <AppText
             testID={m && (chatAction || m.saved) ? `chat-action-${m.id}` : undefined}
-            variant={entry.kind === 'question' ? 'body' : 'headline'}
-            style={[styles.flex, undone ? styles.struck : null]}
+            numberOfLines={entry.kind === 'question' ? 3 : 2}
+            style={[
+              { fontFamily: entry.kind === 'question' ? theme.type.row.fontFamily : theme.type.bodyStrong.fontFamily },
+              undone ? styles.struck : null,
+            ]}
           >
-            {undone && chatAction ? t('chat.action_undone', { text: title }) : title}
+            {shownTitle}
           </AppText>
-          {badge ? (
-            <View style={{ backgroundColor: badge.bg, borderRadius: theme.radius.round, paddingHorizontal: theme.space[2], paddingVertical: 2 }}>
-              <AppText variant="caption" style={{ color: badge.fg, fontFamily: theme.type.button.fontFamily }}>
-                {badge.text}
-              </AppText>
-            </View>
-          ) : null}
-        </View>
-        {notice ? <AppText variant="callout">{notice}</AppText> : null}
-        {m?.sources && m.sources.length > 0 ? <SourceChips messageId={m.id} sources={m.sources} /> : null}
-        {m && m.status === 'done' && m.aiGenerated && !!m.text && !chatAction ? <AiLabel variant="footnote" /> : null}
-        <View style={[styles.row, { gap: theme.space[2], flexWrap: 'wrap' }]}>
-          {meta && entry.kind !== 'question' ? (
-            <AppText variant="footnote" style={styles.flex}>
+          {state ? (
+            <AppText testID={`history-state-${entry.key}`} variant="footnote">
+              {state}
+            </AppText>
+          ) : meta && entry.kind !== 'question' ? (
+            <AppText variant="footnote" numberOfLines={1}>
               {meta}
             </AppText>
-          ) : (
-            <View style={styles.flex} />
-          )}
-          {canUndo ? (
-            <Button
-              testID={m && chatAction ? `chat-undo-${m.id}` : `did-undo-${a?.id}`}
-              label={t('common.undo')}
-              accessibilityLabel={t('did.undo_a11y', { what: title })}
-              variant="text"
-              disabled={!!a && busy === a.id}
-              onPress={() => (m && chatAction && !a ? void undoAction(m.id) : a ? onUndo(a) : undefined)}
-            />
           ) : null}
-          {back && recent ? (
-            <Button testID={`did-redo-${a?.id}`} label={t('changes.revert')} accessibilityLabel={t('did.redo_a11y', { what: title })} variant="text" disabled={busy === back.id} onPress={() => onUndo(back)} />
-          ) : null}
-          {entry.kind === 'waiting' && m?.proposal ? (
-            <Button
-              testID={`history-answer-${m.id}`}
-              label={t('history.answer')}
-              variant="text"
-              onPress={() => {
-                useAssistant.getState().showBanner({ messageId: m.id });
-                router.navigate('/');
-              }}
-            />
-          ) : null}
-          {m?.status === 'interrupted' ? <Button testID={`chat-retry-${m.id}`} label={t('answer.retry')} variant="text" onPress={() => void retry(m.id)} /> : null}
-          {m && canReport(m) && m.status !== 'streaming' ? <Button testID={`chat-more-${m.id}`} label={t('chat.more')} variant="text" onPress={() => onMore(m)} /> : null}
         </View>
+        {canUndo ? (
+          <Pressable
+            testID={m && chatAction ? `chat-undo-${m.id}` : `did-undo-${a?.id}`}
+            accessibilityRole="button"
+            accessibilityLabel={t('did.undo_a11y', { what: title })}
+            disabled={!!a && busy === a.id}
+            hitSlop={8}
+            onPress={() => (m && chatAction && !a ? void undoAction(m.id) : a ? onUndo(a) : undefined)}
+            style={({ pressed }) => [styles.link, pressed ? { opacity: 0.6 } : null]}
+          >
+            <AppText
+              nativeID="v5-one-line"
+              numberOfLines={1}
+              style={{
+                color: theme.colors.assistantText,
+                fontFamily: theme.type.headline.fontFamily,
+                fontSize: 15,
+                lineHeight: 18,
+              }}
+            >
+              {t('common.undo')}
+            </AppText>
+          </Pressable>
+        ) : back && recent ? (
+          <Pressable
+            testID={`did-redo-${a?.id}`}
+            accessibilityRole="button"
+            accessibilityLabel={t('did.redo_a11y', { what: title })}
+            disabled={busy === back.id}
+            hitSlop={8}
+            onPress={() => onUndo(back)}
+            style={({ pressed }) => [styles.link, pressed ? { opacity: 0.6 } : null]}
+          >
+            <AppText
+              nativeID="v5-one-line"
+              numberOfLines={1}
+              style={{
+                fontFamily: theme.type.headline.fontFamily,
+                fontSize: 15,
+                lineHeight: 18,
+                textDecorationLine: 'underline',
+              }}
+            >
+              {t('changes.revert')}
+            </AppText>
+          </Pressable>
+        ) : entry.kind === 'waiting' && m?.proposal ? (
+          <Button
+            testID={`history-answer-${m.id}`}
+            label={t('history.answer')}
+            size="small"
+            minHeight={38}
+            onPress={() => {
+              useAssistant.getState().showBanner({ messageId: m.id });
+              router.navigate('/');
+            }}
+          />
+        ) : null}
       </View>
+      {notice ? (
+        <AppText variant="small" style={{ marginTop: 6, marginLeft: 28 }}>
+          {notice}
+        </AppText>
+      ) : null}
+      {m?.sources && m.sources.length > 0 ? (
+        <View style={{ marginTop: 6, marginLeft: 28 }}>
+          <SourceChips messageId={m.id} sources={m.sources} />
+        </View>
+      ) : null}
+      {m && m.status === 'done' && m.aiGenerated && !!m.text && !chatAction ? (
+        <AiLabel variant="footnote" style={{ marginLeft: 28, marginTop: 4 }} />
+      ) : null}
+      {m && m.status !== 'streaming' && (m.status === 'interrupted' || canReport(m)) ? (
+        <View style={[styles.row, { gap: 4, marginLeft: 20 }]}>
+          {m.status === 'interrupted' ? (
+            <Button
+              testID={`chat-retry-${m.id}`}
+              label={t('answer.retry')}
+              variant="link"
+              size="small"
+              onPress={() => void retry(m.id)}
+            />
+          ) : null}
+          {canReport(m) ? (
+            <Button
+              testID={`chat-more-${m.id}`}
+              label={t('chat.more')}
+              variant="link"
+              size="small"
+              onPress={() => onMore(m)}
+            />
+          ) : null}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -309,5 +369,6 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
   chips: { flexDirection: 'row', flexWrap: 'wrap' },
   flex: { flex: 1 },
+  link: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 4 },
   struck: { textDecorationLine: 'line-through' },
 });

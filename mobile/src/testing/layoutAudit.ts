@@ -17,7 +17,8 @@ import { Dimensions, PixelRatio, StyleSheet, type TextStyle, type ViewStyle } fr
  *                     the design asks for (`nativeID="v5-capped"`: tab labels ≤ 13 dp, the phrase / big number
  *                     ×1.3, sheet titles ×1.2) still scale (≥ 1.0) and are allowed;
  * - `row-of-buttons`  ≥3 buttons with words side by side, no `flexWrap` and no sideways scroll
- *                     (2-design §8: «при ≥150% ряды становятся вертикальными списками»);
+ *                     (2-design §8: «при ≥150% ряды становятся вертикальными списками») — except the week on
+ *                     «Сегодня» (`nativeID="v5-week"`, Ф-84): seven fixed day columns of a number, like a calendar;
  * - `small-target`    a button with a fixed height or width under 48;
  * - `too-wide`        a View with a fixed width wider than the window.
  */
@@ -137,7 +138,7 @@ export function auditLayout(
         push('small-target', id, `${style.width ?? '-'}×${style.height ?? '-'}: ${textOf(n)}`);
     }
 
-    if (style.flexDirection === 'row' && style.flexWrap !== 'wrap' && !inHorizontal && n.props.accessibilityRole !== 'tablist') {
+    if (style.flexDirection === 'row' && style.flexWrap !== 'wrap' && !inHorizontal && n.props.accessibilityRole !== 'tablist' && n.props.nativeID !== 'v5-week') {
       const buttons = rowButtons(n).filter((b) => textOf(b).trim().length > 2);
       if (buttons.length >= 3) push('row-of-buttons', id, buttons.map((b) => textOf(b)).join(' | '));
     }

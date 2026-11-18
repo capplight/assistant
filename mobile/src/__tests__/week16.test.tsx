@@ -165,7 +165,12 @@ describe('«Сегодня» — the tear-off sheet', () => {
   it('the date above «Сегодня», «Сегодня свободно…» when nothing', async () => {
     await renderRouter(APP_DIR, { initialUrl: '/' });
     expect(screen.getByTestId('today-header')).toHaveTextContent(new RegExp(`${new Date().getDate()}`));
-    expect(screen.getByTestId('today-empty')).toHaveTextContent('Скажите: «Напомни завтра в 9 позвонить»'); // QA v2 §1.7: the empty «План дня» example
+    // Ф-84 «Сводка» + неделя: day 1 with nothing — «Чистый лист», the week, «Три первые фразы» instead of a plan.
+    await settle(() => screen.queryByTestId('today-first') !== null);
+    expect(screen.getByTestId('sheet-phrase')).toHaveTextContent('Чистый лист. Скажите первое.');
+    expect(screen.getAllByTestId(/^week-\d{4}-\d\d-\d\d$/)).toHaveLength(7);
+    expect(screen.getByTestId('today-first')).toHaveTextContent(/0 из 3/);
+    expect(screen.queryByTestId('today-plan-head')).toBeNull();
     expect(screen.queryByTestId('today-next')).toBeNull();
   });
 

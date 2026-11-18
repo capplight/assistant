@@ -189,10 +189,11 @@ describe('PageFrame and the registry', () => {
     await testRecords.applyRemote(itemOut('n1', 70, { text: 'Код домофона 4512', status: 'ready' }));
     const r = await renderRouter(APP_DIR, { initialUrl: `/page/${notes.id}` });
     await settle(() => screen.queryByTestId('record-n1') !== null);
-    // One header line (ux-audit P0-2): the title, 🔍 and ⋯; «Порядок» and «Настроить» are in ⋯; 🔍 opens the one search (Ф-50).
-    for (const id of ['page-title', 'page-search', 'page-menu']) expect(screen.getByTestId(id)).toBeTruthy();
-    for (const id of ['page-order', 'page-settings', 'page-find']) expect(screen.queryByTestId(id)).toBeNull();
+    // add-entry-model.md: the title, «+» and «⋯»; «Найти на странице», «Порядок» and «Настроить» are in ⋯.
+    for (const id of ['page-title', 'page-add', 'page-menu']) expect(screen.getByTestId(id)).toBeTruthy();
+    for (const id of ['page-search', 'page-order', 'page-settings', 'page-find']) expect(screen.queryByTestId(id)).toBeNull();
     await fireEvent.press(screen.getByTestId('page-menu'));
+    expect(screen.getByTestId('page-search')).toHaveTextContent('Найти на странице');
     expect(screen.getByTestId('page-order')).toBeTruthy();
     expect(screen.getByTestId('page-settings')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('page-menu-sheet-close'));
@@ -203,6 +204,7 @@ describe('PageFrame and the registry', () => {
     await settle(() => screen.queryByTestId('page-view-notes:list') !== null);
     expect(screen.queryByTestId('sticker-n1')).toBeNull();
     expect(screen.getByTestId('record-n1')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('page-menu'));
     await fireEvent.press(screen.getByTestId('page-search'));
     expect(r.getPathname()).toBe('/search');
   });

@@ -1,41 +1,98 @@
 import { router } from 'expo-router';
-import { AlarmClock, Camera, FileText, Image as ImageIcon, QrCode } from 'lucide-react-native';
+import { AlarmClock, Camera, FileText, Image as ImageIcon, PencilLine, ReceiptText } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 
-import { useFeatures } from '@/store/features';
+import { showSavedToast } from '@/chat/service';
+import { getMedia, type PickedMedia } from '@/expenses/media';
+import { getCapture } from '@/services';
+import { usePages } from '@/store/pages';
+import { useToast } from '@/store/toast';
 
 import { ActionList, Sheet, type SheetAction } from './ui/Sheet';
 
 /**
- * «+» sheet (Ф-50, ux-review-2 §3): only what works — no «Появится позже». Everywhere: «Напоминание» (the manual form
- * S13, offline and in «Без ИИ» too). On «Расходы»: «Фото чека» and «Камера» (the receipt screen); «Выписка PDF» only
- * while `statements_pdf` is on (Ф-37: the flag is off for the beta, the screen must not be reachable).
+ * «Добавить» (add-entry-model.md, screens-v5-extra «Добавить · «+» в «Помощнике»»): the only «Добавить» sheet in the
+ * app, opened by the «+» of the full assistant line. Камера · Фото из галереи · Файл · Фото чека (straight to
+ * «Расходы») · Напоминание · Написать вручную. Everything works offline and in «Без ИИ»: a photo or a file is saved
+ * as a record (the server places it, Ф-47), a note is typed on its own screen.
  */
-export function AddSheet({ visible, onClose, expensesPageId = null }: { visible: boolean; onClose: () => void; expensesPageId?: string | null }) {
+export function AddSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { t } = useTranslation();
-  const statements = useFeatures((f) => f.statements_pdf);
-  const qr = useFeatures((f) => f.receipt_qr);
-  const receipt = (kind: 'photo' | 'camera' | 'statement' | 'qr') => () => {
-    onClose();
-    if (expensesPageId) router.push({ pathname: '/receipt', params: { kind, page: expensesPageId } });
+  const save = async (m: PickedMedia | null, source: 'camera' | 'files', what: string) => {
+    if (!m) return;
+    const rec = await (await getCapture()).saveFile({ uri: m.uri, mime: m.mime, name: m.name, source });
+    showSavedToast(rec.id, what);
   };
-  const actions: SheetAction[] = [];
-  if (expensesPageId) {
-    actions.push({ key: 'photo', testID: 'add-photo', label: t('add.receipt_photo'), icon: ImageIcon, onPress: receipt('photo') });
-    actions.push({ key: 'camera', testID: 'add-camera', label: t('add.camera'), icon: Camera, onPress: receipt('camera') });
-    if (qr) actions.push({ key: 'qr', testID: 'add-qr', label: t('exp.bring_qr'), icon: QrCode, onPress: receipt('qr') });
-    if (statements) actions.push({ key: 'file', testID: 'add-file', label: t('exp.bring_statement'), icon: FileText, onPress: receipt('statement') });
-  }
-  actions.push({
-    key: 'reminder',
-    testID: 'add-reminder',
-    label: t('add.reminder'),
-    icon: AlarmClock,
-    onPress: () => {
-      onClose();
-      router.push('/reminder-new');
+  const run = (job: () => Promise<void>) => () => {
+    onClose();
+    void job().catch((e: unknown) => {
+      console.warn('add pick failed', e);
+      useToast.getState().show(t('exp.pick_failed'), 4000);
+    });
+  };
+  const media = getMedia;
+  const actions: SheetAction[] = [
+    {
+      key: 'camera',
+      testID: 'add-camera',
+      label: t('add.camera'),
+      icon: Camera,
+      onPress: run(async () => {
+        let perm = await media().cameraPermission();
+        if (perm !== 'granted') perm = await media().requestCamera();
+        if (perm !== 'granted') {
+          useToast.getState().show(t('exp.camera_blocked'), 4000);
+          return;
+        }
+        await save(await media().takePhoto(), 'camera', t('add.photo'));
+      }),
     },
-  });
+    {
+      key: 'photo',
+      testID: 'add-photo',
+      label: t('add.gallery'),
+      icon: ImageIcon,
+      onPress: run(async () => save(await media().pickPhoto(), 'files', t('add.photo'))),
+    },
+    {
+      key: 'file',
+      testID: 'add-file',
+      label: t('add.file'),
+      icon: FileText,
+      onPress: run(async () => save(await media().pickPdf(), 'files', t('add.file'))),
+    },
+    {
+      key: 'receipt',
+      testID: 'add-receipt',
+      label: t('add.receipt_photo'),
+      icon: ReceiptText,
+      onPress: () => {
+        onClose();
+        const exp = usePages.getState().pages.find((p) => p.templateKey === 'expenses');
+        router.push({ pathname: '/receipt', params: { kind: 'camera', ...(exp ? { page: exp.id } : {}) } });
+      },
+    },
+    {
+      key: 'reminder',
+      testID: 'add-reminder',
+      label: t('add.reminder'),
+      icon: AlarmClock,
+      onPress: () => {
+        onClose();
+        router.push('/reminder-new');
+      },
+    },
+    {
+      key: 'manual',
+      testID: 'add-manual',
+      label: t('add.write'),
+      icon: PencilLine,
+      onPress: () => {
+        onClose();
+        router.push('/note-new');
+      },
+    },
+  ];
   return (
     <Sheet visible={visible} onClose={onClose} title={t('add.title')} testID="add-sheet">
       <ActionList actions={actions} />

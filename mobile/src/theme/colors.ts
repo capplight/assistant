@@ -132,10 +132,12 @@ const darkV5: V5Tokens = {
   tray: '#0F0E12',
   trayInk: '#F1EEE8',
   trayInk2: '#9A95A2',
-  paper: '#1E1D23',
-  paper2: '#2A2930',
-  line: '#34323A',
-  line2: '#4A4752',
+  // Ф-84 / QA v5-device-1 A8 (approved): the paper one step lighter, so its edge and rounded corners show over the
+  // tray on a phone (#1E1D23 merged with #0F0E12); ink3 5.8 on paper · 5.0 on paper2, assistantText 6.5.
+  paper: '#26252B',
+  paper2: '#312F37',
+  line: '#3B3942',
+  line2: '#504D58',
   ink: '#F1EEE8',
   ink2: '#C2BDC8',
   ink3: '#A29DAA',
@@ -220,7 +222,7 @@ export type StickerKey = 'paper' | 'sand' | 'rose' | 'mist' | 'graphite';
 export const STICKER_KEYS: readonly StickerKey[] = ['paper', 'sand', 'rose', 'mist', 'graphite'];
 export const stickerColors: Record<'light' | 'dark', Record<StickerKey, string>> = {
   light: { paper: '#FFFFFF', sand: '#EFE4CF', rose: '#F3D6DC', mist: '#D4E8E2', graphite: '#E2DFD8' },
-  dark: { paper: '#2A2930', sand: '#4A4232', rose: '#4E3439', mist: '#2E4640', graphite: '#36353C' },
+  dark: { paper: '#33313A', sand: '#4A4232', rose: '#4E3439', mist: '#2E4640', graphite: '#3C3B42' },
 };
 export const stickerInk = {
   light: { ink: '#1A191E', ink2: '#4D4A52' },

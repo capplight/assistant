@@ -2,7 +2,19 @@ import { router } from 'expo-router';
 import { ArrowUp, MessageSquareText, Mic, PencilLine, Plus } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AccessibilityInfo, Animated, Easing, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
+import {
+  AccessibilityInfo,
+  Animated,
+  Easing,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  useWindowDimensions,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 
 import { caught } from '@/chat/caught';
 import { chatAllowed, sendFromLine, showSavedToast } from '@/chat/service';
@@ -55,7 +67,14 @@ export function AssistantLine({
   variant = 'full',
   placeholderText,
   testID = 'assistant-line',
-}: { scope?: 'all'; compact?: boolean; keyboardHeight?: number; variant?: 'strip' | 'full'; placeholderText?: string; testID?: string } = {}) {
+}: {
+  scope?: 'all';
+  compact?: boolean;
+  keyboardHeight?: number;
+  variant?: 'strip' | 'full';
+  placeholderText?: string;
+  testID?: string;
+} = {}) {
   const theme = useTheme();
   const strip = variant === 'strip';
   const { height: windowHeight } = useWindowDimensions();
@@ -69,13 +88,8 @@ export function AssistantLine({
   const showToast = useToast((s) => s.show);
   const [text, setText] = useState('');
   const [addOpen, setAddOpen] = useState(false);
-  // v5: on the tabs «+» lives on the sheet of the page (the strip has only the dot and the mic).
-  const addRequest = useChrome((st) => st.addRequest);
-  const [seenAdd, setSeenAdd] = useState(addRequest);
-  if (seenAdd !== addRequest) {
-    setSeenAdd(addRequest);
-    setAddOpen(true);
-  }
+  // add-entry-model.md: «Добавить» with every way lives only in «Помощник» (the full line, its «+»); a page «+»
+  // makes that place's own thing and never opens this sheet.
   // v2 «ввод»: a brand ring while the field has the focus; the chips show while it is empty.
   const [focused, setFocused] = useState(false);
   // «Я в магазине»: only a «Написать» strip and the mic until the person starts writing.
@@ -142,10 +156,10 @@ export function AssistantLine({
     : placeholderText
       ? placeholderText
       : current.kind === 'assistant'
-      ? t('line.placeholder_assistant')
-      : current.kind === 'page' && current.page.templateKey === 'expenses'
-        ? t('line.placeholder_expenses')
-        : t('line.placeholder');
+        ? t('line.placeholder_assistant')
+        : current.kind === 'page' && current.page.templateKey === 'expenses'
+          ? t('line.placeholder_expenses')
+          : t('line.placeholder');
 
   const send = async () => {
     const value = text.trim();
@@ -242,7 +256,10 @@ export function AssistantLine({
     >
       {segments
         ? segments.map((sg, i) => (
-            <Text key={i} style={sg.lit ? { backgroundColor: theme.colors.paper2, color: theme.colors.ink } : undefined}>
+            <Text
+              key={i}
+              style={sg.lit ? { backgroundColor: theme.colors.paper2, color: theme.colors.ink } : undefined}
+            >
               {sg.text}
             </Text>
           ))
@@ -252,7 +269,10 @@ export function AssistantLine({
 
   // The Pressable is the 48 target; the visible circle inside is 40 (mic / send) or 36 («+»).
   const target = { width: theme.size.minTouch, height: theme.size.minTouch };
-  const circle = (d: number, bg: string) => [styles.round, { width: d, height: d, borderRadius: d / 2, backgroundColor: bg }];
+  const circle = (d: number, bg: string) => [
+    styles.round,
+    { width: d, height: d, borderRadius: d / 2, backgroundColor: bg },
+  ];
   const mic = strip ? theme.m.ask.mic : 42;
   const iconPx = theme.size.iconSm;
   const stroke = theme.icon.strokeWidth;
@@ -382,7 +402,10 @@ export function AssistantLine({
       }}
     />
   ) : folded ? (
-    <View testID="assistant-line-folded" style={[styles.row, { gap: theme.space[2], justifyContent: 'space-between', paddingLeft: theme.space[3] }]}>
+    <View
+      testID="assistant-line-folded"
+      style={[styles.row, { gap: theme.space[2], justifyContent: 'space-between', paddingLeft: theme.space[3] }]}
+    >
       <View style={styles.flex}>{openField}</View>
       {right}
     </View>
@@ -390,7 +413,16 @@ export function AssistantLine({
     // v5 strip: dot · hint / field · mic or «Записать».
     <View
       testID="assistant-line-row"
-      style={[styles.row, styles.end, { minHeight: h - 2 * askBar.border, paddingLeft: theme.m.ask.padLeft - 2, paddingRight: askBar.padRight - 6, gap: theme.m.ask.gap - 2 }]}
+      style={[
+        styles.row,
+        styles.end,
+        {
+          minHeight: h - 2 * askBar.border,
+          paddingLeft: theme.m.ask.padLeft - 2,
+          paddingRight: askBar.padRight - 6,
+          gap: theme.m.ask.gap - 2,
+        },
+      ]}
     >
       <View style={{ height: h - 2 * askBar.border, justifyContent: 'center' }}>{dot}</View>
       <View style={styles.flex}>{field}</View>
@@ -410,7 +442,9 @@ export function AssistantLine({
       {seen && (seen.day || seen.time) ? <CaughtCard c={seen} /> : null}
       {showChips ? (
         <LineChips
-          kind={current.kind === 'page' ? current.page.templateKey : current.kind === 'assistant' ? 'assistant' : 'today'}
+          kind={
+            current.kind === 'page' ? current.page.templateKey : current.kind === 'assistant' ? 'assistant' : 'today'
+          }
           onPick={(phrase) => {
             setText(phrase);
             inputRef.current?.focus();
@@ -424,15 +458,20 @@ export function AssistantLine({
         inset={strip ? theme.m.ask.inset : 12}
         bubbleLabel={t('ask.bubble_a11y', { hint: placeholder.replace(/…$/, '') })}
         onOpen={() => inputRef.current?.focus()}
-        style={[{ backgroundColor: theme.colors.paper, borderRadius: listening ? 24 : h / 2, minHeight: h, gap: theme.space[1] }, listening && !strip ? null : askBar.elevation, listening && !strip ? null : ring]}
+        style={[
+          {
+            backgroundColor: theme.colors.paper,
+            borderRadius: listening ? 24 : h / 2,
+            minHeight: h,
+            gap: theme.space[1],
+          },
+          listening && !strip ? null : askBar.elevation,
+          listening && !strip ? null : ring,
+        ]}
       >
         {denied}
         {content}
-        <AddSheet
-          visible={addOpen}
-          onClose={() => setAddOpen(false)}
-          expensesPageId={current.kind === 'page' && current.page.templateKey === 'expenses' ? current.page.id : null}
-        />
+        {strip ? null : <AddSheet visible={addOpen} onClose={() => setAddOpen(false)} />}
       </AskFold>
     </>
   );
@@ -502,7 +541,11 @@ function AskFold({
     ? p.interpolate({ inputRange: [0, 1], outputRange: [1, 0] })
     : p.interpolate({ inputRange: [0, 0.4], outputRange: [1, 0], extrapolate: 'clamp' });
   return (
-    <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)} pointerEvents="box-none" style={{ marginHorizontal: inset, alignItems: 'flex-end' }}>
+    <View
+      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+      pointerEvents="box-none"
+      style={{ marginHorizontal: inset, alignItems: 'flex-end' }}
+    >
       <Animated.View
         testID={testID}
         pointerEvents={collapsed ? 'none' : 'auto'}
@@ -511,10 +554,16 @@ function AskFold({
         style={[
           style,
           styles.clip,
-          reduced || width === 0 ? { width: '100%', opacity: reduced ? p : 1 } : { width: p.interpolate({ inputRange: [0, 1], outputRange: [height, width] }) },
+          reduced || width === 0
+            ? { width: '100%', opacity: reduced ? p : 1 }
+            : { width: p.interpolate({ inputRange: [0, 1], outputRange: [height, width] }) },
         ]}
       >
-        <Animated.View style={{ width: width > 0 ? width - 0 : '100%', alignSelf: 'flex-end', opacity: reduced ? 1 : textOpacity }}>{children}</Animated.View>
+        <Animated.View
+          style={{ width: width > 0 ? width - 0 : '100%', alignSelf: 'flex-end', opacity: reduced ? 1 : textOpacity }}
+        >
+          {children}
+        </Animated.View>
       </Animated.View>
       {collapsed ? (
         <Animated.View style={[styles.bubbleWrap, { opacity: iconOpacity }]}>
@@ -527,10 +576,25 @@ function AskFold({
               useChrome.getState().setAskCollapsed(false);
               onOpen();
             }}
-            style={[styles.bubble, { width: height, height, borderRadius: height / 2, backgroundColor: theme.colors.paper, borderColor: theme.colors.ink }, askBar.elevation]}
+            style={[
+              styles.bubble,
+              {
+                width: height,
+                height,
+                borderRadius: height / 2,
+                backgroundColor: theme.colors.paper,
+                borderColor: theme.colors.ink,
+              },
+              askBar.elevation,
+            ]}
           >
             <MessageSquareText size={22} color={theme.colors.ink} strokeWidth={theme.icon.strokeWidth} />
-            <View style={[styles.bubbleDot, { backgroundColor: theme.colors.place.assistant, borderColor: theme.colors.paper }]} />
+            <View
+              style={[
+                styles.bubbleDot,
+                { backgroundColor: theme.colors.place.assistant, borderColor: theme.colors.paper },
+              ]}
+            />
           </Pressable>
         </Animated.View>
       ) : null}
@@ -550,5 +614,13 @@ const styles = StyleSheet.create({
   clip: { overflow: 'hidden' },
   bubbleWrap: { position: 'absolute', right: 0, bottom: 0 },
   bubble: { alignItems: 'center', justifyContent: 'center', borderWidth: askBar.border },
-  bubbleDot: { position: 'absolute', right: 3, top: 3, borderWidth: 2, width: askBar.dot + 4, height: askBar.dot + 4, borderRadius: (askBar.dot + 4) / 2 },
+  bubbleDot: {
+    position: 'absolute',
+    right: 3,
+    top: 3,
+    borderWidth: 2,
+    width: askBar.dot + 4,
+    height: askBar.dot + 4,
+    borderRadius: (askBar.dot + 4) / 2,
+  },
 });

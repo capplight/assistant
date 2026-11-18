@@ -31,7 +31,8 @@ export default function ReceiptScreen() {
   // Ф-37: statements and the QR are hidden while their switches are off (a stale link falls back to the photo).
   const flags = getFeatures();
   const asked: Kind = KINDS.has(params.kind as Kind) ? (params.kind as Kind) : 'camera';
-  const kind: Kind = (asked === 'statement' && !flags.statements_pdf) || (asked === 'qr' && !flags.receipt_qr) ? 'photo' : asked;
+  const kind: Kind =
+    (asked === 'statement' && !flags.statements_pdf) || (asked === 'qr' && !flags.receipt_qr) ? 'photo' : asked;
   const page = params.page ?? null;
   const needsCamera = kind === 'camera' || kind === 'qr';
   const [perm, setPerm] = useState<Permission | null>(needsCamera ? null : 'granted');
@@ -51,7 +52,8 @@ export default function ReceiptScreen() {
       setBusy(true);
       try {
         const media = getMedia();
-        const m = k === 'camera' ? await media.takePhoto() : k === 'photo' ? await media.pickPhoto() : await media.pickPdf();
+        const m =
+          k === 'camera' ? await media.takePhoto() : k === 'photo' ? await media.pickPhoto() : await media.pickPdf();
         if (!m) return leave();
         if (k === 'statement') {
           const job = await saveStatement(m);
@@ -117,7 +119,12 @@ export default function ReceiptScreen() {
             {t('exp.qr_hint')}
           </AppText>
           <AppText variant="callout">{t('exp.qr_offline')}</AppText>
-          <Button testID="receipt-qr-photo" label={t('exp.qr_take_photo')} variant="secondary" onPress={() => void pick('camera')} />
+          <Button
+            testID="receipt-qr-photo"
+            label={t('exp.qr_take_photo')}
+            variant="secondary"
+            onPress={() => void pick('camera')}
+          />
           <Button testID="receipt-cancel" label={t('exp.cancel')} variant="text" onPress={leave} />
         </View>
       </View>
@@ -128,7 +135,10 @@ export default function ReceiptScreen() {
   return (
     // screens-v5-extra «Чек · нужна камера»: the green strip «‹ Расходы · Фото чека», the words on the paper.
     <Screen testID="receipt-screen" place="expenses" mode="strip">
-      <Header title={t('exp.receipt_photo')} back={{ onPress: leave, label: t('tpl.short.expenses'), testID: 'receipt-back' }} />
+      <Header
+        title={t('exp.receipt_photo')}
+        back={{ onPress: leave, label: t('tpl.short.expenses'), testID: 'receipt-back' }}
+      />
       <View style={{ gap: theme.space[4] }}>
         {badQr ? (
           <>
@@ -158,18 +168,40 @@ export default function ReceiptScreen() {
                 <AppText testID="receipt-camera-blocked" color="warning">
                   {t('exp.camera_blocked')}
                 </AppText>
-                <Button testID="receipt-settings" label={t('exp.camera_settings')} onPress={() => getMedia().openSettings()} />
+                <Button
+                  testID="receipt-settings"
+                  label={t('exp.camera_settings')}
+                  onPress={() => getMedia().openSettings()}
+                />
               </>
             ) : (
               <Button testID="receipt-allow" label={t('exp.camera_allow')} onPress={() => void allow()} />
             )}
-            <Button testID="receipt-gallery" label={t('exp.from_gallery')} variant="secondary" onPress={() => void pick('photo')} />
+            <Button
+              testID="receipt-gallery"
+              label={t('exp.from_gallery')}
+              variant="secondary"
+              onPress={() => void pick('photo')}
+            />
             <Button testID="receipt-cancel" label={t('exp.not_now')} variant="text" onPress={leave} />
           </>
         ) : (
-          <AppText testID="receipt-busy" accessibilityLiveRegion="polite">
-            {busy || perm === null ? t('exp.opening') : ''}
-          </AppText>
+          <>
+            <AppText testID="receipt-busy" accessibilityLiveRegion="polite">
+              {busy || perm === null ? t('exp.opening') : ''}
+            </AppText>
+            {/* add-entry-model.md §6: under the camera — «Из галереи» (a receipt photo taken earlier). */}
+            {kind === 'camera' ? (
+              <View style={{ alignItems: 'flex-start' }}>
+                <Button
+                  testID="receipt-from-gallery"
+                  label={t('exp.gallery_link')}
+                  variant="link"
+                  onPress={() => void pick('photo')}
+                />
+              </View>
+            ) : null}
+          </>
         )}
       </View>
     </Screen>

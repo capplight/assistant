@@ -23,7 +23,6 @@ import { readableColumn, useLayout, useTheme } from '@/theme';
 import { ChangedMark } from '@/components/ChangedMark';
 
 import { AppText } from '../AppText';
-import { BudgetSheet } from '../BudgetSheet';
 import { RecordRow } from '../RecordRow';
 import { useMinuteClock } from '../ReminderLists';
 import { Button } from '../ui/Button';
@@ -154,7 +153,6 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
     if (!entry) setEntry({ category: null });
   }
   const budget = useBudget(budgetMinor);
-  const [budgetOpen, setBudgetOpen] = useState(false);
   const thisMonth = kind === 'month' && period.from === periodOf('month', today).from;
 
   const ovProps: OverviewProps = {
@@ -162,7 +160,6 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
     title: periodTitle(period, lang),
     board: b,
     budget: thisMonth ? budget : null,
-    onSetBudget: thisMonth ? () => setBudgetOpen(true) : undefined,
     today,
     period,
     onlyToCheck,
@@ -505,7 +502,6 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
           }}
         />
       ) : null}
-      {budgetOpen ? <BudgetSheet visible onClose={() => setBudgetOpen(false)} /> : null}
       {kaspi ? (
         <Sheet testID="exp-kaspi-sheet" title={t('exp.kaspi_title')} onClose={() => setKaspi(false)}>
           <AppText>{t('exp.kaspi_1')}</AppText>

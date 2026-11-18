@@ -80,7 +80,7 @@ export function ClassicView({ page, entries, frameTop, ordering, simple = false 
           ) : (
             <>
               <ReminderRows segment={segment} now={now} canDelete />
-              <Button testID="tasks-new-reminder" label={t('today.new_reminder')} variant="secondary" onPress={() => router.push('/reminder-new')} />
+              <Button testID="tasks-new-reminder" label={t('add.task_new')} variant="secondary" onPress={() => router.push('/reminder-new')} />
             </>
           )}
         </View>

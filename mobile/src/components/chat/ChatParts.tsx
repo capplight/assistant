@@ -1,15 +1,27 @@
 import { router } from 'expo-router';
 import { AiLabel } from '@/components/AiLabel';
-import { Clock, CloudOff, CreditCard, Lock, MessageSquareText, StickyNote, Sun, Undo2, ListChecks, Ellipsis } from 'lucide-react-native';
+import {
+  Clock,
+  CloudOff,
+  CreditCard,
+  Lock,
+  MessageSquareText,
+  StickyNote,
+  Sun,
+  Undo2,
+  ListChecks,
+  Ellipsis,
+} from 'lucide-react-native';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { actionText, answerProposal, undoAction } from '@/chat/service';
+import { actionText, answerProposal, retry, undoAction } from '@/chat/service';
 import { getRecords, type LocalRecord } from '@/db';
 import { usePageLabels } from '@/pages/usePageLabels';
 import { kickSync } from '@/services';
 import type { ChatAction, ChatMessage } from '@/store/assistant';
+import { useConnectivity } from '@/store/connectivity';
 import { usePages, type Page } from '@/store/pages';
 import { useToast } from '@/store/toast';
 import { useView } from '@/store/view';
@@ -32,7 +44,10 @@ export function AssistantMark({ size = 40 }: { size?: number }) {
     <View
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
-      style={[styles.center, { width: size, height: size, borderRadius: size / 2, backgroundColor: theme.colors.place.assistant }]}
+      style={[
+        styles.center,
+        { width: size, height: size, borderRadius: size / 2, backgroundColor: theme.colors.place.assistant },
+      ]}
     >
       <MessageSquareText size={size * 0.48} color={theme.colors.onSheet} strokeWidth={theme.icon.strokeWidth} />
     </View>
@@ -69,7 +84,16 @@ export function UserBubble({ m, testID }: { m: ChatMessage; testID?: string }) {
         testID={testID}
         accessible
         accessibilityLabel={t('chat.you', { text: m.text })}
-        style={{ maxWidth: '82%', backgroundColor: theme.colors.btn, borderTopLeftRadius: 20, borderTopRightRadius: 20, borderBottomRightRadius: 6, borderBottomLeftRadius: 20, paddingHorizontal: 15, paddingVertical: 11 }}
+        style={{
+          maxWidth: '82%',
+          backgroundColor: theme.colors.btn,
+          borderTopLeftRadius: 20,
+          borderTopRightRadius: 20,
+          borderBottomRightRadius: 6,
+          borderBottomLeftRadius: 20,
+          paddingHorizontal: 15,
+          paddingVertical: 11,
+        }}
       >
         <AppText style={{ color: theme.colors.onBtn, lineHeight: 22 }}>{m.text}</AppText>
       </View>
@@ -84,8 +108,13 @@ export function AssistantMessage({ m, testID }: { m: ChatMessage; testID?: strin
   const hits = m.status === 'queued' ? (m.localHits ?? []) : [];
   const titles = useLocalHitTitles(m.status === 'queued' ? m.localHits : undefined, t);
   // Ф-50: a checked short answer is one big value — only when the server says so (`banner.value`).
-  const value = !m.action && m.text && m.value ? { value: m.value, note: m.text.trim() !== m.value ? m.text : null } : null;
+  const value =
+    !m.action && m.text && m.value ? { value: m.value, note: m.text.trim() !== m.value ? m.text : null } : null;
   const notice = m.saved ? null : answerNotice(m, t);
+  // QA v5-device-1 «Помощник» 2: a broken answer says why and offers «Повторить»; without a connection — the cloud
+  // (§11.3). Not for the calm notices (limit, no AI, saved for later, «может, уже сделано»).
+  const online = useConnectivity((st) => st.online);
+  const retryable = (m.status === 'interrupted' && m.notice !== 'maybe_done') || (m.status === 'failed' && !m.notice);
   return (
     <View testID={testID} style={{ gap: theme.space[2], alignItems: 'stretch' }}>
       {m.saved ? (
@@ -94,7 +123,11 @@ export function AssistantMessage({ m, testID }: { m: ChatMessage; testID?: strin
           <AppText variant="footnote">{t('assistant.saved_later')}</AppText>
         </View>
       ) : null}
-      {m.status === 'streaming' && !m.text ? <AppText variant="chat" color="ink2">{m.activity ?? t('assistant.thinking')}</AppText> : null}
+      {m.status === 'streaming' && !m.text ? (
+        <AppText variant="chat" color="ink2">
+          {m.activity ?? t('assistant.thinking')}
+        </AppText>
+      ) : null}
       {m.action && (m.action.undoOf || (m.action.undid?.length ?? 0) > 0) ? (
         <UndoResultCard m={m} action={m.action} />
       ) : m.action ? (
@@ -135,19 +168,56 @@ export function AssistantMessage({ m, testID }: { m: ChatMessage; testID?: strin
       ) : null}
       {/* screens-v5-extra «на сегодня хватит», «Ответ не дошёл»: a calm plate on the paper, never red. */}
       {notice ? (
-        <Inset testID={testID ? `${testID}-notice` : undefined}>
-          <AppText style={{ fontSize: 15.5, lineHeight: 22 }}>{notice}</AppText>
+        <Inset
+          testID={testID ? `${testID}-notice` : undefined}
+          style={retryable ? [styles.row, { alignItems: 'flex-start', gap: 12 }] : undefined}
+        >
+          {retryable && !online ? (
+            <View
+              testID={testID ? `${testID}-offline` : undefined}
+              accessible
+              accessibilityLabel={t('assistant.offline_short')}
+            >
+              <CloudOff size={22} color={theme.colors.ink} strokeWidth={theme.icon.strokeWidth} />
+            </View>
+          ) : null}
+          <View style={retryable ? [styles.flex, { gap: 10 }] : undefined}>
+            <AppText style={{ fontSize: 15.5, lineHeight: 22 }}>
+              {retryable && !online ? t('assistant.offline_title') : notice}
+            </AppText>
+            {retryable ? (
+              <View style={styles.row}>
+                <Button
+                  testID={`chat-retry-${m.id}`}
+                  label={t('answer.retry_short')}
+                  variant="secondary"
+                  size="small"
+                  minHeight={38}
+                  onPress={() => void retry(m.id)}
+                />
+              </View>
+            ) : null}
+          </View>
         </Inset>
       ) : null}
       {hits.length > 0 ? <LocalHitChips messageId={m.id} recordIds={hits} titles={titles} /> : null}
       {m.sources && m.sources.length > 0 ? <SourceChips messageId={m.id} sources={m.sources} /> : null}
-      {m.status === 'done' && m.aiGenerated && !!m.text && !m.action ? <AiLabel testID={testID ? `${testID}-ai` : undefined} variant="footnote" /> : null}
+      {m.status === 'done' && m.aiGenerated && !!m.text && !m.action ? (
+        <AiLabel testID={testID ? `${testID}-ai` : undefined} variant="footnote" />
+      ) : null}
     </View>
   );
 }
 
 /** The icon of a place on a result sheet. */
-const PLACE_ICON: Record<PlaceKey, LucideIcon> = { today: Sun, notes: StickyNote, assistant: MessageSquareText, expenses: CreditCard, tasks: ListChecks, stone: Ellipsis };
+const PLACE_ICON: Record<PlaceKey, LucideIcon> = {
+  today: Sun,
+  notes: StickyNote,
+  assistant: MessageSquareText,
+  expenses: CreditCard,
+  tasks: ListChecks,
+  stone: Ellipsis,
+};
 
 /** The record a change is about, once it is on the phone (it may still come by /sync). */
 async function recordOf(serverId: string | null): Promise<LocalRecord | null> {
@@ -173,7 +243,13 @@ export function ActionResultCard({ m, action }: { m: ChatMessage; action: ChatAc
   const [replace, setReplace] = useState<{ record: LocalRecord; what: string; from: Page | null } | null>(null);
   // Step 6: a phrase with several actions — a row per action; else a row per record of the one action.
   const parts = action.parts && action.parts.length > 1 ? action.parts : null;
-  const rows: { itemId: string | null; title: string | null; text: string; pageServerId: string | null; undone: boolean }[] = parts
+  const rows: {
+    itemId: string | null;
+    title: string | null;
+    text: string;
+    pageServerId: string | null;
+    undone: boolean;
+  }[] = parts
     ? parts.map((p) => ({
         itemId: p.changes[0]?.itemId ?? p.changedItemIds[0] ?? null,
         title: p.changes[0]?.title ?? null,
@@ -187,7 +263,9 @@ export function ActionResultCard({ m, action }: { m: ChatMessage; action: ChatAc
           itemId: c.itemId,
           title: c.title,
           text: c.text,
-          pageServerId: action.savedTo?.find((st) => c.itemId && st.itemIds.includes(c.itemId))?.pageServerId ?? action.pageServerId,
+          pageServerId:
+            action.savedTo?.find((st) => c.itemId && st.itemIds.includes(c.itemId))?.pageServerId ??
+            action.pageServerId,
           undone: !!action.undone,
         }));
   const many = rows.length > 1;
@@ -207,11 +285,26 @@ export function ActionResultCard({ m, action }: { m: ChatMessage; action: ChatAc
     if (!rec) return showToast(t('save.replace_later'), 3000);
     setReplace({ record: rec, what: rows[0]?.title ?? actionText(action, i18n.language), from: firstPage });
   };
-  const shown = rows.length > 0 ? rows : [{ itemId: null, title: null, text: actionText(action, i18n.language), pageServerId: action.pageServerId, undone: !!action.undone }];
+  const shown =
+    rows.length > 0
+      ? rows
+      : [
+          {
+            itemId: null,
+            title: null,
+            text: actionText(action, i18n.language),
+            pageServerId: action.pageServerId,
+            undone: !!action.undone,
+          },
+        ];
   return (
     <View testID={`chat-action-${m.id}`} style={{ gap: 6 }}>
-      {many && groupNotice ? <AppText variant="chat">{(i18n.language === 'kk' && groupNotice.text_kk) || groupNotice.text_ru}</AppText> : null}
-      {many && !groupNotice ? <AppText variant="chat">{t('assistant.did_many', { count: rows.length })}</AppText> : null}
+      {many && groupNotice ? (
+        <AppText variant="chat">{(i18n.language === 'kk' && groupNotice.text_kk) || groupNotice.text_ru}</AppText>
+      ) : null}
+      {many && !groupNotice ? (
+        <AppText variant="chat">{t('assistant.did_many', { count: rows.length })}</AppText>
+      ) : null}
       {shown.map((c, i) => {
         const page = pageByServer(c.pageServerId) ?? (i === 0 ? firstPage : null);
         const place = page ? placeOfTemplate(page.templateKey) : 'stone';
@@ -234,7 +327,13 @@ export function ActionResultCard({ m, action }: { m: ChatMessage; action: ChatAc
           <View style={[styles.row, { gap: 4, flexWrap: 'wrap', marginTop: 4 }]}>
             {(action.savedTo?.length ?? 0) > 0 || action.kind === 'save_item' ? (
               <>
-                <Button testID={`chat-replace-${m.id}`} label={t('save.replace')} variant="link" size="small" onPress={() => void doReplace()} />
+                <Button
+                  testID={`chat-replace-${m.id}`}
+                  label={t('save.replace')}
+                  variant="link"
+                  size="small"
+                  onPress={() => void doReplace()}
+                />
                 <AppText variant="small" color="ink3" accessibilityElementsHidden importantForAccessibility="no">
                   ·
                 </AppText>
@@ -246,9 +345,19 @@ export function ActionResultCard({ m, action }: { m: ChatMessage; action: ChatAc
               accessibilityLabel={many ? t('assistant.undo_all') : t('common.undo')}
               onPress={() => void undoAction(m.id)}
               hitSlop={8}
-              style={({ pressed }) => [{ minHeight: theme.size.minTouch, justifyContent: 'center', paddingHorizontal: 8 }, pressedStyle(pressed)]}
+              style={({ pressed }) => [
+                { minHeight: theme.size.minTouch, justifyContent: 'center', paddingHorizontal: 8 },
+                pressedStyle(pressed),
+              ]}
             >
-              <AppText style={{ color: theme.colors.assistantText, fontFamily: theme.type.headline.fontFamily, fontSize: 15, lineHeight: 18 }}>
+              <AppText
+                style={{
+                  color: theme.colors.assistantText,
+                  fontFamily: theme.type.headline.fontFamily,
+                  fontSize: 15,
+                  lineHeight: 18,
+                }}
+              >
                 {many ? t('assistant.undo_all') : t('common.undo')}
               </AppText>
             </Pressable>
@@ -259,7 +368,14 @@ export function ActionResultCard({ m, action }: { m: ChatMessage; action: ChatAc
           {t('assistant.undone')}
         </AppText>
       )}
-      {replace ? <ReplaceSheet record={replace.record} what={replace.what} from={replace.from} onClose={() => setReplace(null)} /> : null}
+      {replace ? (
+        <ReplaceSheet
+          record={replace.record}
+          what={replace.what}
+          from={replace.from}
+          onClose={() => setReplace(null)}
+        />
+      ) : null}
     </View>
   );
 }
@@ -272,7 +388,10 @@ export function OfflineBanner() {
     <Inset testID="chat-offline" style={[styles.row, { alignItems: 'flex-start', gap: 12 }]}>
       <CloudOff size={22} color={theme.colors.ink} strokeWidth={theme.icon.strokeWidth} />
       <AppText style={[styles.flex, { fontSize: 15.5, lineHeight: 22 }]}>
-        <AppText style={{ fontFamily: theme.type.headline.fontFamily, fontSize: 15.5 }}>{t('assistant.offline_title')}</AppText> {t('assistant.offline_rest')}
+        <AppText style={{ fontFamily: theme.type.headline.fontFamily, fontSize: 15.5 }}>
+          {t('assistant.offline_title')}
+        </AppText>{' '}
+        {t('assistant.offline_rest')}
       </AppText>
     </Inset>
   );
@@ -332,7 +451,9 @@ export function ChatEmpty() {
 export function UndoResultCard({ m, action }: { m: ChatMessage; action: ChatAction }) {
   const theme = useTheme();
   const { t, i18n } = useTranslation();
-  const head = action.notice ? (i18n.language === 'kk' && action.notice.text_kk) || action.notice.text_ru : t('assistant.undid');
+  const head = action.notice
+    ? (i18n.language === 'kk' && action.notice.text_kk) || action.notice.text_ru
+    : t('assistant.undid');
   const body = actionText(action, i18n.language);
   return (
     <Inset testID={`chat-undo-result-${m.id}`} style={{ gap: theme.space[2] }}>
@@ -344,7 +465,13 @@ export function UndoResultCard({ m, action }: { m: ChatMessage; action: ChatActi
         </View>
       </View>
       <View style={[styles.row, { justifyContent: 'flex-end' }]}>
-        <Button testID={`chat-open-history-${m.id}`} label={t('assistant.open_history')} variant="link" size="small" onPress={() => router.push('/history')} />
+        <Button
+          testID={`chat-open-history-${m.id}`}
+          label={t('assistant.open_history')}
+          variant="link"
+          size="small"
+          onPress={() => router.push('/history')}
+        />
       </View>
     </Inset>
   );

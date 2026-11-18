@@ -137,8 +137,11 @@ describe('«Сегодня» and the beta switches (Ф-42)', () => {
     await renderRouter(APP_DIR, { initialUrl: '/' });
     expect(screen.getByTestId('task-a')).toHaveTextContent(/Позвонить в банк/);
     expect(screen.getByTestId('task-b')).toHaveTextContent(/Оплатить интернет/);
-    // screens-v5 «Сегодня»: «Все дела ›» without a count.
-    expect(screen.getByTestId('today-all-tasks')).toHaveTextContent(/Все дела/);
+    // Ф-84 «Сводка»: no plan today → the phrase names what is there, the week is on the sheet (a day opens «Дела»);
+    // «Все дела ›» belongs to the nearest day with things, so an empty week has none.
+    expect(screen.getByTestId('sheet-phrase')).toHaveTextContent('Свободный день. Не забыть 2 дела.');
+    expect(screen.getByTestId(`week-${day}`).props.accessibilityState.selected).toBe(true);
+    expect(screen.queryByTestId('today-all-tasks')).toBeNull();
     await fireEvent.press(screen.getByTestId('task-check-b'));
     await settle(() => screen.getByTestId('task-check-b').props.accessibilityState.checked === true);
   });

@@ -300,9 +300,9 @@ describe('«Расходы» — the calculator', () => {
     await renderRouter(APP_DIR, { initialUrl: `/page/${expensesPage().id}` });
     await settle(() => screen.queryByTestId('exp-board') !== null);
     expect(screen.getByTestId('page-view-expenses:builtin:expenses')).toBeTruthy();
-    // v2 mock: the title, «+ Трата» and ⋯ (the one search lives on the other pages and in the line).
-    for (const id of ['page-title', 'exp-enter']) expect(screen.getByTestId(id)).toBeTruthy();
-    expect(screen.queryByTestId('page-menu')).toBeNull(); // QA v2 §3.7
+    // add-entry-model.md: «+ Трата», the receipt camera 📷 and ⋯; no bare «+» (no double «+»).
+    for (const id of ['page-title', 'exp-enter', 'exp-camera', 'page-menu']) expect(screen.getByTestId(id)).toBeTruthy();
+    expect(screen.queryByTestId('page-add')).toBeNull();
     expect(text('exp-total')).toBe('0 ₸');
     expect(screen.getByTestId('exp-empty-total')).toBeTruthy();
     // Empty: the keys are open, with the hint.

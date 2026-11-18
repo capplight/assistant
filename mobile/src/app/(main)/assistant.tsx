@@ -54,7 +54,12 @@ export default function AssistantScreen() {
     }
   };
 
-  const days = messages.map((m) => dayTitle(m.at));
+  // QA v5-device-1 «Помощник» 1: actions stand only under their answer — the head of a trimmed conversation (a result
+  // whose question is no longer here: «Переложить · Отменить» with nothing above) is not shown; it stays in «История».
+  let start = 0;
+  while (start < messages.length && messages[start]!.role !== 'user' && !!messages[start]!.action) start += 1;
+  const list = start > 0 ? messages.slice(start) : messages;
+  const days = list.map((m) => dayTitle(m.at));
   const ink = theme.colors.onSheet;
   return (
     <PlaceScreen
@@ -68,12 +73,31 @@ export default function AssistantScreen() {
         if (!focus) scrollRef.current?.scrollToEnd({ animated: false });
       }}
       contentContainerStyle={{ paddingBottom: theme.m.ask.listBottomPadding + 22, gap: theme.space[3] }}
-      stripLeft={<SheetIcon icon={History} label={t('more.history')} onPress={() => router.push('/history')} color={ink} testID="assistant-history" />}
+      stripLeft={
+        <SheetIcon
+          icon={History}
+          label={t('more.history')}
+          onPress={() => router.push('/history')}
+          color={ink}
+          testID="assistant-history"
+        />
+      }
       stripRight={
         online ? (
-          <SheetIcon icon={Search} label={t('today.search')} onPress={() => router.navigate('/search')} color={ink} testID="assistant-search" />
+          <SheetIcon
+            icon={Search}
+            label={t('today.search')}
+            onPress={() => router.navigate('/search')}
+            color={ink}
+            testID="assistant-search"
+          />
         ) : (
-          <View testID="assistant-offline-icon" accessible accessibilityLabel={t('assistant.offline_short')} style={styles.icon}>
+          <View
+            testID="assistant-offline-icon"
+            accessible
+            accessibilityLabel={t('assistant.offline_short')}
+            style={styles.icon}
+          >
             <CloudOff size={22} color={ink} strokeWidth={theme.icon.strokeWidth} />
           </View>
         )
@@ -81,14 +105,22 @@ export default function AssistantScreen() {
     >
       <View testID="assistant-chat" style={{ gap: theme.space[3], display: listening ? 'none' : 'flex' }}>
         {!online ? <OfflineBanner /> : null}
-        {messages.length === 0 ? <ChatEmpty /> : null}
-        {messages.map((m, i) => {
+        {list.length === 0 ? <ChatEmpty /> : null}
+        {list.map((m, i) => {
           const day = days[i]!;
           const header = i === 0 || days[i - 1] !== day;
           return (
-            <View key={m.id} onLayout={focus && m.id === focus ? (ev) => setFocusY(ev.nativeEvent.layout.y) : undefined} style={{ gap: theme.space[3] }}>
+            <View
+              key={m.id}
+              onLayout={focus && m.id === focus ? (ev) => setFocusY(ev.nativeEvent.layout.y) : undefined}
+              style={{ gap: theme.space[3] }}
+            >
               {header ? <DaySeparator label={day} /> : null}
-              {m.role === 'user' ? <UserBubble m={m} testID={`chat-user-${m.id}`} /> : <AssistantMessage m={m} testID={`chat-msg-${m.id}`} />}
+              {m.role === 'user' ? (
+                <UserBubble m={m} testID={`chat-user-${m.id}`} />
+              ) : (
+                <AssistantMessage m={m} testID={`chat-msg-${m.id}`} />
+              )}
             </View>
           );
         })}

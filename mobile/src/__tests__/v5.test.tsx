@@ -10,6 +10,7 @@ import { planPieces } from '@/components/ui/DayPlan';
 import { ASK_SCROLL_START, askScrollStep, type AskScrollState } from '@/store/chrome';
 import { resetWindow, setWindow } from '@/testing/layoutAudit';
 import { darkColors, layoutMetricsFor, legacyStickerMap, lightColors, PLACE_KEYS, stickerColors, stickerInk, stickerOf, type ColorTokens } from '@/theme';
+import { emptyPhrase, firstSteps, nearestDay, weekOf, withoutLastWord } from '@/today/empty';
 
 /** v5 «Листы» (Ф-79, tokens-v5.ts, design-system §11): adaptive metrics, the strip rules, the day plan, colours. */
 
@@ -118,6 +119,13 @@ describe('colours (tokens-v5)', () => {
     expect(c.a4).toBe('#FFFFFF');
   });
 
+  it('A8 (Ф-84): the dark paper stands apart from the tray, and a paper sticker from the paper', () => {
+    expect(darkColors.paper).toBe('#26252B');
+    expect(contrast(darkColors.paper, darkColors.tray)).toBeGreaterThanOrEqual(1.25);
+    expect(stickerColors.dark.paper).not.toBe(darkColors.paper);
+    expect(stickerColors.dark.paper).not.toBe(darkColors.paper2);
+  });
+
   it('ink3 is #6B6774 in light; stickers keep their text AA; old keys map to the new stickers', () => {
     expect(lightColors.ink3).toBe('#6B6774');
     for (const scheme of ['light', 'dark'] as const)
@@ -177,5 +185,35 @@ describe('device QA 1 (docs/design/qa/v5-device-qa-1.md): layout rules', () => {
     await render(<Chip label="Пропущено 2" onPress={() => undefined} />);
     expect(screen.getByText('Пропущено 2').props.numberOfLines).toBe(1);
     expect(StyleSheet.flatten(screen.getByText('Пропущено 2').props.style).flexShrink).toBe(0);
+  });
+});
+
+describe('Ф-84 empty «Сегодня»: the phrase table and the week', () => {
+  const t = (k: string, o?: Record<string, unknown>) => {
+    const i18n = jest.requireActual('@/i18n').default as { t: (k: string, o?: Record<string, unknown>) => string };
+    return i18n.t(k, o);
+  };
+  const base = { today: '2026-11-17', blank: false, notForget: 0, load: {}, weekday: () => 'пятница' };
+  it('names what is there, two short sentences, no «…»', () => {
+    expect(emptyPhrase({ ...base, blank: true }, t)).toBe('Чистый лист.\nСкажите первое.');
+    expect(emptyPhrase({ ...base, notForget: 2 }, t)).toBe('Свободный день.\nНе забыть 2\u00a0дела.');
+    expect(emptyPhrase({ ...base, load: { '2026-11-18': 3 } }, t)).toBe('Сегодня свободно.\nЗавтра 3\u00a0дела.');
+    expect(emptyPhrase({ ...base, load: { '2026-11-18': 1 } }, t)).toBe('Сегодня свободно.\nЗавтра 1\u00a0дело.');
+    expect(emptyPhrase({ ...base, load: { '2026-11-20': 1 } }, t)).toBe('Свободный день.\nБлижайшее — пятница.');
+    expect(emptyPhrase(base, t)).toBe('Свободный день.\nНеделя пустая.');
+    expect(emptyPhrase({ ...base, notForget: 5 }, t)).toMatch(/5\u00a0дел\.$/);
+  });
+  it('the week is Monday…Sunday; the nearest day looks 7 days ahead', () => {
+    expect(weekOf('2026-11-17')).toEqual(['2026-11-16', '2026-11-17', '2026-11-18', '2026-11-19', '2026-11-20', '2026-11-21', '2026-11-22']);
+    expect(weekOf('2026-11-22')[0]).toBe('2026-11-16');
+    expect(nearestDay('2026-11-17', { '2026-11-25': 1 })).toBeNull();
+    expect(nearestDay('2026-11-17', { '2026-11-24': 1, '2026-11-20': 2 })).toBe('2026-11-20');
+  });
+  it('«Три первые фразы»: the first 7 days until three records exist; the phrase goes in without its last word', () => {
+    expect(firstSteps({ ageDays: 1, note: true, reminder: false, expense: false })).toEqual({ show: true, done: 1 });
+    expect(firstSteps({ ageDays: 1, note: true, reminder: true, expense: true }).show).toBe(false);
+    expect(firstSteps({ ageDays: 7.5, note: false, reminder: false, expense: false }).show).toBe(false);
+    expect(withoutLastWord('Запомни: код домофона 4512')).toBe('Запомни: код домофона ');
+    expect(withoutLastWord('Такси')).toBe('Такси');
   });
 });

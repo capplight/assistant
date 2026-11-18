@@ -106,12 +106,15 @@ describe('the page header: one line (ux-audit P0-2)', () => {
     const { tasks } = await seed();
     const r = await renderRouter(APP_DIR, { initialUrl: `/page/${tasks.id}` });
     await settle(() => screen.queryByTestId('page-title') !== null);
-    expect(screen.getByTestId('page-search').props.accessibilityLabel).toBe('Найти на странице');
+    // add-entry-model.md: «+» and «⋯»; «Найти на странице» is the first row of «⋯».
+    expect(screen.getByTestId('page-add').props.accessibilityLabel).toBe('Новое дело');
+    expect(screen.queryByTestId('page-search')).toBeNull();
     expect(screen.queryByTestId('page-find')).toBeNull();
     expect(screen.queryByTestId('page-order')).toBeNull();
     expect(screen.queryByTestId('page-settings')).toBeNull();
     await fireEvent.press(screen.getByTestId('page-menu'));
     await settle(() => screen.queryByTestId('page-menu-sheet') !== null);
+    expect(screen.getByTestId('page-search')).toHaveTextContent('Найти на странице');
     expect(screen.getByTestId('page-order')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('page-settings'));
     await settle(() => r.getPathname() === `/page-settings/${tasks.id}`);
@@ -120,7 +123,8 @@ describe('the page header: one line (ux-audit P0-2)', () => {
   it('🔍 opens the one search (Ф-50), from this page', async () => {
     const { notes } = await seed();
     const r = await renderRouter(APP_DIR, { initialUrl: `/page/${notes.id}` });
-    await settle(() => screen.queryByTestId('page-search') !== null);
+    await settle(() => screen.queryByTestId('page-menu') !== null);
+    await fireEvent.press(screen.getByTestId('page-menu'));
     await fireEvent.press(screen.getByTestId('page-search'));
     expect(r.getPathname()).toBe('/search');
     expect(screen.queryByTestId('page-find')).toBeNull();

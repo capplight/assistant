@@ -143,6 +143,23 @@ describe('«Помощник» — the centre tab', () => {
     await act(async () => useConnectivity.setState({ online: true }));
   });
 
+  it('QA v5-device-1 «Помощник»: a broken answer has «Повторить» (and the cloud offline); a trimmed head is not shown', async () => {
+    const act1 = { id: 'x1', kind: 'save_item', text: 'Записал', textKk: null, pageServerId: null, pageTitle: 'Заметки', changedItemIds: [], changes: [], createdPageId: null, undoable: true, undone: false };
+    const orphan: ChatMessage = { id: 'o1', role: 'assistant', text: '', status: 'done', pageId: 'assistant', pageTitle: 'Помощник', at: iso(), action: act1 as never };
+    const q: ChatMessage = { id: 'q2', role: 'user', text: 'где паспорт', pageId: 'assistant', pageTitle: 'Помощник', at: iso() };
+    const broken: ChatMessage = { id: 'b1', role: 'assistant', text: '', status: 'interrupted', pageId: 'assistant', pageTitle: 'Помощник', at: iso(), replyTo: 'q2' };
+    useAssistant.setState({ messages: [orphan, q, broken] });
+    await renderRouter(APP_DIR, { initialUrl: '/assistant' });
+    // «Переложить · Отменить» of an answer whose question is gone does not hang on top.
+    expect(screen.queryByTestId('chat-msg-o1')).toBeNull();
+    expect(screen.queryByTestId('chat-undo-o1')).toBeNull();
+    expect(screen.getByTestId('chat-retry-b1')).toHaveTextContent('Повторить');
+    expect(screen.queryByTestId('chat-msg-b1-offline')).toBeNull();
+    await act(async () => useConnectivity.setState({ online: false }));
+    expect(screen.getByTestId('chat-msg-b1-offline')).toBeTruthy();
+    await act(async () => useConnectivity.setState({ online: true }));
+  });
+
   it('«Дела» left the tabs: «‹ Сегодня» on their page, a tile in «Ещё»', async () => {
     const r = await renderRouter(APP_DIR, { initialUrl: '/more' });
     expect(screen.getByTestId('more-tasks')).toBeTruthy();

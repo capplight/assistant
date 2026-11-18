@@ -598,6 +598,7 @@ describe('«Найти на странице» → the one search (Ф-50)', () =
     finishOnboarding();
     await testRecords.insertLocal({ id: 'r1', kind: 'note', source: 'typed', text: 'Ёлка на дачу' });
     const r = await renderRouter(APP_DIR, { initialUrl: `/page/${notes().id}` });
+    await fireEvent.press(screen.getByTestId('page-menu'));
     await fireEvent.press(screen.getByTestId('page-search'));
     expect(r.getPathname()).toBe('/search');
     await fireEvent.changeText(screen.getByTestId('search-field'), 'елка');

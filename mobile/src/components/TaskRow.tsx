@@ -124,7 +124,7 @@ export function TaskRow({
             // «В магазине»: large and high contrast, capped at 2× (template-screens 2.4).
             maxFontSizeMultiplier={big ? 2 : undefined}
             color={done ? 'ink3' : 'ink'}
-            style={[big ? { fontFamily: theme.type.headline.fontFamily } : null, done ? { textDecorationLine: 'line-through' } : null]}
+            style={[big ? { fontFamily: theme.type.headline.fontFamily } : null, done ? { textDecorationLine: 'line-through', textDecorationColor: theme.colors.ink3 } : null]}
           >
             {shownTitle}
           </AppText>
@@ -169,7 +169,7 @@ export function TaskRow({
               // «В магазине»: large and high contrast, capped at 2× (template-screens 2.4).
               maxFontSizeMultiplier={big ? 2 : undefined}
               color={done ? 'ink3' : 'ink'}
-              style={[big ? { fontFamily: theme.type.headline.fontFamily } : null, done ? { textDecorationLine: 'line-through' } : null]}
+              style={[big ? { fontFamily: theme.type.headline.fontFamily } : null, done ? { textDecorationLine: 'line-through', textDecorationColor: theme.colors.ink3 } : null]}
             >
               {shownTitle}
             </AppText>

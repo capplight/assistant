@@ -233,8 +233,8 @@ describe('«Заметки» — the sticker wall «Ряды»', () => {
     await renderRouter(APP_DIR, { initialUrl: `/page/${notes.id}` });
     await settle(() => screen.queryByTestId('sticker-n1') !== null);
     expect(screen.getByTestId('page-view-notes:builtin:notes_board')).toBeTruthy();
-    // The frame stays the same: one line — the title, 🔍 and ⋯ (ux-audit P0-2); no ⋯ on a sticker.
-    for (const id of ['page-title', 'page-search', 'page-menu']) expect(screen.getByTestId(id)).toBeTruthy();
+    // The frame stays the same: one line — the title, «+» and ⋯ (add-entry-model.md); no ⋯ on a sticker.
+    for (const id of ['page-title', 'page-add', 'page-menu']) expect(screen.getByTestId(id)).toBeTruthy();
     expect(screen.queryByTestId('page-find')).toBeNull();
     expect(screen.queryByTestId('record-menu-n1')).toBeNull();
     expect(screen.getByTestId('record-n1').props.accessibilityLabel).toMatch(/^Стикер 1 из 3\. белый\. Код домофона/);

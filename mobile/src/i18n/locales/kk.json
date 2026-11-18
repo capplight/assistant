@@ -212,7 +212,14 @@
     "file": "Файл",
     "manual": "Қолмен",
     "reminder": "Ескерту",
-    "receipt_photo": "Чек фотосы"
+    "receipt_photo": "Чек фотосы",
+    "gallery": "Галереядан сурет",
+    "write": "Қолмен жазу",
+    "note_new": "Жаңа жазба",
+    "record_new": "Жаңа жазба",
+    "task_new": "Жаңа іс",
+    "save": "Сақтау",
+    "note_placeholder": "Не жазамыз?"
   },
   "answer": {
     "open": "Жауапты ашу",
@@ -234,7 +241,8 @@
     "maybe_done": "Байланыс үзілді. Үлгерсем, өзгеріс «Не жасадым» бөлімінде болады — сол жерде «Болдырмау».",
     "change_later": "Сәл кейінірек жасаймын — нәтижесі «Не жасадым» бөлімінде болады, сол жерде «Болдырмау».",
     "assistant": "Көмекші",
-    "continue_chat": "Чатта жалғастыру ›"
+    "continue_chat": "Чатта жалғастыру ›",
+    "retry_short": "Қайталау"
   },
   "chat": {
     "title": "Хат алмасу",
@@ -360,7 +368,44 @@
     "phrase_missed_one": "Біреуі өткізілді.",
     "phrase_missed_few": "{{count}} өткізілді.",
     "phrase_missed_many": "{{count}} өткізілді.",
-    "phrase_missed_other": "{{count}} өткізілді."
+    "phrase_missed_other": "{{count}} өткізілді.",
+    "e_blank": "Таза парақ.\nАлғашқысын айтыңыз.",
+    "e_free": "Бос күн.",
+    "e_free_today": "Бүгін бос.",
+    "e_not_forget_one": "Ұмытпаңыз: {{count}} іс.",
+    "e_not_forget_other": "Ұмытпаңыз: {{count}} іс.",
+    "e_tomorrow_one": "Ертең {{count}} іс.",
+    "e_tomorrow_other": "Ертең {{count}} іс.",
+    "e_nearest": "Ең жақыны — {{day}}.",
+    "e_week_empty": "Апта бос.",
+    "week": "Апта",
+    "week_day_one": "{{day}}, {{count}} іс",
+    "week_day_other": "{{day}}, {{count}} іс",
+    "week_day_free": "{{day}}, іс жоқ",
+    "week_hint": "Күнді «Істерде» ашады",
+    "recent": "Жақында сақталды",
+    "recent_link": "Жазбалар",
+    "since_yesterday": "кешеден бері",
+    "no_due": "мерзімсіз",
+    "first_title": "Алғашқы үш сөйлем",
+    "first_progress": "{{done}} / 3",
+    "first_note": "Маңыздыны есте сақтау",
+    "first_note_q": "Есте сақта: домофон коды 4512",
+    "first_note_to": "Жазбаларға түседі",
+    "first_rem": "Еске салғыш қою",
+    "first_rem_q": "Ертең сағат 10-да ХҚКО-ға қоңырау шалу",
+    "first_rem_to": "Істерге түседі",
+    "first_exp": "Шығын жазу",
+    "first_exp_q": "Такси 2 400",
+    "first_exp_to": "Шығындарға түседі",
+    "first_hint": "Сөйлемді көмекші жолына қояды",
+    "first_done": "орындалды",
+    "e_not_forget_few": "Ұмытпаңыз: {{count}} іс.",
+    "e_not_forget_many": "Ұмытпаңыз: {{count}} іс.",
+    "e_tomorrow_few": "Ертең {{count}} іс.",
+    "e_tomorrow_many": "Ертең {{count}} іс.",
+    "week_day_few": "{{day}}, {{count}} іс",
+    "week_day_many": "{{day}}, {{count}} іс"
   },
   "page": {
     "find": "Беттен табу",
@@ -1422,7 +1467,10 @@
     "receipt_lines": "{{n}} позиция",
     "open_receipt": "Чекті ашу",
     "receipt_photo": "Чектің суреті",
-    "statement_title": "Үзінді"
+    "statement_title": "Үзінді",
+    "camera_a11y": "Чекті суретке түсіру",
+    "statement_menu": "Банктен үзінді көшірме",
+    "gallery_link": "Галереядан"
   },
   "kp": {
     "new": "Жаңа КҰ",
@@ -2016,7 +2064,7 @@
   },
   "history": {
     "title": "Тарих",
-    "meta": "сіз не айттыңыз → мен не істедім",
+    "meta": "Не айттыңыз және мен не істедім. Кез келген әрекетті болдырмауға болады.",
     "all": "Барлығы",
     "changes": "Өзгерістер",
     "questions": "Сұрақтар",
@@ -2030,7 +2078,9 @@
     "badge_done": "Орындалды",
     "badge_waiting": "Күтуде",
     "badge_undone": "Болдырылмады",
-    "answer": "Жауап беру"
+    "answer": "Жауап беру",
+    "st_waiting": "жауабыңызды күтеді",
+    "st_undone": "сіз болдырмадыңыз"
   },
   "save": {
     "saved_in": "«{{page}}» бетіне сақтадым: {{what}}",

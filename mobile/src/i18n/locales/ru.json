@@ -209,7 +209,14 @@
     "file": "Файл",
     "manual": "Вручную",
     "reminder": "Напоминание",
-    "receipt_photo": "Фото чека"
+    "receipt_photo": "Фото чека",
+    "gallery": "Фото из галереи",
+    "write": "Написать вручную",
+    "note_new": "Новая заметка",
+    "record_new": "Новая запись",
+    "task_new": "Новое дело",
+    "save": "Сохранить",
+    "note_placeholder": "Что записать?"
   },
   "answer": {
     "open": "Открыть ответ",
@@ -231,7 +238,8 @@
     "maybe_done": "Связь прервалась. Если я успел, изменение будет в «Что я сделал» — там же «Отменить».",
     "change_later": "Сделаю чуть позже — результат будет в «Что я сделал», там же «Отменить».",
     "assistant": "Помощник",
-    "continue_chat": "Продолжить в чате ›"
+    "continue_chat": "Продолжить в чате ›",
+    "retry_short": "Повторить"
   },
   "chat": {
     "title": "Переписка",
@@ -357,7 +365,44 @@
     "phrase_missed_one": "Одно пропущено.",
     "phrase_missed_few": "{{count}} пропущено.",
     "phrase_missed_many": "{{count}} пропущено.",
-    "phrase_missed_other": "{{count}} пропущено."
+    "phrase_missed_other": "{{count}} пропущено.",
+    "e_blank": "Чистый лист.\nСкажите первое.",
+    "e_free": "Свободный день.",
+    "e_free_today": "Сегодня свободно.",
+    "e_not_forget_one": "Не забыть {{count}} дело.",
+    "e_not_forget_few": "Не забыть {{count}} дела.",
+    "e_not_forget_many": "Не забыть {{count}} дел.",
+    "e_not_forget_other": "Не забыть {{count}} дела.",
+    "e_tomorrow_one": "Завтра {{count}} дело.",
+    "e_tomorrow_few": "Завтра {{count}} дела.",
+    "e_tomorrow_many": "Завтра {{count}} дел.",
+    "e_tomorrow_other": "Завтра {{count}} дела.",
+    "e_nearest": "Ближайшее — {{day}}.",
+    "e_week_empty": "Неделя пустая.",
+    "week": "Неделя",
+    "week_day_one": "{{day}}, {{count}} дело",
+    "week_day_few": "{{day}}, {{count}} дела",
+    "week_day_many": "{{day}}, {{count}} дел",
+    "week_day_other": "{{day}}, {{count}} дела",
+    "week_day_free": "{{day}}, дел нет",
+    "week_hint": "Открывает день в «Делах»",
+    "recent": "Недавно сохранили",
+    "recent_link": "Заметки",
+    "since_yesterday": "с вчера",
+    "no_due": "без срока",
+    "first_title": "Три первые фразы",
+    "first_progress": "{{done}} из 3",
+    "first_note": "Запомнить важное",
+    "first_note_q": "Запомни: код домофона 4512",
+    "first_note_to": "ляжет в Заметки",
+    "first_rem": "Поставить напоминание",
+    "first_rem_q": "Завтра в 10 позвонить в ЦОН",
+    "first_rem_to": "ляжет в Дела",
+    "first_exp": "Записать трату",
+    "first_exp_q": "Такси 2 400",
+    "first_exp_to": "ляжет в Расходы",
+    "first_hint": "Вставит фразу в строку помощника",
+    "first_done": "сделано"
   },
   "page": {
     "find": "Найти на странице",
@@ -1419,7 +1464,10 @@
     "receipt_lines": "{{n}} позиций",
     "open_receipt": "Открыть чек",
     "receipt_photo": "Фото чека",
-    "statement_title": "Выписка"
+    "statement_title": "Выписка",
+    "camera_a11y": "Сфотографировать чек",
+    "statement_menu": "Выписка из банка",
+    "gallery_link": "Из галереи"
   },
   "kp": {
     "new": "Новое КП",
@@ -2013,7 +2061,7 @@
   },
   "history": {
     "title": "История",
-    "meta": "что вы сказали → что я сделал",
+    "meta": "Что вы сказали и что я сделал. Любое действие можно отменить.",
     "all": "Всё",
     "changes": "Изменения",
     "questions": "Вопросы",
@@ -2027,7 +2075,9 @@
     "badge_done": "Сделано",
     "badge_waiting": "Ждёт",
     "badge_undone": "Отменено",
-    "answer": "Ответить"
+    "answer": "Ответить",
+    "st_waiting": "ждёт вашего ответа",
+    "st_undone": "вы отменили"
   },
   "save": {
     "saved_in": "Сохранил в «{{page}}»: {{what}}",

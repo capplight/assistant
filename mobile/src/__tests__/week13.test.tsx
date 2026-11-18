@@ -465,8 +465,8 @@ describe('receipt photo, QR, «Проверьте сумму», «Объедин
     setMediaForTests(m);
     await renderRouter(APP_DIR, { initialUrl: `/page/${expensesPage().id}` });
     await settle(() => screen.queryByTestId('exp-board') !== null);
-    await fireEvent.press(screen.getByTestId('page-add'));
-    await fireEvent.press(screen.getByTestId('add-camera'));
+    // add-entry-model.md: the receipt camera 📷 is on the sheet of «Расходы», one tap.
+    await fireEvent.press(screen.getByTestId('exp-camera'));
     await settle(() => screen.queryByTestId('receipt-camera-why') !== null);
     expect(text('receipt-camera-why')).toMatch(/Снимок делаете вы сами/);
     expect(calls).toEqual([]); // nothing asked before the person read why
@@ -635,8 +635,8 @@ describe('receipt photo, QR, «Проверьте сумму», «Объедин
     expect(screen.getByTestId('exp-check-amount-v2').props.maxFontSizeMultiplier).toBe(1.6);
     expect(screen.getByTestId('exp-check-ok-v2').props.accessibilityLabel).toBe('Верно, 700 ₸');
     await fireEvent.press(screen.getByTestId('exp-attention-sheet-close'));
-    await fireEvent.press(screen.getByTestId('page-add'));
-    await settle(() => screen.queryByTestId('add-camera') !== null);
-    expect(screen.getByTestId('add-camera')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('page-menu'));
+    await settle(() => screen.queryByTestId('exp-budget-menu') !== null);
+    expect(screen.getByTestId('exp-budget-menu')).toBeTruthy();
   });
 });

@@ -1,4 +1,5 @@
-import { act, fireEvent, renderRouter, screen } from 'expo-router/testing-library';
+import { act, fireEvent, renderRouter, screen, within } from 'expo-router/testing-library';
+import { StyleSheet } from 'react-native';
 
 import { actionOut, budgetOut, FEATURE_DEFAULTS, todayOut } from '@/api/endpoints';
 import type { ActionOut, ReminderDraft } from '@/api/types';
@@ -44,7 +45,7 @@ const pageOf = (k: string) => usePages.getState().pages.find((p) => p.templateKe
 
 describe('tokens v5 (Ф-79): stored sticker keys stay, they show as the v5 palette', () => {
   it('old keys map through legacyStickerMap; the v5 sticker ink', () => {
-    expect(darkColors.paper).toBe('#1E1D23');
+    expect(darkColors.paper).toBe('#26252B'); // A8: one step lighter (Ф-84)
     expect(NOTE_COLOR_KEYS).toEqual(['white', 'yellow', 'peach', 'pink', 'lilac', 'blue', 'green']);
     expect(lightNoteColors.yellow).toBe('#EFE4CF'); // sand
     expect(lightNoteColors.peach).toBe(lightNoteColors.pink); // rose
@@ -148,18 +149,46 @@ describe('«Сегодня» v2 — the briefing', () => {
 });
 
 describe('«+» and the statement leak (Ф-50, Ф-37)', () => {
-  it('no «Появится позже»; on «Расходы» no statement while `statements_pdf` is off', async () => {
-    await renderRouter(APP_DIR, { initialUrl: `/page/${pageOf('notes').id}` });
+  it('add-entry-model.md: the page «+» makes the thing of the place; «Добавить» is only in «Помощник»; no statement while off', async () => {
+    // «Заметки»: «+» opens «Новая заметка» at once (no sheet, no «Напоминание» here).
+    const r = await renderRouter(APP_DIR, { initialUrl: `/page/${pageOf('notes').id}` });
+    expect(screen.getByTestId('page-add').props.accessibilityLabel).toBe('Новая заметка');
     await fireEvent.press(screen.getByTestId('page-add'));
-    expect(screen.getByTestId('add-reminder')).toBeTruthy();
-    expect(screen.queryByTestId('add-photo')).toBeNull();
+    await settle(() => r.getPathname() === '/note-new');
+    expect(screen.queryByTestId('add-sheet')).toBeNull();
+    // «Дела»: «+» is a new task (the reminder form until a task editor exists).
+    const r2 = await renderRouter(APP_DIR, { initialUrl: `/page/${pageOf('tasks').id}` });
+    await fireEvent.press(screen.getByTestId('page-add'));
+    await settle(() => r2.getPathname() === '/reminder-new');
+    // «Помощник»: the one «Добавить» with every way; the receipt photo goes to «Расходы».
+    await renderRouter(APP_DIR, { initialUrl: '/assistant' });
+    await settle(() => screen.queryByTestId('assistant-plus') !== null);
+    await fireEvent.press(screen.getByTestId('assistant-plus'));
+    for (const id of ['add-camera', 'add-photo', 'add-file', 'add-receipt', 'add-reminder', 'add-manual']) expect(screen.getByTestId(id)).toBeTruthy();
     expect(screen.queryByText('Появится позже')).toBeNull();
+    // «Расходы»: the statement lives in «⋯» and only while `statements_pdf` is on.
     await renderRouter(APP_DIR, { initialUrl: `/page/${pageOf('expenses').id}` });
-    await fireEvent.press(screen.getByTestId('page-add'));
-    expect(screen.getByTestId('add-photo')).toBeTruthy();
-    expect(screen.queryByTestId('add-file')).toBeNull();
+    await fireEvent.press(screen.getByTestId('page-menu'));
+    expect(screen.queryByTestId('exp-statement')).toBeNull();
     await act(async () => useFeatureStore.getState().set({ ...FEATURE_DEFAULTS, statements_pdf: true }));
-    expect(screen.getByTestId('add-file')).toBeTruthy();
+    expect(screen.getByTestId('exp-statement')).toBeTruthy();
+  });
+
+  it('«Новая заметка»: one field, «Сохранить» is off while empty; saved offline in «Без ИИ» on that page, «Отменить»', async () => {
+    resetApp();
+    finishOnboarding('no_ai');
+    useConnectivity.setState({ online: false });
+    const notes = pageOf('notes');
+    const r = await renderRouter(APP_DIR, { initialUrl: `/note-new?page=${notes.id}` });
+    expect(screen.getByTestId('note-new-screen')).toHaveTextContent(/Новая заметка/);
+    expect(screen.getByTestId('note-new-save').props.accessibilityState.disabled).toBe(true);
+    await fireEvent.changeText(screen.getByTestId('note-new-text'), 'Код домофона 4512');
+    await fireEvent.press(screen.getByTestId('note-new-save'));
+    await settle(() => r.getPathname() !== '/note-new');
+    const rec = (await (await getRecords()).list(10)).find((x) => x.text === 'Код домофона 4512');
+    expect(rec?.pageId).toBe(notes.id);
+    expect(useUndo.getState().strip).toMatchObject({ kind: 'saved', recordId: rec!.id });
+    useConnectivity.setState({ online: true });
   });
 
   it('«Поделиться» PDF: no «Выписка» while off; «Сделать документ из этого» is there', async () => {
@@ -237,6 +266,30 @@ describe('«История» (Ф-50: «Переписка» + «Что я сде
   });
 });
 
+describe('«История» rows (QA v5-device-1 B «История» 3, Ф-84)', () => {
+  it('a row: «время · Вы: …», the place tab, the title, «Отменить» as a link; undone — struck, «вы отменили», «Вернуть»', async () => {
+    const notes = pageOf('notes');
+    usePages.setState({ pages: usePages.getState().pages.map((p) => (p.id === notes.id ? { ...p, serverId: 'srv-n' } : p)) });
+    useTasks.getState().set({
+      actions: {
+        a3: action({ id: 'a3', summary: { ru: 'Заметка «Окулист»', kk: null } }),
+        a4: action({ id: 'a4', summary: { ru: 'Купить молоко', kk: null }, undone_at: new Date().toISOString() }),
+      },
+    } as never);
+    await renderRouter(APP_DIR, { initialUrl: '/history' });
+    const row = screen.getByTestId('did-a3');
+    expect(row).toHaveTextContent(/Заметка «Окулист»/);
+    expect(within(row).getByTestId('place-tab-notes', { includeHiddenElements: true })).toBeTruthy();
+    // No grey card, no «Сделано» badge, no «вы».
+    expect(within(row).queryByText('Сделано')).toBeNull();
+    expect(within(row).getByTestId('did-undo-a3')).toHaveTextContent('Отменить');
+    expect(StyleSheet.flatten(within(row).getByText('Отменить').props.style).color).toBe(lightColors.assistantText);
+    const undone = screen.getByTestId('did-a4');
+    expect(undone).toHaveTextContent(/вы отменили/);
+    expect(within(undone).queryByTestId('did-undo-a4')).toBeNull();
+  });
+});
+
 describe('SaveToast «Сохранил в «…» · Переложить · Отменить» (Ф-50)', () => {
   it('a note saved on this phone names its page at the top (v4 TopNotice); a tap opens the record', async () => {
     const r = await renderRouter(APP_DIR, { initialUrl: '/' });
@@ -300,6 +353,7 @@ describe('one search, the answer as a value (Ф-50)', () => {
 
   it('the page 🔍 opens the same search screen', async () => {
     const r = await renderRouter(APP_DIR, { initialUrl: `/page/${pageOf('notes').id}` });
+    await fireEvent.press(screen.getByTestId('page-menu'));
     await fireEvent.press(screen.getByTestId('page-search'));
     expect(r.getPathname()).toBe('/search');
   });
