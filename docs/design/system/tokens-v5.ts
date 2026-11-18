@@ -12,7 +12,7 @@
  *               Text in terracotta on paper → `assistantText`. No text smaller than 17 semibold ON the terracotta sheet.
  *   action    = ordinary buttons, links, toggles, mic, checkboxes → `btn` / `onBtn` (black in light, light in dark).
  *   danger    = only irreversible actions («Удалить навсегда», «Удалить все данные»).
- *   Category and sticker palettes never reuse place hues (no yellow, light blue, terracotta/peach, light green, lilac).
+ *   Category palette never reuses place hues. Stickers (QA-2): multicoloured pastels, never a place hex, never terracotta.
  * Contrast (WCAG 2.1): ink/ink2/ink3 ≥ 4.5:1 on paper AND paper2; onSheet/onSheet2 ≥ 4.5:1 on every place sheet.
  */
 
@@ -166,21 +166,29 @@ export const categoryLabel: Record<CategoryKey, string> = {
   food: 'Продукты', transport: 'Транспорт', home: 'Дом', cafe: 'Кафе', health: 'Здоровье', kids: 'Дети', other: 'Другое',
 };
 
-/** Note stickers: muted palette of 5, no place hues. Old v2 keys are mapped on read (stored values stay). */
-export type StickerKey = 'paper' | 'sand' | 'rose' | 'mist' | 'graphite';
-export const STICKER_KEYS: readonly StickerKey[] = ['paper', 'sand', 'rose', 'mist', 'graphite'];
+/** Note stickers — multicoloured palette of 8 (founder, QA-2 point 3; replaces the muted 5 of Ф-79).
+ * Stickers MAY use the hue families of places, but never their hex: light stickers are pastel and much lighter
+ * than the sheets (relative luminance 0.71–0.86 vs 0.57–0.67 for place sheets), dark stickers are deep and darker
+ * than the dark sheets. A sticker is a small card r20 on paper, a sheet is full width — they do not compete.
+ * New note → next colour in STICKER_KEYS order, skipping the colours of its two neighbours (no two equal colours side by side).
+ * Old v2/v5 keys are mapped on read (stored values stay). */
+export type StickerKey = 'paper' | 'lemon' | 'apricot' | 'rose' | 'lilac' | 'sky' | 'aqua' | 'mint';
+export const STICKER_KEYS: readonly StickerKey[] = ['lemon', 'sky', 'rose', 'mint', 'lilac', 'apricot', 'aqua', 'paper'];
 export const stickerColors: Record<'light' | 'dark', Record<StickerKey, string>> = {
-  light: { paper: '#FFFFFF', sand: '#EFE4CF', rose: '#F3D6DC', mist: '#D4E8E2', graphite: '#E2DFD8' },
-  dark: { paper: '#2A2930', sand: '#4A4232', rose: '#4E3439', mist: '#2E4640', graphite: '#36353C' }, // Ф-57: brighter than paper
+  light: { paper: '#FFFFFF', lemon: '#FFEFA6', apricot: '#FFD8B5', rose: '#FFCFD8', lilac: '#E4DAFF', sky: '#CDE5FF', aqua: '#C2EDE6', mint: '#D6F0C2' },
+  dark: { paper: '#2A2930', lemon: '#4F4419', apricot: '#673F24', rose: '#6A3040', lilac: '#463B74', sky: '#24476E', aqua: '#1A4F4B', mint: '#2D4E27' },
 };
 export const stickerInk = {
-  light: { ink: '#1A191E', ink2: '#4D4A52' }, // ink2 ≥ 6.4 on every sticker
-  dark: { ink: '#F1EEE8', ink2: '#C9C4CE' }, // ink2 ≥ 5.8
+  light: { ink: '#1A191E', ink2: '#4D4A52' }, // ink ≥ 12.6, ink2 ≥ 6.3 on every sticker
+  dark: { ink: '#F1EEE8', ink2: '#C9C4CE' }, // ink ≥ 7.8, ink2 ≥ 5.3 on every sticker; sticker vs paper ≥ 1.7
 } as const;
-/** v2 NoteColorKey → v5 StickerKey. */
+/** v2 NoteColorKey and Ф-79 v5 keys → current StickerKey. */
 export const legacyStickerMap: Record<string, StickerKey> = {
-  white: 'paper', yellow: 'sand', peach: 'rose', pink: 'rose', lilac: 'graphite', blue: 'mist', green: 'mist',
+  white: 'paper', yellow: 'lemon', peach: 'apricot', pink: 'rose', lilac: 'lilac', blue: 'sky', green: 'mint',
+  sand: 'lemon', mist: 'aqua', graphite: 'lilac',
 };
+/** Notes list mode (QA-2 point 4): full-width stickers with a gap; grid keeps 10 × 10. */
+export const stickerLayout = { gridGap: 10, listGap: 10, listPadding: { h: 16, v: 14 }, listMinHeight: 64 } as const;
 
 /* ---------------- typography ----------------
  * Kazakh check (2026-11-17, Google Fonts cmap + headless Chrome render):
@@ -278,8 +286,9 @@ export const motion = {
   confirm: { duration: 220, easing: [0.2, 0, 0, 1] },
   deleteToStack: { duration: 240, easing: [0.3, 0, 1, 1] },
   check: { duration: 300, easing: [0.2, 0, 0, 1] },
-  askCollapse: { duration: 200, easing: [0.2, 0, 0, 1] }, // assistant strip → circle (Ф-82)
-  askExpand: { duration: 240, easing: [0.2, 0, 0, 1] }, // circle → strip
+  askCollapse: { duration: 260, easing: [0.2, 0, 0, 1] }, // assistant strip → circle (Ф-82; QA-2: 200 → 260, one morphing view)
+  askExpand: { duration: 280, easing: [0.2, 0, 0, 1] }, // circle → strip
+  dayChange: { duration: 180, easing: [0.2, 0, 0, 1] }, // «Сегодня» week: content cross-fade + 8 dp slide toward the tapped day (QA-2 point 8)
   reducedMotionFade: 150,
 } as const;
 
@@ -347,9 +356,12 @@ export const assistantEntry = {
     neverCollapseWhen: ['contentFits', 'focused', 'hasDraftText', 'voice', 'savedNoticeVisible', 'answerCardVisible', 'screenReaderEnabled'],
     followsFinger: false, // event-driven, not scroll-linked
   },
+  suggestions: false, // QA-2 point 2: NO suggestion chips above the bar («Новая заметка», «Что на завтра?») in any state
   motion: {
-    collapse: { duration: 200, easing: [0.2, 0, 0, 1], width: 'full → bubble, anchored right', textOutMs: [0, 80], iconInMs: [120, 200] },
-    expand: { duration: 240, easing: [0.2, 0, 0, 1], iconOutMs: [0, 80], textInMs: [120, 240] },
+    // QA-2 point 1: ONE view morphs (width + radius), no second circle underneath; shadow lives on that view only and
+    // is off (elevation 0) during the morph, back on at the end. Bar and bubble are never rendered at the same time.
+    collapse: { duration: 260, easing: [0.2, 0, 0, 1], width: 'full → bubble, anchored right', textOutMs: [0, 90], iconInMs: [150, 260], shadowOffDuringMorph: true },
+    expand: { duration: 280, easing: [0.2, 0, 0, 1], iconOutMs: [0, 90], textInMs: [150, 280], shadowOffDuringMorph: true },
     reducedMotion: { crossFade: 150, easing: 'linear' }, // no width morph: strip and circle cross-fade
   },
   listBottomPadding: 70, // 48 + 10 + 12, from the top of the tab bar
@@ -380,4 +392,32 @@ export const assistantEntry = {
 export const assistantEntryLegacy = {
   A: { height: 48, heightLarge: 56, radius: 24, gapAbove: 8, inset: { default: 12, small: 8, large: 16 }, bg: 'askBg', border: 'askLine', scroll: 'fixed', listBottomPadding: 16 },
   B: { button: 56, color: 'place.assistant', aboveTabBar: 14, hideOnScrollDown: true, showAfterStopMs: 400, listBottomPadding: 84, panel: { heightPct: 56, maxPct: 90 } },
+} as const;
+
+/* ---------------- «Сегодня» · day in place (QA-2 point 8). Mock: today-day-view.html ----------------
+ * Tapping a day in the week NEVER navigates to «Дела». The yellow sheet stays, the content below shows that day.
+ */
+export const dayView = {
+  week: {
+    cell: { width: 'equal 1/7', height: 64, radius: 18 },
+    selected: { bg: 'onSheet', ink: 'place.today' }, // the chosen day = dark pill (as today's pill now)
+    today: { ring: 1.5, color: 'onSheet' }, // today when another day is selected: outline pill, word «сегодня» not needed
+    dot: { size: 5, gap: 4, color: 'onSheet' }, // under the number: the day has something (task, event, reminder)
+    swipe: 'horizontal swipe on the week = previous / next week',
+  },
+  phrase: {
+    past: '{weekday}, {d month}. Было {n} дел, сделано {m}.',
+    future: '{Weekday}. {n} дела, {k} встреча.', // ≤ 2 lines, plural forms via i18n
+    empty: '{Weekday} свободен.', // «Пятница свободна.» — gender by weekday
+  },
+  backToToday: { label: 'К сегодня', height: 36, radius: 18, bg: 'paper', ink: 'ink', place: 'sheet meta row, right, instead of the search icon' },
+  empty: {
+    illustration: { size: 112, kind: 'blank sticker card with a folded corner + a small sun or moon (by weekday), lucide-style line 1.8, ink on paper2' },
+    title: 'На {день} пока ничего', // «На пятницу пока ничего»
+    text: 'Скажите «в пятницу в 10 — стоматолог», и я поставлю сюда.',
+    actions: [{ label: 'Добавить на {день}', kind: 'primary btn', height: 52 }],
+    pastTitle: 'В этот день записей нет',
+    pastText: 'Здесь будет всё, что вы сделали и записали в этот день.',
+  },
+  motion: 'motion.dayChange',
 } as const;

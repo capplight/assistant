@@ -31,7 +31,7 @@
   /* категории расходов */
   --k-food:#2F7F70;--k-trans:#4F5D86;--k-home:#8C6A43;--k-cafe:#B05A78;--k-health:#9B3F4C;--k-kids:#737A35;--k-other:#8A857B;
   /* стикеры заметок */
-  --st-paper:#FFFFFF;--st-sand:#EFE4CF;--st-rose:#F3D6DC;--st-mist:#D4E8E2;--st-graph:#E2DFD8;--stInk:#1A191E;--stInk2:#4D4A52;
+  --st-paper:#FFFFFF;--st-lemon:#FFEFA6;--st-apricot:#FFD8B5;--st-rose:#FFCFD8;--st-lilac:#E4DAFF;--st-sky:#CDE5FF;--st-aqua:#C2EDE6;--st-mint:#D6F0C2;--stInk:#1A191E;--stInk2:#4D4A52;
   /* форма */
   --sheetB:44px;--phrase:27px;--peekF:none;
   /* строка помощника и клавиатура макета (Ф-81) */
@@ -50,7 +50,7 @@
   --noticeBg:#F1EEE8;--noticeInk:#16151A;--noticeUndo:#B23E14;
   --scrim:rgba(0,0,0,.55);--a4:#FFFFFF;--a4Ink:#1A191E;
   --k-food:#5FB3A3;--k-trans:#8E9BC8;--k-home:#C29C70;--k-cafe:#DB8CA8;--k-health:#D97A86;--k-kids:#AEB65E;--k-other:#A8A397;
-  --st-paper:#2A2930;--st-sand:#4A4232;--st-rose:#4E3439;--st-mist:#2E4640;--st-graph:#36353C;--stInk:#F1EEE8;--stInk2:#C9C4CE;
+  --st-paper:#2A2930;--st-lemon:#4F4419;--st-apricot:#673F24;--st-rose:#6A3040;--st-lilac:#463B74;--st-sky:#24476E;--st-aqua:#1A4F4B;--st-mint:#2D4E27;--stInk:#F1EEE8;--stInk2:#C9C4CE;
   --sheetB:38px;--phrase:25px;--peekF:brightness(.62);
   --askBg:#2A2930;--askLine:#34323A;--kb:#26252B;--kbKey:#46444D;--kbKey2:#34323A;--kbInk:#F1EEE8;
 }}
@@ -67,7 +67,7 @@
   --noticeBg:#F1EEE8;--noticeInk:#16151A;--noticeUndo:#B23E14;
   --scrim:rgba(0,0,0,.55);--a4:#FFFFFF;--a4Ink:#1A191E;
   --k-food:#5FB3A3;--k-trans:#8E9BC8;--k-home:#C29C70;--k-cafe:#DB8CA8;--k-health:#D97A86;--k-kids:#AEB65E;--k-other:#A8A397;
-  --st-paper:#2A2930;--st-sand:#4A4232;--st-rose:#4E3439;--st-mist:#2E4640;--st-graph:#36353C;--stInk:#F1EEE8;--stInk2:#C9C4CE;
+  --st-paper:#2A2930;--st-lemon:#4F4419;--st-apricot:#673F24;--st-rose:#6A3040;--st-lilac:#463B74;--st-sky:#24476E;--st-aqua:#1A4F4B;--st-mint:#2D4E27;--stInk:#F1EEE8;--stInk2:#C9C4CE;
   --sheetB:38px;--phrase:25px;--peekF:brightness(.62);
   --askBg:#2A2930;--askLine:#34323A;--kb:#26252B;--kbKey:#46444D;--kbKey2:#34323A;--kbInk:#F1EEE8;
 }
@@ -221,7 +221,7 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 .stk .cap{color:var(--stInk2)}
 .stk .chg{font-size:12.5px}
 .st-paper{--st:var(--st-paper);box-shadow:inset 0 0 0 1px var(--line)}
-.st-sand{--st:var(--st-sand)}.st-rose{--st:var(--st-rose)}.st-mist{--st:var(--st-mist)}.st-graph{--st:var(--st-graph)}
+.st-lemon{--st:var(--st-lemon)}.st-apricot{--st:var(--st-apricot)}.st-rose{--st:var(--st-rose)}.st-lilac{--st:var(--st-lilac)}.st-sky{--st:var(--st-sky)}.st-aqua{--st:var(--st-aqua)}.st-mint{--st:var(--st-mint)}
 .kq{width:12px;height:12px;border-radius:4px;background:var(--k);flex:none}
 .k-food{--k:var(--k-food)}.k-trans{--k:var(--k-trans)}.k-home{--k:var(--k-home)}.k-cafe{--k:var(--k-cafe)}.k-health{--k:var(--k-health)}.k-kids{--k:var(--k-kids)}.k-other{--k:var(--k-other)}
 .ptab{width:16px;height:22px;border-radius:5px 5px 2px 2px;background:var(--c);flex:none}
@@ -532,20 +532,20 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 <div class="chips" style="margin-bottom:12px"><span class="chip on">Все</span><span class="chip">Важные</span><span class="chip"><svg class="i xs"><use href="#film"/></svg>Из материала</span></div>
 <div style="display:flex;gap:8px;align-items:flex-start">
 <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
-<div class="stk st-sand"><h4>Код домофона</h4><p class="tn" style="font:800 26px/1.15 Onest;margin-top:6px">4512</p><p class="cap">подъезд 3, кв. 47</p></div>
-<div class="stk st-paper"><span class="fold"></span><h4 style="padding-right:14px">Алматы: что посмотреть</h4><span class="chg" style="display:flex;margin-top:6px">изменил помощник</span><p class="small" style="margin-top:4px;color:var(--stInk2)">Медеу — после 16:00, Кок-Тобе, Зелёный базар</p></div>
-<div class="stk st-mist"><h4>Wi-Fi на даче</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Dacha_5G<br>sunflower2024</p><p class="cap" style="margin-top:6px">10 нояб.</p></div>
+<div class="stk st-lemon"><h4>Код домофона</h4><p class="tn" style="font:800 26px/1.15 Onest;margin-top:6px">4512</p><p class="cap">подъезд 3, кв. 47</p></div>
+<div class="stk st-sky"><span class="fold"></span><h4 style="padding-right:14px">Алматы: что посмотреть</h4><span class="chg" style="display:flex;margin-top:6px">изменил помощник</span><p class="small" style="margin-top:4px;color:var(--stInk2)">Медеу — после 16:00, Кок-Тобе, Зелёный базар</p></div>
+<div class="stk st-mint"><h4>Wi-Fi на даче</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Dacha_5G<br>sunflower2024</p><p class="cap" style="margin-top:6px">10 нояб.</p></div>
 </div>
 <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
 <div class="stk st-rose"><h4>Подарки на НГ</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Алие — коньки<br>Папе — термос</p><p class="cap" style="margin-top:6px">2 нояб.</p></div>
-<div class="stk st-graph"><h4>Размер шин</h4><p class="tn" style="font:800 20px/1.2 Onest;margin-top:6px">205/55 R16</p></div>
-<div class="stk st-paper"><h4>Стамбул</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">23 совета · кафе, музеи</p><p class="cap row" style="gap:5px;margin-top:6px"><svg class="i xs"><use href="#film"/></svg>из материала</p></div>
-<div class="stk st-sand"><h4>Мастер по стиралке</h4><p class="small tn" style="margin-top:4px;color:var(--stInk2)">Ержан<br>+7 701 455 12 90</p></div>
+<div class="stk st-lilac"><h4>Размер шин</h4><p class="tn" style="font:800 20px/1.2 Onest;margin-top:6px">205/55 R16</p></div>
+<div class="stk st-apricot"><h4>Стамбул</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">23 совета · кафе, музеи</p><p class="cap row" style="gap:5px;margin-top:6px"><svg class="i xs"><use href="#film"/></svg>из материала</p></div>
+<div class="stk st-aqua"><h4>Мастер по стиралке</h4><p class="small tn" style="margin-top:4px;color:var(--stInk2)">Ержан<br>+7 701 455 12 90</p></div>
 </div>
 </div>
 </div>
 <div class="fstrip" role="group" aria-label="Строка помощника"><span class="adot" aria-hidden="true"></span><span class="f1 ell">Сохранить в Заметки…</span><span class="rb" role="button" aria-label="Сказать голосом"><svg class="i"><use href="#mic"/></svg></span></div><nav class="tabs" aria-label="Вкладки"><span class="tab c-today"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes on"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
-</div></div><figcaption><b>Заметки · список</b>Обычный заголовок, без фразы. Стикеры — в своей приглушённой палитре (песок, роза, туман, графит, бумага): ни голубого «Заметок», ни жёлтого «Сегодня». Изменённая помощником — с терракотовым уголком. Строка «Сохранить в Заметки…» — в покое.</figcaption></figure>
+</div></div><figcaption><b>Заметки · список</b>Обычный заголовок, без фразы. Стикеры разноцветные (разбор №2): светлая пастель из 8 цветов, светлее листов мест, соседние не повторяются. Изменённая помощником — с терракотовым уголком. Строка «Сохранить в Заметки…» — в покое.</figcaption></figure>
 
 <!-- Заметки · листают (C: кружок) -->
 <figure><div class="frame"><div class="ph">
@@ -555,15 +555,15 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 <div class="chips" style="margin-bottom:12px"><span class="chip on">Все</span><span class="chip">Важные</span><span class="chip"><svg class="i xs"><use href="#film"/></svg>Из материала</span></div>
 <div style="display:flex;gap:8px;align-items:flex-start">
 <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
-<div class="stk st-sand"><h4>Код домофона</h4><p class="tn" style="font:800 26px/1.15 Onest;margin-top:6px">4512</p><p class="cap">подъезд 3, кв. 47</p></div>
-<div class="stk st-paper"><span class="fold"></span><h4 style="padding-right:14px">Алматы: что посмотреть</h4><span class="chg" style="display:flex;margin-top:6px">изменил помощник</span><p class="small" style="margin-top:4px;color:var(--stInk2)">Медеу — после 16:00, Кок-Тобе, Зелёный базар</p></div>
-<div class="stk st-mist"><h4>Wi-Fi на даче</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Dacha_5G<br>sunflower2024</p><p class="cap" style="margin-top:6px">10 нояб.</p></div>
+<div class="stk st-lemon"><h4>Код домофона</h4><p class="tn" style="font:800 26px/1.15 Onest;margin-top:6px">4512</p><p class="cap">подъезд 3, кв. 47</p></div>
+<div class="stk st-sky"><span class="fold"></span><h4 style="padding-right:14px">Алматы: что посмотреть</h4><span class="chg" style="display:flex;margin-top:6px">изменил помощник</span><p class="small" style="margin-top:4px;color:var(--stInk2)">Медеу — после 16:00, Кок-Тобе, Зелёный базар</p></div>
+<div class="stk st-mint"><h4>Wi-Fi на даче</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Dacha_5G<br>sunflower2024</p><p class="cap" style="margin-top:6px">10 нояб.</p></div>
 </div>
 <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
 <div class="stk st-rose"><h4>Подарки на НГ</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Алие — коньки<br>Папе — термос</p><p class="cap" style="margin-top:6px">2 нояб.</p></div>
-<div class="stk st-graph"><h4>Размер шин</h4><p class="tn" style="font:800 20px/1.2 Onest;margin-top:6px">205/55 R16</p></div>
-<div class="stk st-paper"><h4>Стамбул</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">23 совета · кафе, музеи</p><p class="cap row" style="gap:5px;margin-top:6px"><svg class="i xs"><use href="#film"/></svg>из материала</p></div>
-<div class="stk st-sand"><h4>Мастер по стиралке</h4><p class="small tn" style="margin-top:4px;color:var(--stInk2)">Ержан<br>+7 701 455 12 90</p></div>
+<div class="stk st-lilac"><h4>Размер шин</h4><p class="tn" style="font:800 20px/1.2 Onest;margin-top:6px">205/55 R16</p></div>
+<div class="stk st-apricot"><h4>Стамбул</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">23 совета · кафе, музеи</p><p class="cap row" style="gap:5px;margin-top:6px"><svg class="i xs"><use href="#film"/></svg>из материала</p></div>
+<div class="stk st-aqua"><h4>Мастер по стиралке</h4><p class="small tn" style="margin-top:4px;color:var(--stInk2)">Ержан<br>+7 701 455 12 90</p></div>
 </div>
 </div>
 </div></div>
@@ -580,7 +580,7 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 <p class="small" style="margin-top:6px">Медеу — на вечер, новая цена канатки, добавил озеро. Вы просили: «обнови по свежему рилсу».</p>
 </div>
 <h1 style="font:800 26px/1.2 Onest;letter-spacing:-.5px;margin:18px 0 4px">Алматы: что посмотреть</h1>
-<p class="cap row" style="gap:6px"><svg class="i xs"><use href="#film"/></svg>из материала · 3 окт. · стикер «бумага»</p>
+<p class="cap row" style="gap:6px"><svg class="i xs"><use href="#film"/></svg>из материала · 3 окт. · стикер «небо»</p>
 <ol style="margin:14px 0 0;padding-left:22px;font-size:17px;line-height:1.6">
 <li>Медеу — <s>утром</s> <mark>после 16:00, меньше людей</mark></li>
 <li>Кок-Тобе — на канатке, билет <s class="tn">2 500</s> <mark class="tn">3 000 ₸</mark></li>
@@ -1168,15 +1168,15 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 <div class="chips" style="margin-bottom:12px"><span class="chip on">Все</span><span class="chip">Важные</span><span class="chip"><svg class="i xs"><use href="#film"/></svg>Из материала</span></div>
 <div style="display:flex;gap:8px;align-items:flex-start">
 <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
-<div class="stk st-sand"><h4>Код домофона</h4><p class="tn" style="font:800 26px/1.15 Onest;margin-top:6px">4512</p><p class="cap">подъезд 3, кв. 47</p></div>
-<div class="stk st-paper"><span class="fold"></span><h4 style="padding-right:14px">Алматы: что посмотреть</h4><span class="chg" style="display:flex;margin-top:6px">изменил помощник</span><p class="small" style="margin-top:4px;color:var(--stInk2)">Медеу — после 16:00, Кок-Тобе, Зелёный базар</p></div>
-<div class="stk st-mist"><h4>Wi-Fi на даче</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Dacha_5G<br>sunflower2024</p><p class="cap" style="margin-top:6px">10 нояб.</p></div>
+<div class="stk st-lemon"><h4>Код домофона</h4><p class="tn" style="font:800 26px/1.15 Onest;margin-top:6px">4512</p><p class="cap">подъезд 3, кв. 47</p></div>
+<div class="stk st-sky"><span class="fold"></span><h4 style="padding-right:14px">Алматы: что посмотреть</h4><span class="chg" style="display:flex;margin-top:6px">изменил помощник</span><p class="small" style="margin-top:4px;color:var(--stInk2)">Медеу — после 16:00, Кок-Тобе, Зелёный базар</p></div>
+<div class="stk st-mint"><h4>Wi-Fi на даче</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Dacha_5G<br>sunflower2024</p><p class="cap" style="margin-top:6px">10 нояб.</p></div>
 </div>
 <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
 <div class="stk st-rose"><h4>Подарки на НГ</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Алие — коньки<br>Папе — термос</p><p class="cap" style="margin-top:6px">2 нояб.</p></div>
-<div class="stk st-graph"><h4>Размер шин</h4><p class="tn" style="font:800 20px/1.2 Onest;margin-top:6px">205/55 R16</p></div>
-<div class="stk st-paper"><h4>Стамбул</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">23 совета · кафе, музеи</p><p class="cap row" style="gap:5px;margin-top:6px"><svg class="i xs"><use href="#film"/></svg>из материала</p></div>
-<div class="stk st-sand"><h4>Мастер по стиралке</h4><p class="small tn" style="margin-top:4px;color:var(--stInk2)">Ержан<br>+7 701 455 12 90</p></div>
+<div class="stk st-lilac"><h4>Размер шин</h4><p class="tn" style="font:800 20px/1.2 Onest;margin-top:6px">205/55 R16</p></div>
+<div class="stk st-apricot"><h4>Стамбул</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">23 совета · кафе, музеи</p><p class="cap row" style="gap:5px;margin-top:6px"><svg class="i xs"><use href="#film"/></svg>из материала</p></div>
+<div class="stk st-aqua"><h4>Мастер по стиралке</h4><p class="small tn" style="margin-top:4px;color:var(--stInk2)">Ержан<br>+7 701 455 12 90</p></div>
 </div>
 </div>
 </div>
@@ -1247,15 +1247,15 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 <div style="display:flex;gap:8px;align-items:flex-start">
 <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
 <div class="stk st-paper" style="box-shadow:inset 0 0 0 2px var(--asst)"><h4>Пароль от роутера</h4><p class="small tn" style="margin-top:4px;color:var(--stInk2)">ivanova2024</p><p class="cap" style="margin-top:6px">только что</p></div>
-<div class="stk st-sand"><h4>Код домофона</h4><p class="tn" style="font:800 26px/1.15 Onest;margin-top:6px">4512</p><p class="cap">подъезд 3, кв. 47</p></div>
-<div class="stk st-paper"><span class="fold"></span><h4 style="padding-right:14px">Алматы: что посмотреть</h4><span class="chg" style="display:flex;margin-top:6px">изменил помощник</span><p class="small" style="margin-top:4px;color:var(--stInk2)">Медеу — после 16:00, Кок-Тобе, Зелёный базар</p></div>
-<div class="stk st-mist"><h4>Wi-Fi на даче</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Dacha_5G<br>sunflower2024</p><p class="cap" style="margin-top:6px">10 нояб.</p></div>
+<div class="stk st-lemon"><h4>Код домофона</h4><p class="tn" style="font:800 26px/1.15 Onest;margin-top:6px">4512</p><p class="cap">подъезд 3, кв. 47</p></div>
+<div class="stk st-sky"><span class="fold"></span><h4 style="padding-right:14px">Алматы: что посмотреть</h4><span class="chg" style="display:flex;margin-top:6px">изменил помощник</span><p class="small" style="margin-top:4px;color:var(--stInk2)">Медеу — после 16:00, Кок-Тобе, Зелёный базар</p></div>
+<div class="stk st-mint"><h4>Wi-Fi на даче</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Dacha_5G<br>sunflower2024</p><p class="cap" style="margin-top:6px">10 нояб.</p></div>
 </div>
 <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
 <div class="stk st-rose"><h4>Подарки на НГ</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Алие — коньки<br>Папе — термос</p><p class="cap" style="margin-top:6px">2 нояб.</p></div>
-<div class="stk st-graph"><h4>Размер шин</h4><p class="tn" style="font:800 20px/1.2 Onest;margin-top:6px">205/55 R16</p></div>
-<div class="stk st-paper"><h4>Стамбул</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">23 совета · кафе, музеи</p><p class="cap row" style="gap:5px;margin-top:6px"><svg class="i xs"><use href="#film"/></svg>из материала</p></div>
-<div class="stk st-sand"><h4>Мастер по стиралке</h4><p class="small tn" style="margin-top:4px;color:var(--stInk2)">Ержан<br>+7 701 455 12 90</p></div>
+<div class="stk st-lilac"><h4>Размер шин</h4><p class="tn" style="font:800 20px/1.2 Onest;margin-top:6px">205/55 R16</p></div>
+<div class="stk st-apricot"><h4>Стамбул</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">23 совета · кафе, музеи</p><p class="cap row" style="gap:5px;margin-top:6px"><svg class="i xs"><use href="#film"/></svg>из материала</p></div>
+<div class="stk st-aqua"><h4>Мастер по стиралке</h4><p class="small tn" style="margin-top:4px;color:var(--stInk2)">Ержан<br>+7 701 455 12 90</p></div>
 </div>
 </div>
 </div>
@@ -1393,15 +1393,15 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 <div class="chips" style="margin-bottom:12px"><span class="chip on">Все</span><span class="chip">Важные</span><span class="chip"><svg class="i xs"><use href="#film"/></svg>Из материала</span></div>
 <div style="display:flex;gap:8px;align-items:flex-start">
 <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
-<div class="stk st-sand"><h4>Код домофона</h4><p class="tn" style="font:800 26px/1.15 Onest;margin-top:6px">4512</p><p class="cap">подъезд 3, кв. 47</p></div>
-<div class="stk st-paper"><span class="fold"></span><h4 style="padding-right:14px">Алматы: что посмотреть</h4><span class="chg" style="display:flex;margin-top:6px">изменил помощник</span><p class="small" style="margin-top:4px;color:var(--stInk2)">Медеу — после 16:00, Кок-Тобе, Зелёный базар</p></div>
-<div class="stk st-mist"><h4>Wi-Fi на даче</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Dacha_5G<br>sunflower2024</p><p class="cap" style="margin-top:6px">10 нояб.</p></div>
+<div class="stk st-lemon"><h4>Код домофона</h4><p class="tn" style="font:800 26px/1.15 Onest;margin-top:6px">4512</p><p class="cap">подъезд 3, кв. 47</p></div>
+<div class="stk st-sky"><span class="fold"></span><h4 style="padding-right:14px">Алматы: что посмотреть</h4><span class="chg" style="display:flex;margin-top:6px">изменил помощник</span><p class="small" style="margin-top:4px;color:var(--stInk2)">Медеу — после 16:00, Кок-Тобе, Зелёный базар</p></div>
+<div class="stk st-mint"><h4>Wi-Fi на даче</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Dacha_5G<br>sunflower2024</p><p class="cap" style="margin-top:6px">10 нояб.</p></div>
 </div>
 <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
 <div class="stk st-rose"><h4>Подарки на НГ</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Алие — коньки<br>Папе — термос</p><p class="cap" style="margin-top:6px">2 нояб.</p></div>
-<div class="stk st-graph"><h4>Размер шин</h4><p class="tn" style="font:800 20px/1.2 Onest;margin-top:6px">205/55 R16</p></div>
-<div class="stk st-paper"><h4>Стамбул</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">23 совета · кафе, музеи</p><p class="cap row" style="gap:5px;margin-top:6px"><svg class="i xs"><use href="#film"/></svg>из материала</p></div>
-<div class="stk st-sand"><h4>Мастер по стиралке</h4><p class="small tn" style="margin-top:4px;color:var(--stInk2)">Ержан<br>+7 701 455 12 90</p></div>
+<div class="stk st-lilac"><h4>Размер шин</h4><p class="tn" style="font:800 20px/1.2 Onest;margin-top:6px">205/55 R16</p></div>
+<div class="stk st-apricot"><h4>Стамбул</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">23 совета · кафе, музеи</p><p class="cap row" style="gap:5px;margin-top:6px"><svg class="i xs"><use href="#film"/></svg>из материала</p></div>
+<div class="stk st-aqua"><h4>Мастер по стиралке</h4><p class="small tn" style="margin-top:4px;color:var(--stInk2)">Ержан<br>+7 701 455 12 90</p></div>
 </div>
 </div>
 </div>
@@ -1452,15 +1452,15 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 <div class="chips" style="margin-bottom:12px"><span class="chip on">Все</span><span class="chip">Важные</span><span class="chip"><svg class="i xs"><use href="#film"/></svg>Из материала</span></div>
 <div style="display:flex;gap:8px;align-items:flex-start">
 <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
-<div class="stk st-sand"><h4>Код домофона</h4><p class="tn" style="font:800 26px/1.15 Onest;margin-top:6px">4512</p><p class="cap">подъезд 3, кв. 47</p></div>
-<div class="stk st-paper"><span class="fold"></span><h4 style="padding-right:14px">Алматы: что посмотреть</h4><span class="chg" style="display:flex;margin-top:6px">изменил помощник</span><p class="small" style="margin-top:4px;color:var(--stInk2)">Медеу — после 16:00, Кок-Тобе, Зелёный базар</p></div>
-<div class="stk st-mist"><h4>Wi-Fi на даче</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Dacha_5G<br>sunflower2024</p><p class="cap" style="margin-top:6px">10 нояб.</p></div>
+<div class="stk st-lemon"><h4>Код домофона</h4><p class="tn" style="font:800 26px/1.15 Onest;margin-top:6px">4512</p><p class="cap">подъезд 3, кв. 47</p></div>
+<div class="stk st-sky"><span class="fold"></span><h4 style="padding-right:14px">Алматы: что посмотреть</h4><span class="chg" style="display:flex;margin-top:6px">изменил помощник</span><p class="small" style="margin-top:4px;color:var(--stInk2)">Медеу — после 16:00, Кок-Тобе, Зелёный базар</p></div>
+<div class="stk st-mint"><h4>Wi-Fi на даче</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Dacha_5G<br>sunflower2024</p><p class="cap" style="margin-top:6px">10 нояб.</p></div>
 </div>
 <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
 <div class="stk st-rose"><h4>Подарки на НГ</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Алие — коньки<br>Папе — термос</p><p class="cap" style="margin-top:6px">2 нояб.</p></div>
-<div class="stk st-graph"><h4>Размер шин</h4><p class="tn" style="font:800 20px/1.2 Onest;margin-top:6px">205/55 R16</p></div>
-<div class="stk st-paper"><h4>Стамбул</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">23 совета · кафе, музеи</p><p class="cap row" style="gap:5px;margin-top:6px"><svg class="i xs"><use href="#film"/></svg>из материала</p></div>
-<div class="stk st-sand"><h4>Мастер по стиралке</h4><p class="small tn" style="margin-top:4px;color:var(--stInk2)">Ержан<br>+7 701 455 12 90</p></div>
+<div class="stk st-lilac"><h4>Размер шин</h4><p class="tn" style="font:800 20px/1.2 Onest;margin-top:6px">205/55 R16</p></div>
+<div class="stk st-apricot"><h4>Стамбул</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">23 совета · кафе, музеи</p><p class="cap row" style="gap:5px;margin-top:6px"><svg class="i xs"><use href="#film"/></svg>из материала</p></div>
+<div class="stk st-aqua"><h4>Мастер по стиралке</h4><p class="small tn" style="margin-top:4px;color:var(--stInk2)">Ержан<br>+7 701 455 12 90</p></div>
 </div>
 </div>
 </div>
@@ -1473,15 +1473,15 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 <div class="chips" style="margin-bottom:12px"><span class="chip on">Все</span><span class="chip">Важные</span><span class="chip"><svg class="i xs"><use href="#film"/></svg>Из материала</span></div>
 <div style="display:flex;gap:8px;align-items:flex-start">
 <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
-<div class="stk st-sand"><h4>Код домофона</h4><p class="tn" style="font:800 26px/1.15 Onest;margin-top:6px">4512</p><p class="cap">подъезд 3, кв. 47</p></div>
-<div class="stk st-paper"><span class="fold"></span><h4 style="padding-right:14px">Алматы: что посмотреть</h4><span class="chg" style="display:flex;margin-top:6px">изменил помощник</span><p class="small" style="margin-top:4px;color:var(--stInk2)">Медеу — после 16:00, Кок-Тобе, Зелёный базар</p></div>
-<div class="stk st-mist"><h4>Wi-Fi на даче</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Dacha_5G<br>sunflower2024</p><p class="cap" style="margin-top:6px">10 нояб.</p></div>
+<div class="stk st-lemon"><h4>Код домофона</h4><p class="tn" style="font:800 26px/1.15 Onest;margin-top:6px">4512</p><p class="cap">подъезд 3, кв. 47</p></div>
+<div class="stk st-sky"><span class="fold"></span><h4 style="padding-right:14px">Алматы: что посмотреть</h4><span class="chg" style="display:flex;margin-top:6px">изменил помощник</span><p class="small" style="margin-top:4px;color:var(--stInk2)">Медеу — после 16:00, Кок-Тобе, Зелёный базар</p></div>
+<div class="stk st-mint"><h4>Wi-Fi на даче</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Dacha_5G<br>sunflower2024</p><p class="cap" style="margin-top:6px">10 нояб.</p></div>
 </div>
 <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
 <div class="stk st-rose"><h4>Подарки на НГ</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Алие — коньки<br>Папе — термос</p><p class="cap" style="margin-top:6px">2 нояб.</p></div>
-<div class="stk st-graph"><h4>Размер шин</h4><p class="tn" style="font:800 20px/1.2 Onest;margin-top:6px">205/55 R16</p></div>
-<div class="stk st-paper"><h4>Стамбул</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">23 совета · кафе, музеи</p><p class="cap row" style="gap:5px;margin-top:6px"><svg class="i xs"><use href="#film"/></svg>из материала</p></div>
-<div class="stk st-sand"><h4>Мастер по стиралке</h4><p class="small tn" style="margin-top:4px;color:var(--stInk2)">Ержан<br>+7 701 455 12 90</p></div>
+<div class="stk st-lilac"><h4>Размер шин</h4><p class="tn" style="font:800 20px/1.2 Onest;margin-top:6px">205/55 R16</p></div>
+<div class="stk st-apricot"><h4>Стамбул</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">23 совета · кафе, музеи</p><p class="cap row" style="gap:5px;margin-top:6px"><svg class="i xs"><use href="#film"/></svg>из материала</p></div>
+<div class="stk st-aqua"><h4>Мастер по стиралке</h4><p class="small tn" style="margin-top:4px;color:var(--stInk2)">Ержан<br>+7 701 455 12 90</p></div>
 </div>
 </div>
 </div>
@@ -1552,15 +1552,15 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 <div class="chips" style="margin-bottom:12px"><span class="chip on">Все</span><span class="chip">Важные</span><span class="chip"><svg class="i xs"><use href="#film"/></svg>Из материала</span></div>
 <div style="display:flex;gap:8px;align-items:flex-start">
 <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
-<div class="stk st-sand"><h4>Код домофона</h4><p class="tn" style="font:800 26px/1.15 Onest;margin-top:6px">4512</p><p class="cap">подъезд 3, кв. 47</p></div>
-<div class="stk st-paper"><span class="fold"></span><h4 style="padding-right:14px">Алматы: что посмотреть</h4><span class="chg" style="display:flex;margin-top:6px">изменил помощник</span><p class="small" style="margin-top:4px;color:var(--stInk2)">Медеу — после 16:00, Кок-Тобе, Зелёный базар</p></div>
-<div class="stk st-mist"><h4>Wi-Fi на даче</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Dacha_5G<br>sunflower2024</p><p class="cap" style="margin-top:6px">10 нояб.</p></div>
+<div class="stk st-lemon"><h4>Код домофона</h4><p class="tn" style="font:800 26px/1.15 Onest;margin-top:6px">4512</p><p class="cap">подъезд 3, кв. 47</p></div>
+<div class="stk st-sky"><span class="fold"></span><h4 style="padding-right:14px">Алматы: что посмотреть</h4><span class="chg" style="display:flex;margin-top:6px">изменил помощник</span><p class="small" style="margin-top:4px;color:var(--stInk2)">Медеу — после 16:00, Кок-Тобе, Зелёный базар</p></div>
+<div class="stk st-mint"><h4>Wi-Fi на даче</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Dacha_5G<br>sunflower2024</p><p class="cap" style="margin-top:6px">10 нояб.</p></div>
 </div>
 <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
 <div class="stk st-rose"><h4>Подарки на НГ</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">Алие — коньки<br>Папе — термос</p><p class="cap" style="margin-top:6px">2 нояб.</p></div>
-<div class="stk st-graph"><h4>Размер шин</h4><p class="tn" style="font:800 20px/1.2 Onest;margin-top:6px">205/55 R16</p></div>
-<div class="stk st-paper"><h4>Стамбул</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">23 совета · кафе, музеи</p><p class="cap row" style="gap:5px;margin-top:6px"><svg class="i xs"><use href="#film"/></svg>из материала</p></div>
-<div class="stk st-sand"><h4>Мастер по стиралке</h4><p class="small tn" style="margin-top:4px;color:var(--stInk2)">Ержан<br>+7 701 455 12 90</p></div>
+<div class="stk st-lilac"><h4>Размер шин</h4><p class="tn" style="font:800 20px/1.2 Onest;margin-top:6px">205/55 R16</p></div>
+<div class="stk st-apricot"><h4>Стамбул</h4><p class="small" style="margin-top:4px;color:var(--stInk2)">23 совета · кафе, музеи</p><p class="cap row" style="gap:5px;margin-top:6px"><svg class="i xs"><use href="#film"/></svg>из материала</p></div>
+<div class="stk st-aqua"><h4>Мастер по стиралке</h4><p class="small tn" style="margin-top:4px;color:var(--stInk2)">Ержан<br>+7 701 455 12 90</p></div>
 </div>
 </div>
 </div></div>
@@ -1689,13 +1689,16 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 <div><i style="background:#8A857B"></i><span><b>Другое</b>#8A857B · #A8A397</span></div>
 </div><p class="cap" style="color:var(--pg-ink2);margin-top:8px;font-size:13px">Светлая · тёмная. Глубокие приглушённые тона: бирюза, сланец, орех, роза, клюква, олива. Ни один не похож на светлые листы мест и на терракоту.</p></div>
 
-<div class="fact"><h3>Стикеры заметок</h3><div class="sw">
+<div class="fact"><h3>Стикеры заметок · разноцветные (разбор №2, п. 3)</h3><div class="sw">
+<div><i style="background:#FFEFA6"></i><span><b>Лимон</b>#FFEFA6 · #4F4419</span></div>
+<div><i style="background:#CDE5FF"></i><span><b>Небо</b>#CDE5FF · #24476E</span></div>
+<div><i style="background:#FFCFD8"></i><span><b>Роза</b>#FFCFD8 · #6A3040</span></div>
+<div><i style="background:#D6F0C2"></i><span><b>Мята</b>#D6F0C2 · #2D4E27</span></div>
+<div><i style="background:#E4DAFF"></i><span><b>Лаванда</b>#E4DAFF · #463B74</span></div>
+<div><i style="background:#FFD8B5"></i><span><b>Абрикос</b>#FFD8B5 · #673F24</span></div>
+<div><i style="background:#C2EDE6"></i><span><b>Бирюза</b>#C2EDE6 · #1A4F4B</span></div>
 <div><i style="background:#FFFFFF"></i><span><b>Бумага</b>#FFFFFF · #2A2930</span></div>
-<div><i style="background:#EFE4CF"></i><span><b>Песок</b>#EFE4CF · #4A4232</span></div>
-<div><i style="background:#F3D6DC"></i><span><b>Роза</b>#F3D6DC · #4E3439</span></div>
-<div><i style="background:#D4E8E2"></i><span><b>Туман</b>#D4E8E2 · #2E4640</span></div>
-<div><i style="background:#E2DFD8"></i><span><b>Графит</b>#E2DFD8 · #36353C</span></div>
-</div><p class="cap" style="color:var(--pg-ink2);margin-top:8px;font-size:13px">Нет жёлтого, голубого, зелёного, сиреневого и персикового — они заняты местами и помощником. Старые ключи стикеров переводятся: yellow → sand, peach/pink → rose, green/blue → mist, lilac → graphite.</p></div>
+</div><p class="cap" style="color:var(--pg-ink2);margin-top:8px;font-size:13px">Светлая · тёмная. Пастель светлее листов мест (яркость 0,71–0,86 против 0,57–0,67), в тёмной — глубокие тона темнее листов. Текст: ink ≥ 12,6 / 7,8, ink2 ≥ 6,3 / 5,3. Новая заметка берёт следующий цвет по кругу, не как у соседей. Старые ключи: yellow/sand → лимон, blue → небо, peach → абрикос, pink → роза, green → мята, mist → бирюза, lilac/graphite → лаванда, white → бумага.</p></div>
 
 <div class="fact"><h3>Шрифты</h3>
 <p><b>Geologica 700</b> — только большая фраза (3–4 слова и числа) и одна крупная цифра на экран. <b>Onest</b> — весь интерфейс. Цифры везде табличные (<code>tnum</code>).</p>
@@ -1777,7 +1780,7 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 <section class="grp" id="g-rules">
 <h2>Правила v5 · коротко</h2>
 <div class="facts">
-<div class="fact"><h3>Цвет = место</h3><ul><li>Пять цветов — только у мест: Сегодня, Заметки, Помощник, Расходы, Дела.</li><li>«Ещё», поиск, настройки, импорт, документы, корзина — камень (графит в тёмной).</li><li>«История» — терракотовая. Документ — белый A4.</li><li>Категории и стикеры — своя приглушённая палитра.</li></ul></div>
+<div class="fact"><h3>Цвет = место</h3><ul><li>Пять цветов — только у мест: Сегодня, Заметки, Помощник, Расходы, Дела.</li><li>«Ещё», поиск, настройки, импорт, документы, корзина — камень (графит в тёмной).</li><li>«История» — терракотовая. Документ — белый A4.</li><li>Категории — своя глубокая палитра. Стикеры — разноцветная пастель из 8 цветов, никогда не цвет листа и не терракота.</li></ul></div>
 <div class="fact"><h3>Терракота — только помощник</h3><ul><li>Его лист, метка «изменил помощник», «Отменить», маркер правки.</li><li>Обычные кнопки, ссылки, включатели — чёрные (в тёмной — светлые).</li><li>«Восстановить» после удаления — обычная ссылка.</li><li>На терракоте нет текста мельче 17 полужирного.</li></ul></div>
 <div class="fact"><h3>Лист и заголовок</h3><ul><li>Большая фраза — только на «Сегодня» и «Расходах», до двух строк.</li><li>Остальные — заголовок 30.</li><li>При прокрутке лист сворачивается в полоску 44 с названием.</li><li>320 dp или шрифт ≥ ×1,3 — фразы нет, только заголовок.</li></ul></div>
 <div class="fact"><h3>Вкладки</h3><ul><li>У всех пяти — цветная капсула и слово.</li><li>Активная: шире, обведена, слово жирное.</li><li>Подпись 12, на 320 — 11,5, при крупном шрифте не больше 13.</li></ul></div>

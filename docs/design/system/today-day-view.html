@@ -1,0 +1,608 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Сегодня · день на месте</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geologica:wght@500;600;700;800&family=Onest:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* =====================================================================
+   ТОКЕНЫ · страница (pg-*) и телефон (всё остальное). Тёмная — ниже.
+   ===================================================================== */
+:root{
+  color-scheme:light;
+  /* страница */
+  --pg:#F2EFE9;--pg-card:#FFFFFF;--pg-ink:#1A191E;--pg-ink2:#55525C;--pg-line:#DEDAD1;--pg-tab:#E6E1D7;--bezel:#0B0B0D;
+  /* телефон: основа */
+  --tray:#1A191E;--trayInk:#F4F1EA;--trayInk2:#B9B4AA;
+  --paper:#FBF8F2;--paper2:#F1ECE2;--line:#E6DFD3;--line2:#CFC8BB;
+  --ink:#1A191E;--ink2:#55525C;--ink3:#6B6774;
+  /* листы мест */
+  --today:#F6D35B;--notes:#A9CCF4;--asst:#E0592C;--exp:#B6D89C;--tasks:#CDBFF5;--stone:#D8D2C6;
+  --onSheet:#1A191E;--onSheet2:#3D3A42;--onStone:#1A191E;--onStone2:#3D3A42;
+  /* помощник */
+  --asstText:#B23E14;--hl:#F7D9CC;
+  /* действия */
+  --btn:#1A191E;--onBtn:#FBF8F2;--danger:#B42335;--onDanger:#FFFFFF;
+  --noticeBg:#1A191E;--noticeInk:#F4F1EA;--noticeUndo:#FF8A5C;
+  --scrim:rgba(26,25,30,.38);--a4:#FFFFFF;--a4Ink:#1A191E;
+  /* категории расходов */
+  --k-food:#2F7F70;--k-trans:#4F5D86;--k-home:#8C6A43;--k-cafe:#B05A78;--k-health:#9B3F4C;--k-kids:#737A35;--k-other:#8A857B;
+  /* стикеры заметок */
+  --st-paper:#FFFFFF;--st-sand:#EFE4CF;--st-rose:#F3D6DC;--st-mist:#D4E8E2;--st-graph:#E2DFD8;--stInk:#1A191E;--stInk2:#4D4A52;
+  /* форма */
+  --sheetB:44px;--phrase:27px;--peekF:none;
+  /* строка помощника и клавиатура макета (Ф-81) */
+  --askBg:#FBF8F2;--askLine:transparent;--kb:#D3D0CA;--kbKey:#FFFFFF;--kbKey2:#ADA9A1;--kbInk:#1A191E;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark;
+  --pg:#121114;--pg-card:#1C1B20;--pg-ink:#F1EEE8;--pg-ink2:#B4AFBA;--pg-line:#2E2C33;--pg-tab:#26252B;--bezel:#000;
+  --tray:#0F0E12;--trayInk:#F1EEE8;--trayInk2:#9A95A2;
+  --paper:#1E1D23;--paper2:#2A2930;--line:#34323A;--line2:#4A4752;
+  --ink:#F1EEE8;--ink2:#C2BDC8;--ink3:#A29DAA;
+  --today:#C9A23A;--notes:#5E93DC;--asst:#E0592C;--exp:#6FA35C;--tasks:#9683E6;--stone:#42404A;
+  --onSheet:#16151A;--onSheet2:#1F1D24;--onStone:#F1EEE8;--onStone2:#C2BDC8;
+  --asstText:#FF8A5C;--hl:#5A2E20;
+  --btn:#F1EEE8;--onBtn:#16151A;--danger:#FF6B78;--onDanger:#16151A;
+  --noticeBg:#F1EEE8;--noticeInk:#16151A;--noticeUndo:#B23E14;
+  --scrim:rgba(0,0,0,.55);--a4:#FFFFFF;--a4Ink:#1A191E;
+  --k-food:#5FB3A3;--k-trans:#8E9BC8;--k-home:#C29C70;--k-cafe:#DB8CA8;--k-health:#D97A86;--k-kids:#AEB65E;--k-other:#A8A397;
+  --st-paper:#2A2930;--st-sand:#4A4232;--st-rose:#4E3439;--st-mist:#2E4640;--st-graph:#36353C;--stInk:#F1EEE8;--stInk2:#C9C4CE;
+  --sheetB:38px;--phrase:25px;--peekF:brightness(.62);
+  --askBg:#2A2930;--askLine:#34323A;--kb:#26252B;--kbKey:#46444D;--kbKey2:#34323A;--kbInk:#F1EEE8;
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --pg:#121114;--pg-card:#1C1B20;--pg-ink:#F1EEE8;--pg-ink2:#B4AFBA;--pg-line:#2E2C33;--pg-tab:#26252B;--bezel:#000;
+  --tray:#0F0E12;--trayInk:#F1EEE8;--trayInk2:#9A95A2;
+  --paper:#1E1D23;--paper2:#2A2930;--line:#34323A;--line2:#4A4752;
+  --ink:#F1EEE8;--ink2:#C2BDC8;--ink3:#A29DAA;
+  --today:#C9A23A;--notes:#5E93DC;--asst:#E0592C;--exp:#6FA35C;--tasks:#9683E6;--stone:#42404A;
+  --onSheet:#16151A;--onSheet2:#1F1D24;--onStone:#F1EEE8;--onStone2:#C2BDC8;
+  --asstText:#FF8A5C;--hl:#5A2E20;
+  --btn:#F1EEE8;--onBtn:#16151A;--danger:#FF6B78;--onDanger:#16151A;
+  --noticeBg:#F1EEE8;--noticeInk:#16151A;--noticeUndo:#B23E14;
+  --scrim:rgba(0,0,0,.55);--a4:#FFFFFF;--a4Ink:#1A191E;
+  --k-food:#5FB3A3;--k-trans:#8E9BC8;--k-home:#C29C70;--k-cafe:#DB8CA8;--k-health:#D97A86;--k-kids:#AEB65E;--k-other:#A8A397;
+  --st-paper:#2A2930;--st-sand:#4A4232;--st-rose:#4E3439;--st-mist:#2E4640;--st-graph:#36353C;--stInk:#F1EEE8;--stInk2:#C9C4CE;
+  --sheetB:38px;--phrase:25px;--peekF:brightness(.62);
+  --askBg:#2A2930;--askLine:#34323A;--kb:#26252B;--kbKey:#46444D;--kbKey2:#34323A;--kbInk:#F1EEE8;
+}
+
+/* ---------- страница ---------- */
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--pg);color:var(--pg-ink);font:16px/1.5 Onest,-apple-system,'Segoe UI',Roboto,sans-serif;overflow-x:hidden}
+.wrap{max-width:1680px;margin:0 auto;padding:28px 16px 72px}
+.top h1{font:800 30px/1.15 Onest;letter-spacing:-.6px;margin:0 0 8px}
+.top p{margin:0 0 6px;color:var(--pg-ink2);max-width:860px}
+.bar{position:sticky;top:0;z-index:50;background:var(--pg);padding:12px 0;margin-top:16px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-bottom:1px solid var(--pg-line)}
+.seg{display:inline-flex;background:var(--pg-tab);border-radius:999px;padding:3px;margin-right:6px}
+.seg button{font:600 14px Onest;border:0;background:transparent;color:var(--pg-ink);padding:8px 16px;border-radius:999px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--pg-ink);color:var(--pg)}
+.bar a{text-decoration:none;color:var(--pg-ink);background:var(--pg-tab);padding:8px 13px;border-radius:999px;font:500 14px Onest;white-space:nowrap}
+@media (max-width:600px){.bar{position:static}}
+section.grp{padding-top:30px}
+section.grp>h2{font:800 24px/1.2 Onest;margin:0 0 6px;letter-spacing:-.3px}
+section.grp>p.lead{margin:0 0 18px;color:var(--pg-ink2);max-width:860px}
+.phones{display:flex;flex-wrap:wrap;gap:34px 28px;align-items:flex-start}
+figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:12px}
+figcaption{font-size:14px;line-height:1.45;color:var(--pg-ink2);max-width:340px;text-align:center}
+figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
+.frame{padding:6px;border-radius:50px;background:var(--bezel);box-shadow:0 22px 46px -22px rgba(0,0,0,.45)}
+@media (max-width:440px){.frame{zoom:.84}.frame.fw430{zoom:.75}}
+@media (max-width:380px){.frame{zoom:.78}.frame.fw430{zoom:.68}.frame.fw390{zoom:.75}}
+@media (max-width:340px){.frame{zoom:.72}.frame.fw430{zoom:.63}.frame.fw390{zoom:.7}}
+.facts{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:12px;margin:0 0 24px}
+.fact{background:var(--pg-card);border:1px solid var(--pg-line);border-radius:16px;padding:14px 16px;font-size:15px;line-height:1.5}
+.fact h3{margin:0 0 6px;font:700 16px Onest}
+.fact p,.fact ul{margin:0}.fact ul{padding-left:18px}
+.fact code,.tok code{font:500 13px ui-monospace,Consolas,monospace;background:var(--pg-tab);padding:1px 5px;border-radius:5px}
+
+/* =====================================================================
+   ТЕЛЕФОН
+   ===================================================================== */
+.ph{--w:375px;--h:780px;--gut:20px;width:var(--w);height:var(--h);position:relative;overflow:hidden;border-radius:44px;background:var(--tray);color:var(--ink);font:400 16px/1.38 Onest,sans-serif;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased;text-align:left}
+.ph *{box-sizing:border-box}
+.ph p{margin:0}
+.ph.w320{--w:320px;--h:640px;--gut:16px;--phrase:23px}
+.ph.w390{--w:390px;--h:844px}
+.ph.w430{--w:430px;--h:932px;--gut:24px;--phrase:30px}
+.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none;display:block}
+.i.s{width:18px;height:18px}.i.xs{width:15px;height:15px}.i.l{width:26px;height:26px}.i.xl{width:30px;height:30px}
+.tn{font-variant-numeric:tabular-nums}
+.ell{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.f1{flex:1;min-width:0}
+.row{display:flex;align-items:center;gap:10px}
+.cur{font-size:.56em;margin-left:.12em;font-weight:inherit}
+
+/* статус-бар и стопка */
+.sb{flex:none;height:46px;display:flex;align-items:center;justify-content:space-between;padding:4px 28px 0 34px;color:var(--trayInk);font:600 15px/1 Onest;letter-spacing:-.2px}
+.sbs{width:66px;height:12px;display:block}
+.peek{flex:none;height:14px;position:relative;filter:var(--peekF)}
+.peek i{position:absolute;height:30px;border-radius:18px 18px 0 0;background:var(--c)}
+.peek i:first-child{left:40px;right:40px;top:0}
+.peek i+i{left:22px;right:22px;top:7px;filter:brightness(.94)}
+
+/* цвета мест */
+.c-today{--c:var(--today);--on:var(--onSheet);--on2:var(--onSheet2)}
+.c-notes{--c:var(--notes);--on:var(--onSheet);--on2:var(--onSheet2)}
+.c-asst{--c:var(--asst);--on:var(--onSheet);--on2:var(--onSheet)}
+.c-exp{--c:var(--exp);--on:var(--onSheet);--on2:var(--onSheet2)}
+.c-tasks{--c:var(--tasks);--on:var(--onSheet);--on2:var(--onSheet2)}
+.c-stone{--c:var(--stone);--on:var(--onStone);--on2:var(--onStone2)}
+
+/* цветной лист */
+.sheet{flex:none;position:relative;z-index:1;background:var(--c);color:var(--on);border-radius:28px 28px 0 0;padding:10px var(--gut) var(--sheetB)}
+.sh-top{display:flex;align-items:center;gap:6px;min-height:40px;font:600 15px/1.2 Onest;color:var(--on2)}
+.sh-top .sp{flex:1;min-width:0}
+.ib{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;color:var(--on);flex:none}
+.ib.ring{box-shadow:inset 0 0 0 1.5px currentColor}
+.back{display:inline-flex;align-items:center;gap:2px;font:600 16px Onest;color:var(--on);margin-left:-8px;height:40px}
+.phrase{font:700 var(--phrase)/1.12 Geologica,Onest,sans-serif;letter-spacing:-.025em;margin:4px 0 0;max-width:13.5em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ttl{font:800 30px/1.12 Onest;letter-spacing:-.6px;margin:2px 0 0}
+.ttl-only{display:none}
+.sub{font:600 15px/1.3 Onest;color:var(--on2);margin-top:4px}
+/* свёрнутый лист */
+.sheet.min{padding:6px 10px calc(var(--sheetB) - 12px)}
+.strip{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;height:44px;gap:6px}
+.strip .t{font:750 18px/1 Onest;text-align:center;white-space:nowrap}
+.strip .l{display:flex;align-items:center;justify-content:flex-start;min-width:0}
+.strip .r{display:flex;align-items:center;justify-content:flex-end}
+.strip .back{margin-left:0;font-size:15px}
+
+/* светлый лист с подробностями */
+.pap{flex:1;min-height:0;position:relative;z-index:2;margin-top:-28px;background:var(--paper);border-radius:28px;overflow:hidden;padding:18px var(--gut) 0}
+.pap.flat{border-radius:28px 28px 0 0}
+
+/* вкладки: цвет + слово у всех пяти */
+.tabs{flex:none;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));padding:9px 4px 0;height:68px}
+.tab{display:flex;flex-direction:column;align-items:center;gap:5px;font:600 12px/1.1 Onest;color:var(--trayInk2);min-width:0;white-space:nowrap;letter-spacing:-.1px}
+.tab b{display:grid;place-items:center;width:46px;height:30px;border-radius:15px;background:var(--c);color:var(--on)}
+.tab b .i{width:20px;height:20px}
+.tab.on{color:var(--trayInk);font-weight:800}
+.tab.on b{width:58px;box-shadow:0 0 0 2px var(--tray),0 0 0 3.5px var(--trayInk)}
+.home{flex:none;height:24px;position:relative}
+.home::after{content:"";position:absolute;left:50%;bottom:8px;width:134px;margin-left:-67px;height:5px;border-radius:3px;background:var(--trayInk);opacity:.85}
+
+/* строки и разделы */
+.ln{display:flex;align-items:center;gap:12px;min-height:54px;border-top:1px solid var(--line);font-size:16px}
+.ln.f0{border-top:0}
+.m{margin-left:auto;color:var(--ink3);font-size:14px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.am{font:700 16px Onest;font-variant-numeric:tabular-nums;white-space:nowrap}
+.sec{display:flex;align-items:baseline;justify-content:space-between;gap:8px;font:750 17px/1.2 Onest;margin:18px 0 6px}
+.sec:first-child{margin-top:0}
+.sec .lk{font:600 15px Onest;color:var(--ink);display:inline-flex;align-items:center;gap:2px;white-space:nowrap}
+.cap{font-size:13px;line-height:1.35;color:var(--ink3)}
+.small{font-size:14px;line-height:1.4;color:var(--ink2)}
+.big{font:700 46px/1 Geologica,Onest,sans-serif;letter-spacing:-.035em;font-variant-numeric:tabular-nums}
+.ph h4{margin:0;font:700 16px/1.25 Onest}
+
+/* кнопки */
+.btn{height:52px;border-radius:26px;background:var(--btn);color:var(--onBtn);font:700 17px/1 Onest;display:flex;align-items:center;justify-content:center;gap:8px;padding:0 22px;border:0}
+.btn.sm{height:42px;border-radius:21px;font-size:15px;padding:0 16px}
+.btn.ghost{background:transparent;color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.btn.danger{background:var(--danger);color:var(--onDanger)}
+.rb{width:42px;height:42px;border-radius:50%;background:var(--btn);color:var(--onBtn);display:grid;place-items:center;flex:none}
+.lnk{font-weight:700;color:var(--ink);text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1.5px}
+.undo{font-weight:750;color:var(--asstText)}
+.chip{height:38px;border-radius:19px;padding:0 15px;box-shadow:inset 0 0 0 1.5px var(--line2);font:600 15px/1 Onest;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;color:var(--ink)}
+.chip.on{background:var(--btn);color:var(--onBtn);box-shadow:none}
+.chips{display:flex;gap:8px;flex-wrap:nowrap;overflow:hidden}
+
+/* строка помощника */
+.ask{position:absolute;left:12px;right:12px;bottom:12px;height:56px;border-radius:28px;background:var(--paper);box-shadow:inset 0 0 0 1.5px var(--ink);display:flex;align-items:center;gap:6px;padding:0 7px 0 18px;color:var(--ink3);font-size:16px;z-index:5}
+.ask .plus{width:36px;height:36px;display:grid;place-items:center;color:var(--ink);margin-left:-10px}
+
+/* уведомление сверху */
+.notice{position:absolute;left:10px;right:10px;top:50px;z-index:30;min-height:54px;border-radius:18px;background:var(--noticeBg);color:var(--noticeInk);display:flex;align-items:center;gap:12px;padding:8px 16px;font:600 15px/1.25 Onest;box-shadow:0 14px 30px -10px rgba(0,0,0,.5)}
+.notice .f1{white-space:normal}
+.notice .act{margin-left:auto;font-weight:800;white-space:nowrap;color:var(--noticeInk);text-decoration:underline;text-underline-offset:3px}
+.notice .act.asst{color:var(--noticeUndo);text-decoration:none}
+.tm{display:flex;gap:3px;flex:none}.tm i{width:6px;height:6px;border-radius:50%;background:currentColor}.tm i.o{opacity:.25}
+
+/* «изменил помощник», правка в тексте */
+.chg{display:inline-flex;align-items:center;gap:6px;font:700 13px/1.1 Onest;color:var(--asstText);white-space:nowrap}
+.chg::before{content:"";width:9px;height:9px;border-radius:50%;background:var(--asst);flex:none}
+.ph mark{background:var(--hl);color:var(--ink);border-radius:4px;padding:0 3px;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.ph s{color:var(--ink3);text-decoration-thickness:1.5px}
+.fold{position:absolute;right:0;top:0;width:24px;height:24px;border-radius:0 20px 0 8px;background:linear-gradient(225deg,var(--paper) 50%,var(--asst) 50%)}
+
+/* отметки дел */
+.ck{width:26px;height:26px;border-radius:50%;box-shadow:inset 0 0 0 2px var(--ink);flex:none;display:grid;place-items:center;color:var(--paper)}
+.ck.ok{background:var(--ink)}
+.ck.wait{box-shadow:inset 0 0 0 2px var(--ink3);background:repeating-conic-gradient(var(--paper) 0 10deg,transparent 10deg 20deg)}
+
+/* стикеры, категории */
+.stk{border-radius:20px;padding:14px 14px 13px;background:var(--st);color:var(--stInk);position:relative;overflow:hidden}
+.stk .cap{color:var(--stInk2)}
+.stk .chg{font-size:12.5px}
+.st-paper{--st:var(--st-paper);box-shadow:inset 0 0 0 1px var(--line)}
+.st-sand{--st:var(--st-sand)}.st-rose{--st:var(--st-rose)}.st-mist{--st:var(--st-mist)}.st-graph{--st:var(--st-graph)}
+.kq{width:12px;height:12px;border-radius:4px;background:var(--k);flex:none}
+.k-food{--k:var(--k-food)}.k-trans{--k:var(--k-trans)}.k-home{--k:var(--k-home)}.k-cafe{--k:var(--k-cafe)}.k-health{--k:var(--k-health)}.k-kids{--k:var(--k-kids)}.k-other{--k:var(--k-other)}
+.ptab{width:16px;height:22px;border-radius:5px 5px 2px 2px;background:var(--c);flex:none}
+
+/* шторка, затемнение, компактное подтверждение */
+.scrim{position:absolute;inset:0;background:var(--scrim);z-index:40}
+.bsheet{position:absolute;left:0;right:0;bottom:0;z-index:41;background:var(--paper);border-radius:28px 28px 0 0;padding:0 var(--gut) 30px;overflow:hidden;box-shadow:0 -10px 30px rgba(0,0,0,.25)}
+.bsheet .strip-c{height:6px;background:var(--c);margin:0 calc(var(--gut) * -1)}
+.grab{width:40px;height:5px;border-radius:3px;background:var(--line2);margin:8px auto 12px}
+.confirm{position:absolute;left:10px;right:10px;bottom:12px;z-index:41;background:var(--paper);border-radius:26px;padding:18px 18px 16px;box-shadow:0 18px 40px rgba(0,0,0,.35)}
+
+/* план дня: высота = длительность (1 dp = 1 мин, минимум 40) */
+.plan{position:relative;padding-left:56px}
+.plan .blk{position:relative;border-radius:14px;padding:6px 12px;display:flex;flex-direction:column;justify-content:center;min-height:40px;background:var(--paper2);margin-bottom:4px}
+.plan .blk h4{font-size:15.5px}
+.plan .blk .cap{margin-top:2px}
+.plan .blk.done{background:transparent;box-shadow:inset 0 0 0 1px var(--line)}
+.plan .blk.done h4{text-decoration:line-through;color:var(--ink3);font-weight:600}
+.plan .blk.main{background:var(--ink);color:var(--paper)}
+.plan .blk.main .cap{color:var(--paper);opacity:.85}
+.plan .free{border-radius:14px;box-shadow:inset 0 0 0 1.5px var(--line2);border:0;background:repeating-linear-gradient(135deg,transparent 0 7px,var(--line) 7px 8px);display:flex;align-items:center;justify-content:center;font:600 14px Onest;color:var(--ink2);margin-bottom:4px}
+.plan .free span{background:var(--paper);padding:2px 10px;border-radius:10px}
+.plan .t{position:absolute;left:-56px;top:10px;width:48px;font:700 14px Onest;font-variant-numeric:tabular-nums;color:var(--ink)}
+.plan .now{position:relative;height:0;margin:2px 0 6px;border-top:2px solid var(--ink)}
+.plan .now span{position:absolute;left:-56px;top:-11px;font:800 12px/1 Onest;background:var(--ink);color:var(--paper);padding:4px 7px;border-radius:9px;font-variant-numeric:tabular-nums}
+
+/* чат */
+.me{display:flex;justify-content:flex-end;margin-bottom:12px}
+.me p{max-width:82%;background:var(--btn);color:var(--onBtn);padding:11px 15px;border-radius:20px 20px 6px 20px;font-size:16px;line-height:1.35}
+.bot{font-size:16.5px;line-height:1.45;font-weight:500;margin:0 0 10px}
+.res{border-radius:18px;padding:12px 14px;background:var(--c);color:var(--on);display:flex;align-items:center;gap:10px}
+.res+.res{margin-top:6px}
+.res small{display:block;font:600 13px/1.2 Onest;color:var(--on2);margin-bottom:2px}
+.res h4{font:700 16px Onest}
+
+/* A4 */
+.a4{aspect-ratio:210/297;background:var(--a4);color:var(--a4Ink);border-radius:4px;box-shadow:0 10px 30px -8px rgba(0,0,0,.35),0 0 0 1px rgba(0,0,0,.06);font-size:8.6px;line-height:1.45;padding:22px 20px}
+.a4 table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.a4 td,.a4 th{padding:4px 0;border-bottom:.5px solid #CFCAC0;text-align:left;font-weight:400}
+.a4 th{font-weight:700}
+.a4 .r{text-align:right}
+
+/* крупный шрифт (×1,35) */
+.ph.lg{font-size:21px}
+.ph.lg .ln{min-height:68px;font-size:21px}
+.ph.lg .m{font-size:18px}
+.ph.lg .sec{font-size:22px}
+.ph.lg .ttl{font-size:36px}
+.ph.lg .sh-top{font-size:19px}
+.ph.lg .tab{font-size:13px}
+.ph.lg .ck{width:32px;height:32px}
+.ph.w320 .phrase,.ph.lg .phrase{display:none}
+.ph.w320 .ttl-only,.ph.lg .ttl-only{display:block}
+.ph.w320 .tab{font-size:11.5px}
+.ph.w320 .plan .blk .cap{display:none}
+.ph.w320 .tab b{width:42px}
+.ph.w320 .tab.on b{width:52px}
+
+/* токены на странице */
+.tok{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,360px),1fr));gap:14px}
+.tok .fact{overflow:hidden}
+.sw{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.sw div{display:flex;align-items:center;gap:8px;font:500 13px/1.25 Onest;color:var(--pg-ink2);min-width:0}
+.sw div i{width:30px;height:30px;border-radius:8px;flex:none;box-shadow:inset 0 0 0 1px rgba(128,128,128,.35)}
+.sw div span{min-width:0}
+.sw div b{display:block;color:var(--pg-ink);font-weight:600}
+.tt{width:100%;border-collapse:collapse;font-size:14px}
+.tt td,.tt th{padding:7px 6px;border-top:1px solid var(--pg-line);text-align:left;vertical-align:top}
+.tt th{font-weight:700;color:var(--pg-ink2);font-size:13px}
+.scroll-x{overflow-x:auto}
+.kz{font-size:24px;line-height:1.35;margin:6px 0 2px;overflow-wrap:anywhere}
+
+/* =====================================================================
+   ЧАТ НА ДРУГИХ ЭКРАНАХ · A / B / C (Ф-81). ВЫБРАН C (Ф-82); A и B — история
+   ===================================================================== */
+.ph{--dockIn:12px}.ph.w320{--dockIn:8px}.ph.w430{--dockIn:16px}
+.vh{font:800 21px/1.25 Onest;margin:34px 0 6px;letter-spacing:-.2px}
+.vh span{font:700 13px/1 Onest;background:var(--pg-ink);color:var(--pg);padding:4px 9px;border-radius:999px;vertical-align:3px;margin-left:6px}
+.vs{font:700 17px/1.3 Onest;margin:26px 0 12px;color:var(--pg-ink)}
+.adot{width:9px;height:9px;border-radius:50%;background:var(--asst);flex:none;display:inline-block}
+.caret{display:inline-block;width:2px;height:19px;background:var(--ink);vertical-align:-4px;margin-left:1px}
+/* A · строка в лотке над вкладками */
+.dock{flex:none;position:relative;z-index:3;padding:8px var(--dockIn) 0}
+.kb~.dock,.dock:has(+.kb){padding-bottom:8px}
+.astr{height:48px;border-radius:24px;background:var(--askBg);box-shadow:inset 0 0 0 1px var(--askLine);display:flex;align-items:center;gap:10px;padding:0 6px 0 16px;color:var(--ink3);font:500 16px/1.2 Onest}
+.astr .rb{width:36px;height:36px}.astr .rb .i{width:20px;height:20px}
+.astr.typing{color:var(--ink)}
+.astr.voice{height:auto;min-height:64px;padding:8px 8px 8px 8px;align-items:center}
+.astr.voice .ib.ring{box-shadow:inset 0 0 0 1.5px var(--ink)}
+.vl{display:flex;align-items:center;gap:7px;font:700 14px/1.2 Onest;color:var(--ink2)}
+.vt{display:block;font:600 16px/1.3 Onest;color:var(--ink);margin-top:3px}
+.wv{display:inline-flex;align-items:center;gap:3px;margin-left:6px;height:18px}
+.wv i{width:3px;border-radius:2px;background:var(--ink);display:block}
+.wv.big{display:flex;justify-content:center;height:44px;gap:5px;margin:18px 0 0}.wv.big i{width:5px;border-radius:3px}
+.dest{display:flex;align-items:center;gap:8px;height:28px;padding:0 8px 6px;font:600 14px/1 Onest;color:var(--trayInk)}
+.notice.atstrip{top:auto;bottom:156px;left:var(--dockIn);right:var(--dockIn)}
+.qa{position:absolute;left:var(--dockIn);right:var(--dockIn);bottom:156px;z-index:20;background:var(--paper);border-radius:20px;padding:14px 16px 6px;box-shadow:0 0 0 1px var(--line),0 16px 34px -8px rgba(0,0,0,.4)}
+.qa-t{font:500 16px/1.4 Onest;margin-top:6px !important;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.qa-f{display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--line);margin-top:10px;min-height:44px;font-size:16px}
+.ph.w320 .astr{font-size:15px;padding-left:14px;gap:8px}
+.ph.lg .astr{height:56px;border-radius:28px;font-size:19px}.ph.lg .astr .rb{width:44px;height:44px}
+/* клавиатура телефона (только в макете) */
+.kb{flex:none;height:252px;background:var(--kb);padding:0 3px;display:flex;flex-direction:column;gap:10px}
+.ksug{display:flex;height:38px;align-items:center;justify-content:space-around;font:500 15px Onest;color:var(--kbInk);border-bottom:1px solid var(--kbKey2)}
+.kr{display:flex;gap:5px;padding:0 2px}
+.kr span{flex:1;height:42px;border-radius:6px;background:var(--kbKey);color:var(--kbInk);display:grid;place-items:center;font:400 19px Onest;box-shadow:0 1px 0 var(--kbKey2)}
+.kr span.w{flex:1.4;background:var(--kbKey2)}.kr span.w2{flex:1.3;background:var(--kbKey2);font-size:15px}.kr span.sp{flex:5;font-size:15px}
+.kb,.home.kbh{position:relative;z-index:42}.home.kbh{background:var(--kb)}.home.kbh::after{background:var(--kbInk)}
+/* B · плавающая кнопка и мини-чат */
+.fab{position:absolute;right:calc(var(--gut) - 4px);bottom:106px;width:56px;height:56px;border-radius:50%;background:var(--asst);color:var(--onSheet);display:grid;place-items:center;z-index:6;box-shadow:0 10px 24px -8px rgba(0,0,0,.5)}
+.fabtip{position:absolute;right:calc(var(--gut) + 62px);bottom:116px;z-index:6;background:var(--noticeBg);color:var(--noticeInk);font:600 15px/1.2 Onest;padding:10px 14px;border-radius:14px 14px 4px 14px;box-shadow:0 10px 24px -10px rgba(0,0,0,.5);white-space:nowrap}
+.pap.end{display:flex;flex-direction:column;justify-content:flex-end}
+.pap.padB{padding-bottom:84px}.pap.padC{padding-bottom:70px}
+.mini{position:absolute;left:0;right:0;z-index:41;background:var(--paper);border-radius:28px 28px 0 0;display:flex;flex-direction:column;overflow:hidden;padding:0 var(--gut) 10px;box-shadow:0 -10px 30px rgba(0,0,0,.25)}
+.mini .strip-c{height:6px;background:var(--c);margin:0 calc(var(--gut) * -1);flex:none}
+.mini .grab{flex:none}
+.mhead{display:flex;align-items:center;gap:12px;font:750 17px/1.2 Onest;min-height:40px;flex:none}
+.mbody{flex:1;min-height:0;overflow:hidden;padding-top:8px;display:flex;flex-direction:column;justify-content:flex-end}
+.mbody .me p{font-size:15.5px}
+.mask{flex:none;height:52px;border-radius:26px;box-shadow:inset 0 0 0 1.5px var(--ink);display:flex;align-items:center;gap:10px;padding:0 7px 0 16px;color:var(--ink3);font:500 16px/1.2 Onest;margin-top:10px}
+.mask .rb{width:38px;height:38px}.mask.typing{color:var(--ink)}
+/* C · строка поверх листа, сворачивается в кружок — ВЫБРАНО (Ф-82), стоит на основных экранах */
+.fstrip{position:absolute;left:var(--dockIn);right:var(--dockIn);bottom:102px;height:48px;z-index:6;border-radius:24px;background:var(--paper);box-shadow:inset 0 0 0 1.5px var(--ink),0 10px 22px -12px rgba(0,0,0,.45);display:flex;align-items:center;gap:10px;padding:0 6px 0 16px;color:var(--ink3);font:500 16px/1.2 Onest}
+.fstrip .rb{width:36px;height:36px}.fstrip .rb .i{width:20px;height:20px}
+.fbub{position:absolute;right:var(--dockIn);bottom:102px;width:48px;height:48px;border-radius:50%;z-index:6;background:var(--paper);color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink),0 10px 22px -12px rgba(0,0,0,.45);display:grid;place-items:center}
+.fbub .adot{position:absolute;right:3px;top:3px;box-shadow:0 0 0 2px var(--paper)}
+.ph.w320 .fstrip{font-size:15px;padding-left:14px;gap:8px}
+.ph.lg .fstrip{height:56px;border-radius:28px;font-size:19px}.ph.lg .fstrip .rb{width:44px;height:44px}
+.ph.lg .fbub{width:56px;height:56px}.ph.lg .pap.padC{padding-bottom:78px}
+.notice.atC{top:auto;bottom:158px;left:var(--dockIn);right:var(--dockIn)}.ph.lg .notice.atC{bottom:166px}
+/* C · фокус: строка над клавиатурой (в потоке), над ней — куда ляжет запись */
+.cfocus{flex:none;position:relative;z-index:3;background:var(--paper);padding:0 var(--dockIn) 8px}
+.cfocus .fstrip{position:relative;left:auto;right:auto;bottom:auto;color:var(--ink)}
+.cdest{display:inline-flex;align-items:center;gap:8px;height:28px;padding:0 12px;border-radius:14px;background:var(--paper2);color:var(--ink2);font:600 14px/1 Onest;margin:0 0 6px 2px}
+.vh span.no{background:var(--pg-tab);color:var(--pg-ink)}
+.ring{box-shadow:0 0 0 2px var(--asst);border-radius:12px}
+/* C · растушёвка под строкой: текст не просвечивает в зазоре 10 между строкой и вкладками */
+.pap.padC::after{content:"";position:absolute;left:0;right:0;bottom:0;height:34px;z-index:4;pointer-events:none;background:linear-gradient(to bottom,transparent,var(--paper) 70%)}
+
+/* =====================================================================
+   ВАРИАНТЫ ПУСТОГО «СЕГОДНЯ» — только новое, остальное как в screens-v5.html
+   ===================================================================== */
+.opt-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.opt-h h2{font:800 24px/1.2 Onest;margin:0;letter-spacing:-.3px}
+.opt-h .n{font:800 15px/1 Onest;background:var(--pg-ink);color:var(--pg);padding:6px 11px;border-radius:999px}
+.opt-h .rec{font:700 14px/1 Onest;box-shadow:inset 0 0 0 1.5px var(--pg-ink);color:var(--pg-ink);padding:6px 11px;border-radius:999px}
+.why{background:var(--pg-card);border:1px solid var(--pg-line);border-radius:16px;padding:14px 16px;max-width:860px;margin:12px 0 20px;font-size:15px;line-height:1.55}
+.why p{margin:0}.why p+p{margin-top:8px}
+.why .pc{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:4px 18px;margin-top:10px;font-size:14px;color:var(--pg-ink2)}
+.why .pc b{color:var(--pg-ink)}
+.top code,.lead code{font:500 13px ui-monospace,Consolas,monospace;background:var(--pg-tab);padding:1px 5px;border-radius:5px}
+.anno{display:inline-block;font:700 13px/1 Onest;background:var(--pg-ink);color:var(--pg);padding:5px 9px;border-radius:999px;white-space:nowrap}
+
+/* неделя на жёлтом листе */
+.wk{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px;margin:14px -6px 0}
+.wk span{display:flex;flex-direction:column;align-items:center;gap:4px;padding:7px 0;border-radius:15px;font:600 13px/1 Onest;color:var(--on2);min-width:0}
+.wk span b{font:700 18px/1 Onest;color:var(--on);font-variant-numeric:tabular-nums}
+.wk span i{display:flex;gap:3px;height:5px}
+.wk span i u{width:5px;height:5px;border-radius:50%;background:var(--on)}
+.wk span.past b{color:var(--on2);font-weight:600}
+.wk span.on{background:var(--on);color:var(--c)}
+.wk span.on b{color:var(--c)}
+.wk span.on i u{background:var(--c)}
+.ph.w320 .wk{margin:10px -4px 0}.ph.w320 .wk span b{font-size:17px}
+
+/* шкала дня: жёлтый лист = сам день */
+.rul{--a:var(--on);--b:var(--on2);--bg:var(--c);position:relative;height:52px;margin:14px 2px 0}
+.rul.pp{--a:var(--ink);--b:var(--ink3);--bg:var(--paper);margin:8px 2px 4px}
+.rul .tr{position:absolute;left:0;right:0;top:22px;height:2px;border-radius:1px;background:var(--a)}
+.rul .tk{position:absolute;top:18px;width:2px;height:10px;border-radius:1px;background:var(--a);margin-left:-1px}
+.rul .tk.s{top:20px;height:6px;width:1.5px}
+.rul .past{position:absolute;left:0;top:19px;height:8px;border-radius:4px;background:var(--a)}
+.rul .lb{position:absolute;top:36px;transform:translateX(-50%);font:600 13px/1 Onest;color:var(--b);font-variant-numeric:tabular-nums;white-space:nowrap}
+.rul .lb.l0{transform:none}.rul .lb.r0{transform:translateX(-100%)}
+.rul .nw{position:absolute;top:13px;width:20px;height:20px;margin-left:-10px;border-radius:50%;background:var(--bg);box-shadow:inset 0 0 0 3px var(--a)}
+.rul .sn{position:absolute;top:-3px;transform:translateX(-50%);color:var(--b)}
+.rul .it{position:absolute;top:15px;width:12px;height:16px;margin-left:-6px;border-radius:4px;background:var(--a)}
+.rul.pp .it{box-shadow:0 0 0 2px var(--paper)}
+.shnote{display:flex;align-items:center;gap:6px;font:600 15px/1.2 Onest;color:var(--on2);margin-top:2px}
+
+/* первые шаги (только первые дни) */
+.prog{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin:2px 0 6px}
+.prog i{height:6px;border-radius:3px;background:var(--line)}
+.prog i.ok{background:var(--ink)}
+.stp{display:flex;align-items:center;gap:12px;min-height:64px;border-top:1px solid var(--line);padding:8px 0}
+.stp.f0{border-top:0}
+.stp h4{font:650 16px/1.25 Onest}
+.stp .q{font-size:14px;line-height:1.35;color:var(--ink2);margin-top:2px}
+.go{margin-left:auto;color:var(--ink);flex:none}
+
+/* строка-пример: по касанию встаёт в строку помощника */
+.ex{display:flex;align-items:center;gap:12px;min-height:54px;border-top:1px solid var(--line);font-size:16px}
+.ex.f0{border-top:0}
+
+/* совет помощника (после беты, Ф-62) */
+.tip{border-radius:20px;background:var(--paper2);padding:14px 14px 12px;margin:16px 0 4px;position:relative}
+.tip .hd{display:flex;align-items:center;gap:8px;font:700 13px/1.2 Onest;color:var(--asstText)}
+.tip p.t{font:600 16px/1.35 Onest;margin-top:6px}
+.tip .acts{display:flex;align-items:center;gap:16px;margin-top:12px;flex-wrap:wrap}
+.tip .anno{position:absolute;right:10px;top:-11px}
+.tip.pb{outline:2px dashed var(--line2);outline-offset:3px}
+
+/* стикеры на «Сегодня» */
+.stks{display:flex;gap:8px;align-items:flex-start}
+.stks>div{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
+.stk h4{font-size:15.5px}
+.stk .q{font-size:14px;line-height:1.35;color:var(--stInk2);margin-top:4px}
+
+/* время в колонке строки */
+.tc{width:48px;flex:none;font:700 14px Onest;font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<symbol id="sbi" viewBox="0 0 66 12"><rect x="0" y="7" width="3" height="4" rx="1" fill="currentColor"/><rect x="4.5" y="5" width="3" height="6" rx="1" fill="currentColor"/><rect x="9" y="3" width="3" height="8" rx="1" fill="currentColor"/><rect x="13.5" y="1" width="3" height="10" rx="1" fill="currentColor"/><path d="M22 5a9 9 0 0 1 12 0M24.5 7.8a5.4 5.4 0 0 1 7 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="28" cy="10.3" r=".9" fill="currentColor"/><rect x="40.5" y=".5" width="21" height="11" rx="3.2" fill="none" stroke="currentColor" stroke-opacity=".45"/><rect x="42" y="2" width="15" height="8" rx="2" fill="currentColor"/><rect x="63" y="4" width="1.6" height="4" rx=".8" fill="currentColor" fill-opacity=".45"/></symbol>
+<symbol id="sbo" viewBox="0 0 66 12"><rect x="0" y="7" width="3" height="4" rx="1" fill="currentColor" fill-opacity=".35"/><rect x="4.5" y="5" width="3" height="6" rx="1" fill="currentColor" fill-opacity=".35"/><rect x="9" y="3" width="3" height="8" rx="1" fill="currentColor" fill-opacity=".35"/><rect x="13.5" y="1" width="3" height="10" rx="1" fill="currentColor" fill-opacity=".35"/><path d="M23 3l10 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><rect x="40.5" y=".5" width="21" height="11" rx="3.2" fill="none" stroke="currentColor" stroke-opacity=".45"/><rect x="42" y="2" width="11" height="8" rx="2" fill="currentColor"/></symbol>
+<symbol id="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4"/></symbol>
+<symbol id="note" viewBox="0 0 24 24"><path d="M5 4h10l4 4v12H5z"/><path d="M15 4v4h4M8.5 12h7M8.5 16h5"/></symbol>
+<symbol id="asst" viewBox="0 0 24 24"><path d="M4.5 6.5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H11l-4.5 3.5v-3.5h0a2 2 0 0 1-2-2z"/><path d="M8.5 9.5h7M8.5 12.5h4.5"/></symbol>
+<symbol id="coin" viewBox="0 0 24 24"><rect x="3.5" y="6" width="17" height="13" rx="2.5"/><path d="M3.5 10.5h17M7.5 15h3"/></symbol>
+<symbol id="more" viewBox="0 0 24 24"><circle cx="5.5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18.5" cy="12" r="1.3"/></symbol>
+<symbol id="tasks" viewBox="0 0 24 24"><path d="M10 6.5h10M10 12h10M10 17.5h10"/><path d="M3.8 6.5l1.4 1.4L7.6 5.4M3.8 12l1.4 1.4 2.4-2.5M3.8 17.5l1.4 1.4 2.4-2.5"/></symbol>
+<symbol id="mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11.5" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></symbol>
+<symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></symbol>
+<symbol id="check" viewBox="0 0 24 24"><path d="M5.5 12.5l4 4L18.5 7.5"/></symbol>
+<symbol id="back" viewBox="0 0 24 24"><path d="M14.5 6l-6 6 6 6"/></symbol>
+<symbol id="chev" viewBox="0 0 24 24"><path d="M9.5 6l6 6-6 6"/></symbol>
+<symbol id="down" viewBox="0 0 24 24"><path d="M6 9.5l6 6 6-6"/></symbol>
+<symbol id="x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+<symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l2.8 1.8"/></symbol>
+<symbol id="trash" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 12.5h9l1-12.5M10 11v5M14 11v5"/></symbol>
+<symbol id="share" viewBox="0 0 24 24"><path d="M12 3.5v11M8 7.5l4-4 4 4"/><path d="M6 11.5v8h12v-8"/></symbol>
+<symbol id="cloud" viewBox="0 0 24 24"><path d="M7 18.5h10a4 4 0 0 0 .6-8A6 6 0 0 0 6.2 9 4.8 4.8 0 0 0 7 18.5z"/><path d="M4 4l16 16"/></symbol>
+<symbol id="gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></symbol>
+<symbol id="hist" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4.5v3.5h3.5M12 8v4l2.8 1.8"/></symbol>
+<symbol id="doc" viewBox="0 0 24 24"><path d="M6 3.5h8.5l3.5 3.5v13.5H6z"/><path d="M14.5 3.5V7H18M9 11.5h6M9 15h6"/></symbol>
+<symbol id="inbox" viewBox="0 0 24 24"><path d="M12 3.5v9M8.5 9l3.5 3.5L15.5 9"/><path d="M3.5 13.5h5l1.5 2.5h4l1.5-2.5h5v6h-17z"/></symbol>
+<symbol id="all" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></symbol>
+<symbol id="receipt" viewBox="0 0 24 24"><path d="M6 3.5h12v17l-2-1.3-2 1.3-2-1.3-2 1.3-2-1.3-2 1.3z"/><path d="M9 8h6M9 11.5h6M9 15h3.5"/></symbol>
+<symbol id="lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
+<symbol id="stop" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2.5" fill="currentColor" stroke="none"/></symbol>
+<symbol id="pen" viewBox="0 0 24 24"><path d="M4.5 19.5l1-4L16 5l3 3L8.5 18.5z"/><path d="M14 7l3 3"/></symbol>
+<symbol id="cam" viewBox="0 0 24 24"><path d="M4 8h3.5L9 5.5h6L16.5 8H20v11H4z"/><circle cx="12" cy="13" r="3.5"/></symbol>
+<symbol id="bell" viewBox="0 0 24 24"><path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 1.5H5z"/><path d="M10 20.5h4"/></symbol>
+<symbol id="type" viewBox="0 0 24 24"><path d="M4 18.5L8.5 6.5h1L14 18.5M5.6 14.5h6.8M15 18.5l3-8h.6l3 8M15.8 16h5"/></symbol>
+<symbol id="moon" viewBox="0 0 24 24"><path d="M19 14.5A7.5 7.5 0 1 1 9.5 5a6 6 0 0 0 9.5 9.5z"/></symbol>
+<symbol id="globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 3.5 5.4 3.5 8.5s-1 5.9-3.5 8.5c-2.5-2.6-3.5-5.4-3.5-8.5s1-5.9 3.5-8.5z"/></symbol>
+<symbol id="pin" viewBox="0 0 24 24"><path d="M12 20.5s-6-5.3-6-10.5a6 6 0 0 1 12 0c0 5.2-6 10.5-6 10.5z"/><circle cx="12" cy="10" r="2"/></symbol>
+<symbol id="film" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 4v16M16 4v16M4 9h4M4 15h4M16 9h4M16 15h4"/></symbol>
+<symbol id="export" viewBox="0 0 24 24"><path d="M12 14V3.5M8.5 7L12 3.5 15.5 7"/><path d="M4.5 13v6.5h15V13"/></symbol>
+<symbol id="up" viewBox="0 0 24 24"><path d="M12 19V5.5M6.5 11L12 5.5 17.5 11"/></symbol>
+<symbol id="redo" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></symbol>
+<symbol id="sunset" viewBox="0 0 24 24"><path d="M4 18h16M7.5 18a4.5 4.5 0 0 1 9 0M12 6v3M5.6 10.6l1.6 1.6M18.4 10.6l-1.6 1.6M3 14.5h2M19 14.5h2"/></symbol></svg>
+<style>
+/* день на месте (разбор №2, п. 8) */
+:root{--il-a:#FFEFA6;--il-b:#CDE5FF;--il-c:#FFCFD8}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--il-a:#4F4419;--il-b:#24476E;--il-c:#6A3040}}
+:root[data-theme="dark"]{--il-a:#4F4419;--il-b:#24476E;--il-c:#6A3040}
+.wk span.today{box-shadow:inset 0 0 0 1.5px var(--on)}
+.wk span{cursor:pointer}
+.back2{height:36px;border-radius:18px;padding:0 14px;background:var(--paper);color:var(--ink);font:700 15px/1 Onest;display:inline-flex;align-items:center;gap:6px;flex:none}
+.empty{display:flex;flex-direction:column;align-items:center;text-align:center;padding:26px 8px 8px}
+.empty svg.ill{width:112px;height:112px;margin-bottom:18px}
+.empty h3{margin:0;font:750 20px/1.25 Onest;color:var(--ink);letter-spacing:-.2px}
+.empty p{margin-top:8px;font:400 16px/1.4 Onest;color:var(--ink2);max-width:290px}
+.empty .btn{margin-top:20px;width:100%;max-width:300px}
+.empty .ex2{margin-top:14px;font:600 14px/1.3 Onest;color:var(--ink3)}
+.blk2{display:flex;gap:12px;align-items:stretch;min-height:54px;border-top:1px solid var(--line)}
+.blk2 .t{width:56px;flex:none;font:700 14px/1 Onest;font-variant-numeric:tabular-nums;padding-top:19px;color:var(--ink2)}
+.blk2 .b{flex:1;min-width:0;display:flex;align-items:center;gap:10px}
+.spec{max-width:1100px;margin:34px auto 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+</style>
+<div class="wrap">
+<header class="top">
+<h1>«Сегодня» · день на месте</h1>
+<p>Разбор №2, пункт 8. Касание дня в неделе больше не уводит в «Дела». Жёлтый лист остаётся, неделя остаётся, ниже показан выбранный день. Если день пустой — спокойный шаблон с одной кнопкой. Данные выдуманы.</p>
+</header>
+<nav class="bar" aria-label="Тема">
+<div class="seg" role="group" aria-label="Тема"><button type="button" data-t="light">Светлая</button><button type="button" data-t="dark">Тёмная</button></div>
+</nav>
+<section class="grp">
+<div class="phones">
+
+<!-- 1 · выбран другой день, есть дела -->
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-asst"></i><i class="c-notes"></i></div>
+<div class="sheet c-today"><div class="sh-top"><span class="sp">Пятница, 20 ноября</span><span class="back2" role="button"><svg class="i xs"><use href="#back"/></svg>К сегодня</span></div>
+<p class="phrase">Пятница.<br>2&nbsp;дела, 1&nbsp;встреча.</p><p class="ttl ttl-only">Пятница</p>
+<div class="wk" aria-label="Неделя"><span class="past">пн<b>16</b><i><u></u></i></span><span class="past">вт<b>17</b><i><u></u></i></span><span class="today">ср<b>18</b><i><u></u><u></u></i></span><span>чт<b>19</b><i></i></span><span class="on" aria-selected="true">пт<b>20</b><i><u></u><u></u></i></span><span>сб<b>21</b><i></i></span><span>вс<b>22</b><i></i></span></div></div>
+<div class="pap padC">
+<div class="sec">План дня<span class="m">3</span></div>
+<div class="blk2" style="border-top:0"><span class="t">10:00</span><div class="b"><h4 class="f1 ell">Стоматолог</h4><span class="cap">1 ч</span></div></div>
+<div class="blk2"><span class="t">16:00</span><div class="b"><h4 class="f1 ell">Забрать посылку</h4></div></div>
+<div class="blk2"><span class="t">19:00</span><div class="b"><h4 class="f1 ell">Ужин у родителей</h4><span class="cap">встреча</span></div></div>
+<div class="sec">Без времени<span class="m">1</span></div>
+<div class="ln f0"><span class="ck"></span><span class="f1 ell">Оплатить интернет</span><span class="m">до пт</span></div>
+</div>
+<div class="fstrip" role="group" aria-label="Строка помощника"><span class="adot" aria-hidden="true"></span><span class="f1 ell">Добавить на пятницу…</span><span class="rb" role="button" aria-label="Сказать голосом"><svg class="i"><use href="#mic"/></svg></span></div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>Выбран другой день</b>Чёрная капсула — выбранный день, контур — сегодня. Точки под числом — в дне что-то есть. Фраза и строка помощника говорят про выбранный день. Справа сверху «К сегодня» вместо лупы. Смена дня — затухание 180 мс со сдвигом 8 dp в сторону дня.</figcaption></figure>
+
+<!-- 2 · пустой будущий день -->
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-asst"></i><i class="c-notes"></i></div>
+<div class="sheet c-today"><div class="sh-top"><span class="sp">Суббота, 21 ноября</span><span class="back2" role="button"><svg class="i xs"><use href="#back"/></svg>К сегодня</span></div>
+<p class="phrase">Суббота<br>свободна.</p><p class="ttl ttl-only">Суббота</p>
+<div class="wk" aria-label="Неделя"><span class="past">пн<b>16</b><i><u></u></i></span><span class="past">вт<b>17</b><i><u></u></i></span><span class="today">ср<b>18</b><i><u></u><u></u></i></span><span>чт<b>19</b><i></i></span><span>пт<b>20</b><i><u></u><u></u></i></span><span class="on" aria-selected="true">сб<b>21</b><i></i></span><span>вс<b>22</b><i></i></span></div></div>
+<div class="pap padC">
+<div class="empty">
+<svg class="ill" viewBox="0 0 112 112" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--ink)">
+<rect x="30" y="20" width="62" height="66" rx="12" transform="rotate(8 61 53)" fill="var(--il-b)"/>
+<path d="M22 32a12 12 0 0 1 12-12h40l12 12v44a12 12 0 0 1-12 12H34a12 12 0 0 1-12-12z" transform="rotate(-6 54 54)" fill="var(--il-a)"/>
+<path d="M74 20v8a4 4 0 0 0 4 4h8" transform="rotate(-6 54 54)"/>
+<path d="M36 50h26M36 60h18" transform="rotate(-6 54 54)" stroke-opacity=".35"/>
+<circle cx="88" cy="88" r="13" fill="var(--paper)"/><path d="M88 82v12M82 88h12"/>
+</svg>
+<h3>На субботу пока ничего</h3>
+<p>Скажите «в субботу в&nbsp;10 — рынок», и&nbsp;я&nbsp;поставлю сюда.</p>
+<span class="btn" role="button"><svg class="i s"><use href="#plus"/></svg>Добавить на субботу</span>
+</div>
+</div>
+<div class="fstrip" role="group" aria-label="Строка помощника"><span class="adot" aria-hidden="true"></span><span class="f1 ell">Добавить на субботу…</span><span class="rb" role="button" aria-label="Сказать голосом"><svg class="i"><use href="#mic"/></svg></span></div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>Пустой день впереди</b>Фраза «Суббота свободна» — это хорошая новость, не ошибка. Картинка — два чистых стикера (лимон и небо из палитры стикеров) и «+». Одна кнопка: ставит фокус в строку помощника с текстом «В субботу » и открывает клавиатуру. Ничего не создаётся, пока человек не скажет что.</figcaption></figure>
+
+<!-- 3 · пустой прошедший день -->
+<figure><div class="frame"><div class="ph">
+<div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-asst"></i><i class="c-notes"></i></div>
+<div class="sheet c-today"><div class="sh-top"><span class="sp">Понедельник, 16 ноября</span><span class="back2" role="button"><svg class="i xs"><use href="#back"/></svg>К сегодня</span></div>
+<p class="phrase">Понедельник<br>прошёл тихо.</p><p class="ttl ttl-only">Понедельник</p>
+<div class="wk" aria-label="Неделя"><span class="past on" aria-selected="true">пн<b>16</b><i></i></span><span class="past">вт<b>17</b><i><u></u></i></span><span class="today">ср<b>18</b><i><u></u><u></u></i></span><span>чт<b>19</b><i></i></span><span>пт<b>20</b><i><u></u><u></u></i></span><span>сб<b>21</b><i></i></span><span>вс<b>22</b><i></i></span></div></div>
+<div class="pap padC">
+<div class="empty">
+<svg class="ill" viewBox="0 0 112 112" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--ink)">
+<path d="M26 34a12 12 0 0 1 12-12h36a12 12 0 0 1 12 12v40a12 12 0 0 1-12 12H38a12 12 0 0 1-12-12z" fill="var(--il-c)"/>
+<path d="M26 40h60M40 16v12M72 16v12"/>
+<path d="M44 62l8 8 16-16" stroke-opacity=".5"/>
+</svg>
+<h3>В этот день записей нет</h3>
+<p>Здесь будет всё, что вы сделали и&nbsp;сохранили в&nbsp;этот день.</p>
+<span class="ex2">Неделю можно листать: смахните влево или вправо</span>
+</div>
+</div>
+<div class="fstrip" role="group" aria-label="Строка помощника"><span class="adot" aria-hidden="true"></span><span class="f1 ell">Скажите или напишите…</span><span class="rb" role="button" aria-label="Сказать голосом"><svg class="i"><use href="#mic"/></svg></span></div>
+<nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
+</div></div><figcaption><b>Пустой прошедший день</b>Без кнопки «Добавить»: в прошлое дела не ставим. Если в дне были сделанные дела, заметки или траты — они идут списком «Сделано», «Сохранили», «Потратили», как на «Сегодня».</figcaption></figure>
+
+</div>
+<div class="spec">
+<div class="fact"><h3>Поведение</h3><ul>
+<li>Касание дня: выбранный день — тёмная капсула (<code>onSheet</code>, цифра цвета листа), сегодня — контур 1,5 <code>onSheet</code>. Переход в «Дела» убрать совсем.</li>
+<li>Лист и неделя не двигаются, меняется только фраза, мета-строка и светлый лист: затухание + сдвиг 8 dp, 180 мс, <code>0.2, 0, 0, 1</code>.</li>
+<li>Смахивание недели — прошлая / следующая неделя. Выбранный день — тот же день недели.</li>
+<li>«К сегодня» (36, радиус 18, <code>paper</code>) — на месте лупы, пока выбран не сегодняшний день. Повторное касание вкладки «Сегодня» тоже возвращает к сегодня.</li>
+<li>При уходе с вкладки и возврате — снова сегодня.</li>
+</ul></div>
+<div class="fact"><h3>Что в дне</h3><ul>
+<li>Будущий день: «План дня» (дела со временем), «Без времени» (дела со сроком в этот день).</li>
+<li>Прошедший: «Сделано», «Сохранили», «Потратили» — только непустые разделы.</li>
+<li>Фраза: будущий — «Пятница. 2 дела, 1 встреча.»; пустой будущий — «Суббота свободна.» (понедельник, вторник, четверг — «свободен», среда, пятница, суббота — «свободна», воскресенье — «свободно»); пустой прошедший — «{День} прошёл тихо.»</li>
+<li>Строка помощника: «Добавить на {день}…» (вин. падеж: на пятницу, на субботу); фраза без даты, сказанная тут, ставится на выбранный день.</li>
+</ul></div>
+<div class="fact"><h3>Пустой шаблон · размеры</h3><ul>
+<li>Картинка 112, линия 1,8 <code>ink</code>, заливки — из палитры стикеров. Отступ сверху 26, до заголовка 18.</li>
+<li>Заголовок Onest 750 20/25 <code>ink</code>; текст 16/22 <code>ink2</code>, ширина до 290; кнопка <code>btn</code> 52, ширина до 300, отступ 20.</li>
+<li>Всё по центру. При крупном шрифте картинка 88, заголовок 24.</li>
+<li>TalkBack: заголовок — роль «header»; кнопка «Добавить на субботу».</li>
+</ul></div>
+</div>
+</section>
+</div>
+
+<script>
+(function(){
+  var d=document.documentElement,btns=document.querySelectorAll('.seg button');
+  function set(t){d.setAttribute('data-theme',t);btns.forEach(function(b){b.setAttribute('aria-pressed',String(b.getAttribute('data-t')===t))});try{localStorage.setItem('v5-theme',t)}catch(e){}}
+  var m=location.search.match(/theme=(light|dark)/),s=null;try{s=localStorage.getItem('v5-theme')}catch(e){}
+  set(m?m[1]:(s||(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')));
+  btns.forEach(function(b){b.addEventListener('click',function(){set(b.getAttribute('data-t'))})});
+})();
+</script>
+</body>
+</html>
