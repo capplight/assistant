@@ -24,12 +24,14 @@ class Price:
     cached_in: Decimal
     cache_write: Decimal
     cache_write_1h: Decimal
+    web_search: Decimal = Decimal("0.01")  # USD per search (Anthropic: $10 per 1,000)
 
     def cost(self, usage: Usage, multiplier: Decimal = Decimal(1)) -> Decimal:
         total = (usage.tokens_in * self.inp + usage.tokens_out * self.out
                  + usage.cached_in * self.cached_in + usage.cache_write_in * self.cache_write
                  + usage.cache_write_1h_in * self.cache_write_1h)
-        return (total * multiplier / _MTOK).quantize(Decimal("0.000001"))  # fmt: skip
+        searches = usage.web_searches * self.web_search
+        return (total * multiplier / _MTOK + searches).quantize(Decimal("0.000001"))  # fmt: skip
 
 
 @dataclass(frozen=True)

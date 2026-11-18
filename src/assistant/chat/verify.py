@@ -240,3 +240,34 @@ def merge(facts: Iterable[Facts]) -> Facts:
     for f in facts:
         out.update(f)
     return out
+
+
+# Ф-86: the assistant talks freely (advice, knowledge, small talk) and is strict only about the
+# person's own data. Code, not the model, decides what counts as "about the person": a phrase
+# that asks about their data keeps the whole answer under the check, and in a general answer a
+# sentence that speaks about their data («у вас в записях…», «вы потратили…») is still checked.
+_PERSONAL_PHRASE = re.compile(
+    r"(?<!\w)(?:мо[йяеёи]|мою|моего|моей|моих|моим|моему|мне\s+(?:записал|сохранил)|"
+    r"у\s+меня|сколько\s+я|я\s+(?:\w+\s+)?(?:потрат|трат|запис|сохран|покуп|купил|заплат|"
+    r"плат|оплат|оплачив|полож|остав|отправ|получ|взял|брал|писал|говорил|просил|"
+    r"занима)\w*|"
+    r"в\s+(?:моих\s+)?записях|в\s+заметках|на\s+странице|записал\w*|сохранил\w*|"
+    r"потратил\w*|заплатил\w*|оплатил\w*|менің|меннің|маған)(?!\w)",
+    re.IGNORECASE)  # fmt: skip
+_PERSONAL_SENTENCE = re.compile(
+    r"(?<!\w)(?:ваш\w*|у\s+вас|у\s+тебя|тво\w+|вы\s+(?:\w+л[аи]?|\w+\s+\w+л[аи]?)|ты\s+\w+л[аи]?|"
+    r"в\s+(?:ваших\s+|твоих\s+)?записях|в\s+заметк\w+|запис(?:ан|ал|ей|и|ь|ях)\w*|"
+    r"сохран\w+|потрачен\w*|потратил\w*|сіздің|сізде)(?!\w)",
+    re.IGNORECASE)  # fmt: skip
+
+
+def personal_question(phrase: str) -> bool:
+    """The person asks about their own data («сколько я потратил», «где мой паспорт», «что у
+    меня завтра»): the answer is checked whatever mode the model chose."""
+    return bool(_PERSONAL_PHRASE.search(" ".join(phrase.lower().replace("ё", "е").split())))
+
+
+def about_person(sentence: str) -> bool:
+    """A sentence that speaks about the person's records or doings; in a general answer only
+    these go through the number/date check."""
+    return bool(_PERSONAL_SENTENCE.search(sentence.replace("ё", "е")))

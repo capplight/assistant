@@ -43,6 +43,8 @@ from assistant.ai.types import (
     StreamInterrupted,
     ToolCall,
     ToolSpec,
+    WebSearchSpec,
+    WebSource,
 )
 from assistant.config import Settings
 
@@ -75,6 +77,7 @@ __all__ = [
     "MemoryAIStore", "Outcome", "PgAIStore", "PreparedBatchRequest", "ProviderAdapter",
     "ProviderError", "Result", "RouteTable", "Router", "StaleBatchResult", "StreamInterrupted",
     "StrongReason", "StrongRequest", "TaskInputs", "ToolCall", "ToolSpec", "UntrustedPart",
+    "WebSearchSpec", "WebSource",
     "ai_consent_providers", "build_adapters", "build_router", "ensure_usage_partitions",
     "iban_ok", "iin_bin_ok",
     "load_routes", "neutralize", "next_month_start", "period_starts", "record_ops_alert",

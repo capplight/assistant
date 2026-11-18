@@ -20,9 +20,16 @@ request; tools are `strict`; forced tool_choice (any/tool) is rejected by curren
 message; the assistant turn (thinking blocks with signatures + tool_use) is replayed unchanged
 (`ProviderTurn`), as the API requires within a tool loop. UNVERIFIED live: the replay dumps SDK
 blocks with model_dump(exclude_none) and sends them back as params.
+
+Web search (Ф-86, checked live 2026-11-19 on claude-haiku-5-5): `web_search_20250305` and
+`web_search_20260209` (with `allowed_callers: ["direct"]`) both work together with
+output_config.format; the JSON answer carries no citation blocks, so sources are taken from the
+`web_search_tool_result` blocks. `user_location.country` "KZ" is rejected (400), so only city and
+time zone are sent. `pause_turn` is continued by sending the paused turn back (MAX_PAUSES).
 """
 
 import base64
+import dataclasses
 from typing import Any
 
 from assistant.ai.adapters.base import (
@@ -46,6 +53,8 @@ from assistant.ai.types import (
     ServerError,
     ToolCall,
     Usage,
+    WebSearchSpec,
+    WebSource,
 )
 
 UNSUPPORTED_KEYWORDS = frozenset({
@@ -53,6 +62,9 @@ UNSUPPORTED_KEYWORDS = frozenset({
     "minLength", "maxLength", "maxItems", "uniqueItems", "minProperties", "maxProperties",
 })  # fmt: skip
 MAX_STRICT_UNIONS = 16  # the API's limit (400 "too many parameters with union types")
+MAX_PAUSES = 2  # `pause_turn` continuations of one web search turn
+WEB_SOURCES_PER_SEARCH = 2
+WEB_SOURCES_MAX = 4
 
 
 def anthropic_schema(node: Any) -> Any:
@@ -142,8 +154,11 @@ class AnthropicAdapter:
         }  # fmt: skip
         if output_config:
             kwargs["output_config"] = output_config
-        if req.tools:
-            kwargs["tools"] = _tool_params(req.tools, max(0, budget))
+        tools = _tool_params(req.tools, max(0, budget)) if req.tools else []
+        if req.web_search is not None:
+            tools.append(_web_search_tool(req.web_search))
+        if tools:
+            kwargs["tools"] = tools
             if req.tool_choice == "none":
                 kwargs["tool_choice"] = {"type": "none"}
         return kwargs
@@ -193,14 +208,23 @@ class AnthropicAdapter:
 
         client = self._get_client()
         kwargs = self.request_kwargs(req)
+        paused: list[Any] = []  # earlier parts of a web search turn the API paused
         try:
-            if req.on_token is None:
-                msg = await client.messages.create(**kwargs)
-            else:
-                async with client.messages.stream(**kwargs) as stream:
-                    async for delta in stream.text_stream:
-                        await req.on_token(delta)
-                    msg = await stream.get_final_message()
+            while True:
+                if req.on_token is None:
+                    msg = await client.messages.create(**kwargs)
+                else:
+                    async with client.messages.stream(**kwargs) as stream:
+                        async for delta in stream.text_stream:
+                            await req.on_token(delta)
+                        msg = await stream.get_final_message()
+                if msg.stop_reason != "pause_turn" or len(paused) >= MAX_PAUSES:
+                    break
+                # A long server-tool turn (web search): send the paused turn back unchanged.
+                paused.append(msg)
+                turn = [b.model_dump(mode="json", exclude_none=True) for b in msg.content]
+                kwargs = {**kwargs, "messages": [*kwargs["messages"],
+                                                 {"role": "assistant", "content": turn}]}
         except anthropic.APITimeoutError as exc:
             raise ProviderTimeout(type(exc).__name__) from exc
         except anthropic.RateLimitError as exc:
@@ -214,7 +238,7 @@ class AnthropicAdapter:
             raise ServerError(type(exc).__name__) from exc
         except TimeoutError as exc:
             raise ProviderTimeout("timeout") from exc
-        return _to_response(msg, req.model)
+        return _to_response(msg, req.model, paused)
 
 
 def _content(m: Message) -> list[dict[str, Any]]:
@@ -284,29 +308,77 @@ def _map_status(status: int, message: str) -> ProviderError:
     return ProviderRequestError(f"http {status}: {message[:300]}")
 
 
-def _to_response(msg: Any, model: str) -> AdapterResponse:
-    u = msg.usage
+def _usage(u: Any) -> Usage:
     writes = getattr(u, "cache_creation_input_tokens", 0) or 0
     long_writes = getattr(getattr(u, "cache_creation", None), "ephemeral_1h_input_tokens", 0) or 0
-    usage = Usage(
+    searches = getattr(getattr(u, "server_tool_use", None), "web_search_requests", 0) or 0
+    return Usage(
         tokens_in=u.input_tokens or 0,
         tokens_out=u.output_tokens or 0,
         cached_in=getattr(u, "cache_read_input_tokens", 0) or 0,
         cache_write_in=max(0, writes - long_writes),
         cache_write_1h_in=long_writes,
+        web_searches=int(searches),
     )
+
+
+def _web_search_tool(spec: WebSearchSpec) -> dict[str, Any]:
+    tool: dict[str, Any] = {"type": spec.tool_type, "name": "web_search",
+                            "max_uses": spec.max_uses}  # fmt: skip
+    if spec.tool_type != "web_search_20250305":
+        # Newer versions filter results through code execution by default; called directly
+        # they behave like the basic tool and cost no code-execution tokens.
+        tool["allowed_callers"] = ["direct"]
+    loc = {k: v for k, v in (("city", spec.city), ("timezone", spec.timezone)) if v}
+    if loc:
+        tool["user_location"] = {"type": "approximate", **loc}
+    return tool
+
+
+def _web_sources(blocks: Any) -> list[WebSource]:
+    """The first results of each search (the answer is JSON, so the API attaches no citation
+    blocks to it): what the answer was written from, shown to the person as sources."""
+    out: list[WebSource] = []
+    seen: set[str] = set()
+    for block in blocks or []:
+        if getattr(block, "type", None) != "web_search_tool_result":
+            continue
+        content = getattr(block, "content", None)
+        if not isinstance(content, list):  # an error object: nothing found
+            continue
+        for r in content[:WEB_SOURCES_PER_SEARCH]:
+            url = getattr(r, "url", None)
+            if url and url not in seen:
+                seen.add(url)
+                out.append(WebSource(url, getattr(r, "title", None) or url))
+    return out[:WEB_SOURCES_MAX]
+
+
+def _to_response(msg: Any, model: str, paused: list[Any] | None = None) -> AdapterResponse:
+    usage = _usage(msg.usage)
+    blocks: list[Any] = []
+    for part in paused or []:  # a paused turn was paid too, and its searches count
+        earlier = _usage(part.usage)
+        usage = Usage(*(a + b for a, b in zip(dataclasses.astuple(usage),
+                                               dataclasses.astuple(earlier), strict=True)))
+        blocks += list(part.content)
+    blocks += list(msg.content)
     if msg.stop_reason == "refusal":
         raise Refused("refusal", usage=usage)
     if msg.stop_reason == "max_tokens":
         raise BadOutput("max_tokens", usage=usage)
     texts, calls = [], []
-    for block in msg.content:
+    for block in blocks:
         if block.type == "text":
             texts.append(block.text)
         elif block.type == "tool_use":
             calls.append(ToolCall(block.id, block.name, dict(block.input or {})))
+    starts = [i for i, t in enumerate(texts) if t.lstrip().startswith("{")]
+    if len(texts) > 1 and starts:  # a word before a web search is not part of the JSON answer
+        texts = texts[starts[0]:]
     return AdapterResponse("".join(texts), usage, getattr(msg, "model", model) or model,
                            tool_calls=calls, request_id=getattr(msg, "_request_id", None),
-                           raw=_raw_turn(msg) if calls else None)
+                           raw=_raw_turn(msg) if calls else None,
+                           web_sources=_web_sources(blocks))
 
 

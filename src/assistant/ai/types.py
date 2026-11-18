@@ -137,6 +137,28 @@ class Usage:
     cached_in: int = 0
     cache_write_in: int = 0  # 5-minute cache writes
     cache_write_1h_in: int = 0  # 1-hour cache writes (a higher price)
+    web_searches: int = 0  # Anthropic web search server tool: billed per search, not tokens
+
+
+@dataclass(frozen=True)
+class WebSearchSpec:
+    """Anthropic's web search server tool (Ф-86): Anthropic runs the searches inside the call.
+    Other adapters ignore it (the answer then comes from the model's own knowledge).
+    `user_location` takes no country for Kazakhstan: the API rejects «KZ» (400, live
+    2026-11-19), so only city and time zone go."""
+
+    tool_type: str = "web_search_20250305"
+    max_uses: int = 3
+    city: str | None = None
+    timezone: str | None = None
+
+
+@dataclass(frozen=True)
+class WebSource:
+    """A page the web search returned: shown to the person as a source of the answer."""
+
+    url: str
+    title: str
 
 
 # Returns False while the delta is not visible to the person yet (see ai/router.py); None = shown.
@@ -159,6 +181,7 @@ class AdapterRequest:
     # "auto" | "none" ("none": answer now, tools stay declared so the cached prefix holds).
     # Forced choices are not offered: current Anthropic models reject them.
     tool_choice: str = "auto"
+    web_search: WebSearchSpec | None = None  # Ф-86: off unless settings.web_search_enabled
 
 
 @dataclass
@@ -169,6 +192,7 @@ class AdapterResponse:
     tool_calls: list[ToolCall] = field(default_factory=list)
     request_id: str | None = None
     raw: ProviderTurn | None = None  # the assistant turn to replay in a tool loop
+    web_sources: list[WebSource] = field(default_factory=list)
 
 
 @dataclass
@@ -284,3 +308,4 @@ class Result[T: BaseModel]:
     raw: ProviderTurn | None = None  # replay in the next step of a tool loop (same provider)
     # Everything produced here is AI-generated content (spec 5.9): UI shows labels.ai_generated.
     ai_generated: bool = True
+    web_sources: list[WebSource] = field(default_factory=list)  # pages a web search returned

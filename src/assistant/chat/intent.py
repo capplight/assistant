@@ -63,7 +63,14 @@ _CHANGE = re.compile(_W + r"(?:"
     r")" + _E, re.IGNORECASE)  # fmt: skip
 _QUESTION = re.compile(_W + r"(?:сколько|где|когда|что|чего|какой|какая|какое|какие|кто|кому|"
                        r"почему|зачем|как|есть ли|найди|покажи|напомни мне|қашан|қайда|қанша|"
-                       r"не\b|кім)", re.IGNORECASE)  # fmt: skip
+                       r"не\b|кім|куда|откуда|"
+                       # Ф-86: asking the assistant for help, advice, a plan or a chat is a
+                       # question (answered from general knowledge), never a note to keep
+                       r"посоветуй\w*|подскаж\w*|расскаж\w*|объясни\w*|"
+                       r"состав(?:ь|ьте)(?!\s+спис)|придума\w*|помоги\w*|предлож(?:и|ите)\b|"
+                       r"порекоменду\w*|поищи\w*|загугли\w*|в\s+интернете|"
+                       r"нужн[аоы]?\s+(?:инф\w*|совет\w*|иде\w*|помощь)|как\s+дела|"
+                       r"привет\w*|здравствуй\w*|сәлем\w*|кеңес\w*)", re.IGNORECASE)  # fmt: skip
 _DEICTIC = re.compile(_W + r"(?:это|эту|этот|эти|этого|здесь|тут|ее|его|осы|мұны|бұны)"
                       r"(?=$|[\s,.;:!?»\"])", re.IGNORECASE)  # fmt: skip
 _TOPICS = re.compile(_W + r"(?:разлож(?:и|ите|ить)|сгруппир(?:уй|уйте|овать)|"
@@ -274,6 +281,22 @@ def names_here(text: str) -> bool:
 def names_page(text: str) -> bool:
     """«сделай страницу …»: a page is made only on a direct request (R-55)."""
     return bool(_PAGE_WORD.search(_norm(text)))
+
+
+_WEB = re.compile(
+    r"(?:в\s+интернете|в\s+сети|в\s+гугл\w*|загугли\w*|поищи\s+(?:в\s+)?(?:интернет|онлайн|сайт)|"
+    r"онлайн|интернеттен|"
+    r"погод\w*|прогноз\w*|курс\w*\s+(?:доллар|валют|евро|рубл|тенге|юан)\w*|новост\w*|"
+    r"сейчас\s+открыт\w*|часы\s+работы|режим\s+работы|расписани\w*|афиш\w*|"
+    r"(?:что|какие)\s+(?:идет|идут)\s+в\s+кино|сч[её]т\s+матча|кто\s+выиграл|"
+    r"сколько\s+(?:сейчас\s+)?стоит|цен[аы]\s+на|актуальн\w*|свеж\w+\s+(?:инф|данн|новост)\w*)",
+    re.IGNORECASE)  # fmt: skip
+
+
+def asks_web(text: str) -> bool:
+    """Ф-86: the phrase needs fresh or online information (weather, rates, news, opening hours)
+    or asks to look it up online. Only then is web search offered (it is paid per search)."""
+    return bool(_WEB.search(_norm(text)))
 
 
 def is_comparison(text: str) -> bool:

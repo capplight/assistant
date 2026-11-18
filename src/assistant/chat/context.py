@@ -36,8 +36,10 @@ from assistant.chat.tools import READ_TOOLS, ToolEnv, run_search
 from assistant.chat.verify import Facts, facts_of, short_date
 from assistant.embeddings import ChunkEmbedder
 
-PROMPT_VERSION = "chat.v3"  # week 12: + aggregate (totals by code)
-SYSTEM_PROMPT = (Path(__file__).parent / "prompts" / "chat.v3.md").read_text(encoding="utf-8")
+# chat.v4 (Ф-86): talks like ChatGPT; strict (records only, numbers checked) about the person's
+# own data, free general knowledge for the rest; the answer carries its `mode`.
+PROMPT_VERSION = "chat.v4"
+SYSTEM_PROMPT = (Path(__file__).parent / "prompts" / "chat.v4.md").read_text(encoding="utf-8")
 
 BUDGET_PROFILE = 400
 BUDGET_PAGE_LINE = 30

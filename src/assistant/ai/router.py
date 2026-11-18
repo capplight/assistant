@@ -62,6 +62,7 @@ from assistant.ai.types import (
     TokenHook,
     ToolSpec,
     Usage,
+    WebSearchSpec,
 )
 from assistant.config import Settings
 from assistant.logs import error_text
@@ -218,7 +219,7 @@ class Router:
         tools: list[ToolSpec] | tuple[ToolSpec, ...] = (), continuing: bool = False,
         job_id: int | None = None, masker: Masker | None = None,
         pin_provider: str | None = None, tool_choice: str = "auto",
-        avoid: tuple[str, ...] = (),
+        avoid: tuple[str, ...] = (), web_search: WebSearchSpec | None = None,
     ) -> Result[T]:  # fmt: skip
         """Run one task. `user_id=None` is allowed only with `no_personal_data=True`
         (synthetic eval data). `strong` asks for the route's escalation tier with the evidence
@@ -285,6 +286,7 @@ class Router:
                     effort="low" if tier is Tier.LIGHT else "medium",
                     on_token=unmasker.attempt() if unmasker is not None else None,
                     tool_choice=tool_choice if tools else "auto",
+                    web_search=web_search,
                 )  # fmt: skip
                 t0 = self.monotonic()
                 try:
@@ -594,5 +596,5 @@ class Router:
                       usage=resp.usage, cost_usd=cost, attempts=attempts,
                       fallback_from=fallback_from, escalation_blocked=denied is not None,
                       escalation_denied=denied, budget_warning=warning,
-                      raw=resp.raw)  # fmt: skip
+                      raw=resp.raw, web_sources=list(resp.web_sources))  # fmt: skip
 

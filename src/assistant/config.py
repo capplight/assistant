@@ -170,6 +170,13 @@ class Settings(BaseSettings):
     # Big semantic reorders (>150 records, PAGE_GROUP) per person per day (spec 5.10 rule 8,
     # `limits.ai_reorder_per_day`, counter `ai_reorders`).
     chat_big_reorders_per_day: int = 3
+    # Ф-86: web search for the assistant line (Anthropic's server tool on claude-haiku-5-5:
+    # $10 per 1,000 searches plus ~10k input tokens of results per search). Offered only when
+    # the phrase asks for fresh or online information (chat/intent.py `asks_web`), at most
+    # `web_search_max_uses` searches per phrase. OFF until the founder approves the cost.
+    web_search_enabled: bool = False
+    web_search_max_uses: int = 3
+    web_search_tool: str = "web_search_20250305"  # or web_search_20260209 (called directly)
     # Week 17: chat cost report and alerts (python -m assistant.ai.costs; spec 5.10 rule 9, 8).
     # Alert: >N chat steps per person per day, or one step dearer than this.
     ops_chat_steps_per_user_day: int = 60
