@@ -281,16 +281,27 @@ export function EntryList({
                   </View>
                 );
               }
+              // v5 `.sec` (QA B «Дела» 8): «Сделано  2» — the count to the right in grey, not «Сделано (2)».
+              const heading = groupTitle ? groupTitle(item) : item.title;
+              const m = /^(.*\S)\s*\((\d+)\)$/u.exec(heading);
               return (
                 <View style={style} onLayout={measure}>
-                  <AppText
+                  <View
                     testID={`group-${item.key}`}
-                    variant="sectionLabel"
+                    accessible
                     accessibilityRole="header"
-                    style={{ paddingTop: theme.space[3], paddingBottom: theme.space[2] }}
+                    accessibilityLabel={heading}
+                    style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, paddingTop: 18, paddingBottom: 6 }}
                   >
-                    {groupTitle ? groupTitle(item) : item.title}
-                  </AppText>
+                    <AppText variant="section" style={{ flexShrink: 1 }}>
+                      {m ? m[1] : heading}
+                    </AppText>
+                    {m ? (
+                      <AppText variant="small" color="ink3">
+                        {m[2]}
+                      </AppText>
+                    ) : null}
+                  </View>
                 </View>
               );
             }

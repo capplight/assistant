@@ -33,7 +33,7 @@ export function Chip({ label, variant = 'tonal', icon, onPress, accessibilityLab
   const inner = (
     <>
       {icon ? <Icon icon={icon} size="sm" color={fg} /> : null}
-      <AppText variant="callout" color={fg} style={[styles.label, { fontFamily: theme.type.sheetMeta.fontFamily, lineHeight: 19 }]}>
+      <AppText nativeID="v5-one-line" numberOfLines={1} variant="callout" color={fg} style={[styles.label, { fontFamily: theme.type.sheetMeta.fontFamily, lineHeight: 19 }]}>
         {label}
       </AppText>
     </>
@@ -74,5 +74,5 @@ export function Chip({ label, variant = 'tonal', icon, onPress, accessibilityLab
 
 const styles = StyleSheet.create({
   chip: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', paddingVertical: 4 },
-  label: { flexShrink: 1 },
+  label: { flexShrink: 0 },
 });

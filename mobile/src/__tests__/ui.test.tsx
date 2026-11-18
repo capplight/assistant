@@ -292,7 +292,7 @@ describe('components', () => {
         ]}
       />,
     );
-    expect(screen.getByText('Сегодня · 4')).toBeTruthy();
+    expect(screen.getByText('Сегодня 4')).toBeTruthy(); // QA A6: «Сегодня 4», no «·»
     expect(screen.getByTestId('s-a')).toBeSelected();
     await fireEvent.press(screen.getByTestId('s-b'));
     expect(onChange).toHaveBeenCalledWith('b');

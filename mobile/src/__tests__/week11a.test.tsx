@@ -412,16 +412,16 @@ describe('«Дела» — the day planner', () => {
     await renderRouter(APP_DIR, { initialUrl: `/page/${tasks.id}` });
     await settle(() => screen.queryByTestId('task-t2') !== null);
     expect(screen.queryByTestId('task-t3')).toBeNull();
-    expect(screen.getByTestId('seg-missed')).toHaveTextContent('Пропущено · 1');
+    expect(screen.getByTestId('seg-missed')).toHaveTextContent('Пропущено 1');
     await fireEvent.press(screen.getByTestId('task-t2'));
     await settle(() => screen.queryByTestId('group-done') !== null);
-    expect(screen.getByTestId('group-done')).toHaveTextContent('Сделано (1)');
+    expect(screen.getByTestId('group-done').props.accessibilityLabel).toBe('Сделано (1)');
     expect(stripText()).toBeTruthy();
     await fireEvent.press(screen.getByTestId('undo-strip-undo'));
     await settle(() => screen.queryByTestId('group-done') === null);
     await fireEvent.press(screen.getByTestId('seg-missed'));
     await settle(() => screen.queryByTestId('task-t3') !== null);
-    expect(within(screen.getByTestId('task-t3')).getByText(/Просрочено/)).toBeTruthy();
+    expect(within(screen.getByTestId('task-open-t3')).getByText(/Просрочено/)).toBeTruthy(); // QA B «Дела» 4: the words are a separate target
   });
 });
 
@@ -466,7 +466,7 @@ describe('«Покупки» — the fridge list and «Я в магазине»'
     await settle(() => s.callsTo('PATCH /tasks/m').length === 1);
     expect(s.callsTo('PATCH /tasks/m')[0]!.body).toEqual({ version: 3, qty: '3', client_id: expect.any(String) });
 
-    expect(screen.getByTestId('group-done')).toHaveTextContent('Куплено (1)');
+    expect(screen.getByTestId('group-done').props.accessibilityLabel).toBe('Куплено (1)');
     await fireEvent.press(screen.getByTestId('shop-clear-bought'));
     await settle(() => screen.queryByTestId('task-y') === null);
     await act(async () => {

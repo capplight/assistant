@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Check, Ellipsis, Film, StickyNote as StickyNoteIcon } from 'lucide-react-native';
+import { ArrowDown, ArrowUp, Check, Ellipsis, Film } from 'lucide-react-native';
 import { AiLabel } from '@/components/AiLabel';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -26,9 +26,9 @@ import type { RowMoves } from '../RecordRow';
 import { StackCards } from '../StackCards';
 import { autoNoteColor, Chip, Icon, pressedStyle, SegmentedControl, Sheet, StickyNote, type LucideIcon } from '../ui';
 import { useScreenReader } from '../useScreenReader';
+import { ChipRow, PlaceTab, Row } from '../ui/Leaf';
 import { BoardView } from './BoardView';
 import { EntryList, type EntryCtx } from './EntryList';
-import { PageEmpty } from './PageEmpty';
 import { entryRow, withGroups, type EntryRow } from './rows';
 import type { ViewProps } from './registry';
 import { stickerLabel } from './stickerLabel';
@@ -173,7 +173,7 @@ export function StickersView({ page, entries, frameTop, ordering }: ViewProps) {
     <View style={{ marginBottom: theme.space[3], gap: theme.space[3] }}>
       {frameTop}
       {!board || boardAsRows ? (
-        <View testID="notes-filters" accessibilityRole="tablist" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+        <ChipRow testID="notes-filters">
           {NOTES_FILTERS.map((f) => (
             <Chip
               key={f.key}
@@ -185,7 +185,7 @@ export function StickersView({ page, entries, frameTop, ordering }: ViewProps) {
               onPress={() => setFilter(f.key)}
             />
           ))}
-        </View>
+        </ChipRow>
       ) : null}
       {boardOn ? <ModeSwitch board={board} onPick={(on) => void changeView(page, { kind: 'board', on })} /> : null}
       {boardAsRows ? (
@@ -421,9 +421,23 @@ function ColorSheet({ title, current, onPick, onClose }: { title: string; curren
 }
 
 /** Empty: the icon, the phrase and what to say (design-system §3 EmptyState — no fake stickers). */
+/** QA B «Заметки» 2: one phrase 17/600 and two example rows with the tab of the place, like the empty «Помощник». */
 function EmptyWall() {
   const { t } = useTranslation();
-  return <PageEmpty icon={StickyNoteIcon} lines={[t('notes.empty'), t('notes.example_1'), t('notes.example_2')]} />;
+  const theme = useTheme();
+  return (
+    <View testID="page-empty" style={{ paddingTop: theme.space[2] }}>
+      <AppText style={{ fontFamily: theme.type.bodyStrong.fontFamily, fontSize: 17, lineHeight: 23, marginBottom: 6 }}>{t('notes.empty')}</AppText>
+      {[t('notes.example_1'), t('notes.example_2')].map((ex, i) => (
+        <Row key={ex} first={i === 0}>
+          <PlaceTab place="notes" />
+          <AppText numberOfLines={1} style={{ flex: 1 }}>
+            {ex}
+          </AppText>
+        </Row>
+      ))}
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({

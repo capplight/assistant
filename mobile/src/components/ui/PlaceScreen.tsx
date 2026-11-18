@@ -18,7 +18,7 @@ import {
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 
 import { feedAskScroll, InTabsContext, useChrome } from '@/store/chrome';
-import { onPlace, sheet as S, useTheme, type PlaceKey, type Theme } from '@/theme';
+import { askBar, onPlace, sheet as S, useTheme, type PlaceKey, type Theme } from '@/theme';
 
 import { AppText } from '../AppText';
 import type { LucideIcon } from './Icon';
@@ -90,6 +90,18 @@ export type PlaceScreenProps = {
 };
 
 type SV = React.ComponentRef<typeof ScrollView>;
+
+/**
+ * The sheet geometry (QA v5-device-1 A1–A4), pure for tests: the colour fills H − 28; the first element of the paper
+ * starts 18 below the visible paper edge, i.e. at H − 28 + 18 of the scroll; content that fits once collapsed does
+ * not keep the sheet collapsed.
+ */
+export function sheetInset(sheetHeight: number): number {
+  return sheetHeight - S.overlap + S.paperPadTop;
+}
+export function sheetFits(contentHeight: number, viewportHeight: number, collapseRange: number): boolean {
+  return contentHeight <= viewportHeight + collapseRange + 1;
+}
 
 /**
  * A screen whose list is its own (a FlatList of a page tool) makes THAT list the scroll of the sheet: the list asks
@@ -219,7 +231,7 @@ export function BottomPaperFade({ color, height }: { color: string; height: numb
         <Defs>
           <LinearGradient id="pf" x1="0" y1="0" x2="0" y2="1">
             <Stop offset="0" stopColor={color} stopOpacity={0} />
-            <Stop offset="0.7" stopColor={color} stopOpacity={1} />
+            <Stop offset="0.5" stopColor={color} stopOpacity={1} />
             <Stop offset="1" stopColor={color} stopOpacity={1} />
           </LinearGradient>
         </Defs>
@@ -285,6 +297,13 @@ export function PlaceScreen({
   const innerRef = useRef<SV | null>(null);
   const viewport = useRef({ h: 0, content: 0 });
 
+  // QA v5-device-1 A3/A4: another page in the same screen (tabs reuse it) or a new list starts expanded at the top —
+  // the sheet must never stay collapsed from an old scroll.
+  // (The value listener below turns the collapsed flag back by itself.)
+  useEffect(() => {
+    y.setValue(0);
+  }, [title, y]);
+
   useEffect(() => {
     if (strip || bare) return;
     const id = y.addListener(({ value }) => {
@@ -304,9 +323,12 @@ export function PlaceScreen({
   const [hasList, setHasList] = useState(false);
   const settle = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (strip || bare) return;
-    const at = e.nativeEvent.contentOffset.y;
-    if (at > 0 && at < range) {
-      const to = at < range / 2 ? 0 : range;
+    const n = e.nativeEvent;
+    const at = n.contentOffset.y;
+    // QA A4: content that fits once the sheet is collapsed is not a reason to collapse — it goes back expanded.
+    const fits = sheetFits(n.contentSize.height, n.layoutMeasurement.height, range);
+    if (at > 0 && (at < range || fits)) {
+      const to = fits || at < range / 2 ? 0 : range;
       if (external.current) external.current(to, !reduced);
       else innerRef.current?.scrollTo({ y: to, animated: !reduced });
     }
@@ -338,12 +360,14 @@ export function PlaceScreen({
   const pad = paperPadding ?? m.gutter;
   const askPad = askRoom ? m.ask.listBottomPadding : 0;
   const listApi: PlaceListApi = {
-    inset: H - S.overlap + S.paperPadTop,
+    inset: sheetInset(H),
     onScroll: handleScroll as unknown as PlaceListApi['onScroll'],
     onScrollEndDrag: settle,
     onMomentumScrollEnd: settle,
     register: (fn) => {
       external.current = fn;
+      // A new list starts at its top: the sheet is expanded (A3).
+      y.setValue(0);
       setHasList(true);
       return () => {
         if (external.current === fn) external.current = null;
@@ -404,7 +428,7 @@ export function PlaceScreen({
           </PlaceListContext.Provider>
         )}
         {footer ? <View style={{ backgroundColor: paperBg, paddingHorizontal: pad, paddingBottom: 14, paddingTop: theme.space[2] }}>{footer}</View> : null}
-        {askRoom ? <BottomPaperFade color={paperBg} height={34} /> : null}
+        {askRoom ? <BottomPaperFade color={paperBg} height={askBar.bottomFade} /> : null}
 
         {/* The coloured sheet over the scroll; its bottom 28 dp are the paper's rounded corners. */}
         {bare ? (
@@ -416,8 +440,11 @@ export function PlaceScreen({
           pointerEvents="box-none"
           nativeID="v5-sheet"
           testID={headerTestID ?? (testID ? `${testID}-sheet` : 'place-sheet')}
-          style={[styles.sheet, { height, backgroundColor: c.bg, borderTopLeftRadius: S.radius, borderTopRightRadius: S.radius }]}
+          style={[styles.sheet, { height }]}
         >
+          {/* QA v5-device-1 A1: the colour fills only down to the paper's edge (H − 28); the last 28 dp are the two
+              rounded corners of the paper (a mask in the sheet colour), the middle shows the paper itself. */}
+          <View pointerEvents="none" style={[styles.fill, { bottom: S.overlap, backgroundColor: c.bg, borderTopLeftRadius: S.radius, borderTopRightRadius: S.radius }]} />
           {strip ? null : (
             <Animated.View
               pointerEvents={collapsed ? 'none' : 'box-none'}
@@ -520,6 +547,7 @@ const styles = StyleSheet.create({
   corners: { position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', justifyContent: 'space-between' },
   fade: { position: 'absolute', left: 0, right: 0, bottom: 0 },
   backdrop: { position: 'absolute', left: 0, right: 0, bottom: 0 },
+  fill: { position: 'absolute', left: 0, right: 0, top: 0 },
   srOnly: { position: 'absolute', width: 1, height: 1, opacity: 0 },
 });
 

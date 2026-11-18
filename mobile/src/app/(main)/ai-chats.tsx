@@ -29,7 +29,13 @@ export default function AiChatsScreen() {
   const shown = useMemo(() => (q.trim() ? searchRecords(chats, q, 200) : chats), [chats, q]);
   const back = () => (router.canGoBack() ? router.back() : router.replace('/more'));
   return (
-    <Screen testID="page-ai-chats" scroll={false} sub={records ? t('aichats.count', { count: chats.length }) : undefined}>
+    <Screen
+      testID="page-ai-chats"
+      scroll={false}
+      sub={records ? t('aichats.count', { count: chats.length }) : undefined}
+      // screens-v5 «Переписки с ChatGPT»: «Принести ещё архив» — an outlined button at the bottom (it was in «Ещё»).
+      footer={chats.length > 0 ? <Button testID="aichats-bring-more" label={t('aichats.bring_more')} variant="secondary" onPress={() => router.push('/ai-import')} /> : undefined}
+    >
       <Header title={t('aichats.title')} back={{ onPress: back, label: t('more.title'), testID: 'aichats-back' }} />
       <PlaceFlatList
         data={shown}

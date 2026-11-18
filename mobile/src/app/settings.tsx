@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { AlarmClock, Copy, Download, Info, Languages, LifeBuoy, Mail, Phone, Repeat, Send, ShieldCheck, Trash2, UserX, Wallet } from 'lucide-react-native';
+import { AlarmClock, Copy, Download, Info, Languages, LifeBuoy, Mail, Phone, Repeat, Send, ShieldCheck, UserX, Wallet } from 'lucide-react-native';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Linking, View } from 'react-native';
@@ -56,12 +56,12 @@ export default function SettingsScreen() {
       <View style={{ gap: theme.space[2] }}>
         <View style={{ gap: theme.space[2] }}>
           <AppText variant="section" accessibilityRole="header">
-            {t('settings.theme')}
+            {t('settings.view')}
           </AppText>
           <ThemePicker
             preference={scheme}
             onChange={setScheme}
-            labels={{ light: t('settings.theme_light'), dark: t('settings.theme_dark'), system: t('settings.theme_system'), systemHint: t('settings.theme_system_hint') }}
+            labels={{ light: t('settings.theme_light'), dark: t('settings.theme_dark'), system: t('settings.theme_system'), systemHint: t('settings.theme_system_hint'), title: t('settings.theme') }}
           />
         </View>
 
@@ -97,7 +97,6 @@ export default function SettingsScreen() {
             chevron
             onPress={() => router.push('/duplicates')}
           />
-          <ListRow testID="settings-trash" icon={Trash2} title={t('trash.title')} chevron onPress={() => router.navigate('/trash')} />
         </ListGroup>
 
         <ListGroup title={t('settings.account')}>

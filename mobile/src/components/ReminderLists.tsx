@@ -23,10 +23,11 @@ import type { Segment } from '@/tasks/rows';
 import { useTasks } from '@/tasks/store';
 import { useToast } from '@/store/toast';
 import { useUndo } from '@/store/undo';
-import { useTheme } from '@/theme';
+import { plan, useTheme } from '@/theme';
 
 import { AppText } from './AppText';
 import { Button } from './ui/Button';
+import { ButtonRow } from './ui/Leaf';
 import { SegmentedControl } from './ui/SegmentedControl';
 
 /** The clock for lists that change with time (a reminder passes, a row becomes «Пропущено»). */
@@ -51,7 +52,7 @@ export function useMissed(now: number): MissedRow[] {
  */
 export function MissedList({ rows, now }: { rows: MissedRow[]; now: number }) {
   const theme = useTheme();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   if (rows.length === 0) return null;
   const done = async (row: MissedRow) => {
     const late = await ackLate(row.key);
@@ -77,40 +78,56 @@ export function MissedList({ rows, now }: { rows: MissedRow[]; now: number }) {
     });
   };
   return (
-    <View style={{ gap: theme.space[2], marginBottom: theme.space[4] }}>
-      {rows.map((row) => {
+    // QA v5-device-1 B «Дела» 3: missed like on «Сегодня» — the time in a 56 column (a past day as «пн» above it), the
+    // title on one line, «Сделано / Перенести» 38 high, no red.
+    <View style={{ marginBottom: theme.space[4] }}>
+      {rows.map((row, i) => {
         const when = dayOffset(row.at, now) === 0 ? timeText(row.at) : `${dayText(row.at, now)}, ${timeText(row.at)}`;
         const line = t('missed.row', { time: when, title: row.title });
+        let weekday = '';
+        try {
+          weekday = dayOffset(row.at, now) === 0 ? '' : new Date(row.at).toLocaleDateString(i18n.language, { weekday: 'short' });
+        } catch {
+          weekday = '';
+        }
         return (
           <View
             key={row.key}
             testID={`missed-${row.key}`}
             accessibilityLabel={line}
-            style={{
-              backgroundColor: theme.colors.dangerTint,
-              borderRadius: theme.radius.lg,
-              padding: theme.space[3],
-              gap: theme.space[2],
-            }}
+            style={{ borderTopWidth: i === 0 ? 0 : 1, borderTopColor: theme.colors.line, paddingVertical: 10, gap: 8 }}
           >
-            <AppText color="danger" variant="bodyStrong">
-              {line}
-            </AppText>
-            <View style={{ flexDirection: theme.largeFont ? 'column' : 'row', gap: theme.space[2] }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={{ width: plan.timeColumn }}>
+                {weekday ? (
+                  <AppText variant="footnote" numberOfLines={1}>
+                    {weekday}
+                  </AppText>
+                ) : null}
+                <AppText nativeID="v5-one-line" numberOfLines={1} style={theme.type.planTime}>
+                  {timeText(row.at)}
+                </AppText>
+              </View>
+              <AppText numberOfLines={1} style={{ flex: 1 }}>
+                {row.title}
+              </AppText>
+            </View>
+            <ButtonRow style={{ paddingLeft: plan.timeColumn }}>
               <Button
                 testID={`missed-done-${row.key}`}
                 label={t('missed.done')}
                 accessibilityLabel={t('missed.done_a11y', { title: row.title })}
                 size="small"
-                style={theme.largeFont ? undefined : { flex: 1 }}
+                minHeight={38}
                 onPress={() => void done(row)}
               />
               <Button
                 testID={`missed-move-${row.key}`}
                 label={t('missed.move')}
                 accessibilityLabel={t('missed.move_a11y', { title: row.title })}
-                variant="text"
-                style={theme.largeFont ? undefined : { flex: 1 }}
+                variant="secondary"
+                size="small"
+                minHeight={38}
                 onPress={() =>
                   router.push({
                     pathname: '/reminder-new',
@@ -118,7 +135,7 @@ export function MissedList({ rows, now }: { rows: MissedRow[]; now: number }) {
                   })
                 }
               />
-            </View>
+            </ButtonRow>
           </View>
         );
       })}
@@ -213,8 +230,7 @@ export function ReminderRows({
                 testID={`${testPrefix}-delete-${a.group}`}
                 label={t('rem.delete')}
                 accessibilityLabel={t('rem.delete_a11y', { title: a.title })}
-                variant="text"
-                labelColor="danger"
+                variant="link"
                 minHeight={theme.size.minTouch}
                 onPress={() => void removeReminder(reminderId, a.title, t)}
               />

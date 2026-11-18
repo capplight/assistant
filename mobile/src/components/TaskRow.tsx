@@ -25,6 +25,7 @@ export function TaskRow({
   showReturn,
   meta,
   onMenu,
+  onOpen,
   highlighted,
   metaColor,
   big = false,
@@ -40,6 +41,8 @@ export function TaskRow({
   meta?: string | null;
   /** «Ещё»: Выше / Ниже / Переместить… — long press and a screen-reader action (F-41). */
   onMenu?: () => void;
+  /** A tap on the title (the task itself); without it the title opens the menu. */
+  onOpen?: () => void;
   /** Just added by the assistant: `highlightTint` for 600 ms. */
   highlighted?: boolean;
   /** @deprecated the circle is 24 everywhere now; kept so old call sites still compile. */
@@ -98,27 +101,23 @@ export function TaskRow({
         },
       ]}
     >
-      <Pressable
-        testID={`task-${task.id}`}
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked: done }}
-        accessibilityLabel={`${title}. ${state}`}
-        accessibilityActions={actions}
-        onAccessibilityAction={actions ? onAction : undefined}
-        onPress={onToggle}
-        onLongPress={onMenu}
-        delayLongPress={400}
-        style={({ pressed }) => [
-          styles.main,
-          {
-            gap: 12,
-            minHeight: big ? theme.size.rowHeightMeta : theme.m.row,
-            paddingVertical: theme.space[2],
-            backgroundColor: pressed ? withAlpha(theme.colors.paper2, 0.8) : 'transparent',
-          },
-        ]}
-      >
-        <CheckMark checked={done} />
+      {big ? (
+        <Pressable
+          testID={`task-${task.id}`}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: done }}
+          accessibilityLabel={`${title}. ${state}`}
+          accessibilityActions={actions}
+          onAccessibilityAction={actions ? onAction : undefined}
+          onPress={onToggle}
+          onLongPress={onMenu}
+          delayLongPress={400}
+          style={({ pressed }) => [
+            styles.main,
+            { gap: 12, minHeight: theme.size.rowHeightMeta, paddingVertical: theme.space[2], backgroundColor: pressed ? withAlpha(theme.colors.paper2, 0.8) : 'transparent' },
+          ]}
+        >
+          <CheckMark checked={done} />
         <View style={styles.flex}>
           <AppText
             variant={big ? 'title2' : 'body'}
@@ -136,7 +135,54 @@ export function TaskRow({
           ) : null}
           <ChangedMark at={task.assistant_changed_at} actionId={task.assistant_action_id} testID={`changed-task-${task.id}`} />
         </View>
-      </Pressable>
+        </Pressable>
+      ) : (
+        // QA v5-device-1 B «Дела» 4: only the circle ticks; a tap on the title opens the task (its menu / editor),
+        // so a 60+ person never completes a task by touching its words.
+        <View style={[styles.main, { gap: 12, minHeight: theme.m.row }]}>
+          <Pressable
+            testID={`task-${task.id}`}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: done }}
+            accessibilityLabel={`${title}. ${state}`}
+            accessibilityActions={actions}
+            onAccessibilityAction={actions ? onAction : undefined}
+            onPress={onToggle}
+            hitSlop={11}
+            style={{ marginLeft: 0 }}
+          >
+            <CheckMark checked={done} />
+          </Pressable>
+          <Pressable
+            testID={`task-open-${task.id}`}
+            accessibilityRole="button"
+            accessibilityLabel={title}
+            accessibilityHint={t('tasks.open_hint')}
+            onPress={onOpen ?? onMenu}
+            onLongPress={onMenu}
+            delayLongPress={400}
+            style={({ pressed }) => [styles.flex, { paddingVertical: theme.space[2], backgroundColor: pressed ? withAlpha(theme.colors.paper2, 0.8) : 'transparent' }]}
+          >
+          <View style={styles.flex}>
+            <AppText
+              variant={big ? 'title2' : 'body'}
+              // «В магазине»: large and high contrast, capped at 2× (template-screens 2.4).
+              maxFontSizeMultiplier={big ? 2 : undefined}
+              color={done ? 'ink3' : 'ink'}
+              style={[big ? { fontFamily: theme.type.headline.fontFamily } : null, done ? { textDecorationLine: 'line-through' } : null]}
+            >
+              {shownTitle}
+            </AppText>
+            {meta ? (
+              <AppText variant="footnote" color={metaColor ?? 'ink2'}>
+                {meta}
+              </AppText>
+            ) : null}
+            <ChangedMark at={task.assistant_changed_at} actionId={task.assistant_action_id} testID={`changed-task-${task.id}`} />
+          </View>
+          </Pressable>
+        </View>
+      )}
       {right}
       {done && showReturn ? (
         <Button

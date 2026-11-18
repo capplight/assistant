@@ -213,7 +213,8 @@ export const askBar = {
   mic: 36,
   micLarge: 44,
   border: 1.5,
-  bottomFade: 34,
+  /** QA v5-device-1 П5 (approved): 70 = strip 48 + gap 10 + 12, transparent → paper at 50 %. */
+  bottomFade: 70,
   listBottomPadding: 70,
   listBottomPaddingLarge: 78,
   aboveKeyboard: 8,

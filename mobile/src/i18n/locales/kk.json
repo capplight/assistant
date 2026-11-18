@@ -355,7 +355,12 @@
     "phrase_rings_few": "{{count}} еске салу",
     "phrase_rings_many": "{{count}} еске салу",
     "missed_title": "Өткізіп алдыңыз",
-    "move_btn": "Ауыстыру"
+    "move_btn": "Ауыстыру",
+    "missed_done": "Орындалды",
+    "phrase_missed_one": "Біреуі өткізілді.",
+    "phrase_missed_few": "{{count}} өткізілді.",
+    "phrase_missed_many": "{{count}} өткізілді.",
+    "phrase_missed_other": "{{count}} өткізілді."
   },
   "page": {
     "find": "Беттен табу",
@@ -792,7 +797,8 @@
     "bought_section": "Сатып алынды",
     "done_section": "Орындалғандар",
     "overdue": "Мерзімі өтті · {{date}}",
-    "no_time": "уақытсыз"
+    "no_time": "уақытсыз",
+    "open_hint": "Істі ашады"
   },
   "missed": {
     "section": "Өткізілген",
@@ -1947,7 +1953,8 @@
     "soon": "Жақында",
     "support": "Қолдау",
     "version": "Нұсқа",
-    "theme_system_hint": "күндіз Жалбыз, түнде Тереңдік"
+    "theme_system_hint": "күндіз Жалбыз, түнде Тереңдік",
+    "view": "Көрініс"
   },
   "legal": {
     "policy": "Құпиялылық саясаты",
@@ -2113,7 +2120,8 @@
     "find": "Чаттардан табу",
     "empty": "Мұнда ChatGPT, Claude және Gemini-мен әңгімелеріңіз болады.",
     "bring": "Хат алмасуды әкелу",
-    "none": "Ештеңе таппадым."
+    "none": "Ештеңе таппадым.",
+    "bring_more": "Тағы архив әкелу"
   },
   "aiimp": {
     "title": "Хат алмасуды әкелу",

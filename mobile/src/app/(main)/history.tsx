@@ -11,6 +11,7 @@ import { AppText } from '@/components/AppText';
 import { answerNotice } from '@/components/answerText';
 import { FeedbackSheet } from '@/components/FeedbackSheet';
 import { Screen } from '@/components/Screen';
+import { ChipRow } from '@/components/ui/Leaf';
 import { SourceChips } from '@/components/SourceChips';
 import { Button } from '@/components/ui/Button';
 import { cardEdge } from '@/components/ui/Card';
@@ -122,7 +123,7 @@ export default function HistoryScreen() {
         <Header title={t('history.title')} back={{ onPress: back, label: t('more.title'), testID: 'chat-collapse' }} />
         <View testID="chat-screen" style={{ gap: theme.space[3] }}>
         <AppText variant="small">{t('history.meta')}</AppText>
-        <View accessibilityRole="tablist" style={[styles.chips, { gap: theme.space[2] }]}>
+        <ChipRow>
           {chips.map((c) => (
             <Chip
               key={c.key}
@@ -132,7 +133,7 @@ export default function HistoryScreen() {
               onPress={() => setFilter(c.key)}
             />
           ))}
-        </View>
+        </ChipRow>
         {shown.length === 0 ? (
           <AppText testID="did-empty" color="ink2">
             {filter === 'all' ? t('chat.empty') : t('history.none')}

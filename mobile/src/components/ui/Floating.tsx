@@ -7,6 +7,7 @@ import { onPlace, useTheme, type PlaceKey } from '@/theme';
 
 import { AppText } from '../AppText';
 import { Button } from './Button';
+import { ButtonRow } from './Leaf';
 import type { LucideIcon } from './Icon';
 import { pressedStyle, useReducedMotion } from './motion';
 
@@ -81,10 +82,10 @@ export function CompactConfirm({
               ) : null}
             </View>
           </View>
-          <View style={[styles.row, { gap: 10, marginTop: 16 }]}>
-            <Button testID={`${testID}-cancel`} label={cancelLabel} variant="secondary" size="small" style={{ flex: 1 }} onPress={onCancel} />
-            <Button testID={`${testID}-ok`} label={confirmLabel} variant={danger ? 'danger' : 'primary'} size="small" style={{ flex: 1.3 }} onPress={onConfirm} />
-          </View>
+          <ButtonRow style={{ marginTop: 16 }}>
+            <Button testID={`${testID}-cancel`} label={cancelLabel} variant="secondary" size="small" onPress={onCancel} />
+            <Button testID={`${testID}-ok`} label={confirmLabel} variant={danger ? 'danger' : 'primary'} size="small" onPress={onConfirm} />
+          </ButtonRow>
         </View>
       </View>
     </Modal>

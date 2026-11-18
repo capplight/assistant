@@ -1,6 +1,6 @@
 import { ChevronRight } from 'lucide-react-native';
-import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Children, type ReactNode } from 'react';
+import { Pressable, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { sheet, useTheme, type PlaceKey } from '@/theme';
 
@@ -83,7 +83,7 @@ export function SectionHead({
         {title}
       </AppText>
       {right !== undefined ? (
-        <AppText variant="small" color="ink3" style={styles.tnum}>
+        <AppText variant="small" color="ink3">
           {right}
         </AppText>
       ) : null}
@@ -142,7 +142,8 @@ export function Row({
 /** `.m`: the muted meta at the end of a row (ink3 14, tabular). */
 export function RowMeta({ children, testID }: { children: ReactNode; testID?: string }) {
   return (
-    <AppText testID={testID} variant="small" color="ink3" style={styles.tnum}>
+    // QA B «Ещё» 3: single counters and times are not tabular (Onest's tabular «1» is wide: «1 1»).
+    <AppText testID={testID} variant="small" color="ink3">
       {children}
     </AppText>
   );
@@ -152,6 +153,33 @@ export function RowMeta({ children, testID }: { children: ReactNode; testID?: st
 export function RowChevron() {
   const theme = useTheme();
   return <ChevronRight size={18} color={theme.colors.ink3} strokeWidth={theme.icon.strokeWidth} />;
+}
+
+/**
+ * Two (or three) buttons side by side that stack one under another at full width when they do not fit (QA
+ * v5-device-1 A6): a wrapping row where every button grows; labels never wrap.
+ */
+export function ButtonRow({ children, testID, style }: { children: ReactNode; testID?: string; style?: StyleProp<ViewStyle> }) {
+  return (
+    <View testID={testID} style={[styles.buttons, style]}>
+      {Children.toArray(children).map((c, i) => (
+        <View key={i} style={styles.buttonCell}>
+          {c}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/** A row of chips that never wraps: it scrolls sideways (QA v5-device-1 A6). */
+export function ChipRow({ children, testID, style }: { children: ReactNode; testID?: string; style?: StyleProp<ViewStyle> }) {
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={styles.chipScroller}>
+      <View testID={testID} accessibilityRole="tablist" style={[styles.chips, style]}>
+        {children}
+      </View>
+    </ScrollView>
+  );
 }
 
 /** The inset block on paper (`paper2`, radius 16, 12 / 14): banners, the «изменил помощник» plate. */
@@ -216,4 +244,8 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
   tnum: { fontVariant: ['tabular-nums'] },
   toggle: { width: 50, height: 30, borderRadius: 15 },
+  buttons: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  buttonCell: { flexGrow: 1, minWidth: 88 },
+  chipScroller: { flexGrow: 0, alignSelf: 'stretch' },
+  chips: { flexDirection: 'row', gap: 8 },
 });

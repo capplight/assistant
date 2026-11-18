@@ -90,6 +90,8 @@ export function AiConsentUpdate() {
       visible
       testID="ai-consent-update"
       title={t('consent_update.title')}
+      // QA B «Поиск по смыслу» 1: one way out — «Не сейчас» (no second «Закрыть» on top).
+      closeButton={false}
       onClose={later}
       footer={
         <View style={{ gap: theme.space[2] }}>

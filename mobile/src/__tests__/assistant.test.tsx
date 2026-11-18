@@ -148,9 +148,10 @@ describe('«Помощник» — the centre tab', () => {
     expect(screen.getByTestId('more-tasks')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('more-tasks'));
     await settle(() => r.getPathname() === `/page/${page('tasks').id}`);
-    expect(screen.getByTestId('page-back')).toHaveTextContent(/Сегодня/);
+    // QA B «Дела» 6: opened from «Ещё» → «‹ Ещё» back to «Ещё».
+    expect(screen.getByTestId('page-back')).toHaveTextContent(/Ещё/);
     await fireEvent.press(screen.getByTestId('page-back'));
-    expect(r.getPathname()).toBe('/');
+    expect(r.getPathname()).toBe('/more');
   });
 });
 

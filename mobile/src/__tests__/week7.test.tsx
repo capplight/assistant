@@ -794,9 +794,8 @@ describe('on screen', () => {
 
   it('S34 from «Ещё»: «Сегодня» first without buttons, ↑ reorders the tabs, «Убрать» and «Отменить»', async () => {
     await setup({ offline: true });
-    await open('/more');
-    await settle(() => screen.queryByTestId('more-my_pages') !== null);
-    await fireEvent.press(screen.getByTestId('more-my_pages'));
+    // QA B «Ещё» 1: «Мои страницы» show in «Ещё» only with own pages; the screen itself is unchanged.
+    await renderRouter(APP_DIR, { initialUrl: '/my-pages' });
     await settle(() => screen.queryByTestId('my-pages-screen') !== null);
     expect(screen.getByTestId('my-pages-count').props.children).toBe('Страниц: 4 из 20');
     expect(screen.queryByTestId('my-pages-up-today')).toBeNull();

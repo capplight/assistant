@@ -133,7 +133,7 @@ describe('«Дела» and «Покупки»: round checks, the row is the targ
     await renderRouter(APP_DIR, { initialUrl: `/page/${tasks.id}` });
     await settle(() => screen.queryByTestId('task-t0') !== null);
     expect(screen.getByTestId('tasks-segments').props.accessibilityRole).toBe('tablist');
-    expect(screen.getByTestId('seg-missed')).toHaveTextContent('Пропущено · 1');
+    expect(screen.getByTestId('seg-missed')).toHaveTextContent('Пропущено 1');
     expect(screen.queryByTestId('task-menu-t0')).toBeNull();
     expect(screen.getByTestId('task-t0').props.accessibilityRole).toBe('checkbox');
   });

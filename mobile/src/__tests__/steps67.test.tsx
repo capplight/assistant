@@ -109,8 +109,10 @@ describe('«Принести переписку» (step 7)', () => {
       .on('POST /actions/*/undo', () => ({ status: 200, body: { action: null, undo: null, partial: false, repeated: false, message_ru: null, page_patches: [] } }));
     await (await getSyncEngine()).run();
     setFilePickerForTests(async () => ({ uri: 'file:///cache/chatgpt.zip', name: 'chatgpt-export.zip', mime: 'application/zip', size: 4_000_000 }));
-    const r = await renderRouter(APP_DIR, { initialUrl: '/more' });
-    await fireEvent.press(screen.getByTestId('more-import'));
+    // QA B «Ещё» 1: «Принести переписку» lives in «Переписки с ChatGPT» now.
+    const r = await renderRouter(APP_DIR, { initialUrl: '/ai-chats' });
+    await settle(() => screen.queryByTestId('aichats-import') !== null);
+    await fireEvent.press(screen.getByTestId('aichats-import'));
     await settle(() => r.getPathname() === '/ai-import');
     expect(screen.getByTestId('aiimp-how')).toHaveTextContent(/Как принести из ChatGPT/);
     await fireEvent.press(screen.getByTestId('aiimp-provider-gemini'));

@@ -1,8 +1,11 @@
 import { render, screen } from '@testing-library/react-native';
-import { Text } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 
 import '@/i18n';
-import { PlaceScreen } from '@/components/ui/PlaceScreen';
+import { PlaceScreen, sheetFits, sheetInset } from '@/components/ui/PlaceScreen';
+import { Button } from '@/components/ui/Button';
+import { Chip } from '@/components/ui/Chip';
+import { ButtonRow } from '@/components/ui/Leaf';
 import { planPieces } from '@/components/ui/DayPlan';
 import { ASK_SCROLL_START, askScrollStep, type AskScrollState } from '@/store/chrome';
 import { resetWindow, setWindow } from '@/testing/layoutAudit';
@@ -144,5 +147,35 @@ describe('PlaceScreen', () => {
     setWindow({ fontScale: 1.3, width: 390, height: 844 });
     await render(ui());
     expect(screen.queryByTestId('sheet-phrase')).toBeNull();
+  });
+});
+
+describe('device QA 1 (docs/design/qa/v5-device-qa-1.md): layout rules', () => {
+  it('A1/A2: the first element starts 18 below the visible paper edge; the strip is 6 / 44 / 6 (+ the 28 overlap)', () => {
+    expect(sheetInset(150)).toBe(150 - 28 + 18);
+    const m = layoutMetricsFor({ width: 384, height: 860 });
+    expect(m.collapsedSheet).toBe(6 + 44 + 6 + 28);
+    expect(layoutMetricsFor({ width: 384, height: 860, scheme: 'dark' }).collapsedSheet).toBe(84);
+    // The list under a collapsed sheet starts at its own height, not the expanded one (A3).
+    expect(sheetInset(m.collapsedSheet)).toBe(56 + 18);
+  });
+
+  it('A4: content that fits once collapsed does not keep the sheet collapsed', () => {
+    expect(sheetFits(700, 600, 120)).toBe(true);
+    expect(sheetFits(900, 600, 120)).toBe(false);
+  });
+
+  it('A6: button and chip labels never wrap; two buttons stack in a wrapping row', async () => {
+    await render(
+      <ButtonRow testID="pair">
+        <Button testID="b1" label="Не удалять" variant="secondary" onPress={() => undefined} />
+        <Button testID="b2" label="Удалить навсегда" onPress={() => undefined} />
+      </ButtonRow>,
+    );
+    expect(screen.getByText('Не удалять').props.numberOfLines).toBe(1);
+    expect(StyleSheet.flatten(screen.getByTestId('pair').props.style)).toMatchObject({ flexDirection: 'row', flexWrap: 'wrap' });
+    await render(<Chip label="Пропущено 2" onPress={() => undefined} />);
+    expect(screen.getByText('Пропущено 2').props.numberOfLines).toBe(1);
+    expect(StyleSheet.flatten(screen.getByText('Пропущено 2').props.style).flexShrink).toBe(0);
   });
 });

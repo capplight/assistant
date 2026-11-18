@@ -70,6 +70,7 @@ export function Button({
           backgroundColor: fill(pressed),
           borderRadius: plain ? theme.radius.round : height / 2,
           paddingHorizontal: plain ? theme.space[2] : small ? theme.space[4] : 22,
+          minWidth: plain ? undefined : 88,
           paddingVertical: small ? theme.space[1] : theme.space[2],
           opacity: disabled ? 0.4 : 1,
           gap: theme.space[2],
@@ -81,7 +82,10 @@ export function Button({
       {...rest}
     >
       {icon ? <View>{icon}</View> : null}
+      {/* QA v5-device-1 A6: a button label never wraps; the button grows to its text (min 88). */}
       <AppText
+        nativeID="v5-one-line"
+        numberOfLines={1}
         variant={small ? 'buttonSmall' : 'button'}
         color={fg}
         style={[styles.label, variant === 'link' ? styles.link : null, plain && !small ? { fontSize: 16 } : null]}
@@ -94,6 +98,6 @@ export function Button({
 
 const styles = StyleSheet.create({
   base: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  label: { textAlign: 'center', flexShrink: 1 },
+  label: { textAlign: 'center', flexShrink: 0 },
   link: { textDecorationLine: 'underline' },
 });

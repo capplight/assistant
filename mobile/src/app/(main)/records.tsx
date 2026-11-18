@@ -1,11 +1,11 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
 
 import { PageEmpty } from '@/components/page/PageEmpty';
 import { RecordRow } from '@/components/RecordRow';
 import { Screen } from '@/components/Screen';
+import { ChipRow } from '@/components/ui/Leaf';
 import { PlaceFlatList } from '@/components/ui/PlaceScreen';
 import { Chip, Header } from '@/components/ui';
 import { useAllRecords } from '@/records/useRecords';
@@ -34,11 +34,11 @@ export default function AllRecordsScreen() {
       <PlaceFlatList
         data={shown}
         ListHeaderComponent={
-          <View testID="records-kinds" accessibilityRole="tablist" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: theme.space[3] }}>
+          <ChipRow testID="records-kinds" style={{ marginBottom: theme.space[3] }}>
             {KINDS.map((k) => (
               <Chip key={k} testID={`records-kind-${k}`} label={t(`records.kind_${k}`)} variant={kind === k ? 'selected' : 'neutral'} selected={kind === k} onPress={() => setKind(k)} />
             ))}
-          </View>
+          </ChipRow>
         }
         keyExtractor={(r) => r.id}
         contentContainerStyle={{ paddingTop: theme.space[2], paddingBottom: theme.space[4] }}

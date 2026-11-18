@@ -1,4 +1,4 @@
-import { act, fireEvent, renderRouter, screen, within } from 'expo-router/testing-library';
+import { act, fireEvent, renderRouter, screen } from 'expo-router/testing-library';
 
 import { actionOut, budgetOut, FEATURE_DEFAULTS, todayOut } from '@/api/endpoints';
 import type { ActionOut, ReminderDraft } from '@/api/types';
@@ -125,7 +125,8 @@ describe('«Сегодня» v2 — the briefing', () => {
     await renderRouter(APP_DIR, { initialUrl: '/' });
     // v5: the brief is the phrase on the yellow sheet; «Потрачено сегодня» is a section head (no metric tiles).
     expect(screen.getByTestId('sheet-phrase')).toBeTruthy();
-    expect(screen.getByTestId('tile-spent')).toBeTruthy();
+    // П3: no spending today → no «Потрачено сегодня».
+    expect(screen.queryByTestId('tile-spent')).toBeNull();
     expect(screen.queryByTestId('tile-tasks')).toBeNull();
     const t = (k: string, o?: Record<string, unknown>) => `${k}${o ? JSON.stringify(o) : ''}`;
     expect(dayPart(new Date(2026, 10, 13, 8).getTime())).toBe('morning');
@@ -139,10 +140,10 @@ describe('«Сегодня» v2 — the briefing', () => {
     expect(briefOf({ part: 'evening', total: 5, done: 4, ahead: [], spent: null, left: null, tomorrow: null }, t).headline).toBe('brief.good');
   });
 
-  it('a budget makes «осталось» appear on the spent tile', async () => {
+  it('П3: with a budget but no spending today «Потрачено сегодня» stays hidden', async () => {
     useBudget.getState().set(12_000_000n);
     await renderRouter(APP_DIR, { initialUrl: '/' });
-    expect(screen.getByTestId('tile-spent')).toHaveTextContent(/осталось 120 000 ₸/);
+    expect(screen.queryByTestId('tile-spent')).toBeNull();
   });
 });
 
@@ -185,11 +186,12 @@ describe('language with a confirmation (Ф-50)', () => {
     expect(useOnboarding.getState().language).toBe('kk');
   });
 
-  it('theme: two previews and «Как в телефоне»', async () => {
+  it('theme: the row «Тема» opens «Светлая / Тёмная / Как в телефоне» (v5)', async () => {
     await renderRouter(APP_DIR, { initialUrl: '/settings' });
+    await fireEvent.press(screen.getByTestId('theme-row'));
     await fireEvent.press(screen.getByTestId('theme-dark'));
     expect(useSchemePreference.getState().preference).toBe('dark');
-    await fireEvent(screen.getByTestId('theme-system'), 'valueChange', true);
+    await fireEvent.press(screen.getByTestId('theme-system'));
     expect(useSchemePreference.getState().preference).toBe('system');
   });
 
@@ -387,15 +389,15 @@ describe('phone QA 1 (docs/design/qa/v2-phone-qa-1.md)', () => {
     expect(b.body).toContain('brief.no_tasks');
   });
 
-  it('§1.1 / §1.3–1.5: the alarm risk is a row of «Ждёт вас»; tiles say nothing contradictory', async () => {
+  it('§1.1 (v5 device QA B4): the alarm risk is a calm row in «Ещё», not on «Сегодня»; no spending → no section (П3)', async () => {
     useAlarms.setState({ offeredAt: new Date().toISOString(), caps: { backend: 'android', exactAlarms: false, notifications: 'granted' } as never });
     await renderRouter(APP_DIR, { initialUrl: '/' });
-    expect(screen.getByTestId('today-waiting')).toBeTruthy();
-    expect(within(screen.getByTestId('today-waiting')).getByTestId('alarm-risk-fix')).toBeTruthy();
+    expect(screen.queryByTestId('alarm-risk-fix')).toBeNull();
     expect(screen.queryByTestId('today-tasks')).toBeNull();
-    // v5: no metric tiles; «Потрачено сегодня 0 ₸ ›» is one section head.
     expect(screen.queryByTestId('tile-new')).toBeNull();
-    expect(screen.getByTestId('tile-spent')).toHaveTextContent(/Потрачено сегодня/);
+    expect(screen.queryByTestId('tile-spent')).toBeNull();
+    await renderRouter(APP_DIR, { initialUrl: '/more' });
+    expect(screen.getByTestId('alarm-risk-fix')).toBeTruthy();
   });
 
   it('§5.1: one profile card — not signed in asks to sign in there; signed in shows the masked number', async () => {

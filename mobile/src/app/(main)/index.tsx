@@ -12,13 +12,12 @@ import { useAlarms } from '@/alarms/store';
 import type { SuggestionOut } from '@/api/types';
 import { AppText } from '@/components/AppText';
 import { PendingAnswerCard } from '@/components/PendingAnswerCard';
-import { AlarmRiskRow, useAlarmRisk } from '@/components/ReminderCards';
 import { useMinuteClock, useMissed } from '@/components/ReminderLists';
 import { PageTiles, ShoppingLine } from '@/components/TodaySheet';
 import { Button } from '@/components/ui/Button';
 import { CheckCircle } from '@/components/ui/Check';
 import { DayPlan, FreeBlock, type PlanItem } from '@/components/ui/DayPlan';
-import { Inset, Row, RowChevron, RowMeta, SectionHead } from '@/components/ui/Leaf';
+import { ButtonRow, Inset, Row, RowChevron, RowMeta, SectionHead } from '@/components/ui/Leaf';
 import { PlaceScreen } from '@/components/ui/PlaceScreen';
 import type { TimelineItem } from '@/components/ui/Timeline';
 import { repeatsCount, visibleGroups } from '@/dedup/service';
@@ -38,7 +37,7 @@ import { briefOf, dayPart } from '@/today/brief';
 import { markMissedDone } from '@/today/missed';
 import { canSayYes, refreshToday, sayNo, sayYes, useToday, visibleSuggestions } from '@/today/service';
 import { todayTiles } from '@/today/tiles';
-import { useTheme } from '@/theme';
+import { plan as planGeometry, useTheme } from '@/theme';
 
 const DAY = 86_400_000;
 const MIN = 60_000;
@@ -195,10 +194,13 @@ export default function TodayScreen() {
   }
   const open = total - done;
   const counts = [open > 0 ? t('today.phrase_tasks', { count: open }) : null, rings.length > 0 ? t('today.phrase_rings', { count: rings.length }) : null].filter(Boolean).join(', ');
-  const phrase = counts ? `${brief.headline}\n${counts}.` : brief.headline;
+  // QA v5-device-1 C: the phrase is concrete and never ends in «….» — the headline without its own final dots,
+  // then the numbers (and the missed ones first).
+  const head = missed.length > 0 ? t('today.phrase_missed', { count: missed.length }) : `${brief.headline.replace(/[.…\s]+$/u, '')}.`;
+  const phrase = counts ? `${head}\n${counts}.` : head;
 
-  const risk = useAlarmRisk();
-  const waiting = risk || repeats > 0 || proposals.length > 0 || !!tip;
+  // QA B4/B5: the alarm risk lives in «Ещё» as a calm row; a tip is a row, not a grey plate.
+  const waiting = repeats > 0 || proposals.length > 0 || !!tip;
   const minutesOf = (ms: number) => {
     const d = new Date(ms);
     return d.getHours() * 60 + d.getMinutes();
@@ -212,10 +214,40 @@ export default function TodayScreen() {
     ...rings.map((r) => ({ id: `r-${r.group}`, testID: `upcoming-${r.group}`, start: minutesOf(r.fireAt), title: r.title })),
   ];
   const soon = plan.find((p) => p.state === 'now');
+  const planEmpty = planItems.length === 0;
+  // П2 (approved): with an empty plan «Не забыть» comes first.
+  const notForgetFirst = planEmpty && missedRows.length === 0;
   const tomorrowRows = [
     ...tomorrowRings.map((r) => ({ key: `tr-${r.group}`, time: timeText(r.fireAt), title: r.title })),
     ...tomorrowTodos.filter((x) => !nearest.some((y) => y.id === x.id)).map((x) => ({ key: `tt-${x.id}`, time: '', title: x.title })),
   ].slice(0, 3);
+
+  const notForget = (
+    <>
+        {nearest.length > 0 ? (
+          <View testID="today-tasks">
+            <SectionHead first={notForgetFirst} title={t('today.not_forget')} right={String(nearest.length)} />
+            {nearest.map((x, i) => {
+              const overdue = !!x.due_date && x.due_date < today;
+              const tomorrow = x.due_date === addDays(today, 1);
+              const checked = isDone(x, ticks);
+              return (
+                <Row key={x.id} first={i === 0} testID={`task-${x.id}`} accessibilityRole="button" onPress={() => openPage('tasks')} accessibilityLabel={x.title}>
+                  {/* QA A5: the circle sits at the column edge (its 48 target overhangs). */}
+                  <View style={{ marginHorizontal: -11 }}>
+                    <TodoCheck id={x.id} checked={checked} title={x.title} />
+                  </View>
+                  <AppText numberOfLines={1} style={[{ flex: 1 }, checked ? { color: theme.colors.ink3, textDecorationLine: 'line-through' } : null]}>
+                    {x.title}
+                  </AppText>
+                  {overdue || tomorrow ? <RowMeta>{overdue ? t('today.overdue') : t('today.tomorrow_meta')}</RowMeta> : null}
+                </Row>
+              );
+            })}
+          </View>
+        ) : null}
+    </>
+  );
 
   return (
     <PlaceScreen
@@ -236,27 +268,46 @@ export default function TodayScreen() {
           <SectionHead first title={t('today.missed_title')} right={String(missedRows.length)} />
           {missedRows.map((p, i) => {
             const row = missed[i]!;
+            // QA v5-device-1 B1: a 56 dp time column with «09:00» only (a past day as «пн» above it), the title on
+            // one line, «Сделано / Перенести» 38 high, no red.
+            const otherDay = dayOffset(row.at, now) !== 0;
+            let weekday = '';
+            try {
+              weekday = new Date(row.at).toLocaleDateString(i18n.language, { weekday: 'short' });
+            } catch {
+              weekday = '';
+            }
             return (
               <View key={p.key} testID={p.testID} accessible accessibilityLabel={p.label} style={{ borderTopWidth: i === 0 ? 0 : 1, borderTopColor: theme.colors.line, paddingVertical: 10, gap: 8 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                  <AppText style={[theme.type.planTime, { width: 48 }]}>{p.time}</AppText>
-                  <AppText numberOfLines={2} style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 0 }}>
+                  <View style={{ width: planGeometry.timeColumn }}>
+                    {otherDay && weekday ? (
+                      <AppText variant="footnote" numberOfLines={1}>
+                        {weekday}
+                      </AppText>
+                    ) : null}
+                    <AppText numberOfLines={1} nativeID="v5-one-line" style={theme.type.planTime}>
+                      {timeText(row.at)}
+                    </AppText>
+                  </View>
+                  <AppText numberOfLines={1} style={{ flex: 1 }}>
                     {p.title}
                   </AppText>
                 </View>
-                <View style={{ flexDirection: 'row', gap: 8, paddingLeft: 60, flexWrap: 'wrap' }}>
-                  <Button testID={`missed-done-${row.key}`} label={t('today.done_btn')} size="small" onPress={() => void markMissedDone(row, t)} />
-                  <Button testID={`missed-move-${row.key}`} label={t('today.move_btn')} size="small" variant="secondary" onPress={p.onPress} />
-                </View>
+                <ButtonRow style={{ paddingLeft: planGeometry.timeColumn }}>
+                  <Button testID={`missed-done-${row.key}`} label={t('today.missed_done')} size="small" minHeight={38} onPress={() => void markMissedDone(row, t)} />
+                  <Button testID={`missed-move-${row.key}`} label={t('today.move_btn')} size="small" minHeight={38} variant="secondary" onPress={p.onPress} />
+                </ButtonRow>
               </View>
             );
           })}
         </View>
       ) : null}
 
+      {planEmpty ? notForget : null}
       <View testID="today-list">
         <SectionHead
-          first
+          first={missedRows.length === 0 && !(planEmpty && nearest.length > 0)}
           title={t('today.plan')}
           link={tasksPage ? t('today.all_tasks_short') : undefined}
           onLink={() => openPage('tasks')}
@@ -272,35 +323,15 @@ export default function TodayScreen() {
             <AppText testID="today-empty" variant="small">{last?.empty && last.example ? t('today.free_example', { example: last.example }) : t('today.plan_empty')}</AppText>
           </View>
         )}
+        {/* QA B6: one «now» — the black block in the plan; its «+10 мин» / «Готово» right under it, no second title. */}
         {soon ? (
-          <Row first testID={soon.testID ? `${soon.testID}-now` : undefined}>
-            <AppText numberOfLines={2} style={{ flex: 1 }}>
-              {soon.meta ? `${soon.meta} · ${soon.title}` : soon.title}
-            </AppText>
-            <Button testID={soon.testID ? `${soon.testID}-snooze` : undefined} label={t('today.snooze_10')} variant="text" size="small" onPress={soon.onSnooze} />
-            <Button testID={soon.testID ? `${soon.testID}-done` : undefined} label={t('today.done_btn')} variant="primary" size="small" onPress={soon.onDone} />
-          </Row>
+          <ButtonRow testID={soon.testID ? `${soon.testID}-now` : undefined} style={{ paddingLeft: planGeometry.timeColumn, marginTop: 4 }}>
+            <Button testID={soon.testID ? `${soon.testID}-snooze` : undefined} label={t('today.snooze_10')} variant="secondary" size="small" minHeight={38} onPress={soon.onSnooze} />
+            <Button testID={soon.testID ? `${soon.testID}-done` : undefined} label={t('today.done_btn')} variant="primary" size="small" minHeight={38} onPress={soon.onDone} />
+          </ButtonRow>
         ) : null}
+        {planEmpty ? null : notForget}
 
-        {nearest.length > 0 ? (
-          <View testID="today-tasks">
-            <SectionHead title={t('today.not_forget')} right={String(nearest.length)} />
-            {nearest.map((x, i) => {
-              const overdue = !!x.due_date && x.due_date < today;
-              const tomorrow = x.due_date === addDays(today, 1);
-              const checked = isDone(x, ticks);
-              return (
-                <Row key={x.id} first={i === 0} testID={`task-${x.id}`} accessibilityRole="checkbox" onPress={() => void setDone(x.id, !checked)} accessibilityLabel={x.title}>
-                  <TodoCheck id={x.id} checked={checked} title={x.title} />
-                  <AppText numberOfLines={1} style={[{ flex: 1 }, checked ? { color: theme.colors.ink3, textDecorationLine: 'line-through' } : null]}>
-                    {x.title}
-                  </AppText>
-                  {overdue || tomorrow ? <RowMeta>{overdue ? t('today.overdue') : t('today.tomorrow_meta')}</RowMeta> : null}
-                </Row>
-              );
-            })}
-          </View>
-        ) : null}
       </View>
 
       {toBuy.length > 0 ? (
@@ -314,7 +345,6 @@ export default function TodayScreen() {
       {waiting ? (
         <View testID="today-waiting">
           <SectionHead title={t('today.waiting')} />
-          <AlarmRiskRow />
           {repeats > 0 ? (
             <Row first testID="waiting-repeats" onPress={() => router.push('/duplicates')} accessibilityLabel={t('today.repeats', { count: repeats })}>
               <Copy size={22} color={theme.colors.ink} strokeWidth={theme.icon.strokeWidth} />
@@ -329,11 +359,13 @@ export default function TodayScreen() {
             {proposals.map((s) => (
               <SuggestionCard key={s.id} s={s} />
             ))}
-            {tip ? <SuggestionCard s={tip} /> : null}
+            {tip ? <TipRow s={tip} /> : null}
           </View>
         </View>
       ) : null}
 
+      {/* П3 (approved): no spending today → no «Потрачено сегодня». */}
+      {todayMinor > 0n ? (
       <View testID="tile-spent">
         <SectionHead
           title={t('today.spent_today_title')}
@@ -347,6 +379,7 @@ export default function TodayScreen() {
           </AppText>
         ) : null}
       </View>
+      ) : null}
 
       {tomorrowRows.length > 0 ? (
         <View testID="today-tomorrow">
@@ -369,6 +402,22 @@ export default function TodayScreen() {
 /** The 26 circle of a to-do (a tick works offline, with «Отменить»). */
 function TodoCheck({ id, checked, title }: { id: string; checked: boolean; title: string }) {
   return <CheckCircle testID={`task-check-${id}`} checked={checked} label={title} onChange={(v) => void setDone(id, v)} />;
+}
+
+/** A tip as one row (QA B5): its words, «Да …» when it has one and «Не сейчас» as links — no plate. */
+function TipRow({ s }: { s: SuggestionOut }) {
+  const theme = useTheme();
+  const { t } = useTranslation();
+  const yes = canSayYes(s);
+  return (
+    <View testID={`suggestion-${s.id}`} style={{ borderTopWidth: 1, borderTopColor: theme.colors.line, paddingVertical: 10, gap: 4 }}>
+      <AppText variant="small">{s.text_ru.replace(/„/g, '«').replace(/[“”]/g, '»')}</AppText>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.space[2] }}>
+        {yes ? <Button testID={`suggestion-yes-${s.id}`} size="small" variant="link" label={s.yes_label ?? t('common.yes')} onPress={() => void sayYes(s)} /> : null}
+        <Button testID={`suggestion-no-${s.id}`} size="small" variant="link" label={s.no_label ?? t('common.not_now')} onPress={() => void sayNo(s)} />
+      </View>
+    </View>
+  );
 }
 
 /** A proposal or a tip: the text, [Да …] and [Не сейчас]. «Да» is never pre-focused or automatic. */

@@ -153,6 +153,7 @@ export function UndoStrip() {
         text={text}
         page={page}
         deleted={strip.kind === 'deleted'}
+        byAssistant={strip.kind === 'action' || strip.kind === 'saved' || (strip.kind === 'server' && strip.action.initiated_by !== 'user')}
         undoLabel={undoLabel}
         durationMs={durationMs}
         onUndo={undo}
@@ -211,6 +212,7 @@ function NoticeBar({
   text,
   page,
   deleted,
+  byAssistant,
   undoLabel,
   durationMs,
   onUndo,
@@ -220,6 +222,8 @@ function NoticeBar({
   text: string;
   page: Page | undefined;
   deleted: boolean;
+  /** QA B «Дела» 5: terracotta «Отменить» only for what the assistant did; the person's own action — a link. */
+  byAssistant: boolean;
   undoLabel: string | null;
   durationMs: number;
   onUndo: () => void;
@@ -253,7 +257,7 @@ function NoticeBar({
 
   const dark = theme.colors.noticeInk;
   // The undo of the assistant is terracotta («Отменить»); the person's own «Восстановить» is an underlined link.
-  const actColor = deleted ? dark : theme.colors.noticeUndo;
+  const actColor = byAssistant ? theme.colors.noticeUndo : dark;
   return (
     <Animated.View
       testID="undo-strip"
@@ -310,7 +314,7 @@ function NoticeBar({
           onPress={onUndo}
           style={({ pressed }) => [styles.button, { minWidth: theme.size.minTouch, minHeight: theme.size.minTouch, paddingHorizontal: 16 }, pressedStyle(pressed)]}
         >
-          <AppText style={{ color: actColor, fontFamily: theme.type.title.fontFamily, fontSize: 15, lineHeight: 19, textDecorationLine: deleted ? 'underline' : 'none' }}>
+          <AppText style={{ color: actColor, fontFamily: theme.type.title.fontFamily, fontSize: 15, lineHeight: 19, textDecorationLine: byAssistant ? 'none' : 'underline' }}>
             {undoLabel}
           </AppText>
         </Pressable>

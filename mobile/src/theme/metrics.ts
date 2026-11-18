@@ -91,7 +91,8 @@ export function layoutMetricsFor(o: { width: number; height: number; fontScale?:
     planAsRows: largeText,
     phraseSize,
     sheetPadBottom,
-    collapsedSheet: sheet.stripPadTop + sheet.strip + (sheetPadBottom - 12),
+    // П4 (approved): visible 6 / 44 / 6 = 56 dp, plus the 28 dp the paper covers.
+    collapsedSheet: sheet.stripPadTop + sheet.strip + sheet.stripPadTop + sheet.overlap,
     top: Math.max(insets.top, 20),
     bottom: insets.bottom > 0 ? insets.bottom : 8,
     insets,

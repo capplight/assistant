@@ -24,7 +24,8 @@ describe('«Ещё» (Ф-41)', () => {
   it('v4: the profile, the «Дела» / «Документы» tiles, the rows (История among them), «Ваши страницы»; no stubs', async () => {
     await renderRouter(APP_DIR, { initialUrl: '/more' });
     // screens-v5 «Ещё»: plain rows, «Корзина» among them, 🔍 on the stone sheet.
-    const rows = ['more-search', 'more-profile', 'more-tasks', 'more-documents', 'more-history', 'more-records', 'more-trash', 'more-import', 'more-ai-chats', 'more-settings', 'more-add_page', 'more-my_pages'];
+    // QA v5-device-1 B «Ещё» 1: the list ends at «Настройки» (import is in «Переписки», own pages show only when there are any).
+    const rows = ['more-search', 'more-profile', 'more-tasks', 'more-documents', 'more-history', 'more-records', 'more-trash', 'more-ai-chats', 'more-settings'];
     for (const id of rows) expect(screen.getByTestId(id)).toBeTruthy();
     const ids = new Set<string>();
     const walk = (n: unknown): void => {
@@ -69,7 +70,8 @@ describe('«Ещё» (Ф-41)', () => {
 describe('«Настройки»', () => {
   it('theme, language, alarms, budget, data, the assistant, account, about and «Удалить аккаунт» in one screen', async () => {
     const r = await renderRouter(APP_DIR, { initialUrl: '/settings' });
-    for (const id of ['phone', 'my_data', 'duplicates', 'trash', 'habits', 'alarms', 'lang', 'budget', 'policy', 'consents', 'version', 'delete_account']) {
+    // «Корзина» is in «Ещё» only (QA B «Настройки» 4).
+    for (const id of ['phone', 'my_data', 'duplicates', 'habits', 'alarms', 'lang', 'budget', 'policy', 'consents', 'version', 'delete_account']) {
       expect(screen.getByTestId(`settings-${id}`)).toBeTruthy();
     }
     await fireEvent.press(screen.getByTestId('settings-consents'));
@@ -92,6 +94,7 @@ describe('«Настройки»', () => {
     await fireEvent.press(screen.getByTestId('lang-kk'));
     await fireEvent.press(screen.getByTestId('lang-confirm-yes'));
     expect(useOnboarding.getState().language).toBe('kk');
+    await fireEvent.press(screen.getByTestId('theme-row'));
     await fireEvent.press(screen.getByTestId('theme-dark'));
     expect(useSchemePreference.getState().preference).toBe('dark');
     expect(screen.getByTestId('theme-dark').props.accessibilityState.checked).toBe(true);

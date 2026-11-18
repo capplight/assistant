@@ -69,7 +69,8 @@ describe('S37 page', () => {
     expect(screen.queryByTestId('assistant-line')).toBeNull();
   });
 
-  it('«Своя страница»: «Ещё» → name → the page opens; listed in «Ещё» (Ф-48 tabs are fixed); goes to the outbox; rename works', async () => {
+  // Ф-83 / QA v5-device-1 B «Ещё» 1: «Своя страница» is hidden from «Ещё» (the code stays, not reachable from the UI).
+  it.skip('«Своя страница»: «Ещё» → name → the page opens; listed in «Ещё» (Ф-48 tabs are fixed); goes to the outbox; rename works', async () => {
     usePages.setState({ pages: usePages.getState().pages.slice(0, 1) });
     const r = await renderRouter(APP_DIR, { initialUrl: '/more' });
     await fireEvent.press(screen.getByTestId('more-add_page'));
@@ -93,7 +94,8 @@ describe('S37 page', () => {
     expect(screen.getAllByText('Дача').length).toBeGreaterThan(0);
   });
 
-  it('«Пока без названия» gives «Моя страница»', async () => {
+  // Hidden with «Своя страница» (Ф-83, QA B «Ещё» 1).
+  it.skip('«Пока без названия» gives «Моя страница»', async () => {
     usePages.setState({ pages: usePages.getState().pages.slice(0, 1) });
     await renderRouter(APP_DIR, { initialUrl: '/more' });
     await fireEvent.press(screen.getByTestId('more-add_page'));

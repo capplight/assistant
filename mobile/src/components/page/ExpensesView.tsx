@@ -255,9 +255,7 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
               <View style={{ flex: Number(((budget - b.main.total) * 1000n) / b.main.total) / 10, borderRadius: 6, borderWidth: 1.5, borderColor: theme.colors.line2, borderStyle: 'dashed' }} />
             ) : null}
           </View>
-          <AppText variant="footnote" style={{ marginTop: 6, marginBottom: 4 }}>
-            {budget !== null && thisMonth ? t('exp.bars_caption_budget') : t('exp.bars_caption')}
-          </AppText>
+          <View style={{ height: 10 }} />
           <View>
             {shownBars.map((bar, i) => {
               const cat = categoryByKey(server, bar.key || null);
@@ -705,7 +703,7 @@ function OverviewPaper(o: OverviewProps) {
       ) : (
         <View style={[styles.rowCenter, { flexWrap: 'wrap', columnGap: theme.space[2] }]}>
           <AppText testID="exp-count" variant="small">
-            {t('exp.count', { count: main.count })}
+            {t('exp.count', { count: Number(main.count) })}
           </AppText>
           {o.board.review > 0 || o.onlyToCheck ? (
             <Pressable

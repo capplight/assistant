@@ -272,7 +272,7 @@ describe('screens', () => {
     expect(screen.getByTestId(`task-${t.id}`).props.accessibilityState).toEqual({ checked: false });
     await fireEvent.press(screen.getByTestId(`task-${t.id}`));
     await settle(() => screen.queryByTestId(`task-return-${t.id}`) !== null);
-    expect(screen.getByTestId('group-done')).toHaveTextContent('Куплено (1)'); // week 11а: «Куплено (N)»
+    expect(screen.getByTestId('group-done').props.accessibilityLabel).toBe('Куплено (1)'); // v5: «Куплено  1», the count on the right
     await fireEvent.press(screen.getByTestId(`task-return-${t.id}`));
     await settle(() => screen.queryByTestId(`task-return-${t.id}`) === null);
   });

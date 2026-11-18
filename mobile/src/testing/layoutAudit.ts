@@ -6,7 +6,9 @@ import { Dimensions, PixelRatio, StyleSheet, type TextStyle, type ViewStyle } fr
  * no snapshots: what would clip, overlap or cut a value when the system font is 200% on a 320 pt
  * phone. Jest has no text layout, so this checks the props that decide it on a device:
  *
- * - `clipped-value`   a Text with `numberOfLines` that is a money value or a time line (≤40 letters), or the «ИИ» label;
+ * - `clipped-value`   a Text with `numberOfLines` that is a money value or a time line (≤40 letters), or the «ИИ» label —
+ *                     except the label of a button or chip (`nativeID="v5-one-line"`): one line by design, the control
+ *                     grows to its text and a row of them scrolls or stacks (QA v5-device-1 A6);
  * - `fixed-height`    a View with a fixed `height` / `maxHeight` around text (text grows, the box does not) — except
  *                     the v5 coloured sheet (`nativeID="v5-sheet"`), whose height is its measured content;
  * - `fixed-input`     a TextInput with a fixed `height`;
@@ -107,7 +109,7 @@ export function auditLayout(
     if (n.type === 'Text') {
       const text = textOf(n);
       const lines = n.props.numberOfLines as number | undefined;
-      if (lines && lines > 0) {
+      if (lines && lines > 0 && n.props.nativeID !== 'v5-one-line') {
         // A sum or a time on its own line (not a preview of a person's long note, which opens in full on tap).
         const valueLine = [...text].length <= 40 && (MONEY.test(text) || TIME.test(text));
         const critical = valueLine || (o.critical ?? []).some((c) => c && text.includes(c));

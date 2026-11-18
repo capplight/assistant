@@ -1,15 +1,15 @@
 import { router } from 'expo-router';
-import { CircleHelp, FileText, FolderInput, Inbox, LayoutGrid, LayoutList, Plus, Search, Settings, ShieldAlert, Trash2 } from 'lucide-react-native';
+import { FileText, Inbox, LayoutGrid, LayoutList, Search, Settings, ShieldAlert, Trash2 } from 'lucide-react-native';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Linking, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 
 import { AppText } from '@/components/AppText';
 import { PageNameSheet } from '@/components/PageNameSheet';
 import { Screen } from '@/components/Screen';
-import { supportUrl } from '@/components/support';
 import { Header } from '@/components/ui/Header';
+import { AlarmRiskRow } from '@/components/ReminderCards';
 import type { LucideIcon } from '@/components/ui/Icon';
 import { PlaceTab, Row, RowChevron, RowMeta, SectionHead } from '@/components/ui/Leaf';
 import { getRecords } from '@/db';
@@ -65,7 +65,6 @@ export default function MoreScreen() {
   const records = useLocalQuery(async () => (await getRecords()).list(LIST_LIMIT), []);
   const { overflow } = mainTabs(pages, { largeFont: theme.largeFont, shopping });
   const shownOverflow = overflow.filter((p) => p.templateKey !== 'documents');
-  const support = supportUrl();
 
   const liveDocs = Object.values(docs).filter((d) => !d.deleted_at);
   const drafts = liveDocs.filter((d) => d.status === 'draft' || d.status === 'extracting').length;
@@ -83,7 +82,8 @@ export default function MoreScreen() {
   };
   const openTemplate = (k: 'tasks' | 'notes' | 'expenses') =>
     void ensureTemplatePage(k).then((p) => {
-      if (p) router.navigate({ pathname: '/page/[id]', params: { id: p.id } });
+      // QA B «Дела» 6: opened from «Ещё» → «‹ Ещё» and the «Ещё» tab stay.
+      if (p) router.navigate({ pathname: '/page/[id]', params: { id: p.id, from: 'more' } });
     });
   const tasksToday = liveTasks(tasks, 'todo').filter((x) => !!x.due_date && x.due_date <= todayKey && !isDone(x, ticks)).length;
   const openDocuments = () =>
@@ -158,24 +158,26 @@ export default function MoreScreen() {
       {row({ id: 'more-trash', title: t('trash.short'), meta: trash && trash.length > 0 ? String(trash.length) : undefined, lead: icon(Trash2), onPress: () => router.navigate('/trash') })}
       {row({ id: 'more-settings', title: t('more.settings'), lead: icon(Settings), onPress: () => router.push('/settings') })}
 
-      <SectionHead title={t('more.more_section')} />
-      {/* v4 «Ещё»: «Принести переписку · ChatGPT, Claude, Gemini — всё в одном месте» (Telegram is inside). */}
-      {row({ id: 'more-import', first: true, title: t('more.import_chats'), meta: undefined, lead: icon(FolderInput), onPress: () => router.push('/ai-import') })}
-      {support ? row({ id: 'more-help', title: t('more.help'), lead: icon(CircleHelp), onPress: () => void Linking.openURL(support).catch(() => undefined) }) : null}
-
-      <SectionHead title={t('more.your_pages')} />
-      {shownOverflow.map((p, i) =>
-        row({
-          id: `more-page-${p.id}`,
-          first: i === 0,
-          title: title(p),
-          lead: <PlaceTab place={placeOfTemplate(p.templateKey)} />,
-          onPress: () => router.navigate({ pathname: '/page/[id]', params: { id: p.id } }),
-        }),
-      )}
-      {row({ id: 'more-add_page', first: shownOverflow.length === 0, title: t('more.add_page'), lead: icon(Plus), onPress: () => setNaming(true) })}
-      {/* Order, rename, remove the pages (S34): the tabs stay fixed (Ф-48), «Ваши страницы» follow this order. */}
-      {row({ id: 'more-my_pages', title: t('more.my_pages'), lead: icon(LayoutList), onPress: () => router.navigate('/my-pages') })}
+      {/* QA v5-device-1 B «Ещё» 1: the list ends at «Настройки» (import is inside «Переписки», help in «Настройки»).
+          Pages that are not tabs (a custom page, «Покупки») stay reachable while there are any. */}
+      <AlarmRiskRow />
+      {shownOverflow.filter((p) => p.templateKey !== 'tasks').length > 0 ? (
+        <>
+          <SectionHead title={t('more.your_pages')} />
+          {shownOverflow
+            .filter((p) => p.templateKey !== 'tasks')
+            .map((p, i) =>
+              row({
+                id: `more-page-${p.id}`,
+                first: i === 0,
+                title: title(p),
+                lead: <PlaceTab place={placeOfTemplate(p.templateKey)} />,
+                onPress: () => router.navigate({ pathname: '/page/[id]', params: { id: p.id } }),
+              }),
+            )}
+          {row({ id: 'more-my_pages', title: t('more.my_pages'), lead: icon(LayoutList), onPress: () => router.navigate('/my-pages') })}
+        </>
+      ) : null}
       {naming ? (
         <PageNameSheet
           onClose={() => setNaming(false)}

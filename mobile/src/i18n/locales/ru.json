@@ -352,7 +352,12 @@
     "tomorrow": "Завтра",
     "all_tasks_short": "Все дела",
     "missed_title": "Пропущено",
-    "move_btn": "Перенести"
+    "move_btn": "Перенести",
+    "missed_done": "Сделано",
+    "phrase_missed_one": "Одно пропущено.",
+    "phrase_missed_few": "{{count}} пропущено.",
+    "phrase_missed_many": "{{count}} пропущено.",
+    "phrase_missed_other": "{{count}} пропущено."
   },
   "page": {
     "find": "Найти на странице",
@@ -789,7 +794,8 @@
     "bought_section": "Куплено",
     "done_section": "Выполненное",
     "overdue": "Просрочено · {{date}}",
-    "no_time": "без времени"
+    "no_time": "без времени",
+    "open_hint": "Открывает дело"
   },
   "missed": {
     "section": "Пропущено",
@@ -1944,7 +1950,8 @@
     "soon": "Скоро",
     "support": "Поддержка",
     "version": "Версия",
-    "theme_system_hint": "днём Мята, ночью Глубина"
+    "theme_system_hint": "днём Мята, ночью Глубина",
+    "view": "Вид"
   },
   "legal": {
     "policy": "Политика конфиденциальности",
@@ -2110,7 +2117,8 @@
     "find": "Найти в чатах",
     "empty": "Здесь будут ваши разговоры с ChatGPT, Claude и Gemini.",
     "bring": "Принести переписку",
-    "none": "Ничего не нашёл."
+    "none": "Ничего не нашёл.",
+    "bring_more": "Принести ещё архив"
   },
   "aiimp": {
     "title": "Принести переписку",

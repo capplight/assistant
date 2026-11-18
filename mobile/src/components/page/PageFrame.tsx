@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowUpDown, Ellipsis, LayoutGrid, List, PencilLine, Plus, Search, SlidersHorizontal, X } from 'lucide-react-native';
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,7 +17,7 @@ import { placeOfTemplate, useTheme, type PlaceKey } from '@/theme';
 import type { SheetAction as StripAction, SheetBack } from '../ui/PlaceScreen';
 
 import { AppText } from '../AppText';
-import { ActionList, Button, Header, Icon, Sheet, ViewToggle, type SheetAction } from '../ui';
+import { ActionList, Button, Header, Icon, Sheet, type SheetAction } from '../ui';
 import { PageNameSheet } from '../PageNameSheet';
 import { Screen } from '../Screen';
 import { FindField, SearchMore } from '../SearchResults';
@@ -89,6 +89,8 @@ export function PageFrame({ page }: { page: Page }) {
   const setNotesLook = useNotesLook((st) => st.set);
   const isNotes = page.templateKey === 'notes';
   const place = placeOfTemplate(page.templateKey);
+  const { from } = useLocalSearchParams<{ from?: string }>();
+  const fromMore = from === 'more';
   const shopping = useView((st) => st.shopMode === page.id);
 
   // The marker goes after 600 ms (Reduce Motion: the same, it is a colour, not a move).
@@ -114,6 +116,21 @@ export function PageFrame({ page }: { page: Page }) {
     setFind({ pageId: page.id, q: '' });
   };
   const menuActions: SheetAction[] = [
+    // QA B «Заметки» 1: at most two icons on the sheet — «Сеткой / Списком» lives in «⋯».
+    ...(isNotes
+      ? [
+          {
+            key: 'look',
+            testID: notesLook === 'list' ? 'notes-look-grid' : 'notes-look-list',
+            label: notesLook === 'list' ? t('notes.look_grid') : t('notes.look_list'),
+            icon: notesLook === 'list' ? LayoutGrid : List,
+            onPress: () => {
+              setMenuOpen(false);
+              setNotesLook(notesLook === 'list' ? 'grid' : 'list');
+            },
+          },
+        ]
+      : []),
     ...(hasRecords && !searching
       ? [{ key: 'order', testID: 'page-order', label: t('page.order'), icon: ArrowUpDown, onPress: () => (setMenuOpen(false), setOrdering(true)) }]
       : []),
@@ -138,7 +155,13 @@ export function PageFrame({ page }: { page: Page }) {
         testID="page-header"
         title={title(page)}
         // «Дела» are not a tab any more (VISION-2026-11): «‹ Сегодня» leads back to where they come from.
-        back={page.templateKey === 'tasks' ? { onPress: () => router.navigate('/'), label: t('today.today'), testID: 'page-back' } : undefined}
+        back={
+          page.templateKey === 'tasks'
+            ? fromMore
+              ? { onPress: () => router.navigate('/more'), label: t('more.title'), testID: 'page-back' }
+              : { onPress: () => router.navigate('/'), label: t('today.today'), testID: 'page-back' }
+            : undefined
+        }
         meta={
           isNotes && entries
             ? t(notesLook === 'list' ? 'notes.count_list' : 'notes.count', { count: entries.length })
@@ -149,16 +172,6 @@ export function PageFrame({ page }: { page: Page }) {
         accessory={
           page.templateKey === 'expenses' ? (
             <Button testID="exp-enter" label={t('exp.add_short')} size="small" icon={<Icon icon={Plus} size="sm" color="onBrand" />} onPress={() => useView.getState().requestKeypad()} />
-          ) : isNotes ? (
-            <ViewToggle
-              testID="notes-look"
-              value={notesLook}
-              onChange={setNotesLook}
-              options={[
-                { key: 'grid', icon: LayoutGrid, label: t('notes.look_grid'), testID: 'notes-look-grid' },
-                { key: 'list', icon: List, label: t('notes.look_list'), testID: 'notes-look-list' },
-              ]}
-            />
           ) : undefined
         }
         titleTestID="page-title"
@@ -175,6 +188,7 @@ export function PageFrame({ page }: { page: Page }) {
           },
               ]),
           // screens-v5 «Заметки»: 🔍 and «+» on the sheet («+» opens «Добавить» of the assistant line).
+          // «+» opens «Добавить» (on «Расходы» the receipt photo and the statement live only there).
           { key: 'add', testID: 'page-add', icon: Plus, label: t('line.plus_a11y'), onPress: () => useChrome.getState().requestAdd() },
           ...(page.templateKey === 'expenses'
             ? []
@@ -257,7 +271,6 @@ export function PageFrame({ page }: { page: Page }) {
       sheetExtra={slot?.sheetExtra}
       hideTitle={slot?.hideTitle}
       {...(slot?.strip ? { mode: 'strip' as const, title: slot.strip.title, back: slot.strip.back, actions: slot.strip.actions ?? [] } : {})}
-      paperPadding={isNotes ? 14 : undefined}
     >
       {/* «Я в магазине» is the list alone: no sheet header (template-screens 3). */}
       {shopping ? null : header}

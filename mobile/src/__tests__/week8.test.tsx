@@ -1,4 +1,5 @@
 import { act, fireEvent, renderRouter, screen } from 'expo-router/testing-library';
+import { router } from 'expo-router';
 
 import { looksLikeReminder, phoneIn } from '@/alarms/format';
 import { levelFor, planAlarms, upcoming, type PlanInput } from '@/alarms/plan';
@@ -478,6 +479,9 @@ describe('screens', () => {
     await settle(() => screen.queryByTestId('setup-done-autostart') !== null);
     await fireEvent.press(screen.getByTestId('setup-later'));
     expect(r.getPathname()).toBe('/');
+    // QA B4: the calm row is in «Ещё», not on «Сегодня».
+    expect(screen.queryByTestId('alarm-risk')).toBeNull();
+    await act(async () => router.navigate('/more'));
     await settle(() => screen.queryByTestId('alarm-risk') !== null);
     await fireEvent.press(screen.getByTestId('alarm-risk-fix'));
     expect(r.getPathname()).toBe('/alarm-setup');

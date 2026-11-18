@@ -1,4 +1,4 @@
-import { router, usePathname } from 'expo-router';
+import { router, useGlobalSearchParams, usePathname } from 'expo-router';
 import { CreditCard, Ellipsis, MessageSquareText, StickyNote, Sun } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
@@ -66,6 +66,7 @@ export function BottomTabs({ bottomInset = 0 }: { bottomInset?: number }) {
   const tabs = useTabs();
   const current = useCurrentPage();
   const pathname = usePathname();
+  const { from: fromParam } = useGlobalSearchParams<{ from?: string }>();
   const showToast = useToast((s) => s.show);
   // «Дела» and other pages opened from «Сегодня» / «Ещё» keep their home tab lit (design-system v3 §9.1).
   const activeKey =
@@ -74,7 +75,7 @@ export function BottomTabs({ bottomInset = 0 }: { bottomInset?: number }) {
       : current.kind === 'page'
         ? tabs.some((x) => x.key === current.id)
           ? current.id
-          : current.page.templateKey === 'tasks'
+          : current.page.templateKey === 'tasks' && fromParam !== 'more'
             ? 'today'
             : 'more'
         : current.kind === 'more'

@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { useTheme } from '@/theme';
 
@@ -23,7 +23,7 @@ type Props<K extends string> = {
 export function SegmentedControl<K extends string>({ segments, value, onChange, accessibilityLabel, testID }: Props<K>) {
   const theme = useTheme();
   const column = theme.largeFont;
-  return (
+  const track = (
     <View
       testID={testID}
       accessibilityRole="tablist"
@@ -42,7 +42,7 @@ export function SegmentedControl<K extends string>({ segments, value, onChange, 
     >
       {segments.map((s) => {
         const on = s.key === value;
-        const label = s.count !== undefined ? `${s.label} · ${s.count}` : s.label;
+        const label = s.count !== undefined ? `${s.label} ${s.count}` : s.label;
         return (
           <Pressable
             key={s.key}
@@ -54,7 +54,6 @@ export function SegmentedControl<K extends string>({ segments, value, onChange, 
             hitSlop={column ? undefined : { top: 6, bottom: 6 }}
             style={[
               styles.segment,
-              column ? null : styles.flex,
               {
                 minHeight: theme.size.chipHeight,
                 borderRadius: theme.size.chipHeight / 2,
@@ -65,7 +64,7 @@ export function SegmentedControl<K extends string>({ segments, value, onChange, 
               },
             ]}
           >
-            <AppText variant="callout" color={on ? 'onBtn' : 'ink'} style={[styles.label, { fontFamily: theme.type.sheetMeta.fontFamily }]}>
+            <AppText nativeID="v5-one-line" numberOfLines={1} variant="callout" color={on ? 'onBtn' : 'ink'} style={[styles.label, { fontFamily: theme.type.sheetMeta.fontFamily }]}>
               {label}
             </AppText>
           </Pressable>
@@ -73,10 +72,17 @@ export function SegmentedControl<K extends string>({ segments, value, onChange, 
       })}
     </View>
   );
+  // QA v5-device-1 A6: chips never wrap — one row that scrolls sideways (a column only at ≥ 150 %).
+  return column ? track : (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={styles.scroller}>
+      {track}
+    </ScrollView>
+  );
 }
 
 const styles = StyleSheet.create({
-  track: { alignSelf: 'stretch' },
+  track: { alignSelf: 'flex-start' },
+  scroller: { flexGrow: 0, alignSelf: 'stretch' },
   flex: { flex: 1 },
   segment: { alignItems: 'center', justifyContent: 'center', paddingVertical: 4 },
   label: { textAlign: 'center' },

@@ -249,11 +249,12 @@ function NowLine({ now }: { now: number }) {
   const theme = useTheme();
   const { t } = useTranslation();
   return (
-    <View testID="planner-now" accessibilityLiveRegion="none" style={[styles.row, { gap: theme.space[2], paddingVertical: theme.space[2] }]}>
-      <AppText variant="bodyStrong" color="brand">
-        {t('planner.now', { time: hhmm(now) })}
-      </AppText>
-      {theme.largeFont ? null : <View style={{ flex: 1, height: 2, backgroundColor: theme.colors.brand, borderRadius: 1 }} />}
+    // QA B «Дела» 8: «сейчас» is a thin line with a small black tag (the «Ритм» plan), not a heavy plate.
+    <View testID="planner-now" accessible accessibilityLabel={t('planner.now', { time: hhmm(now) })} accessibilityLiveRegion="none" style={[styles.row, { gap: 0, paddingVertical: theme.space[2] }]}>
+      <View style={{ backgroundColor: theme.colors.ink, borderRadius: 9, paddingHorizontal: 7, paddingVertical: 4 }}>
+        <AppText style={{ color: theme.colors.paper, fontFamily: theme.type.title.fontFamily, fontSize: 12, lineHeight: 13, fontVariant: ['tabular-nums'] }}>{hhmm(now)}</AppText>
+      </View>
+      <View style={{ flex: 1, height: 2, backgroundColor: theme.colors.ink }} />
     </View>
   );
 }

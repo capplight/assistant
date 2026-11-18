@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { BellRing, TriangleAlert } from 'lucide-react-native';
+import { BellRing, TriangleAlert, AlarmClock } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 
@@ -30,10 +30,10 @@ export function AlarmRiskRow() {
   const { t } = useTranslation();
   if (!useAlarmRisk()) return null;
   return (
+    // QA v5-device-1 B4: a calm row in «Ещё», never red (it is not an error).
     <ListGroup testID="alarm-risk">
       <ListRow
-        icon={TriangleAlert}
-        danger
+        icon={AlarmClock}
         title={t('alarm.risk_row')}
         meta={t('alarm.risk_row_meta')}
         right={<Button testID="alarm-risk-fix" label={t('alarm.fix')} variant="secondary" size="small" onPress={() => router.push('/alarm-setup')} />}

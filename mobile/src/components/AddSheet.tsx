@@ -37,7 +37,7 @@ export function AddSheet({ visible, onClose, expensesPageId = null }: { visible:
     },
   });
   return (
-    <Sheet visible={visible} onClose={onClose} title={t('add.title')} testID="add-sheet" place="assistant">
+    <Sheet visible={visible} onClose={onClose} title={t('add.title')} testID="add-sheet">
       <ActionList actions={actions} />
     </Sheet>
   );
