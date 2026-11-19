@@ -483,7 +483,7 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 :root[data-theme="dark"]{--il-a:#4F4419;--il-b:#24476E;--il-c:#6A3040}
 .wk span.today{box-shadow:inset 0 0 0 1.5px var(--on)}
 .wk span{cursor:pointer}
-.back2{height:36px;border-radius:18px;padding:0 14px;background:var(--paper);color:var(--ink);font:700 15px/1 Onest;display:inline-flex;align-items:center;gap:6px;flex:none}
+
 .empty{display:flex;flex-direction:column;align-items:center;text-align:center;padding:26px 8px 8px}
 .empty svg.ill{width:112px;height:112px;margin-bottom:18px}
 .empty h3{margin:0;font:750 20px/1.25 Onest;color:var(--ink);letter-spacing:-.2px}
@@ -509,7 +509,7 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 <!-- 1 · выбран другой день, есть дела -->
 <figure><div class="frame"><div class="ph">
 <div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-asst"></i><i class="c-notes"></i></div>
-<div class="sheet c-today"><div class="sh-top"><span class="sp">Пятница, 20 ноября</span><span class="back2" role="button"><svg class="i xs"><use href="#back"/></svg>К сегодня</span></div>
+<div class="sheet c-today"><div class="sh-top"><span class="ib" role="button" aria-label="Назад" style="margin-left:-10px"><svg class="i"><use href="#back"/></svg></span><span class="sp">Пятница, 20 ноября</span><span class="ib" aria-label="Поиск"><svg class="i"><use href="#search"/></svg></span></div>
 <p class="phrase">Пятница.<br>2&nbsp;дела, 1&nbsp;встреча.</p><p class="ttl ttl-only">Пятница</p>
 <div class="wk" aria-label="Неделя"><span class="past">пн<b>16</b><i><u></u></i></span><span class="past">вт<b>17</b><i><u></u></i></span><span class="today">ср<b>18</b><i><u></u><u></u></i></span><span>чт<b>19</b><i></i></span><span class="on" aria-selected="true">пт<b>20</b><i><u></u><u></u></i></span><span>сб<b>21</b><i></i></span><span>вс<b>22</b><i></i></span></div></div>
 <div class="pap padC">
@@ -522,12 +522,12 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 </div>
 <div class="fstrip" role="group" aria-label="Строка помощника"><span class="adot" aria-hidden="true"></span><span class="f1 ell">Добавить на пятницу…</span><span class="rb" role="button" aria-label="Сказать голосом"><svg class="i"><use href="#mic"/></svg></span></div>
 <nav class="tabs" aria-label="Вкладки"><span class="tab c-today on"><b><svg class="i"><use href="#sun"/></svg></b>Сегодня</span><span class="tab c-notes"><b><svg class="i"><use href="#note"/></svg></b>Заметки</span><span class="tab c-asst"><b><svg class="i"><use href="#asst"/></svg></b>Помощник</span><span class="tab c-exp"><b><svg class="i"><use href="#coin"/></svg></b>Расходы</span><span class="tab c-stone"><b><svg class="i"><use href="#more"/></svg></b>Ещё</span></nav><div class="home"></div>
-</div></div><figcaption><b>Выбран другой день</b>Чёрная капсула — выбранный день, контур — сегодня. Точки под числом — в дне что-то есть. Фраза и строка помощника говорят про выбранный день. Справа сверху «К сегодня» вместо лупы. Смена дня — затухание 180 мс со сдвигом 8 dp в сторону дня.</figcaption></figure>
+</div></div><figcaption><b>Выбран другой день</b>Чёрная капсула — выбранный день, контур — сегодня. Точки под числом — в дне что-то есть. Фраза и строка помощника говорят про выбранный день. Сверху одна стрелка «‹», дата и лупа; кнопки «К сегодня» нет (Ф-91). Стрелка (и системный жест «назад») возвращает к сегодня. Смена дня — затухание 180 мс со сдвигом 8 dp в сторону дня.</figcaption></figure>
 
 <!-- 2 · пустой будущий день -->
 <figure><div class="frame"><div class="ph">
 <div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-asst"></i><i class="c-notes"></i></div>
-<div class="sheet c-today"><div class="sh-top"><span class="sp">Суббота, 21 ноября</span><span class="back2" role="button"><svg class="i xs"><use href="#back"/></svg>К сегодня</span></div>
+<div class="sheet c-today"><div class="sh-top"><span class="ib" role="button" aria-label="Назад" style="margin-left:-10px"><svg class="i"><use href="#back"/></svg></span><span class="sp">Суббота, 21 ноября</span><span class="ib" aria-label="Поиск"><svg class="i"><use href="#search"/></svg></span></div>
 <p class="phrase">Суббота<br>свободна.</p><p class="ttl ttl-only">Суббота</p>
 <div class="wk" aria-label="Неделя"><span class="past">пн<b>16</b><i><u></u></i></span><span class="past">вт<b>17</b><i><u></u></i></span><span class="today">ср<b>18</b><i><u></u><u></u></i></span><span>чт<b>19</b><i></i></span><span>пт<b>20</b><i><u></u><u></u></i></span><span class="on" aria-selected="true">сб<b>21</b><i></i></span><span>вс<b>22</b><i></i></span></div></div>
 <div class="pap padC">
@@ -551,7 +551,7 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 <!-- 3 · пустой прошедший день -->
 <figure><div class="frame"><div class="ph">
 <div class="sb"><span>9:41</span><svg class="sbs"><use href="#sbi"/></svg></div><div class="peek"><i class="c-asst"></i><i class="c-notes"></i></div>
-<div class="sheet c-today"><div class="sh-top"><span class="sp">Понедельник, 16 ноября</span><span class="back2" role="button"><svg class="i xs"><use href="#back"/></svg>К сегодня</span></div>
+<div class="sheet c-today"><div class="sh-top"><span class="ib" role="button" aria-label="Назад" style="margin-left:-10px"><svg class="i"><use href="#back"/></svg></span><span class="sp">Понедельник, 16 ноября</span><span class="ib" aria-label="Поиск"><svg class="i"><use href="#search"/></svg></span></div>
 <p class="phrase">Понедельник<br>прошёл тихо.</p><p class="ttl ttl-only">Понедельник</p>
 <div class="wk" aria-label="Неделя"><span class="past on" aria-selected="true">пн<b>16</b><i></i></span><span class="past">вт<b>17</b><i><u></u></i></span><span class="today">ср<b>18</b><i><u></u><u></u></i></span><span>чт<b>19</b><i></i></span><span>пт<b>20</b><i><u></u><u></u></i></span><span>сб<b>21</b><i></i></span><span>вс<b>22</b><i></i></span></div></div>
 <div class="pap padC">
@@ -576,7 +576,7 @@ figcaption b{color:var(--pg-ink);font-weight:700;display:block;font-size:15px}
 <li>Касание дня: выбранный день — тёмная капсула (<code>onSheet</code>, цифра цвета листа), сегодня — контур 1,5 <code>onSheet</code>. Переход в «Дела» убрать совсем.</li>
 <li>Лист и неделя не двигаются, меняется только фраза, мета-строка и светлый лист: затухание + сдвиг 8 dp, 180 мс, <code>0.2, 0, 0, 1</code>.</li>
 <li>Смахивание недели — прошлая / следующая неделя. Выбранный день — тот же день недели.</li>
-<li>«К сегодня» (36, радиус 18, <code>paper</code>) — на месте лупы, пока выбран не сегодняшний день. Повторное касание вкладки «Сегодня» тоже возвращает к сегодня.</li>
+<li>Кнопки «К сегодня» нет (Ф-91), пути в шапке тоже. Пока выбран не сегодняшний день, слева от даты — одна стрелка «‹» (единственная кнопка «назад» на экране); она и системный жест «назад» возвращают к сегодня. Касание другого дня в неделе просто выбирает день и шагов «назад» не копит.</li>
 <li>При уходе с вкладки и возврате — снова сегодня.</li>
 </ul></div>
 <div class="fact"><h3>Что в дне</h3><ul>

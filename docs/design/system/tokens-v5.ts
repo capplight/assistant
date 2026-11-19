@@ -412,7 +412,10 @@ export const dayView = {
     future: '{Weekday}. {n} дела, {k} встреча.', // ≤ 2 lines, plural forms via i18n
     empty: '{Weekday} свободен.', // «Пятница свободна.» — gender by weekday
   },
-  backToToday: { label: 'К сегодня', height: 36, radius: 18, bg: 'paper', ink: 'ink', place: 'sheet meta row, right, instead of the search icon' },
+  // Ф-91: no «К сегодня» button (was backToToday), no breadcrumbs. Only ONE back control per screen: while another day is
+  // shown, a back arrow (40, lucide chevron-left) sits left of the date; it and the system back gesture return to today.
+  // Selecting other days does not stack back steps. Search icon stays on the right.
+  back: { size: 40, icon: 'chevron-left', shownWhen: 'selected day ≠ today', action: 'select today' },
   empty: {
     illustration: { size: 112, kind: 'blank sticker card with a folded corner + a small sun or moon (by weekday), lucide-style line 1.8, ink on paper2' },
     title: 'На {день} пока ничего', // «На пятницу пока ничего»
