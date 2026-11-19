@@ -252,7 +252,10 @@ _PERSONAL_PHRASE = re.compile(
     r"плат|оплат|оплачив|полож|остав|отправ|получ|взял|брал|писал|говорил|просил|"
     r"занима)\w*|"
     r"в\s+(?:моих\s+)?записях|в\s+заметках|на\s+странице|записал\w*|сохранил\w*|"
-    r"потратил\w*|заплатил\w*|оплатил\w*|менің|меннің|маған)(?!\w)",
+    r"потратил\w*|заплатил\w*|оплатил\w*|менің|меннің|маған|"
+    # Ф-89: «когда я свободен», «успею до встречи», «что сейчас»: the person's own time
+    r"свобод(?:ен|на|ны|но)|успе(?:ю|ваю|ем)|что\s+(?:у\s+меня\s+)?сейчас|"
+    r"что\s+дальше|бос\s+(?:боламын|уақыт\w*))(?!\w)",
     re.IGNORECASE)  # fmt: skip
 _PERSONAL_SENTENCE = re.compile(
     r"(?<!\w)(?:ваш\w*|у\s+вас|у\s+тебя|тво\w+|вы\s+(?:\w+л[аи]?|\w+\s+\w+л[аи]?)|ты\s+\w+л[аи]?|"
@@ -271,3 +274,34 @@ def about_person(sentence: str) -> bool:
     """A sentence that speaks about the person's records or doings; in a general answer only
     these go through the number/date check."""
     return bool(_PERSONAL_SENTENCE.search(sentence.replace("ё", "е")))
+
+
+# Ф-89: the assistant never proposes a time of today that is already past. A sentence that
+# offers / plans a clock time («давайте в 9:00», «напомню в 8:30», «свободны с 10:00») for today
+# (no other day in it) earlier than now is not shown. A sentence about the past («встреча была в
+# 9:00») is not a proposal.
+_PROPOSE = re.compile(
+    r"(?<!\w)(?:давай\w*|предлагаю|предложу|можно|могу|поставл\w*|постав(?:ить|лю)|напомн\w*|"
+    r"запланир\w*|успеет\w*|успеешь|успеете|свобод\w*|перенес\w*|начн\w*|"
+    r"сходит\w*|сходи|позвони\w*)(?!\w)", re.IGNORECASE)  # fmt: skip
+_PAST_TALK = re.compile(r"(?<!\w)(?:был|была|было|были|прошл\w*|уже\s+прош\w*|вчера)(?!\w)",
+                        re.IGNORECASE)  # fmt: skip
+_OTHER_DAY = re.compile(
+    rf"(?<!\w)(?:завтра|послезавтра|понедельник\w*|вторник\w*|сред[аыу]|четверг\w*|"
+    rf"пятниц\w*|суббот\w*|воскресень\w*|ертең|недел\w*|{_MONTH_WORD})|"
+    r"(?<!\d)\d{1,2}\.\d{1,2}(?!\d)|\d{4}-\d{2}-\d{2}", re.IGNORECASE)  # fmt: skip
+
+
+PAST_SLACK_MIN = 5  # «сейчас 15:00» said at 15:03 is not a proposal of the past
+
+
+def proposes_past(sentence: str, now_local: datetime) -> bool:
+    """The sentence offers a clock time of today that is already past (`now_local`: naive)."""
+    low = sentence.replace("ё", "е")
+    if not _PROPOSE.search(low) or _PAST_TALK.search(low) or _OTHER_DAY.search(low):
+        return False
+    now_min = now_local.hour * 60 + now_local.minute
+    for m in _TIME_RE.finditer(low):
+        if int(m.group(1)) * 60 + int(m.group(2)) <= now_min - PAST_SLACK_MIN:
+            return True
+    return False

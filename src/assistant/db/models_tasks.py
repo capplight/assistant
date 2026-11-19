@@ -7,6 +7,7 @@ from datetime import date, datetime
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     Date,
     DateTime,
     FetchedValue,
@@ -70,6 +71,12 @@ class Task(Base):
     where_text: Mapped[str | None] = mapped_column(Text)
     due_date: Mapped[date | None] = mapped_column(Date)
     done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # --- 0035: the calendar (docs/api/calendar.md) ---
+    start_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    duration_min: Mapped[int | None] = mapped_column(Integer)
+    tz: Mapped[str | None] = mapped_column(Text)
+    rrule: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[str] = mapped_column(Text, default="user", server_default="user")
     source_item_id: Mapped[int | None] = mapped_column(
         ForeignKey("items.id", ondelete="SET NULL")
     )
@@ -80,6 +87,29 @@ class Task(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class TaskOccurrence(Base):
+    """One occurrence of a repeating task that differs (0035): moved, resized, done, skipped."""
+
+    __tablename__ = "task_occurrences"
+    __mapper_args__ = {"eager_defaults": True}
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(Uuid, default=uuid7, unique=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"))
+    occurrence_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    start_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    duration_min: Mapped[int | None] = mapped_column(Integer)
+    done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    skipped: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    seq: Mapped[int] = _seq()
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class Suggestion(Base):

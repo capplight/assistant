@@ -9,7 +9,7 @@ engine); the caller writes the action and commits. Writers take the per-user syn
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import func, select
@@ -38,6 +38,41 @@ LIST_OF_TEMPLATE = {"shopping": ListKey.SHOPPING, "tasks": ListKey.TODO}
 
 class TaskError(ValueError):
     pass
+
+
+DEFAULT_TZ = "Asia/Almaty"
+
+
+def check_duration(value: int | None) -> int | None:
+    if value is not None and not 5 <= int(value) <= 1440:
+        raise TaskError("validation_error")
+    return int(value) if value is not None else None
+
+
+def set_time(task: Task, start_at: datetime | None, duration_min: int | None, tz: str,
+             rrule: str | None) -> None:  # fmt: skip
+    """0035: the to-do's time on the calendar; `due_date` follows the local day of the start."""
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    from assistant.tasks.calendar import check_rrule
+
+    try:
+        zone = ZoneInfo(tz)
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        raise TaskError("validation_error") from exc
+    rule = check_rrule(rrule)
+    if start_at is None:
+        if rule:
+            raise TaskError("validation_error")  # a repeat counts from a start
+        task.start_at = task.duration_min = task.rrule = None
+        task.tz = None
+        return
+    if start_at.tzinfo is None:
+        raise TaskError("validation_error")
+    task.start_at = start_at.astimezone(UTC).replace(microsecond=0)
+    task.duration_min = check_duration(duration_min)
+    task.tz, task.rrule = tz, rule
+    task.due_date = task.start_at.astimezone(zone).date()
 
 
 def clean_title(value: str | None) -> str:
@@ -103,7 +138,9 @@ def as_todo(spec: TaskSpec) -> TaskSpec:
         title = f"{title}, {' '.join(spec.qty.split())}"
     if spec.where:
         title = f"{title} ({' '.join(spec.where.split())})"
-    return TaskSpec(ListKey.TODO, title[:TITLE_MAX], due_date=spec.due_date)
+    return TaskSpec(ListKey.TODO, title[:TITLE_MAX], due_date=spec.due_date,
+                    start_at=spec.start_at, duration_min=spec.duration_min, tz=spec.tz,
+                    rrule=spec.rrule)  # fmt: skip
 
 
 def shopping_on() -> bool:
@@ -126,7 +163,8 @@ class Added:
 
 async def add(session: AsyncSession, user_id: int, specs: Sequence[TaskSpec], *, by: str,
               now: datetime, client_id: uuid.UUID | None = None,
-              source_item_id: int | None = None, voice: bool = False) -> Added:  # fmt: skip
+              source_item_id: int | None = None, voice: bool = False,
+              dedupe: bool = True) -> Added:  # fmt: skip
     """New tasks of one list (one phrase or one tap). An open task with the same title is not
     added twice; a ticked one comes back on the list."""
     await lock_user(session, user_id)
@@ -146,7 +184,9 @@ async def add(session: AsyncSession, user_id: int, specs: Sequence[TaskSpec], *,
     titles: list[str] = []
     for spec in specs:
         title = clean_title(spec.title)
-        same = await session.scalar(
+        # A to-do with a time is its own block on the calendar: «Встреча» today and tomorrow are
+        # two (0035); only a to-do without a time is not added twice.
+        same = None if not dedupe or spec.start_at is not None else await session.scalar(
             select(Task).join(Item, Item.id == Task.item_id)
             .where(Task.user_id == user_id, Task.list_key == spec.list_key,
                    Task.deleted_at.is_(None), Item.deleted_at.is_(None),
@@ -185,7 +225,10 @@ async def add(session: AsyncSession, user_id: int, specs: Sequence[TaskSpec], *,
                     else None,
                     due_date=spec.due_date if spec.list_key == ListKey.TODO else None,
                     source_item_id=source_item_id,
-                    client_id=client_id if len(specs) == 1 else None)  # fmt: skip
+                    client_id=client_id if len(specs) == 1 else None,
+                    created_by="user" if by == "user" else "assistant")  # fmt: skip
+        if spec.start_at is not None and spec.list_key == ListKey.TODO:
+            set_time(task, spec.start_at, spec.duration_min, spec.tz or DEFAULT_TZ, spec.rrule)
         session.add(task)
         await session.flush()
         await enqueue_ingest(session, item)
@@ -206,12 +249,32 @@ async def add(session: AsyncSession, user_id: int, specs: Sequence[TaskSpec], *,
         out.changes.append({"item_id": str(item.public_id), "task_id": str(task.public_id),
                             "title": title, "kind": "create",
                             "page_id": str(page.public_id) if page else None,
-                            "text": f"«{title}»" + (f" → {page.title}" if page else "")})
+                            "text": f"«{title}»" + (f" → {page.title}" if page else ""),
+                            "start_at": task.start_at.isoformat() if task.start_at else None})
         titles.append(title)
     if page is not None:
         out.pages.add(page.id)
     out.sentence = sentence_for(page, list_key, titles)
+    if len(out.tasks) == 1 and out.tasks[0].start_at is not None:
+        out.sentence = timed_sentence(out.tasks[0], now)
     return out
+
+
+def timed_sentence(task: Task, now: datetime) -> str:
+    """«Записал в Дела: завтра в 15:00–16:00 — «Встреча»» (calendar-time.md §5)."""
+    from zoneinfo import ZoneInfo
+
+    from assistant import timewords
+
+    assert task.start_at is not None
+    zone = ZoneInfo(task.tz or DEFAULT_TZ)
+    start = task.start_at.astimezone(zone).replace(tzinfo=None)
+    label = timewords.moment_label(start, now.astimezone(zone).date())
+    if task.duration_min:
+        end = start + timedelta(minutes=task.duration_min)
+        label += f"–{end.hour}:{end.minute:02d}"
+    repeat = ", повторяется" if task.rrule else ""
+    return f"Записал в Дела: {label[:1].lower() + label[1:]}{repeat} — «{task.title}»."
 
 
 async def attach(session: AsyncSession, user_id: int, item: Item, spec: TaskSpec, *, by: str,
@@ -295,12 +358,30 @@ async def tasks_dicts(session: AsyncSession, rows: Sequence[Task]) -> list[dict[
             for t in rows]  # fmt: skip
 
 
+def local_of(t: Task) -> dict[str, Any] | None:
+    """{"date", "start", "end"} on the task's clock, or None without a time."""
+    if t.start_at is None:
+        return None
+    from zoneinfo import ZoneInfo
+
+    zone = ZoneInfo(t.tz or DEFAULT_TZ)
+    start = t.start_at.astimezone(zone)
+    end = start + timedelta(minutes=t.duration_min) if t.duration_min else None
+    return {"date": start.date().isoformat(), "start": f"{start.hour}:{start.minute:02d}",
+            "end": f"{end.hour}:{end.minute:02d}" if end else None}  # fmt: skip
+
+
 def task_dict(t: Task, item_id: uuid.UUID | None) -> dict[str, Any]:
     return {
         "id": t.public_id, "client_id": t.client_id, "item_id": item_id, "list_key": t.list_key,
         "title": t.title, "qty": t.qty, "where": t.where_text,
         "due_date": t.due_date.isoformat() if t.due_date else None,
-        "done": t.done_at is not None, "done_at": t.done_at, "version": t.version, "seq": t.seq,
+        "done": t.done_at is not None, "done_at": t.done_at,
+        # 0035: the calendar (docs/api/calendar.md)
+        "start_at": t.start_at, "duration_min": t.duration_min, "tz": t.tz, "rrule": t.rrule,
+        "all_day": t.start_at is None and t.due_date is not None,
+        "source": t.created_by or "user", "local": local_of(t),
+        "version": t.version, "seq": t.seq,
         "created_at": t.created_at, "updated_at": t.updated_at, "deleted_at": t.deleted_at,
     }  # fmt: skip
 

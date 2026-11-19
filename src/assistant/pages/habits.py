@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from assistant.db.models_habits import HabitKind, HabitSource, HabitStatus, UserHabit
 from assistant.db.models_pages import Screen
+from assistant.pages.rules import envelope_type
 
 LEARN_AT = 2  # different records moved the same way before the rule is used
 KEEP_ITEMS = 20  # evidence item ids kept on the rule (to count each record once)
@@ -33,9 +34,12 @@ KIND_WORDS = {"task": "Дела", "reminder_request": "Напоминания", 
               "price_list": "Прайсы", "event": "События"}  # fmt: skip
 
 
-def kind_of(envelope: Mapping[str, Any] | None) -> str | None:
-    """What makes two records "of one kind" for a placement rule, or None."""
-    t = (envelope or {}).get("type")
+def kind_of(envelope: Mapping[str, Any] | None, item_kind: str | None = None,
+            source_meta: Mapping[str, Any] | None = None) -> str | None:  # fmt: skip
+    """What makes two records "of one kind" for a placement rule, or None. With `item_kind`, a
+    file-less «receipt» (a typed expense) is a note: it teaches and takes no «Чеки» rule."""
+    t = (envelope or {}).get("type") if item_kind is None else envelope_type(envelope, item_kind,
+                                                                             source_meta)
     return t if isinstance(t, str) and t in LEARNABLE else None
 
 
@@ -74,10 +78,12 @@ def count_evidence(habit: UserHabit, item_public_id: str, *, add: bool, now: dat
 
 async def learn(session: AsyncSession, user_id: int, *, item_public_id: str,
                 envelope: Mapping[str, Any] | None, to_page: Screen, from_page: Screen | None,
-                now: datetime) -> tuple[dict[str, Any] | None, bool]:  # fmt: skip
+                now: datetime, item_kind: str | None = None,
+                source_meta: Mapping[str, Any] | None = None,
+                ) -> tuple[dict[str, Any] | None, bool]:  # fmt: skip
     """Count one manual move. Returns (the op that takes it back, or None; True if this move
     switched the rule on). Call under the user's lock."""
-    kind = kind_of(envelope)
+    kind = kind_of(envelope, item_kind, source_meta)
     if kind is None or to_page.kind == "system_today":
         return None, False
     key = _key(to_page, kind)
@@ -106,10 +112,11 @@ async def learn(session: AsyncSession, user_id: int, *, item_public_id: str,
     return op, habit.status == HabitStatus.ACTIVE and not was_on
 
 
-async def placements(session: AsyncSession, user_id: int,
-                     envelope: Mapping[str, Any] | None) -> list[UserHabit]:  # fmt: skip
+async def placements(session: AsyncSession, user_id: int, envelope: Mapping[str, Any] | None,
+                     *, item_kind: str | None = None,
+                     source_meta: Mapping[str, Any] | None = None) -> list[UserHabit]:  # fmt: skip
     """The person's active rules that hold for a record with this envelope."""
-    kind = kind_of(envelope)
+    kind = kind_of(envelope, item_kind, source_meta)
     if kind is None:
         return []
     rows = await session.scalars(

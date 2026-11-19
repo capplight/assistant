@@ -151,6 +151,7 @@ Body: `{"text": "Напомни завтра в 7 выпить таблетку"
 |---|---|
 | `ok` | One reading. Show S13 with `draft`. `time_assumed=true`: no time was said, 9:00 was put in — highlight the time. |
 | `ambiguous` | «в 7» — `options` has 2 drafts (7:00, 19:00), likelier first; `message` = «В 7 утра или в 7 вечера?». The tap picks the draft. Week 17 (founder 2026-11-09): also on the model path — code reads the person's phrase (`rules.ambiguous_hour`, RU + KK «сағат 7-де») and asks whatever hour the model chose; a past option moves to tomorrow. |
+| `ambiguous` + `reason: "past"` | Ф-89 (2026-11-20): the time is already past today («сегодня в 9» at 10:00, «к концу дня» at 19:00, «вечером» at 21:00). Never set and never dropped: `options` = later today (the next full hour, when still today) and the same time tomorrow, sooner first; `message` = «Это время уже прошло. Сегодня в 11:00 или завтра в 9:00?». A repeating reminder never gets here. |
 | `form` | Open the manual form S12 («Ввести вручную»), prefilled from `draft` when not null. `reason` + `message` say why. |
 
 | `reason` (only with `form`) | `message` |
@@ -159,7 +160,8 @@ Body: `{"text": "Напомни завтра в 7 выпить таблетку"
 | `no_ai` | «Укажите время вручную.» — no `ai_cross_border` consent («Без ИИ») and code could not read it |
 | `ai_unavailable` | «Сейчас не получилось разобрать. Укажите время вручную.» (provider down / budget) |
 | `check_failed` | «Проверьте время — я мог ошибиться.» — the model's date/time failed our check |
-| `past` | «Это время уже прошло. Выберите другое.» |
+| `past` | «Это время уже прошло. Выберите другое.» — only when no choice can be offered (since Ф-89 a past time is `ambiguous` + `reason: "past"`) |
+| `check_failed` + `checks_failed: ["day_words"]` | Ф-89: the model's day is not the day the words name («через неделю», «в следующий вторник», «бүрсігүні») |
 
 `source`: `rules` (read by code, instant, free), `llm` (by the model), null.
 `parser`: the server setting — `rules_first` or `llm` (see below). A `draft` with
@@ -182,7 +184,28 @@ Setting `REMINDERS_RULES_FIRST` (server) → `parser`:
   ambiguous (7:00 / 19:00); «7:30», «07:00», «в 7 утра», «в 19» are not. The phone reads `parser`
   from `GET /v1/reminders/settings` and uses its local parser only when it is `rules_first`.
 
+### Time in words (Ф-89 part 1, `assistant.timewords`)
+
+After the strict rules give up, code also reads the longer time words (Russian phrases, with
+`rules_first`; no model call): «в обед», «утром / днём / вечером / ночью», «после обеда», «после
+работы», «к концу дня», «в следующий вторник вечером», «в эту пятницу», «через неделю», «через 3
+дня», «через полчаса», «послезавтра в 9» (asked: 9:00 / 21:00). Anything else left that sounds like
+time («на выходных», «за час», «каждый…») still goes to the model. On the model path (Kazakh,
+unclear phrases) code settles a vague part of the day itself («кешке» = 19:00 whatever the model
+wrote) and checks the model's day against the day words (`day_words`).
+
+The vague parts have one table of default times, `timewords.TIME_DEFAULTS` (the strict rules read
+it too): утром 9:00 · в обед 13:00 · днём / после обеда 14:00 · после работы 18:30 · к концу дня
+18:00 · вечером 19:00 · ночью 22:00. 2026-11-20: «днём» moved 13:00 → 14:00 with this table (one
+vector in `reminder-parse-vectors.json` follows it). Without a day: a precise hour already past
+today is tomorrow (the draft says «Завтра»); a vague part already past is tomorrow's, unless that
+part of the day still goes on (3 hours) — then it is asked.
+
 ## Create, change, delete
+
+0035 (calendar.md): `POST` / `PATCH` take `duration_min` (5…1440 or null), `Reminder` carries it,
+undo restores it. A reminder on a timed to-do's record is that to-do's alert on the calendar and
+moves with it.
 
 ### From the assistant line (week 9)
 

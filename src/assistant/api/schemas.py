@@ -708,6 +708,7 @@ class SyncOut(BaseModel):
     reminders: list["ReminderOut"] = []  # app reminders, incl. deleted (reminders.md)
     reminder_fires: list["FireOut"] = []  # their fires: state changes, retargets, new snoozes
     tasks: list["TaskOut"] = []  # week 9 (today.md), incl. deleted ones
+    task_occurrences: list["TaskOccurrenceOut"] = []  # 0035 (calendar.md)
     suggestions: list["SuggestionOut"] = []  # week 9, status changes too
     pending_actions: list["PendingActionOut"] = []  # week 9 (actions.md)
     habits: list["HabitSyncOut"] = []  # week 9 (pages.md)
@@ -1175,6 +1176,7 @@ class ReminderIn(BaseModel):
     sensitivity: Literal["health"] | None = None
     message_id: uuid.UUID | None = None  # week 9: the chat reply the draft came from
     item_id: uuid.UUID | None = None
+    duration_min: int | None = Field(default=None, ge=5, le=1440)  # 0035: length on the grid
 
     @model_validator(mode="after")
     def _when(self) -> "ReminderIn":
@@ -1194,6 +1196,7 @@ class ReminderPatchIn(BaseModel):
     offsets: list[int] | None = Field(default=None, max_length=3)
     level: ReminderLevelStr | None = None
     sensitivity: Literal["health"] | None = None
+    duration_min: int | None = Field(default=None, ge=5, le=1440)  # 0035
 
 
 class ReminderParseIn(BaseModel):
@@ -1226,6 +1229,7 @@ class ReminderOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     deleted_at: datetime | None
+    duration_min: int | None = None  # 0035 (calendar.md)
 
 
 class FireOut(BaseModel):
@@ -1371,6 +1375,27 @@ class TaskOut(BaseModel):
     deleted_at: datetime | None
     assistant_changed_at: datetime | None = None  # Ф-73, from the task's record
     assistant_action_id: uuid.UUID | None = None
+    # 0035, the calendar (calendar.md)
+    start_at: datetime | None = None
+    duration_min: int | None = None
+    tz: str | None = None
+    rrule: str | None = None
+    all_day: bool = False
+    source: str = "user"
+    local: dict[str, Any] | None = None
+
+
+class TaskOccurrenceOut(BaseModel):
+    id: uuid.UUID
+    task_id: uuid.UUID
+    occurrence_at: datetime
+    start_at: datetime | None
+    duration_min: int | None
+    done_at: datetime | None
+    skipped: bool
+    version: int
+    seq: int
+    updated_at: datetime
 
 
 class TasksOut(BaseModel):
@@ -1384,6 +1409,11 @@ class TaskIn(BaseModel):
     qty: str | None = Field(default=None, max_length=60)
     where: str | None = Field(default=None, max_length=60)
     due_date: DateStr | None = None
+    # 0035, the calendar
+    start_at: AwareDatetime | None = None
+    duration_min: int | None = Field(default=None, ge=5, le=1440)
+    tz: str | None = Field(default=None, max_length=64)
+    rrule: str | None = Field(default=None, max_length=200)
 
 
 class TaskPatchIn(BaseModel):
@@ -1395,11 +1425,19 @@ class TaskPatchIn(BaseModel):
     where: str | None = Field(default=None, max_length=60)
     due_date: DateStr | None = None
     list_key: ListKeyStr | None = None
+    # 0035, the calendar: move / resize; one occurrence of a repeat
+    start_at: AwareDatetime | None = None
+    duration_min: int | None = Field(default=None, ge=5, le=1440)
+    tz: str | None = Field(default=None, max_length=64)
+    rrule: str | None = Field(default=None, max_length=200)
+    occurrence_at: AwareDatetime | None = None
+    scope: Literal["this", "following", "all"] | None = None
 
 
 class TaskDoneIn(BaseModel):
     client_id: uuid.UUID
     done: bool = True
+    occurrence_at: AwareDatetime | None = None  # 0035: one occurrence of a repeat
 
 
 class TasksClearDoneIn(BaseModel):
@@ -1428,6 +1466,18 @@ class TaskChangedOut(BaseModel):
     task: TaskOut
     action: "ActionOut | None"
     repeated: bool = False
+    occurrence: TaskOccurrenceOut | None = None  # 0035: the occurrence changed
+    previous_task: TaskOut | None = None  # 0035: «это и следующие» — the series that ended
+
+
+class CalendarOut(BaseModel):
+    tz: str
+    from_: str = Field(alias="from")
+    to: str
+    now: datetime
+    entries: list[dict[str, Any]]
+
+    model_config = {"populate_by_name": True}
 
 
 class SuggestionOut(BaseModel):

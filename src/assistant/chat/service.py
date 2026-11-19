@@ -34,12 +34,14 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel
 from sqlalchemy import func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from assistant import timewords
 from assistant.ai import (
     AIConsentRequired,
     AIUnavailable,
@@ -110,6 +112,7 @@ from assistant.chat.verify import (
     about_person,
     check_sentence,
     personal_question,
+    proposes_past,
     split_sentences,
 )
 from assistant.config import Settings
@@ -125,6 +128,7 @@ from assistant.db.models_chat import (
 )
 from assistant.db.models_memory import FactSource, MemoryFact
 from assistant.db.models_pages import Screen
+from assistant.db.models_tasks import ListKey
 from assistant.embeddings import ChunkEmbedder, NullChunkEmbedder
 from assistant.expenses import parse as expenses_parse
 from assistant.expenses import service as expenses_service
@@ -217,6 +221,17 @@ def is_reminder_phrase(text: str) -> bool:
     if norm.endswith("?") or _REMIND_QUESTION.search(norm):
         return False
     return bool(_REMIND.search(norm))
+
+
+def _task_spec(d: dict[str, Any]) -> "tasks_parse.TaskSpec":
+    """A stored / code-made to-do with a time (0035) as a TaskSpec."""
+    from datetime import date as _date
+
+    return tasks_parse.TaskSpec(
+        ListKey.TODO, d["title"],
+        due_date=_date.fromisoformat(d["due_date"]) if d.get("due_date") else None,
+        start_at=datetime.fromisoformat(d["start_at"]) if d.get("start_at") else None,
+        duration_min=d.get("duration_min"), tz=d.get("tz"), rrule=d.get("rrule"))  # fmt: skip
 
 
 def _jsonable(value: Any) -> Any:
@@ -347,8 +362,10 @@ class AnswerGate:
 
     def __init__(self, book: SourceBook, extra: Facts, counts: set[int],
                  emit: Callable[[str, dict[str, Any]], None], lang: str = "ru",
-                 computed: Facts | None = None, *, phrase: str = "") -> None:  # fmt: skip
+                 computed: Facts | None = None, *, phrase: str = "",
+                 now_local: datetime | None = None) -> None:  # fmt: skip
         self.mode: str | None = None  # None until the model's `mode` field is read
+        self.now_local = now_local  # Ф-89: no past time of today is proposed
         self.strict = personal_question(phrase)
         self.general_sent = 0  # sentences sent unchecked (general knowledge)
         self.computed = computed if computed is not None else Facts()
@@ -395,6 +412,10 @@ class AnswerGate:
             return
         if not self.sent:
             self.emit("status", {"stage": "writing", "text": STATUS["writing"][self.lang]})
+        if self.now_local is not None and proposes_past(sentence, self.now_local):
+            self.removed += 1
+            log.info("chat: sentence dropped, it proposes a time already past")
+            return
         if self.general and not about_person(sentence):
             self.general_sent += 1
             self.sent.append(sentence)
@@ -673,6 +694,9 @@ class ChatService:
             if prior is None and not mixed and turn.input_kind != "share" \
                     and await self._save_expense(run, turn):  # fmt: skip
                 return  # «потратил 5000 на бензин» → «Расходы», one action (US-31)
+            if prior is None and not mixed and turn.input_kind != "share" \
+                    and await self._timed_task(run, turn, background):  # fmt: skip
+                return  # «добавь встречу завтра в 15:00 на час» → a block in «Дела» (0035)
             reading = rules_first(turn.text, input_kind=turn.input_kind)
             follow: str | None = None
             if prior is None and turn.input_kind != "share" and follow_up_phrase(turn.text):
@@ -1307,15 +1331,16 @@ class ChatService:
         return tz, self.clock().astimezone(ZoneInfo(tz)).date()
 
     async def _save_tasks(self, run: ReplyRun, turn: TurnInput, text_: str,
-                          default_list: str | None, *,
-                          m: MutationState | None = None) -> bool:  # fmt: skip
+                          default_list: str | None, *, m: MutationState | None = None,
+                          given: "tasks_parse.Reading | None" = None) -> bool:  # fmt: skip
         """A list phrase → tasks on the list page, one action (US-10). False: not a list (the
-        caller saves a note or goes on). The reader sees the person's phrase only."""
+        caller saves a note or goes on). The reader sees the person's phrase only. `given`: a
+        reading code already made (a to-do with a time, 0035)."""
         from assistant.actions import actions_dicts, record
         from assistant.actions.patch import page_patches
 
         _, today = await self._local_today(turn.user_id)
-        reading = await tasks_parse.read_phrase(
+        reading = given or await tasks_parse.read_phrase(
             text_, today=today, rules_first=self.s.tasks_rules_first, router=self.router,
             user_id=turn.user_id, default_list=default_list)  # fmt: skip
         if reading is None or not reading.specs:
@@ -1360,6 +1385,54 @@ class ChatService:
                                         "error": False, "by": reading.source}])  # fmt: skip
         return True
 
+    async def _timed_task(self, run: ReplyRun, turn: TurnInput, background: bool) -> bool:
+        """0035: «добавь встречу завтра в 15:00 на час», «поставь тренировку каждый вторник в
+        19:00» — code reads the title, moment, length and repeat and makes the to-do at once
+        (one action with «Отменить»); a bare hour or a time already past is asked first (the
+        `choice` proposal, nothing is made until the tap). False: not this shape."""
+        tz, _ = await self._local_today(turn.user_id)
+        zone = ZoneInfo(tz)
+        now = self.clock().replace(microsecond=0)
+        now_local = now.astimezone(zone).replace(tzinfo=None)
+        timed = tasks_parse.timed_phrase(turn.text, now_local)
+        if timed is None:
+            return False
+
+        def spec_of(moment: datetime | None) -> dict[str, Any]:
+            return {"title": timed.title, "tz": tz, "rrule": timed.rrule,
+                    "start_at": moment.replace(tzinfo=zone).isoformat() if moment else None,
+                    "duration_min": timed.duration_min if moment else None,
+                    "due_date": timed.day.isoformat() if timed.day else None}  # fmt: skip
+
+        if timed.status == "ok":
+            spec = spec_of(timed.moments[0] if timed.moments else None)
+            given = tasks_parse.Reading(ListKey.TODO, [_task_spec(spec)], "rules")
+            return await self._save_tasks(run, turn, turn.text, None, given=given)
+        if background:  # a question waits for the person; nothing is made behind their back
+            await self._fail(run, "not_done", text=TEXT_NOT_DONE[turn.lang], retry=True)
+            return True
+        book = await book_for(self.sessionmaker, turn.user_id, turn.page_pk)
+        m = self._mutation(run, turn, book, False, False)
+        settled = timewords.Settled("ask", timed.moments, reason=timed.reason)
+        today = now_local.date()
+        question = (timewords.question(settled, today) if timed.reason == "past"
+                    else f"«{timed.title}» — " + timewords.question(settled, today)[:1].lower()
+                    + timewords.question(settled, today)[1:])  # fmt: skip
+        options = [{"id": f"t{i + 1}", "kind": "time", "item_id": None,
+                    "label": timewords.moment_label(mo, today)}
+                   for i, mo in enumerate(timed.moments)]  # fmt: skip
+        options.append({"id": "cancel", "label": "Отмена", "kind": "cancel", "item_id": None})
+        m.note = question
+        m.proposal = {
+            "kind": "choice", "question": question, "count": None, "item_ids": [],
+            "options": options, "default": None,
+            "expires_at": (self.clock() + timedelta(hours=24)).isoformat(), "state": "open",
+            "plan": {"tool": "task_time", "reason": timed.reason,
+                     "specs": {f"t{i + 1}": spec_of(mo) for i, mo in enumerate(timed.moments)}},
+        }  # fmt: skip
+        await self._finish_change(run, turn, m, Decimal(0), [])
+        return True
+
     async def _reminder_draft(self, run: ReplyRun, turn: TurnInput, *, text_: str | None = None,
                               m: MutationState | None = None) -> None:  # fmt: skip
         """«Напомни завтра в 7 …» (week 8 gap): «как понял» for S13, nothing saved. Same reader
@@ -1395,6 +1468,23 @@ class ChatService:
         book = await book_for(self.sessionmaker, turn.user_id, turn.page_pk)
         m = self._mutation(run, turn, book, False, False)
         m.note = note
+        if outcome.status == "ambiguous" and drafts:
+            # Ф-89: an unclear time («в 7», or a time already past) is a short question with
+            # choices; a tap gives the S13 draft of that moment (`_choice`, «reminder_time»).
+            today = now.astimezone(ZoneInfo(tz)).date()
+            options = [{"id": f"t{i + 1}", "kind": "time", "item_id": None,
+                        "label": timewords.moment_label(d.local, today)}
+                       for i, d in enumerate(outcome.drafts)]  # fmt: skip
+            options.append({"id": "cancel", "label": "Отмена", "kind": "cancel", "item_id": None})
+            m.proposal = {
+                "kind": "choice", "question": note, "count": None, "item_ids": [],
+                "options": options, "default": None,
+                "expires_at": (self.clock() + timedelta(hours=24)).isoformat(), "state": "open",
+                "plan": {"tool": "reminder_time", "reason": outcome.reason,
+                         "source": outcome.source, "created_via": created_via,
+                         "parser": "rules_first" if self.s.reminders_rules_first else "llm",
+                         "drafts": {f"t{i + 1}": d for i, d in enumerate(drafts)}},
+            }  # fmt: skip
         await self._finish_change(run, turn, m, Decimal(str(outcome.cost_usd)),
                                   [{"name": "reminder_parse", "arguments": {},
                                     "error": outcome.status == "form",
@@ -1436,6 +1526,25 @@ class ChatService:
                 await memory.forget_all(s, turn.user_id)
                 await s.commit()
             m.note = memory.TEXT_FORGOT_ALL
+        elif prop["plan"].get("tool") == "task_time":  # 0035: the to-do's time tapped
+            spec = (prop["plan"].get("specs") or {}).get(option)
+            if spec is None:
+                m.note = TEXT_CANCELLED[lang]
+            else:
+                given = tasks_parse.Reading(ListKey.TODO, [_task_spec(spec)], "rules")
+                await self._save_tasks(run, turn, turn.text, None, m=m, given=given)
+        elif prop["plan"].get("tool") == "reminder_time":  # Ф-89: «Сегодня в 19:00» tapped
+            draft = (prop["plan"].get("drafts") or {}).get(option)
+            if draft is None:
+                m.note = TEXT_CANCELLED[lang]
+            else:
+                plan = prop["plan"]
+                run.emit("reminder_draft", {
+                    "reply_id": str(run.reply_id), "status": "ok", "source": plan.get("source"),
+                    "reason": None, "message": None, "draft": draft, "options": [],
+                    "parser": plan.get("parser"), "created_via": plan.get("created_via"),
+                })  # fmt: skip
+                m.note = f"Понял так: {draft['when_text']} — {draft['title']}. Сохранить?"
         elif prop["plan"].get("tool") == "rerun":
             pk = prop["plan"].get("options", {}).get(option)
             if pk is None:
@@ -1497,7 +1606,8 @@ class ChatService:
         m: MutationState = env.mut
         change = m.allowed
         gate = AnswerGate(book, ctx.extra, env.counts, run.emit, lang, env.computed,
-                          phrase=turn.text)
+                          phrase=turn.text, now_local=self.clock().astimezone(
+                              ZoneInfo(ctx.tz)).replace(tzinfo=None))  # fmt: skip
         masker = Masker(mask_contacts=True)
         m.masker = masker
         provider: str | None = None

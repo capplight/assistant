@@ -28,11 +28,12 @@ from assistant.api.schemas import (
     TasksClearedOut,
     TasksOut,
 )
-from assistant.db.models import Item
+from assistant.db.models import Item, User
 from assistant.db.models_actions import Action, ActionKind, Initiator
-from assistant.db.models_tasks import ListKey, Task
+from assistant.db.models_tasks import ListKey, Task, TaskOccurrence
 from assistant.pages import lock_user
 from assistant.tasks import TaskSpec, service
+from assistant.tasks import calendar as cal
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 GatedUser = Annotated[CurrentUser, Depends(require_base_consent)]
@@ -57,6 +58,47 @@ async def _by_client(db: Db, user_id: int, client_id: uuid.UUID | None) -> Actio
         return None
     return await db.scalar(select(Action).where(Action.user_id == user_id,
                                                 Action.client_id == client_id))  # fmt: skip
+
+
+async def _user_tz(db: Db, user_id: int) -> str:
+    return await db.scalar(select(User.tz).where(User.id == user_id)) or service.DEFAULT_TZ
+
+
+def _utc(value: datetime | None) -> str | None:
+    return value.astimezone(UTC).replace(microsecond=0).isoformat() if value else None
+
+
+def _occ_out(row: TaskOccurrence | None, task: Task) -> dict[str, Any] | None:
+    if row is None:
+        return None
+    return {"id": row.public_id, "task_id": task.public_id, "occurrence_at": row.occurrence_at,
+            "start_at": row.start_at, "duration_min": row.duration_min, "done_at": row.done_at,
+            "skipped": row.skipped, "version": row.version, "seq": row.seq,
+            "updated_at": row.updated_at}  # fmt: skip
+
+
+async def _occurrence(db: Db, task: Task, at: datetime | None) -> datetime | None:
+    """The occurrence the phone named, checked: a start of the series or a row it already has."""
+    if at is None:
+        return None
+    if not task.rrule:
+        raise ApiError(422, "validation_error")
+    at = at.astimezone(UTC).replace(microsecond=0)
+    own = await db.scalar(select(TaskOccurrence.id).where(TaskOccurrence.task_id == task.id,
+                                                          TaskOccurrence.occurrence_at == at))
+    if own is None:
+        try:
+            cal.check_occurrence(task, at)
+        except (service.TaskError, ValueError) as exc:
+            raise ApiError(422, "validation_error") from exc
+    return at
+
+
+async def _occ_row(db: Db, task: Task, at: datetime | None) -> TaskOccurrence | None:
+    if at is None:
+        return None
+    return await db.scalar(select(TaskOccurrence).where(TaskOccurrence.task_id == task.id,
+                                                        TaskOccurrence.occurrence_at == at))
 
 
 async def _own(db: Db, user_id: int, task_id: uuid.UUID) -> Task:
@@ -92,10 +134,14 @@ async def create_task(body: TaskIn, user: GatedUser, db: Db,
         return TaskCreatedOut(task=await _task_out(db, found),
                               action=await _action_out(db, action, now), repeated=True)
     try:
+        if body.rrule and body.start_at is None:
+            raise service.TaskError("validation_error")
         spec = TaskSpec(body.list_key, service.clean_title(body.title), body.qty, body.where,
-                        date.fromisoformat(body.due_date) if body.due_date else None)
+                        date.fromisoformat(body.due_date) if body.due_date else None,
+                        start_at=body.start_at, duration_min=body.duration_min,
+                        tz=body.tz or await _user_tz(db, user.id), rrule=body.rrule)
         added = await service.add(db, user.id, [spec], by=Initiator.USER, now=now,
-                                  client_id=body.client_id)  # fmt: skip
+                                  client_id=body.client_id, dedupe=body.start_at is None)
     except (service.TaskError, ValueError) as exc:
         raise ApiError(422, "validation_error") from exc
     action = await record(
@@ -133,6 +179,8 @@ async def patch_task(task_id: uuid.UUID, body: TaskPatchIn, user: GatedUser,
     if task.version != body.version:
         raise ApiError(409, "conflict", details={"version": task.version})
     sent = body.model_fields_set - {"version", "client_id"}
+    if sent & {"start_at", "duration_min", "tz", "rrule", "occurrence_at", "scope"}:
+        return await _patch_time(db, user.id, task, body, sent, now)
     values: dict[str, Any] = {}
     try:
         if "title" in sent:
@@ -197,10 +245,18 @@ async def tick_task(task_id: uuid.UUID, body: TaskDoneIn, user: GatedUser,
     if not await service.is_live(db, task):
         raise ApiError(404, "not_found")
     item_pid = await service.item_public_id(db, task)
-    out = await engine.apply(db, user.id, [
-        {"op": "set_task", "id": str(task.public_id), "item": str(item_pid),
-         "values": {"done_at": now.isoformat() if body.done else None}}],
-        by=Initiator.USER, check=False, now=now)  # fmt: skip
+    at = await _occurrence(db, task, body.occurrence_at)
+    if task.rrule and at is None:
+        raise ApiError(422, "validation_error")  # a repeat is done one occurrence at a time
+    done_at = now.isoformat() if body.done else None
+    if at is not None:
+        op: dict[str, Any] = {"op": "set_occurrence", "task": str(task.public_id),
+                              "item": str(item_pid), "occurrence_at": at.isoformat(),
+                              "values": {"done_at": done_at}}  # fmt: skip
+    else:
+        op = {"op": "set_task", "id": str(task.public_id), "item": str(item_pid),
+              "values": {"done_at": done_at}}
+    out = await engine.apply(db, user.id, [op], by=Initiator.USER, check=False, now=now)
     action = None
     if out.inverse:
         sentence = service.done_sentence(task, body.done)
@@ -212,7 +268,9 @@ async def tick_task(task_id: uuid.UUID, body: TaskDoneIn, user: GatedUser,
             client_id=body.client_id,
         )  # fmt: skip
     await db.flush()
-    return TaskChangedOut(task=await _task_out(db, task), action=await _action_out(db, action, now))
+    occ = _occ_out(await _occ_row(db, task, at), task)
+    return TaskChangedOut(task=await _task_out(db, task), action=await _action_out(db, action, now),
+                          occurrence=occ)  # type: ignore[arg-type]
 
 
 CLEARED_RU = {"shopping": "Убрал купленное", "todo": "Убрал сделанное"}
@@ -270,7 +328,8 @@ async def clear_done(body: TasksClearDoneIn, user: GatedUser, db: Db) -> TasksCl
 
 @router.delete("/{task_id}", response_model=TaskChangedOut)
 async def delete_task(task_id: uuid.UUID, user: GatedUser, db: Db,
-                      client_id: uuid.UUID | None = None) -> TaskChangedOut:  # fmt: skip
+                      client_id: uuid.UUID | None = None, occurrence_at: datetime | None = None,
+                      scope: str | None = None) -> TaskChangedOut:  # fmt: skip
     now = _now()
     await lock_user(db, user.id)
     task = await _own(db, user.id, task_id)
@@ -278,10 +337,19 @@ async def delete_task(task_id: uuid.UUID, user: GatedUser, db: Db,
     if first is not None:
         return TaskChangedOut(task=await _task_out(db, task),
                               action=await _action_out(db, first, now), repeated=True)
+    if scope not in (None, "this", "following") or (
+            occurrence_at is not None and occurrence_at.tzinfo is None):  # fmt: skip
+        raise ApiError(422, "validation_error")
     item_pid = await service.item_public_id(db, task)
-    out = await engine.apply(db, user.id, [
-        {"op": "delete_entity_soft", "entity": "tasks", "id": str(task.public_id),
-         "item": str(item_pid)}], by=Initiator.USER, check=False, now=now)  # fmt: skip
+    at = await _occurrence(db, task, occurrence_at)
+    whole = at is None or (scope == "following" and task.start_at is not None
+                           and at <= task.start_at)  # fmt: skip
+    if not whole:
+        return await _delete_some(db, user.id, task, item_pid, at, scope, client_id, now)
+    ops = [*await cal.linked_reminder_cancels(db, user.id, task),
+           {"op": "delete_entity_soft", "entity": "tasks", "id": str(task.public_id),
+            "item": str(item_pid)}]  # fmt: skip
+    out = await engine.apply(db, user.id, ops, by=Initiator.USER, check=False, now=now)
     action = None
     if out.inverse:
         sentence = f"Убрал в корзину: {service.lower_first(task.title)}"
@@ -293,6 +361,136 @@ async def delete_task(task_id: uuid.UUID, user: GatedUser, db: Db,
         )  # fmt: skip
     await db.flush()
     return TaskChangedOut(task=await _task_out(db, task), action=await _action_out(db, action, now))
+
+
+async def _delete_some(db: Db, user_id: int, task: Task, item_pid: uuid.UUID, at: datetime,
+                       scope: str | None, client_id: uuid.UUID | None,
+                       now: datetime) -> TaskChangedOut:  # fmt: skip
+    """One occurrence skipped («только это»), or the series ended before it («это и следующие»)."""
+    if scope == "following":
+        ops: list[dict[str, Any]] = [{"op": "set_task", "id": str(task.public_id),
+                                      "item": str(item_pid),
+                                      "values": {"rrule": cal.with_until(task.rrule or "", at)}}]
+        sentence = f"Больше не повторяю: {service.lower_first(task.title)}"
+    else:
+        ops = [{"op": "set_occurrence", "task": str(task.public_id), "item": str(item_pid),
+                "occurrence_at": at.isoformat(), "values": {"skipped": True}}]
+        sentence = f"Убрал один раз: {service.lower_first(task.title)}"
+    out = await engine.apply(db, user_id, ops, by=Initiator.USER, check=False, now=now)
+    action = None
+    if out.inverse:
+        action = await record(
+            db, user_id=user_id, kind=ActionKind.FACET_EDIT, initiated_by=Initiator.USER,
+            summary={"ru": sentence, "kk": None},
+            changes=[_change_row(task, item_pid, "edit", sentence)], inverse=out.inverse,
+            now=now, source_item_ids=[task.item_id], client_id=client_id)  # fmt: skip
+    await db.flush()
+    occ = _occ_out(await _occ_row(db, task, at), task)
+    return TaskChangedOut(task=await _task_out(db, task),
+                          action=await _action_out(db, action, now),
+                          occurrence=occ)  # type: ignore[arg-type]
+
+
+async def _patch_time(db: Db, user_id: int, task: Task, body: TaskPatchIn, sent: set[str],
+                      now: datetime) -> TaskChangedOut:  # fmt: skip
+    """0035: move / resize / repeat of a to-do (calendar.md). One action with «Отменить»."""
+    scope = body.scope or ("this" if body.occurrence_at is not None else "all")
+    at = await _occurrence(db, task, body.occurrence_at)
+    if scope != "all" and at is None:
+        raise ApiError(422, "validation_error")
+    item_pid = await service.item_public_id(db, task)
+    tz = (body.tz if "tz" in sent and body.tz else None) or task.tz or await _user_tz(db, user_id)
+    try:
+        rule = cal.check_rrule(body.rrule) if "rrule" in sent else task.rrule
+    except (service.TaskError, ValueError) as exc:
+        raise ApiError(422, "validation_error") from exc
+    other = sent - {"start_at", "duration_min", "tz", "rrule", "occurrence_at", "scope"}
+    if other:
+        raise ApiError(422, "validation_error")  # a time change goes alone
+    ops: list[dict[str, Any]] = []
+    extra_inverse: list[dict[str, Any]] = []
+    new_task: Task | None = None
+    previous: Task | None = None
+    old_start = task.start_at
+    new_start = body.start_at.astimezone(UTC).replace(microsecond=0) if body.start_at else None
+    if at is not None and scope == "following" and task.start_at is not None \
+            and at <= task.start_at:  # fmt: skip
+        scope, at = "all", None  # from the first one on = the whole series
+    if scope == "this":
+        assert at is not None
+        if "rrule" in sent or "tz" in sent or ("start_at" in sent and new_start is None):
+            raise ApiError(422, "validation_error")  # one occurrence: only its time
+        values: dict[str, Any] = {}
+        if "start_at" in sent:
+            values["start_at"] = _utc(new_start)
+        if "duration_min" in sent:
+            values["duration_min"] = body.duration_min
+        if values:
+            ops.append({"op": "set_occurrence", "task": str(task.public_id),
+                        "item": str(item_pid), "occurrence_at": at.isoformat(),
+                        "values": values})  # fmt: skip
+        sentence = (cal.moved_sentence(task, at, new_start) if new_start
+                    else f"Изменил: {service.lower_first(task.title)}")  # fmt: skip
+    elif scope == "following":
+        assert at is not None and task.rrule is not None
+        ops.append({"op": "set_task", "id": str(task.public_id), "item": str(item_pid),
+                    "values": {"rrule": cal.with_until(task.rrule, at)}})
+        try:
+            spec = TaskSpec(ListKey.TODO, task.title, start_at=new_start or at,
+                            duration_min=(body.duration_min if "duration_min" in sent
+                                          else task.duration_min), tz=tz,
+                            rrule=rule if "rrule" in sent else _without_until(task.rrule))
+            added = await service.add(db, user_id, [spec], by=Initiator.USER, now=now,
+                                      source_item_id=task.source_item_id, dedupe=False)
+        except (service.TaskError, ValueError) as exc:
+            raise ApiError(422, "validation_error") from exc
+        new_task, previous = added.tasks[0], task
+        extra_inverse = list(added.inverse)
+        sentence = cal.moved_sentence(task, at, new_task.start_at)
+    else:
+        start = new_start if "start_at" in sent else task.start_at
+        duration = body.duration_min if "duration_min" in sent else task.duration_min
+        if start is None:
+            rule, duration = None, None  # all day on `due_date`
+        probe = Task(due_date=task.due_date)
+        try:
+            service.set_time(probe, start, duration, tz, rule)
+        except (service.TaskError, ValueError) as exc:
+            raise ApiError(422, "validation_error") from exc
+        values = {"start_at": _utc(probe.start_at), "duration_min": probe.duration_min,
+                  "tz": probe.tz, "rrule": probe.rrule}
+        if probe.start_at is not None and probe.due_date is not None:
+            values["due_date"] = probe.due_date.isoformat()
+        ops.append({"op": "set_task", "id": str(task.public_id), "item": str(item_pid),
+                    "values": values})  # fmt: skip
+        if not task.rrule and not rule and old_start is not None and probe.start_at is not None:
+            ops += await cal.reminder_shift_ops(db, user_id, task, probe.start_at - old_start,
+                                                now)  # fmt: skip
+        sentence = (cal.moved_sentence(task, old_start, probe.start_at)
+                    if old_start != probe.start_at
+                    else f"Изменил: {service.lower_first(task.title)}")  # fmt: skip
+    out = await engine.apply(db, user_id, ops, by=Initiator.USER, check=False, now=now)
+    inverse = [*extra_inverse, *out.inverse]
+    action = None
+    if inverse:
+        action = await record(
+            db, user_id=user_id, kind=ActionKind.FACET_EDIT, initiated_by=Initiator.USER,
+            summary={"ru": sentence, "kk": None},
+            changes=[_change_row(new_task or task, item_pid, "edit", sentence)],
+            inverse=inverse, now=now, source_item_ids=[task.item_id],
+            client_id=body.client_id)  # fmt: skip
+    await db.flush()
+    occ = _occ_out(await _occ_row(db, task, at), task) if scope == "this" else None
+    return TaskChangedOut(task=await _task_out(db, new_task or task),
+                          action=await _action_out(db, action, now),
+                          occurrence=occ,  # type: ignore[arg-type]
+                          previous_task=await _task_out(db, previous) if previous else None)
+
+
+def _without_until(rule: str | None) -> str | None:
+    if not rule:
+        return None
+    return ";".join(p for p in rule.split(";") if not p.startswith("UNTIL=")) or None
 
 
 __all__ = ["router"]

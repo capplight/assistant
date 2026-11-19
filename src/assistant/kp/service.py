@@ -30,7 +30,7 @@ from assistant.db.models_kp import (
 from assistant.db.models_v2 import File, RecordKind, RecordSource, RecordStatus
 from assistant.kp import calc, prices, vat
 from assistant.kp.norm import name_norm
-from assistant.pages import first_use_page, lock_user, place_item
+from assistant.pages import first_use_page, lock_user, place_item, rules
 from assistant.records import content_hash, normalize_text
 
 PAGE_TEMPLATE = "documents"
@@ -497,8 +497,8 @@ DOC_TYPES = {"receipt": "receipt", "contract": "contract", "kp_request": "other"
 
 def other_field_values(item: Item) -> dict[str, Any]:
     """A document that is not a КП (a contract, a receipt, a PDF): its type from the envelope."""
-    env = item.envelope or {}
-    kind = DOC_TYPES.get(str(env.get("type") or ""), "other")
+    env = item.envelope or {}  # a file-less «receipt» (a typed expense) is no «Чек»
+    kind = DOC_TYPES.get(rules.envelope_type(env, str(item.kind), item.source_meta) or "", "other")
     out: dict[str, Any] = {"doc_type": kind}
     people = (env.get("entities") or {}).get("people") if isinstance(env.get("entities"),
                                                                        dict) else None

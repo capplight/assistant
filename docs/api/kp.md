@@ -581,7 +581,8 @@ from `title` / `total` / `deal_status` (no picture).
 
 `GET /v1/pages/{id}/items` entries of a КП carry `document` (DocumentRow) and `fields`:
 `doc_type: "kp"`, `client`, `amount` (= `total`), `kp_status` (= `deal_status`). Other documents
-on the page get `doc_type` from their envelope (`contract` · `receipt` · `other`). Template v2
+on the page get `doc_type` from their envelope (`contract` · `receipt` · `other`; `receipt` only for
+a record with a photo / file / OFD link — a typed expense is never a «Чек», 2026-11-20). Template v2
 (0020): `kp_status` options `draft, sent, seen, accepted, declined`; `default_view.group_by:
 "client"` (folders by client). The КП record is `items.kind = "kp"`, `ai_generated: true`; it
 lands on «Документы» (and not on «Заметки»).

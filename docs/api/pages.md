@@ -266,7 +266,7 @@ Week 10 adds an optional `"none": [condition, ...]`: the record is left off this
 |---|---|
 | `{"always": true}` | always (`notes`: «Заметки» shows every record) |
 | `{"kinds": ["pdf", ...]}` | `item.kind` is listed |
-| `{"envelope_types": ["receipt", ...]}` | `item.envelope.type` is listed |
+| `{"envelope_types": ["receipt", ...]}` | `item.envelope.type` is listed. 2026-11-20: a `receipt` counts only for a record with a photo / file / link behind it (`kind` image, screenshot, pdf, docx, xlsx, file_other, link, or `source_meta.fiscal_url` / `file_name`); a typed or spoken expense («потратил 5000 на донер») is read as `note`, so it lands on «Расходы» only, never on «Документы» / «Чеки» (`rules.file_backed`, `rules.envelope_type`; the learned placement rules of 0016 read it the same way). Migration 0034 took such rows off «Документы». |
 | `{"aspects": ["reminder", ...]}` | envelope has that part: `reminder`, `task`, `kp` (from `proposed`), `amount` (from `entities.amounts`) |
 | `{"words": ["ремонт", ...]}` | a word in title, summary or text starts with it, ignoring case |
 | `{"task_record": true}` | week 10: the record is a line of «Дела» / «Покупки» (`tasks.item_id`) |

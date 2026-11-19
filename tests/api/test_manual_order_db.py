@@ -331,6 +331,7 @@ async def test_move_to_page_and_also_show_with_undo(db_app):
 
 
 async def test_two_moves_of_one_kind_teach_placement_and_undo_unteaches(db_app):
+    # (typed notes: a «receipt» needs a file since 2026-11-20, so a contract stands in)
     app, _, s = db_app
     async with client(app) as c:
         h = await _signed_in(c)
@@ -338,7 +339,7 @@ async def test_two_moves_of_one_kind_teach_placement_and_undo_unteaches(db_app):
         home = await _add_page(c, h, "custom", title="Ремонт")
         receipts = [await _note(c, h, f"Чек Леруа {k}") for k in range(3)]
         for r_ in receipts:
-            await _set_envelope(s, r_, "receipt")
+            await _set_envelope(s, r_, "contract")
 
         async def move(item: str) -> dict:
             r = await c.post(f"/v1/items/{item}/move-to-page",
@@ -356,13 +357,13 @@ async def test_two_moves_of_one_kind_teach_placement_and_undo_unteaches(db_app):
         assert habit.source == "learned_edit" and habit.kind == "placement_rule"
         listed = [x for x in (await c.get("/v1/habits", headers=h)).json()["habits"]
                   if x["kind"] == "placement_rule"]  # week 9 adds the screen exclusions
-        assert [x["text_ru"] for x in listed] == ["Чеки кладу на страницу «Ремонт»"]
+        assert [x["text_ru"] for x in listed] == ["Договоры кладу на страницу «Ремонт»"]
 
         # A new receipt goes where the person put the others too (once its type is known); a
         # plain note does not.
         new = await _note(c, h, "Чек Леруа 3")
         assert new not in await _ids_on(c, h, home["id"])
-        item = await _set_envelope(s, new, "receipt")
+        item = await _set_envelope(s, new, "contract")
         await place_item(s, item)
         await s.commit()
         assert new in await _ids_on(c, h, home["id"])
@@ -378,7 +379,7 @@ async def test_two_moves_of_one_kind_teach_placement_and_undo_unteaches(db_app):
         assert [x for x in (await c.get("/v1/habits", headers=h)).json()["habits"]
                 if x["kind"] == "placement_rule"] == []
         late = await _note(c, h, "Чек Леруа 4")
-        await place_item(s, await _set_envelope(s, late, "receipt"))
+        await place_item(s, await _set_envelope(s, late, "contract"))
         await s.commit()
         assert late not in await _ids_on(c, h, home["id"])
         # Turned off by the person: learning never switches it on again.
@@ -685,7 +686,7 @@ async def test_undo_of_the_first_of_two_moves_takes_only_its_count_back(db_app):
         ids = [await _note(c, h, f"Чек {k}") for k in range(2)]
         moved = []
         for i in ids:
-            await _set_envelope(s, i, "receipt")
+            await _set_envelope(s, i, "contract")
             r = await c.post(f"/v1/items/{i}/move-to-page",
                              json={"client_id": _cid(), "mode": "move",
                                    "from_page_id": notes["id"], "to_page_ids": [home["id"]]},
@@ -709,7 +710,7 @@ async def test_turning_a_rule_off_stops_it_and_can_be_undone(db_app):
         home = await _add_page(c, h, "custom", title="Ремонт")
         for k in range(2):
             i = await _note(c, h, f"Чек {k}")
-            await _set_envelope(s, i, "receipt")
+            await _set_envelope(s, i, "contract")
             await c.post(f"/v1/items/{i}/move-to-page",
                          json={"client_id": _cid(), "mode": "move", "from_page_id": notes["id"],
                                "to_page_ids": [home["id"]]}, headers=h)  # fmt: skip
@@ -719,7 +720,7 @@ async def test_turning_a_rule_off_stops_it_and_can_be_undone(db_app):
         assert [x for x in (await c.get("/v1/habits", headers=h)).json()["habits"]
                 if x["kind"] == "placement_rule"] == []
         late = await _note(c, h, "Чек поздний")
-        await place_item(s, await _set_envelope(s, late, "receipt"))
+        await place_item(s, await _set_envelope(s, late, "contract"))
         await s.commit()
         assert late not in await _ids_on(c, h, home["id"])
         again = (await c.delete(f"/v1/habits/{rule['id']}", headers=h)).json()

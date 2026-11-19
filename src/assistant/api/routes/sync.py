@@ -43,6 +43,7 @@ from assistant.api.schemas import (
     ReminderOut,
     SuggestionOut,
     SyncOut,
+    TaskOccurrenceOut,
     TaskOut,
     TombstoneOut,
 )
@@ -61,7 +62,7 @@ from assistant.db.models_kp import CompanyProfile, Document, Draft, PriceList, P
 from assistant.db.models_pages import ItemFacet, Screen, ScreenItem
 from assistant.db.models_reminders import APP_KINDS, ReminderFire
 from assistant.db.models_search import ScreenSummary
-from assistant.db.models_tasks import PendingAction, Suggestion, Task
+from assistant.db.models_tasks import PendingAction, Suggestion, Task, TaskOccurrence
 from assistant.db.models_v2 import Device, HiddenReason, SyncTombstone
 from assistant.expenses import imports as statement_plans
 from assistant.expenses import repeats as expense_repeats
@@ -202,7 +203,8 @@ async def sync(
         )
     ]  # fmt: skip
     extra: list[object] = []
-    for model in (Task, Suggestion, PendingAction, UserHabit, ExpenseEntry, ExpenseCategory,
+    for model in (Task, TaskOccurrence, Suggestion, PendingAction, UserHabit, ExpenseEntry,
+                  ExpenseCategory,
                   StatementImport, ExpenseDuplicate, Document, CompanyProfile, PriceList,
                   PriceListItem, Draft):
         extra.extend(await db.scalars(
@@ -224,6 +226,7 @@ async def sync(
     page_reminders = [row for _, row in page if isinstance(row, Reminder)]
     page_fires = [row for _, row in page if isinstance(row, ReminderFire)]
     page_tasks = [row for _, row in page if isinstance(row, Task)]
+    page_occs = [row for _, row in page if isinstance(row, TaskOccurrence)]
     page_suggestions = [row for _, row in page if isinstance(row, Suggestion)]
     page_pending = [row for _, row in page if isinstance(row, PendingAction)]
     page_habits = [row for _, row in page if isinstance(row, UserHabit)]
@@ -262,6 +265,7 @@ async def sync(
         reminder_fires=[FireOut.model_validate(d)
                         for d in await reminder_service.fires_dicts(db, page_fires)],
         tasks=[TaskOut.model_validate(d) for d in await tasks.tasks_dicts(db, page_tasks)],
+        task_occurrences=await occurrences_out(db, page_occs),
         suggestions=[SuggestionOut.model_validate(d)
                      for d in await suggestions.views(db, page_suggestions)],
         pending_actions=await pending_out(db, page_pending),
@@ -297,6 +301,18 @@ async def price_items_out(db: Db, rows: list[PriceListItem]) -> list[dict]:
         PriceList.id.in_(lists)))).tuples().all()) if lists else {}  # fmt: skip
     return [jsonable({**kp_pricelist.item_dict(r, ids.get(r.price_list_id)), "seq": r.seq,
                       "deleted_at": r.deleted_at}) for r in rows]  # fmt: skip
+
+
+async def occurrences_out(db: Db, rows: list[TaskOccurrence]) -> list[TaskOccurrenceOut]:
+    """0035 (calendar.md): one occurrence of a repeating to-do that differs."""
+    if not rows:
+        return []
+    ids = dict((await db.execute(select(Task.id, Task.public_id).where(
+        Task.id.in_({r.task_id for r in rows})))).all())  # fmt: skip
+    return [TaskOccurrenceOut(id=r.public_id, task_id=ids[r.task_id], occurrence_at=r.occurrence_at,
+                              start_at=r.start_at, duration_min=r.duration_min, done_at=r.done_at,
+                              skipped=r.skipped, version=r.version, seq=r.seq,
+                              updated_at=r.updated_at) for r in rows]  # fmt: skip
 
 
 async def pending_out(db: Db, rows: list[PendingAction]) -> list[PendingActionOut]:

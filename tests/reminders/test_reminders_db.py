@@ -231,7 +231,8 @@ async def test_parse_flag_on_reads_simple_phrases_without_the_model(env: Env) ->
         )
         r = await c.post("/v1/reminders/parse", headers=h, json={"text": "завтра в 7 зарядка"})
         assert r.json()["status"] == "ambiguous" and len(r.json()["options"]) == 2
-        r = await c.post("/v1/reminders/parse", headers=h, json={"text": "после обеда позвонить"})
+        r = await c.post("/v1/reminders/parse", headers=h,
+                         json={"text": "в конце месяца позвонить"})
         assert (r.json()["status"], r.json()["reason"]) == ("form", "no_ai")
         assert fake.calls == 0
         settings = (await c.get("/v1/reminders/settings", headers=h)).json()

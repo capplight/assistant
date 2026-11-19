@@ -189,8 +189,9 @@ async def snapshot(s: AsyncSession, user: User, cipher: Cipher | None) -> Snapsh
         WHERE r.user_id = :u ORDER BY r.id""", uid)
     put("reminders.json", _json(reminders))
     tasks = await _rows(s, """
-        SELECT public_id AS id, list_key, title, qty, where_text, due_date, done_at, created_at,
-               deleted_at FROM tasks WHERE user_id = :u ORDER BY id""", uid)
+        SELECT public_id AS id, list_key, title, qty, where_text, due_date, done_at, start_at,
+               duration_min, tz, rrule, created_at, deleted_at
+        FROM tasks WHERE user_id = :u ORDER BY id""", uid)
     put("tasks.json", _json(tasks))
     snap.counts["reminders"], snap.counts["tasks"] = len(reminders), len(tasks)
 

@@ -341,6 +341,7 @@ async def create(
         sensitivity=body.sensitivity,
         item_id=item_pk,
         client_id=body.client_id,
+        duration_min=body.duration_min,
     )
     try:
         r, fires, created = await service.create(db, user.id, data, _now())

@@ -261,6 +261,7 @@ class ReminderInput:
     item_id: int | None = None
     client_id: uuid.UUID | None = None
     kind: str = AppReminderKind.NORMAL
+    duration_min: int | None = None  # 0035: length on the calendar grid
 
 
 def _validated(data: ReminderInput, now: datetime) -> ReminderInput:
@@ -314,6 +315,7 @@ async def create(
         sensitivity=data.sensitivity,
         item_id=data.item_id,
         client_id=data.client_id,
+        duration_min=data.duration_min,
         status=AppReminderStatus.SCHEDULED,
         attempts=0,
         version=1,
@@ -344,6 +346,7 @@ _PATCHABLE = (
     "level",
     "sensitivity",
     "parse_source",
+    "duration_min",
 )
 
 
@@ -382,6 +385,8 @@ async def change(
     r.due_at, r.offsets, r.level = data.due_at, list(data.offsets), data.level
     if "sensitivity" in fields:
         r.sensitivity = fields["sensitivity"]
+    if "duration_min" in fields:
+        r.duration_min = fields["duration_min"]
     if "parse_source" in fields:
         r.parse_source = fields["parse_source"]
     elif timing:
@@ -741,6 +746,7 @@ def reminder_dict(r: Reminder, today: Any = None) -> dict[str, Any]:
         "snooze_until": r.snooze_until,
         "item_id": None,
         "when_text": texts.when_text(local, r.rrule, r.offsets or [], r.level, today),
+        "duration_min": r.duration_min,
         "version": r.version,
         "seq": r.seq,
         "created_at": r.created_at,

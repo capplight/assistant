@@ -9,6 +9,11 @@ Conditions: {"always": true} · {"kinds": [...]} · {"envelope_types": [...]} ·
 week 12: also of a «Расходы» line).
 A rule with an unknown condition never matches, so an old server reading a newer template places
 too little rather than too much.
+
+A "receipt" (2026-11-20) is only a record with a photo or a file behind it: a receipt photo or
+screenshot, a PDF, a shared file, an OFD link. A typed or spoken expense («потратил 5000 на донер»)
+is a «Расходы» line, never a document: whatever its envelope says, rules read it as a note
+(`envelope_type`), and enrichment stores it as one (`records/enrich.py`).
 """
 
 import re
@@ -18,6 +23,27 @@ from typing import Any
 
 _WORD = re.compile(r"\w+", re.UNICODE)
 _CONDITIONS = frozenset({"always", "kinds", "envelope_types", "aspects", "words", "task_record"})
+# Record kinds that carry a photo / file / link (legacy `photo`, `document` included).
+FILE_KINDS = frozenset({"image", "screenshot", "pdf", "docx", "xlsx", "file_other", "link",
+                        "photo", "document"})  # fmt: skip
+FILE_ONLY_TYPES = frozenset({"receipt"})  # envelope types that need a file behind the record
+
+
+def file_backed(kind: str | None, source_meta: Mapping[str, Any] | None = None) -> bool:
+    """The record has a photo, a file or a fiscal (OFD) link behind it."""
+    meta = source_meta if isinstance(source_meta, Mapping) else {}
+    return str(kind) in FILE_KINDS or bool(meta.get("fiscal_url") or meta.get("file_name"))
+
+
+def envelope_type(envelope: Mapping[str, Any] | None, kind: str | None,
+                  source_meta: Mapping[str, Any] | None = None) -> str | None:  # fmt: skip
+    """The envelope's type as code reads it: a file-less «receipt» is a note."""
+    t = (envelope or {}).get("type")
+    if not isinstance(t, str):
+        return None
+    if t in FILE_ONLY_TYPES and not file_backed(kind, source_meta):
+        return "note"
+    return t
 
 
 @dataclass(frozen=True)
@@ -30,6 +56,11 @@ class ItemFacts:
     summary: str | None = None
     text: str | None = None
     is_task: bool = False  # a tool row's own record: a task (tasks.item_id), an expense (week 12)
+    source_meta: Mapping[str, Any] | None = None  # `fiscal_url` / `file_name`: see file_backed
+
+    @property
+    def envelope_type(self) -> str | None:
+        return envelope_type(self.envelope, self.kind, self.source_meta)
 
 
 def _non_empty(value: Any) -> bool:
@@ -77,7 +108,7 @@ def _holds(condition: Mapping[str, Any], facts: ItemFacts) -> bool:
     if name == "kinds":
         return str(facts.kind) in value
     if name == "envelope_types":
-        return bool(facts.envelope) and facts.envelope.get("type") in value
+        return bool(facts.envelope) and facts.envelope_type in value
     if name == "aspects":
         return bool(aspects_of(facts.envelope) & set(value))
     if name == "words":

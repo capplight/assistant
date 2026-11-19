@@ -16,11 +16,12 @@ asks a reader at all. The phrase is data: nothing in it is followed as an instru
 import logging
 import re
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Literal
 
 from pydantic import BaseModel
 
+from assistant import timewords
 from assistant.ai import AIConsentRequired, AIError, LLMTask, TaskInputs, UntrustedPart
 from assistant.db.models_tasks import ListKey
 from assistant.logs import error_text
@@ -40,6 +41,11 @@ class TaskSpec:
     qty: str | None = None
     where: str | None = None
     due_date: date | None = None
+    # 0035, the calendar: a to-do with a time (aware), its length, zone and repeat
+    start_at: datetime | None = None
+    duration_min: int | None = None
+    tz: str | None = None
+    rrule: str | None = None
 
 
 @dataclass
@@ -160,6 +166,18 @@ def day_in(text: str) -> str:
     return "none"
 
 
+def phrase_day(text: str, today: date) -> date | None:
+    """Ф-89: the day the phrase names, by code — the simple day words (`day_in`) and the longer
+    ones (`timewords`: «через неделю», «в следующий вторник», «послезавтра в 9», «ертең»)."""
+    return timewords.day_of(text, today) or to_date(day_in(text), today)
+
+
+def _without_day(text: str, today: date) -> str:
+    """The phrase without its day words («через неделю», «в следующий вторник»)."""
+    r = timewords.read(text, datetime.combine(today, time(0, 0)))
+    return timewords.strip(text, r.day_spans) if r is not None and r.day_spans else text
+
+
 def to_date(day: str, today: date) -> date | None:
     if day == "today":
         return today
@@ -203,18 +221,24 @@ def rules_parse(text: str, today: date, default_list: str | None = None) -> Read
     m = _SHOP_HEAD.match(phrase)
     if m:
         rest = m.group("rest") or m.group("rest2") or m.group("rest3") or ""
-        due = to_date(day_in(rest), today)  # «купить хлеб на завтра»: a day for the to-do
+        due = phrase_day(rest, today)  # «купить хлеб на завтра»: a day for the to-do
         if due is not None:
-            rest = _DAY_IN_LINE.sub("", rest)
+            rest = _DAY_IN_LINE.sub("", _without_day(rest, today))
         specs = [s for s in (_shop_line(p) for p in _SPLIT.split(rest)) if s][:MAX_LINES]
         for spec in specs:
             spec.due_date = due
         return Reading(ListKey.SHOPPING, specs) if specs else None
     m = _TODO_HEAD.match(phrase)
+    said_day = None
+    if m is None:  # «Мне через неделю надо сдать отчёт»: the day words before «надо»
+        bare = _without_day(phrase, today)
+        if bare != phrase and (m := _TODO_HEAD.match(bare)) is not None:
+            said_day = phrase_day(phrase, today)
     if m:
         rest = (m.group("rest") or m.group("rest2") or "").strip()
-        due = to_date(day_in(rest), today) or to_date(day_in(m.group("day") or ""), today)
-        title = _cap(_DAY_TAIL.sub("", rest) if due else rest)
+        due = (phrase_day(rest, today) or said_day
+               or to_date(day_in(m.group("day") or ""), today))  # fmt: skip
+        title = _cap(_DAY_TAIL.sub("", _without_day(rest, today)) if due else rest)
         if not 1 <= len(title) <= TITLE_MAX or len(title.split()) < 2:
             return None  # «надо же» is not a to-do
         return Reading(ListKey.TODO, [TaskSpec(ListKey.TODO, title, due_date=due)])
@@ -222,8 +246,8 @@ def rules_parse(text: str, today: date, default_list: str | None = None) -> Read
         specs = [s for s in (_shop_line(p) for p in _SPLIT.split(phrase)) if s][:MAX_LINES]
         return Reading(ListKey.SHOPPING, specs) if specs else None
     if default_list == ListKey.TODO:
-        due = to_date(day_in(phrase), today)
-        title = _cap(_DAY_TAIL.sub("", phrase) if due else phrase)
+        due = phrase_day(phrase, today)
+        title = _cap(_DAY_TAIL.sub("", _without_day(phrase, today)) if due else phrase)
         if 1 <= len(title) <= TITLE_MAX:
             return Reading(ListKey.TODO, [TaskSpec(ListKey.TODO, title, due_date=due)])
     return None
@@ -251,7 +275,10 @@ def check_reply(text: str, reply: TasksReply, today: date) -> Reading | None:
     said = _stems(text)
     digits = set(_DIGITS.findall(text))
     specs: list[TaskSpec] = []
-    due = to_date(reply.day, today) if reply.list == "todo" and day_in(text) == reply.day else None
+    due = None
+    if reply.list == "todo":  # the day is code's: from the phrase's own words (Ф-89)
+        due = timewords.day_of(text, today) or (
+            to_date(reply.day, today) if day_in(text) == reply.day else None)
     for line in reply.items[:MAX_LINES]:
         title = _cap(" ".join(line.title.split()))
         qty = " ".join((line.qty or "").split()) or None
@@ -311,3 +338,126 @@ async def read_phrase(text: str, *, today: date, rules_first: bool, router: obje
     if reading is not None:
         reading.cost_usd = float(result.cost_usd)
     return reading
+
+
+# --- a to-do with a time (0035, the calendar; calendar-time.md §5) ---
+
+_TIMED_HEAD = re.compile(
+    r"^(?:пожалуйста[,\s]+)?(?:добав(?:ь|ьте)|запиш(?:и|ите)|постав(?:ь|ьте)|созда(?:й|йте)|"
+    r"запланиру(?:й|йте)|внеси(?:те)?|қос(?:ыңыз)?|жаз(?:ыңыз)?)\s+(?:мне\s+)?"
+    r"(?:в\s+(?:дела|календарь|план)\s+)?(?P<rest>.+)$", re.IGNORECASE)  # fmt: skip
+_REPEAT_WORDS = re.compile(
+    r"(?<![\w-])(?:(?P<daily>каждый\s+день|ежедневно|күн\s+сайын)|(?P<weekdays>по\s+будням)"
+    r"|(?P<weekly>каждую\s+неделю|еженедельно)|(?P<monthly>каждый\s+месяц|ежемесячно)"
+    r"|(?:каждый|каждую|каждое)\s+(?P<wd>(?:понедельник|вторник|среду|четверг|пятницу|субботу|"
+    r"воскресенье)(?:(?:\s*,\s*|\s+и\s+)(?:понедельник|вторник|среду|четверг|пятницу|субботу|"
+    r"воскресенье))*))(?![\w])", re.IGNORECASE)  # fmt: skip
+_WD_CODES = {"понедельник": "MO", "вторник": "TU", "сред": "WE", "четверг": "TH", "пятниц": "FR",
+             "суббот": "SA", "воскресен": "SU"}  # fmt: skip
+_CODE_INDEX = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"]
+_MONEY = re.compile(r"\d[\d\s]*(?:тенге|тг|₸|руб|рубл|\$|usd|kzt|eur|€)|потрат|заплат",
+                    re.IGNORECASE)  # fmt: skip
+
+
+@dataclass
+class TimedReading:
+    """«добавь встречу завтра в 15:00 на час»: one to-do with a time, read by code."""
+
+    title: str
+    moments: tuple[datetime, ...]  # naive local: 1 (ok) or 2 (ask)
+    duration_min: int
+    rrule: str | None = None
+    status: str = "ok"  # ok | ask
+    reason: str | None = None  # ask: ambiguous_hour | past
+    day: date | None = None  # all day (a day, no time)
+
+
+def _repeat(text: str) -> tuple[str | None, tuple[int, int] | None]:
+    m = _REPEAT_WORDS.search(text)
+    if m is None:
+        return None, None
+    if m.group("daily"):
+        rule = "FREQ=DAILY"
+    elif m.group("weekdays"):
+        rule = "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR"
+    elif m.group("weekly"):
+        rule = "FREQ=WEEKLY"
+    elif m.group("monthly"):
+        rule = "FREQ=MONTHLY"
+    else:
+        words = re.findall(r"понедельник|вторник|сред\w*|четверг|пятниц\w*|суббот\w*|воскресен\w*",
+                           m.group("wd").lower())  # fmt: skip
+        codes = sorted({next(c for st, c in _WD_CODES.items() if w.startswith(st)) for w in words},
+                       key=_CODE_INDEX.index)  # fmt: skip
+        rule = "FREQ=WEEKLY;BYDAY=" + ",".join(codes)
+    return rule, (m.start(), m.end())
+
+
+def _first_on(rule: str, moment: datetime, said_day: bool) -> datetime:
+    """A weekly repeat on given days without a said day starts on the first such day."""
+    if said_day or "BYDAY=" not in rule:
+        return moment
+    days = [_CODE_INDEX.index(c) for c in rule.split("BYDAY=")[1].split(",")]
+    for k in range(8):
+        cand = moment + timedelta(days=k)
+        if cand.weekday() in days:
+            return cand
+    return moment
+
+
+def _nominative(title: str) -> str:
+    """«добавь встречу» → «Встреча», «тренировку» → «Тренировка» (the first word only, a
+    feminine noun after «добавь»); «урок», «созвон» stay."""
+    head, _, tail = title.partition(" ")
+    low = head.lower()
+    if len(head) > 3 and low[-1] in "ую" and low[-2] not in "аеёиоуыэюя":
+        head = head[:-1] + ("а" if low[-1] == "у" else "я")
+    return f"{head} {tail}".strip()
+
+
+def timed_phrase(text: str, now_local: datetime) -> TimedReading | None:
+    """A phrase that adds a to-do with a time or a day, read by code — or None (not this shape:
+    a reminder, a list, a question go their own ways)."""
+    phrase = " ".join(text.split()).strip(" .!")
+    if not phrase or phrase.endswith("?") or len(phrase) > 300:
+        return None
+    m = _TIMED_HEAD.match(phrase)
+    if m is None:
+        return None
+    rest = m.group("rest")
+    if re.match(r"(?:в\s+)?(?:покупк|список|заметк|страниц|расход)", rest, re.IGNORECASE):
+        return None  # «добавь в покупки …»: a list; a page; an expense
+    if _MONEY.search(rest):
+        return None  # «запиши 5000 тенге на бензин сегодня»: an expense, not a to-do
+    rule, span = _repeat(rest)
+    scan = rest if span is None else rest[:span[0]] + " " * (span[1] - span[0]) + rest[span[1]:]
+    read = timewords.read(scan, now_local)
+    if read is None and rule is None:
+        return None
+    spans = list(read.spans) if read is not None else []
+    if span is not None:
+        spans.append(span)
+    title = _cap(timewords.strip(rest, tuple(sorted(spans))))
+    title = re.sub(r"^(?:в\s+(?:дела|календарь)\s+)", "", title, flags=re.IGNORECASE).strip()
+    title = _cap(_nominative(re.sub(r"\s+(?:в|во|на|к)$", "", title)))
+    if not 1 <= len(title) <= TITLE_MAX:
+        return None
+    if read is None or not read.has_time:
+        if rule is not None and read is None:
+            return None  # «каждый вторник» without a time: the model / a reminder
+        day = read.day if read is not None else None
+        if rule is not None or day is None:
+            return None
+        if re.match(r"(?:запиш|внеси|жаз)", phrase, re.IGNORECASE):
+            return None  # «запиши позвонить маме в пятницу»: a note in the person's words
+        return TimedReading(title, (), 0, None, day=day)  # «добавь встречу на завтра»: all day
+    settled = timewords.settle(read, now_local)
+    duration = read.duration_min or timewords.default_duration(title)
+    moments = settled.moments
+    if rule is not None:
+        if settled.status == "ask" and settled.reason == "past":
+            moments = moments[-1:]  # a repeat simply starts with the next one
+            settled = timewords.Settled("ok", moments)
+        moments = tuple(_first_on(rule, mo, read.day_said) for mo in moments)
+    return TimedReading(title, moments, duration, rule, status=settled.status,
+                        reason=settled.reason)  # fmt: skip

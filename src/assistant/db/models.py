@@ -433,6 +433,7 @@ class Reminder(Base):
         sa.ARRAY(Integer), default=list, server_default="{}"
     )
     level: Mapped[str] = mapped_column(Text, default="notification", server_default="notification")
+    duration_min: Mapped[int | None] = mapped_column(Integer)  # 0035: length on the calendar grid
     created_via: Mapped[str | None] = mapped_column(Text)
     parse_source: Mapped[str | None] = mapped_column(Text)
     sensitivity: Mapped[str | None] = mapped_column(Text)

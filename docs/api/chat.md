@@ -163,7 +163,7 @@ data: {"text":"Плитка стоила 48 000 ₸. "}
 | `token` | 0...n | `{"text": "..."}` — append to the answer. Pieces are whole sentences: each sentence is checked (numbers and dates) before it is sent, so nothing shown is taken back. |
 | `web_sources` | 0...1, before `citations`, only with `web_search_enabled` (Ф-86, off by default) | `{"sources": [{"url", "title"}]}` — pages a web search returned for this answer. The answer text already ends with a line «Источники: zakon.kz, …», so a phone that ignores the event still shows them; a phone that knows it may show tappable links instead. |
 | `citations` | once | `{"citations": [Citation]}` — the chips under the answer. Only records the answer is based on. May be empty. |
-| `checked` | once | `{"ok": bool, "removed": int}` — `removed` sentences had a number or a date not found in the sources and were not sent (R-36). Ф-86 (chat.v4): only sentences about the person's own data are checked; an answer from general knowledge (advice, a plan, small talk) is not cut, except its sentences that speak about the person's records («у вас в записях…», «вы потратили…»), and a phrase that asks about the person's data («сколько я потратил», «где мой…») keeps every sentence checked. Numbers our **code** computed this turn (a count of a page, and from week 12 the totals and remainders of `aggregate`) are allowed too (founder 2026-11-09); a number the model works out itself is still removed. `ok=false` means the text ends with the note «Часть чисел не нашёл в записях — не стал их писать.» Nothing to do beyond showing the text. |
+| `checked` | once | `{"ok": bool, "removed": int}` — `removed` sentences had a number or a date not found in the sources and were not sent (R-36). Ф-86 (chat.v4): only sentences about the person's own data are checked; an answer from general knowledge (advice, a plan, small talk) is not cut, except its sentences that speak about the person's records («у вас в записях…», «вы потратили…»), and a phrase that asks about the person's data («сколько я потратил», «где мой…») keeps every sentence checked. Numbers our **code** computed this turn (a count of a page, and from week 12 the totals and remainders of `aggregate`) are allowed too (founder 2026-11-09); a number the model works out itself is still removed. `ok=false` means the text ends with the note «Часть чисел не нашёл в записях — не стал их писать.» Nothing to do beyond showing the text. Ф-89 (2026-11-20): the context has a code line about «сейчас» (the person's local time, how many timed things of today are past, the next reminder and the minutes until it, the free window until it, «Дела» due today) and a data block «Расписание на сегодня» with the titles; those times and minutes are code's facts the answer may state («что у меня сейчас?», «когда я свободен?», «успею до встречи?» are personal questions: every sentence checked). A sentence that proposes a clock time of today already past («давайте в 10:00» at 14:20, no other day named) is removed too. |
 | `action` | 0...n, a change was made (already saved) | `{"reply_id", "action": Action, "changed_item_ids": [uuid], "page_id": uuid \| null}` — Action as in `actions.md`. Several in one reply = the same action growing: replace by `action.id`. Show `action.summary.ru` in the line with [Что изменилось] (`action.changes`) and [Отменить] (`POST /v1/actions/{id}/undo`). Highlight `changed_item_ids` 600 ms. |
 | `plan` | 0...1, step 8: a plan was made or changed (already saved), after its `action` | `{"reply_id", "action_id", "removed", "plan": PlanCard}` (`plans.md`): show the «План» card instead of text. `done` follows with `answer_kind: "action"`; the answer text is the card's `lead`. |
 | `reminder_draft` | 0...1, a reminder phrase (week 9) | The `/v1/reminders/parse` result + `reply_id`, `created_via` (`reminders.md`): open S13 (or S12 for `status: "form"`). Followed by `banner` + `done` (`answer_kind: "text"`). Nothing was saved. |
@@ -258,7 +258,19 @@ Proposal (in `needs_choice`, `confirm`, `confirm_manual` and on the message):
 - `kind`: `choice` (which record), `count` («Да» with a number), `manual` (records placed by hand).
 - `options[].kind`: `item` (this record), `pick` (let the person tap a record on the page, then
   send the **original phrase again** with that `selected_item_id` and a new `client_id`), `yes`,
-  `no`, `keep_mine`, `cancel`.
+  `no`, `keep_mine`, `cancel`, `time` (Ф-89, see below).
+- Ф-89 (2026-11-20) «когда?»: a reminder phrase whose time is unclear (a bare «в 7», or a time
+  already past today) also ends as a `choice`: `question` is the `reminder_draft` message («В 7
+  утра или в 7 вечера?», «Это время уже прошло. Сегодня в 11:00 или завтра в 9:00?»), `options` =
+  two `time` buttons labelled «Сегодня в 19:00» / «Завтра в 7:00» / «Во вторник в 9:00» and
+  `cancel`. A tap (`choice.option` = `t1` / `t2`) answers with a `reminder_draft` of `status: ok`
+  for that moment and the banner «Понял так: … Сохранить?»; nothing is saved until [Сохранить]
+  (S13). The `reminder_draft` of the first turn still carries both `options` (older phones).
+  A part of a longer phrase keeps only its `reminder_draft` options (no proposal).
+- 0035 (calendar.md «From the assistant line»): «добавь встречу завтра в 15:00 на час» is made
+  by code at once (`action`, `tasks[]` with `start_at` / `duration_min`); an unclear hour or a
+  past time is the same `choice` with `time` options (`plan.tool: "task_time"`), the tap makes
+  the to-do.
 - Any other tap: `POST /v1/chat/messages` with `choice: {"reply_id", "option": id}` and the
   label as `text`. The answer streams like any other (`action`, `done`, ...). `cancel` / `no`:
   «Хорошо, ничего не менял.»

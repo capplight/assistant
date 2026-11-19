@@ -84,12 +84,17 @@ OPS = frozenset({"restore_positions", "restore_view_state", "add_screen_item",
                  "revert_document", "set_document", "set_company_profile", "set_price_list",
                  "set_price_item",
                  # step 8 (actions/ops_items.py): a record's title / text / plan
-                 "set_item_content"})  # fmt: skip
+                 "set_item_content",
+                 # 0035 (actions/ops_calendar.py): one occurrence, a reminder's time
+                 "set_occurrence", "set_reminder_time"})  # fmt: skip
 HABIT_STATUSES = frozenset({"candidate", "active", "disabled"})
 ENTITIES = frozenset({"items", "screens", "tasks", "expenses", "documents"})
 OWNED = frozenset({"tasks", "expenses", "documents"})  # a row with its own record
-TASK_FIELDS = frozenset({"title", "qty", "where_text", "due_date", "done_at", "list_key"})
-REMINDER_FIELDS = ("title", "body", "due_at", "tz", "rrule", "offsets", "level", "sensitivity")
+TASK_FIELDS = frozenset({"title", "qty", "where_text", "due_date", "done_at", "list_key",
+                         # 0035: the calendar
+                         "start_at", "duration_min", "tz", "rrule"})  # fmt: skip
+REMINDER_FIELDS = ("title", "body", "due_at", "tz", "rrule", "offsets", "level", "sensitivity",
+                   "duration_min")  # fmt: skip
 SCREEN_FIELDS = ("title", "title_kk", "icon", "layout")
 ITEM_FIELDS = frozenset({"title"})
 ROW_FIELDS = ("position", "group_key", "manual_order")
@@ -482,7 +487,7 @@ def task_value(task: Task, name: str) -> Any:
 def _task_set(task: Task, name: str, value: Any) -> None:
     if name == "due_date":
         value = date.fromisoformat(value) if value else None
-    elif name == "done_at":
+    elif name in ("done_at", "start_at"):
         value = datetime.fromisoformat(value) if value else None
     setattr(task, name, value)
 
@@ -524,7 +529,8 @@ def reminder_state(r: Reminder) -> dict[str, Any]:
     """What `restore_reminder` sets back: the fields the person edits, and whether it is live."""
     return {"title": r.title, "body": r.body, "due_at": r.due_at.isoformat(), "tz": r.tz,
             "rrule": r.rrule, "offsets": list(r.offsets or []), "level": r.level,
-            "sensitivity": r.sensitivity, "deleted": r.deleted_at is not None}  # fmt: skip
+            "sensitivity": r.sensitivity, "duration_min": r.duration_min,
+            "deleted": r.deleted_at is not None}  # fmt: skip
 
 
 async def _cancel_reminder(session: AsyncSession, user_id: int, op: dict, out: Outcome, *,
@@ -665,6 +671,7 @@ _HANDLERS = {
 
 def _register_week10() -> None:
     from assistant.actions import (  # need Outcome and the helpers above
+        ops_calendar,
         ops_dedup,
         ops_expenses,
         ops_items,
@@ -677,6 +684,7 @@ def _register_week10() -> None:
     _HANDLERS.update(ops_expenses.HANDLERS)
     _HANDLERS.update(ops_kp.HANDLERS)
     _HANDLERS.update(ops_items.HANDLERS)
+    _HANDLERS.update(ops_calendar.HANDLERS)
 
 
 _register_week10()

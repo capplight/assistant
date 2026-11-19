@@ -161,8 +161,13 @@ async def make_tasks(session: AsyncSession, user_id: int, item: Item, *, by: str
             out.skipped += 1
             continue
         due = date.fromisoformat(step["due_date"]) if step.get("due_date") else None
-        added = await tasks_service.add(session, user_id, [TaskSpec(ListKey.TODO, step["title"],
-                                                                    due_date=due)],
+        # 0035: a step with a time is a block on the calendar (its reminder is its alert)
+        start = (datetime.fromisoformat(step["remind_at"]).replace(tzinfo=zone)
+                 if step.get("remind_at") else None)  # fmt: skip
+        length = step.get("duration_min") if isinstance(step.get("duration_min"), int) else None
+        spec = TaskSpec(ListKey.TODO, step["title"], due_date=due, start_at=start,
+                        duration_min=length, tz=tz if start is not None else None)
+        added = await tasks_service.add(session, user_id, [spec],
                                         by=by, now=now, source_item_id=item.id)  # fmt: skip
         if not added.tasks:
             continue

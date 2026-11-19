@@ -24,6 +24,7 @@ from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field
 
+from assistant import timewords
 from assistant.ai import (
     AIConsentRequired,
     AIError,
@@ -116,9 +117,12 @@ class ParseOutcome:
     checks_failed: tuple[str, ...] = ()  # for logs/tests: which code checks the model failed
     cost_usd: float = 0.0
     model_calls: int = 0
+    question: str | None = None  # Ф-89: «Это время уже прошло. Сегодня в 11:00 или завтра…?»
 
     @property
     def message(self) -> str | None:
+        if self.question:
+            return self.question
         if self.status == "ambiguous":
             return texts.ambiguous_text([d.local.time() for d in self.drafts])
         return texts.MSG.get(self.reason) if self.reason else None
@@ -149,11 +153,69 @@ def level_for(text: str, created_via: str, time_assumed: bool) -> str:
 def _finish(ctx: _Ctx, source: Literal["rules", "llm"], drafts: list[Draft],
             **kw: Any) -> ParseOutcome:  # fmt: skip
     ahead = [d for d in drafts if d.local > ctx.now_local and d.due_at > ctx.now]
+    if not ahead and drafts and drafts[0].rrule is None:
+        # Ф-89: a time already past is never set silently, nor dropped: a short question with
+        # two choices — later today, or the same time tomorrow.
+        first = drafts[0]
+        asked = timewords.past_choices(first.local, ctx.now_local)
+        options = tuple(Draft(first.title, m, ctx.tz, None, first.offsets, first.level,
+                              first.time_assumed) for m in asked.moments)  # fmt: skip
+        return ParseOutcome("ambiguous", source, "past", options,
+                            question=timewords.question(asked, ctx.now_local.date()), **kw)
     if not ahead:
         return ParseOutcome("form", source, "past", tuple(drafts[:1]), **kw)
     if len(ahead) == 1:
         return ParseOutcome("ok", source, None, (ahead[0],), **kw)
     return ParseOutcome("ambiguous", source, None, tuple(ahead[:2]), **kw)
+
+
+_KK_LETTERS = re.compile(r"[әғқңөұүһі]")
+
+
+def _from_words(ctx: _Ctx) -> ParseOutcome | None:
+    """Ф-89: what the strict rules leave (`rules.parse` → None) but the time words settle by
+    code: «в обед», «после работы», «в следующий вторник вечером», «через неделю», «к концу
+    дня», «сегодня в 9» already past (a question). Russian only (the title is cut by the Russian
+    rules); anything else left in the phrase that sounds like time → None (the model reads it)."""
+    if _KK_LETTERS.search(ctx.text.lower()):
+        return None
+    read = timewords.read(ctx.text, ctx.now_local)
+    if read is None or not (read.has_time or read.day_said):
+        return None
+    low = rules._normalize(ctx.text)
+    rest = low
+    for a, b in read.spans:
+        rest = rest[:a] + " " * (b - a) + rest[b:]
+    trig = rules._TRIGGER.match(rest)
+    if trig:
+        rest = " " * trig.end() + rest[trig.end():]
+    rest = re.sub(r"(?<![\w])обязательно(?![\w])", " ", rest)
+    if rules._RISKY.search(rest):
+        return None
+    spans = list(read.spans) + [(m.start(), m.end()) for m in
+                                re.finditer(r"(?<![\w])обязательно(?![\w])", low)]  # fmt: skip
+    title = rules._title(ctx.text, spans)
+    if not title:
+        title = "Подъём" if re.search(r"разбуди|будильник", low) else "Напоминание"
+    settled = timewords.settle(read, ctx.now_local)
+    assumed = not read.has_time
+    moments: tuple[datetime, ...] = settled.moments
+    if assumed:  # a day only: the morning of that day (rules.DEFAULT_TIME)
+        moments = ((datetime.combine(settled.day, rules.DEFAULT_TIME),)
+                   if settled.day is not None else ())  # fmt: skip
+        if moments and moments[0] <= ctx.now_local:  # «сегодня …» after 9:00: the next hour
+            nxt = timewords.next_hour(ctx.now_local)
+            moments = (nxt,) if nxt.date() == ctx.now_local.date() else ()
+    if not moments:
+        return None
+    level = level_for(ctx.text, ctx.created_via, assumed)
+    drafts = [Draft(title, m, ctx.tz, None, (), level, assumed) for m in moments]
+    if settled.status == "ask":
+        question = (timewords.question(settled, ctx.now_local.date())
+                    if settled.reason == "past" else None)  # fmt: skip
+        return ParseOutcome("ambiguous", "rules", settled.reason, tuple(drafts),
+                            question=question)  # fmt: skip
+    return _finish(ctx, "rules", drafts)
 
 
 def _from_rules(ctx: _Ctx, result: rules.RulesResult) -> ParseOutcome:
@@ -294,6 +356,30 @@ def _from_model(ctx: _Ctx, out: ReminderParseOut, **kw: Any) -> ParseOutcome:
             problems = []
         failed += problems
         drafts.append(Draft(title, local, ctx.tz, rule, offsets, level, assumed))
+    words = None if rule or failed else timewords.read(ctx.text, ctx.now_local)
+    if words is not None and drafts:
+        vague = words.hour is None and words.rel is None and words.part is not None
+        if vague or (assumed and words.has_time):
+            # Ф-89: «в обед», «после работы», «кешке» — the model cannot know our times of the
+            # day (timewords.TIME_DEFAULTS): code settles the moment, or asks.
+            settled = timewords.settle(words, ctx.now_local)
+            if settled.moments:
+                level = level_for(ctx.text, ctx.created_via, False)
+                drafts = [Draft(title, m, ctx.tz, None, offsets, level, False)
+                          for m in settled.moments]  # fmt: skip
+                if settled.status == "ask":
+                    question = (timewords.question(settled, ctx.now_local.date())
+                                if settled.reason == "past" else None)  # fmt: skip
+                    return ParseOutcome("ambiguous", "llm", settled.reason, tuple(drafts),
+                                        question=question, **kw)  # fmt: skip
+                return _finish(ctx, "llm", drafts, **kw)
+        elif words.day_said:
+            # «через неделю», «в следующий вторник», «бүрсігүні»: the model's day must be the
+            # day the words name.
+            settled = timewords.settle(words, ctx.now_local)
+            days = {m.date() for m in settled.moments} | {words.day}
+            if any(d.local.date() not in days for d in drafts):
+                failed.append("day_words")
     if failed:
         prefill = tuple(d for d in drafts[:1] if d.local > ctx.now_local)
         return ParseOutcome("form", "llm", "check_failed", prefill,
@@ -323,6 +409,9 @@ async def parse_phrase(text: str, *, now: datetime, tz: str, created_via: str = 
         found = rules.parse(text, now, tz)
         if found is not None:
             return _from_rules(ctx, found)
+        words = _from_words(ctx)
+        if words is not None:
+            return words
     if not ai_allowed or router is None:
         return ParseOutcome("form", None, "no_ai" if not ai_allowed else "ai_unavailable")
     try:

@@ -423,7 +423,8 @@ async def move_to_page(session: AsyncSession, user_id: int, *, item_id: uuid.UUI
     for p in live:
         op, switched_on = await habits.learn(session, user_id, item_public_id=str(item_id),
                                              envelope=item.envelope, to_page=p, from_page=src,
-                                             now=now)  # fmt: skip
+                                             now=now, item_kind=str(item.kind),
+                                             source_meta=item.source_meta)  # fmt: skip
         if op is not None:
             learned_ops.append(op)
         base.learned |= switched_on

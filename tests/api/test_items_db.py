@@ -356,7 +356,8 @@ async def test_sync_order_pagination_and_tombstones(db_app):
         empty = (await c.get(f"/v1/sync?since={full['next_since']}", headers=h)).json()
         assert empty == {"items": [], "screens": [], "screen_items": [], "screen_summaries": [],
                          "actions": [], "conversation_messages": [],
-                         "reminders": [], "reminder_fires": [], "tasks": [], "suggestions": [],
+                         "reminders": [], "reminder_fires": [], "tasks": [], "task_occurrences": [],
+                         "suggestions": [],
                          "pending_actions": [], "habits": [], "item_facets": [],
                          "expenses": [], "expense_categories": [],
                          "statement_imports": [], "expense_duplicates": [], "documents": [],

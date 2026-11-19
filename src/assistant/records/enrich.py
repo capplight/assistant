@@ -45,7 +45,7 @@ from assistant.db.models import Item, Job
 from assistant.db.models_ai import AIBatchRequest
 from assistant.db.models_v2 import EnrichState, HiddenReason, RecordKind, RecordSource, RecordStatus
 from assistant.memory import enqueue_embed
-from assistant.pages import place_item
+from assistant.pages import place_item, rules
 from assistant.records import store
 
 log = logging.getLogger(__name__)
@@ -422,6 +422,12 @@ def apply_envelope(item: Item, env: Envelope, *, provider: str, model: str, esca
     fields = item.review_fields or {}
     entered = [str(v.get("value")) for v in fields.values() if v.get("was")]
     data, rejected = checked_envelope(env, "\n".join([item.text or "", *entered]))
+    if data["type"] in rules.FILE_ONLY_TYPES and not rules.file_backed(item.kind,
+                                                                       item.source_meta):
+        # A typed / spoken expense is a «Расходы» line, not a «Чек» in «Документы»: only a
+        # record with a photo, a file or an OFD link is a receipt (2026-11-20).
+        rejected["type"] = [data["type"]]
+        data["type"] = "note"
     carry_corrections(data, fields)
     meta = dict(item.source_meta or {})
     ai_fields = [f for f in (item.ai_fields or []) if f not in ("title", "summary")]

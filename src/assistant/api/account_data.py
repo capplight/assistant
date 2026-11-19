@@ -69,6 +69,7 @@ USER_TABLES: dict[str, Mode] = {
     "public.reminder_fires": "cascade",
     "public.reminder_events": "cascade",
     "public.tasks": "cascade",
+    "public.task_occurrences": "cascade",  # 0035: occurrences of repeating to-dos
     "public.suggestions": "cascade",
     "public.suggestion_counters": "cascade",
     # repeats, stacks, imports

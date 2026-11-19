@@ -116,14 +116,16 @@ async def test_on_works_without_consent_and_without_a_router() -> None:
 
 async def test_on_unclear_phrase_goes_to_the_model() -> None:
     r, fake = router(
-        ReminderParseOut(understood=True, title="позвонить", date="2026-11-08", time="14:00")
+        ReminderParseOut(understood=True, title="съездить на дачу", date="2026-11-14",
+                         time="10:00")
     )
-    out = await run("после обеда позвонить", r, rules_first=True)
+    # («после обеда позвонить» is read by code since Ф-89: test_timewords_unit.py)
+    out = await run("в конце месяца в 10:00 съездить на дачу", r, rules_first=True)
     assert fake.calls == 1 and out.source == "llm" and out.status == "ok"
 
 
 async def test_on_unclear_phrase_without_consent_is_the_form() -> None:
-    out = await run("после обеда позвонить", None, rules_first=True, ai=False)
+    out = await run("в конце месяца съездить на дачу", None, rules_first=True, ai=False)
     assert (out.status, out.reason) == ("form", "no_ai")
 
 
@@ -189,7 +191,11 @@ async def test_model_ambiguous_repeat() -> None:
 async def test_model_past_and_not_understood() -> None:
     r, _ = router(_m(date="2026-11-08", time="09:00"))
     res = await run("сегодня в 9:00 позвонить", r, rules_first=False)
-    assert (res.status, res.reason) == ("form", "past")
+    # Ф-89: a past time is asked, never set or dropped: later today, or the same time tomorrow
+    assert (res.status, res.reason) == ("ambiguous", "past")
+    assert [d.local.isoformat() for d in res.drafts] == ["2026-11-08T11:00:00",
+                                                         "2026-11-09T09:00:00"]
+    assert res.message == "Это время уже прошло. Сегодня в 11:00 или завтра в 9:00?"
     r, _ = router(ReminderParseOut(understood=False))
     res = await run("какая погода", r, rules_first=False)
     assert (res.status, res.reason) == ("form", "not_understood")

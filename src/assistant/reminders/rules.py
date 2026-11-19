@@ -21,9 +21,13 @@ from zoneinfo import ZoneInfo
 from dateutil.relativedelta import relativedelta
 from dateutil.rrule import rrulestr
 
+from assistant.timewords import TIME_DEFAULTS
+
 ALLOWED_OFFSETS = (15, 60, 1440)
-DEFAULT_TIME = time(9, 0)  # «утром» / no time said (habit default_time «утром = 9:00»)
-DAYPART_TIME = {"утром": time(9, 0), "днем": time(13, 0), "вечером": time(19, 0)}
+# The parts of the day come from the one table (assistant.timewords.TIME_DEFAULTS, Ф-89).
+DEFAULT_TIME = TIME_DEFAULTS["morning"]  # «утром» / no time said
+DAYPART_TIME = {"утром": TIME_DEFAULTS["morning"], "днем": TIME_DEFAULTS["afternoon"],
+                "вечером": TIME_DEFAULTS["evening"]}  # fmt: skip
 LOUD_RE = re.compile(r"\b(разбуди\w*|обязательно|не дай(те)? (мне )?забыть|будильник\w*)\b")
 
 _NUM_WORDS = {
@@ -155,7 +159,8 @@ def _scan(low: str) -> _Found | None:  # noqa: C901 - one rule per phrase shape,
     # --- repeats ---
     for m in s.take(_B + r"(каждый|каждое|каждую)\s+(день|утро|вечер)" + _E):
         f.rrule_kind = "daily"
-        f.time_default = {"утро": time(9, 0), "вечер": time(19, 0)}.get(m.group(2))
+        f.time_default = {"утро": TIME_DEFAULTS["morning"],
+                          "вечер": TIME_DEFAULTS["evening"]}.get(m.group(2))  # fmt: skip
     for _ in s.take(_B + r"ежедневно" + _E):
         f.rrule_kind = "daily"
     wd_list = _WD + r"((\s*,\s*|\s+и\s+)" + _WD + r")*"

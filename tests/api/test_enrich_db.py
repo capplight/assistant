@@ -330,12 +330,13 @@ async def test_documents_reach_enrichment(db_app, make, mime):
 async def test_enriched_record_lands_on_the_matching_page(db_app):
     """Rules that read the envelope: the text alone gives no match, the envelope does."""
     app, _, s = db_app
-    fake = FakeAdapter("anthropic", [envelope(type="receipt", title="Чек")])
+    # (a typed «receipt» is a note since 2026-11-20: a contract stands in for a typed record)
+    fake = FakeAdapter("anthropic", [envelope(type="contract", title="Договор")])
     deps = _deps(app, _router(app, fake))
     async with client(app) as c:
         h = await _signed_in(c)
         r = await c.post("/v1/pages", json={"client_id": str(uuid.uuid4()),
-                                            "template_key": "expenses"}, headers=h)  # fmt: skip
+                                            "template_key": "documents"}, headers=h)  # fmt: skip
         assert r.status_code == 201, r.text
         page = r.json()["page"]["id"]
         item = await _note(c, h)
@@ -1097,3 +1098,100 @@ async def test_second_account_gets_no_ai_until_its_own_consent(db_app):
         await _drain(app, deps)
         assert (await _row(s, note["id"])).title == "Разобрал"
         assert fake.calls >= 1
+
+
+# --- a typed expense is not a «Чек» (2026-11-20, device item 72)
+
+
+async def test_typed_expense_stays_in_expenses_not_in_documents(db_app):
+    """«…сегодня я потратил 5000 тенге на донер»: the model calls the expense's record a receipt;
+    code stores it as a note, so «Документы» / «Чеки» never get it; «Расходы» keeps it."""
+    app, _, s = db_app
+    fake = FakeAdapter("anthropic", [envelope(type="receipt", title="Донер 5000 тенге")] * 3)
+    deps = _deps(app, _router(app, fake))
+    async with client(app) as c:
+        h = await _signed_in(c)
+        r = await c.post("/v1/pages", json={"client_id": str(uuid.uuid4()),
+                                            "template_key": "documents"}, headers=h)  # fmt: skip
+        assert r.status_code == 201, r.text
+        docs = r.json()["page"]["id"]
+        r = await c.post("/v1/expenses", json={"client_id": str(uuid.uuid4()), "amount": "5000",
+                                               "note": "донер"}, headers=h)  # fmt: skip
+        assert r.status_code == 201, r.text
+        exp = r.json()
+        item_id = (exp.get("expense") or exp)["item_id"]
+        await _drain(app, deps)
+        # a receipt photo of the same person is still a «Чек»
+        photo = await _receipt(app, c, h, FakeAdapter("anthropic", [envelope(type="receipt",
+                                                                             title="Чек")]))
+        row = await _row(s, item_id)
+        assert row.kind == "note" and row.source_meta.get("expense") is True
+        assert row.enrich_state == "done" and fake.calls >= 1
+        assert row.envelope["type"] == "note"
+        assert row.envelope["rejected"]["type"] == ["receipt"]
+        r = await c.get(f"/v1/pages/{docs}/items", headers=h)
+        on_docs = [e["item"]["id"] for e in r.json()["entries"]]
+        assert item_id not in on_docs and photo["id"] in on_docs
+        summary = (await c.get("/v1/documents/summary", headers=h)).json()
+        assert summary["by_type"]["receipt"] == 1  # the photo only
+        r = await c.get("/v1/pages", headers=h)
+        expenses = next(p["id"] for p in r.json()["pages"] if p["template_key"] == "expenses")
+        r = await c.get(f"/v1/pages/{expenses}/items", headers=h)
+        assert item_id in [e["item"]["id"] for e in r.json()["entries"]]
+
+
+async def test_migration_0034_takes_fileless_receipts_off_documents(db_app):
+    """The data fix: a typed expense already filed as «Чек» leaves «Документы» (it stays on
+    «Расходы»), its envelope becomes a note; a receipt photo and a hand-placed row stay. Twice is
+    the same as once."""
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).parents[2] / "migrations" / "versions" / "0034_fileless_receipts.py"
+    spec = importlib.util.spec_from_file_location("m0034", path)
+    mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    assert (mod.revision, mod.down_revision) == ("0034", "0033")
+    assert "create_all(" not in path.read_text(encoding="utf-8")
+
+    app, _, s = db_app
+    async with client(app) as c:
+        h = await _signed_in(c)
+        r = await c.post("/v1/pages", json={"client_id": str(uuid.uuid4()),
+                                            "template_key": "documents"}, headers=h)  # fmt: skip
+        docs = r.json()["page"]["id"]
+        ids = []
+        for note in ("донер", "кофе"):
+            r = await c.post("/v1/expenses", json={"client_id": str(uuid.uuid4()),
+                                                   "amount": "5000", "note": note}, headers=h)
+            assert r.status_code == 201, r.text
+            ids.append((r.json().get("expense") or r.json())["item_id"])
+        photo = await _receipt(app, c, h, FakeAdapter("anthropic", [envelope(type="receipt",
+                                                                             title="Чек")]))
+        # what the old enrichment left: type receipt, a rule row on «Документы»
+        for n, pid in enumerate(ids):
+            await s.execute(text(
+                "UPDATE items SET envelope = CAST(:e AS jsonb) WHERE public_id = :p"),
+                {"e": '{"type": "receipt", "title": "Донер", "rejected": {}}',
+                 "p": uuid.UUID(pid)})  # fmt: skip
+            await s.execute(text(
+                "INSERT INTO screen_items (screen_id, item_id, user_id, public_id, position, "
+                "added_by) SELECT sc.id, i.id, i.user_id, gen_random_uuid(), :pos, :by "
+                "FROM screens sc, items i WHERE sc.public_id = :sc AND i.public_id = :p"),
+                {"sc": uuid.UUID(docs), "p": uuid.UUID(pid), "pos": f"y{n + 1}",
+                 "by": "rule" if n == 0 else "user"})  # fmt: skip
+        await s.commit()
+        for _ in range(2):
+            for sql in mod.UPGRADE:
+                await s.execute(text(sql))
+            await s.commit()
+        first = (await _row(s, ids[0])).envelope
+        second = (await _row(s, ids[1])).envelope
+        assert first["type"] == "note" and second["type"] == "note"
+        assert first["rejected"] == {"type": ["receipt"]}
+        assert (await _row(s, photo["id"])).envelope["type"] == "receipt"
+        r = await c.get(f"/v1/pages/{docs}/items", headers=h)
+        on_docs = [e["item"]["id"] for e in r.json()["entries"]]
+    assert ids[0] not in on_docs  # the rule's row went
+    assert ids[1] in on_docs  # the person put it there: theirs (R-54)
+    assert photo["id"] in on_docs

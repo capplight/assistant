@@ -539,6 +539,7 @@ async def test_notes_leaves_out_receipts_and_tasks_another_page_takes(db_app):
         lonely = await _note(c, h, "Чек аптека 1 200")
         for pid in (receipt, lonely):
             row = await _item(s, pid)
+            row.kind = "image"  # a receipt is a photo / file (2026-11-20), not a typed note
             row.envelope = {"type": "receipt"}
             await s.flush()
             await place_item(s, row)
@@ -609,6 +610,7 @@ async def test_new_items_land_by_date_and_one_item_is_on_several_pages(db_app):
 
         # The envelope arrives later; placing again only adds what newly matches.
         receipt = await _item(s, first)
+        receipt.kind = "image"  # a receipt is a photo / file (2026-11-20)
         receipt.envelope = {"type": "receipt"}
         await s.flush()
         assert await place_item(s, receipt) == 1  # «Документы», not «Заметки» again
@@ -856,7 +858,8 @@ async def test_sync_carries_pages_links_and_removals_in_seq_order(db_app):
         none = (await c.get(f"/v1/sync?since={delta['next_since']}", headers=h)).json()
         assert none == {"items": [], "screens": [], "screen_items": [], "screen_summaries": [],
                         "actions": [], "conversation_messages": [],
-                        "reminders": [], "reminder_fires": [], "tasks": [], "suggestions": [],
+                        "reminders": [], "reminder_fires": [], "tasks": [], "task_occurrences": [],
+                         "suggestions": [],
                          "pending_actions": [], "habits": [], "item_facets": [],
                          "expenses": [], "expense_categories": [],
                          "statement_imports": [], "expense_duplicates": [], "documents": [],

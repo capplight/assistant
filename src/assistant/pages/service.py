@@ -235,9 +235,10 @@ async def place_item(session: AsyncSession, item: Item) -> int:
     facts = ItemFacts(kind=str(item.kind), envelope=item.envelope, title=item.title,
                       summary=item.summary,
                       text=item.text if item.text is not None else item.raw_text,
-                      is_task=bool(owned_by))  # fmt: skip
+                      is_task=bool(owned_by), source_meta=item.source_meta)  # fmt: skip
     # Learned from the person's moves: such records also go where they put the others.
-    learned = await habits.placements(session, item.user_id, item.envelope)
+    learned = await habits.placements(session, item.user_id, item.envelope,
+                                      item_kind=str(item.kind), source_meta=item.source_meta)
     targets = {str(h.value.get("page_id")) for h in learned}
     when = item.occurred_at or item.created_at
     live = [p for p in pages if p.kind != ScreenKind.SYSTEM_TODAY]
@@ -339,7 +340,7 @@ async def fill_page(session: AsyncSession, page: Screen) -> int:
         return 0
     when = func.coalesce(Item.occurred_at, Item.created_at)
     rows = await session.execute(
-        select(Item.id, Item.kind, Item.envelope, Item.title, Item.summary,
+        select(Item.id, Item.kind, Item.envelope, Item.title, Item.summary, Item.source_meta,
                func.coalesce(Item.text, Item.raw_text).label("body"), when.label("when"))
         .where(Item.user_id == page.user_id,
                Item.hidden_reason.is_distinct_from(HiddenReason.VOICE_FRAGMENT))
@@ -364,7 +365,8 @@ async def fill_page(session: AsyncSession, page: Screen) -> int:
 
     def wanted(r) -> bool:  # type: ignore[no-untyped-def]
         facts = ItemFacts(kind=str(r.kind), envelope=r.envelope, title=r.title,
-                          summary=r.summary, text=r.body, is_task=r.id in owners)  # fmt: skip
+                          summary=r.summary, text=r.body, is_task=r.id in owners,
+                          source_meta=r.source_meta)  # fmt: skip
         facts_of[r.id] = facts
         if not rule.get("none"):
             return r.id in task_items or matches(rule, facts)

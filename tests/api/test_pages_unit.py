@@ -158,7 +158,7 @@ def test_kinds_and_envelope_types():
     assert matches({"any": [{"kinds": ["pdf"]}]}, _facts(kind="pdf"))
     assert not matches({"any": [{"kinds": ["pdf"]}]}, _facts(kind="note"))
     rule = {"any": [{"envelope_types": ["receipt"]}]}
-    assert matches(rule, _facts(envelope={"type": "receipt"}))
+    assert matches(rule, _facts(kind="image", envelope={"type": "receipt"}))
     assert not matches(rule, _facts(envelope={"type": "note"}))
     assert not matches(rule, _facts())
 
@@ -219,3 +219,24 @@ def test_seeded_catalogue_is_well_formed():
     assert templates["today"]["auto_rule"] == {"any": []}
     assert templates["custom"]["auto_rule"] == {"any": []}
     assert templates["custom"]["default_title"]["ru"] == "Моя страница"
+
+
+def test_a_fileless_receipt_is_a_note_for_the_rules() -> None:
+    """2026-11-20: a typed / spoken expense the model called «receipt» is no «Чек»."""
+    from assistant.pages import habits
+    from assistant.pages.rules import ItemFacts, envelope_type, file_backed, matches
+
+    docs = {"any": [{"kinds": ["pdf", "docx", "xlsx", "kp", "document"]},
+                    {"envelope_types": ["document", "receipt", "contract"]}]}  # fmt: skip
+    env = {"type": "receipt"}
+    typed = ItemFacts(kind="note", envelope=env, source_meta={"expense": True})
+    voice = ItemFacts(kind="voice", envelope=env)
+    photo = ItemFacts(kind="image", envelope=env)
+    qr = ItemFacts(kind="note", envelope=env, source_meta={"fiscal_url": "https://ofd1.kz/t"})
+    assert not matches(docs, typed) and not matches(docs, voice)
+    assert matches(docs, photo) and matches(docs, qr)
+    assert typed.envelope_type == "note" and photo.envelope_type == "receipt"
+    assert envelope_type({"type": "contract"}, "note") == "contract"
+    assert not file_backed("note") and file_backed("pdf") and file_backed("screenshot")
+    assert habits.kind_of(env, "note", {}) is None and habits.kind_of(env, "image") == "receipt"
+    assert habits.kind_of(env) == "receipt"  # without the record: the envelope as is
