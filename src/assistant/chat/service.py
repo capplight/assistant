@@ -56,7 +56,7 @@ from assistant.ai.prompting import TaskInputs, ToolRound
 from assistant.ai.router import Router
 from assistant.ai.store import period_starts
 from assistant.ai.types import ToolResult
-from assistant.chat import jobs, kp_line, limits, memory, store, undo_line
+from assistant.chat import jobs, kp_line, limits, memory, plan_line, store, undo_line
 from assistant.chat.context import (
     PROMPT_VERSION,
     Assembled,
@@ -612,8 +612,15 @@ class ChatService:
             if turn.input_kind != "share" and (ask := memory.memory_phrase(turn.text)):
                 await self._memory_phrase(run, turn, ask)  # «что ты обо мне помнишь?», «забудь»
                 return
+            if turn.input_kind != "share" and plan_line.to_tasks_phrase(turn.text):
+                await self._plan_to_tasks(run, turn)  # «сделай делами» (step 8)
+                return
+            if turn.input_kind != "share" and turn.selected_pk is not None \
+                    and await self._plan_selected(turn):  # fmt: skip
+                # step 8: on an open plan («Попросите поменять план…») a phrase is about the plan
+                turn = dataclasses.replace(turn, plan_open=True)
             prior: MutationState | None = None
-            if turn.input_kind != "share":
+            if turn.input_kind != "share" and not turn.plan_open:
                 finished, prior, rest = await self._several(run, turn, background=background)
                 if finished:
                     return  # «купил хлеб за 400, молоко за 600 и напомни оплатить свет» (step 6)
@@ -637,6 +644,10 @@ class ChatService:
             if prior is None and turn.input_kind != "share" and await self._save_expense(run, turn):
                 return  # «потратил 5000 на бензин» → «Расходы», one action (US-31)
             reading = rules_first(turn.text, input_kind=turn.input_kind)
+            if reading.intent == Intent.UNCLEAR and (turn.plan_open
+                                                     or plan_line.asks_plan(turn.text)):
+                # «план поездки в Стамбул на 4 дня»: a plan is asked for, never a note (step 8)
+                reading = Reading(Intent.QUESTION, "rules", reading.deictic)
             list_page = await self._list_of_page(turn)
             if reading.intent == Intent.UNCLEAR and list_page and prior is None:
                 if await self._save_tasks(run, turn, turn.text, list_page):
@@ -649,7 +660,8 @@ class ChatService:
             save = save_text(turn.text) if reading.intent == Intent.CHANGE else None
             listy = (reading.intent == Intent.CHANGE and save is None
                      and tasks_parse.adds_to_list(turn.text))  # «добавь в покупки молоко»
-            if prior is None and (reading.intent == Intent.NOTE or save is not None or listy):
+            if prior is None and not turn.plan_open \
+                    and (reading.intent == Intent.NOTE or save is not None or listy):
                 if list_page or listy or tasks_parse.mentions_list(save or turn.text):
                     if await self._save_tasks(run, turn, save or turn.text, list_page):
                         return
@@ -714,7 +726,7 @@ class ChatService:
     def _mutation(self, run: ReplyRun, turn: TurnInput, book: SourceBook, allowed: bool,
                   deictic: bool) -> MutationState:  # fmt: skip
         def emit(name: str, data: dict[str, Any]) -> None:
-            if name == "action":
+            if name in ("action", "plan"):
                 data = {**data, "reply_id": str(run.reply_id)}
             run.emit(name, data)
 
@@ -977,6 +989,72 @@ class ChatService:
                                   [{"name": "undo", "arguments": {"all": phrase.all,
                                                                   "about": list(phrase.about)},
                                     "error": not done.results, "by": "code"}])  # fmt: skip
+
+    async def _plan_selected(self, turn: TurnInput) -> bool:
+        from assistant.db.models import Item
+
+        async with self.sessionmaker() as session:
+            kind = await session.scalar(select(Item.kind).where(
+                Item.id == turn.selected_pk, Item.user_id == turn.user_id,
+                Item.deleted_at.is_(None)))  # fmt: skip
+        return str(kind) == "plan"
+
+    async def _plan_to_tasks(self, run: ReplyRun, turn: TurnInput) -> None:
+        """«сделай делами» (step 8): the selected plan, else the newest action plan, becomes
+        tasks and reminders — the same as the card's «Сделать делами», one group under this
+        answer (one «Отменить всё»). Code only."""
+        from assistant.actions import actions_dicts
+        from assistant.actions.patch import page_patches
+        from assistant.plans import PlanError, make_tasks
+
+        book = await book_for(self.sessionmaker, turn.user_id, turn.page_pk)
+        m = self._mutation(run, turn, book, True, False)
+        tz, _ = await self._local_today(turn.user_id)
+        now = self.clock()
+        run.emit("tool_activity", {"tool": "plan_tasks", "text": "Делаю делами…",
+                                   "page_id": None})  # fmt: skip
+        outs: list[dict[str, Any]] = []
+        patches: list[dict[str, Any]] = []
+        task_rows: list[dict[str, Any]] = []
+        conv = None
+        async with self.sessionmaker() as s:
+            item = await plan_line.latest_action_plan(s, turn.user_id, turn.selected_pk, now)
+            if item is None:
+                m.note = plan_line.TEXT_NO_PLAN
+            else:
+                try:
+                    conv = await make_tasks(s, turn.user_id, item, by=Initiator.AGENT, now=now,
+                                            tz=tz, message_pk=run.reply_pk,
+                                            group_id=str(run.reply_id))  # fmt: skip
+                except PlanError:
+                    m.note = plan_line.TEXT_NO_STEPS
+            if conv is not None and conv.actions:
+                await s.flush()
+                outs = await actions_dicts(s, conv.actions, now)
+                patches = await page_patches(s, turn.user_id, conv.pages, conv.items)
+                task_rows = _jsonable(await tasks_service.tasks_dicts(s, conv.tasks))
+                await s.execute(text("UPDATE conversation_messages SET action_ids = :ids, "
+                                     "updated_at = now() WHERE id = :r"),
+                                {"ids": [a.id for a in conv.actions], "r": run.reply_pk})
+            elif conv is not None:
+                m.note = conv.sentence
+            await s.commit()
+        if conv is not None and conv.actions:
+            for a in conv.actions:
+                m.took(a.id, str(a.public_id))
+            m.action_out = outs[0]
+            m.sentences.append(conv.sentence)
+            for out in outs:
+                m.emit("action", {"reply_id": None, "action": out,
+                                  "changed_item_ids": out["changed_item_ids"],
+                                  "page_id": str(book.current.id) if book.current else None,
+                                  "tasks": task_rows})  # fmt: skip
+            for patch in patches:
+                m.emit("page_patch", patch)
+        await self._finish_change(run, turn, m, Decimal(0),
+                                  [{"name": "plan_tasks", "arguments": {},
+                                    "error": conv is None or not conv.actions,
+                                    "by": "code"}])  # fmt: skip
 
     async def _list_of_page(self, turn: TurnInput) -> str | None:
         """`todo` / `shopping` when the line is on «Дела» / «Покупки»."""
@@ -1318,6 +1396,9 @@ class ChatService:
         tool_log: list[dict[str, Any]] = []
         reply: ChatReply | None = None
         tools = (*READ_TOOLS, *self._mutating()) if change else READ_TOOLS
+        if turn.input_kind != "share" and (turn.plan_open or plan_line.asks_plan(turn.text)):
+            tools = (*tools, plan_line.MAKE_PLAN)
+            ctx.inputs.context.insert(len(ctx.inputs.context) - 1, plan_line.CONTEXT_LINE)
         allowed = {t.name for t in tools}
         strong = self._strong(turn, book, reading)
         web = self._web_search(turn, ctx, change)
@@ -1386,8 +1467,8 @@ class ChatService:
                     self._announce(run, book)
                     ctx.inputs.tool_rounds.append(
                         ToolRound(tuple(result.tool_calls), tuple(results), result.raw))
-                    if m.proposal is not None or m.note is not None:
-                        break  # the person is asked / told: no more model steps
+                    if m.proposal is not None or m.note is not None or m.finished:
+                        break  # the person is asked / told, or a plan is made: no more steps
                     continue
                 reply = result.data
                 break

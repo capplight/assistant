@@ -35,7 +35,8 @@ LIST_ITEM_CHARS = 160
 
 RecordKindArg = Literal["note", "voice", "image", "screenshot", "pdf", "docx", "xlsx", "link",
                         "email", "tg_message", "kp", "file_other",
-                        "ai_chat"]  # fmt: skip  # step 7: an imported ChatGPT/Claude/Gemini chat
+                        "ai_chat",  # step 7: an imported ChatGPT/Claude/Gemini chat
+                        "plan"]  # fmt: skip  # step 8: a plan the assistant made
 
 
 class SearchArgs(BaseModel):
@@ -463,6 +464,31 @@ async def execute(env: ToolEnv, call: ToolCall, *, allowed: set[str]) -> ToolOut
     person's phrase asked for a change (the intent rule), whatever `allowed` says."""
     from assistant.chat import mutate
 
+    if call.name == "make_plan":  # step 8: only offered when the person's words ask for a plan
+        from assistant.chat import plan_line
+
+        m = env.mut
+        if call.name not in allowed or m is None:
+            return _error("tool make_plan is not available")
+        if m.proposal is not None or m.finished:
+            return _error("answer with text now")
+        if len(m.action_pks) >= mutate.MAX_ACTIONS_PER_PHRASE:
+            return _error("no more changes in this phrase")
+        try:
+            pargs = plan_line.MakePlanArgs.model_validate(call.arguments)
+        except ValidationError:
+            return _error("arguments do not match the schema", plan_line.ACTIVITY)
+        try:
+            res = await plan_line.tool_make_plan(env, pargs)
+        except Exception as exc:
+            from assistant.ai import AIConsentRequired
+
+            if isinstance(exc, AIConsentRequired):
+                raise
+            log.exception("chat tool make_plan failed")
+            return _error("the plan failed; nothing was saved", plan_line.ACTIVITY)
+        m.calls += 1
+        return ToolOutcome(res.content, res.is_error, res.activity, res.page)
     if call.name in mutate.MUTATING_NAMES:
         m = env.mut
         if call.name not in allowed or m is None or not m.allowed:

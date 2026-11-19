@@ -106,6 +106,32 @@ on the phone once `now - assistant_changed_at ≥ 24 h` too. The person's own ed
 title / text / «Исправить») clears it, and so does undoing that action. A task's and an expense's
 mark is their record's (also on `TaskOut` / `ExpenseOut`).
 
+**Inline edit «изменил помощник» (Ф-73, 2026-11-19).** While the mark is on (24 h) and that
+action changed what the record says, Item has `assistant_edit`, else null:
+
+```json
+"assistant_edit": {"action_id": "0194…", "at": "2026-11-19T08:40:00Z",
+                   "said": "исправь в заметке: 20 минут, и допиши брать жетон",
+                   "summary": "Исправил «Паром».",
+                   "changes": [{"field": "text", "before": "Паром в Кадыкёй идёт 40 минут",
+                                "after": "Паром в Кадыкёй идёт 20 минут\nБрать жетон"}]}
+```
+
+- `changes`: the fields the assistant changed, old and new value (`title`, `text`; at most 4000
+  chars each). Show the record's text with the old part struck out (`ink3`) and the new part
+  under the terracotta marker; diff `before` / `after` on the phone (words). A rename has only
+  `title`.
+- `said`: the person's phrase that asked for it (the one line «по какой просьбе» over the note),
+  null when the change came from a tap. `summary`: the action's line.
+- Plate «изменил помощник · 12:40 · Отменить»: «Отменить» = `POST /v1/actions/{action_id}/undo`.
+- It goes (null) with the mark: after 24 h, when the person edits the record, when the action is
+  undone. A move or a new record has no `assistant_edit` (nothing changed inside it). The same
+  `diff` is on the action's change row (`actions.md`), also after 24 h.
+- What makes it: «переименуй …» (title), «исправь / поправь / допиши / дополни / замени /
+  перепиши / вычеркни … в заметке» (the assistant's `update` with `edits`: exact words of the
+  record → new words; code checks the numbers against the phrase and the record, and only a
+  note's, voice note's, message's or e-mail's text is edited), a changed plan (`plans.md`).
+
 **«Разберу позже» (Ф-69).** Item has `parse_later`:
 - `null` — nothing waits;
 - `{"state": "waiting", "text_ru": "Сохранил как заметку, разберу позже", "text_kk": null, "to":

@@ -94,6 +94,10 @@ _MESSAGES: dict[str, tuple[str, str]] = {
     "review_field_not_editable": ("Это место правится в тексте записи.",
                                   "Бұл орын жазба мәтінінде түзетіледі."),
     "not_found": ("Не найдено.", "Табылмады."),
+    # step 8: plans (plans.md)
+    "not_a_plan": ("Это не план.", None),
+    "plan_has_no_steps": ("В этом плане нет шагов, которые можно сделать делами.", None),
+    "plan_already_tasks": ("Все шаги уже в «Делах».", None),
     # week 11: page views (views.md)
     "field_required": ("Без этого поля страница не работает.", None),
     "fields_limit": ("Можно до 5 своих полей.", None),

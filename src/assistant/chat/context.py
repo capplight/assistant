@@ -102,6 +102,8 @@ class TurnInput:
     input_kind: str = "typed"
     # The record was tapped in the answer to «Какую?» of a delete: that tap is the «Да».
     picked: bool = False
+    # Step 8: the selected record is a plan: the phrase is about it (make_plan with its ref).
+    plan_open: bool = False
 
 
 @dataclass

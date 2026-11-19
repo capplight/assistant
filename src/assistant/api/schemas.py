@@ -250,6 +250,45 @@ class ItemFileOut(BaseModel):
     trash_until: datetime | None  # "Оригинал удалю через N дн."
 
 
+class FieldDiffOut(BaseModel):
+    """One field the assistant changed (Ф-73 «изменил помощник»; items.md «Inline edit»)."""
+
+    field: Literal["title", "text"]
+    before: str | None
+    after: str | None
+
+
+class PlanCardRowOut(BaseModel):
+    """A day of a trip plan or a step of an action plan, as the chat card shows it."""
+
+    n: int
+    title: str
+    date: str | None = None  # trip: the day's date (YYYY-MM-DD), null without dates
+    points: int | None = None  # trip: how many points that day
+    due_date: str | None = None  # actions: deadline (YYYY-MM-DD) computed by code
+    after_n: list[int] = Field(default_factory=list)  # actions: «после шага 1»
+    note: str | None = None
+
+
+class PlanCardOut(BaseModel):
+    """The «План» card in the chat (step 8, plans.md «Card»)."""
+
+    item_id: uuid.UUID  # the plan record: GET /v1/plans/{item_id}
+    kind: Literal["trip", "actions"]
+    title: str
+    subtitle: str  # «5 дней · 23 совета», «5 шагов»
+    lead: str  # the answer line: «Собрал из 23 советов. 3 пункта — мои, не из ваших записей.»
+    rows: list[PlanCardRowOut]
+    start_date: str | None = None
+    end_date: str | None = None
+    counts: dict[str, int] = Field(default_factory=dict)  # points, from_records, own, sources
+    page: dict[str, Any] | None = None  # {page_id, title}: where it lies («Заметки»)
+    check_note: str | None = None  # «составил по вашим записям — проверьте»
+    can_make_tasks: bool = False  # actions: show «Сделать делами»
+    action_id: uuid.UUID | None = None  # the action that made / changed it («Отменить»)
+    edited: bool = False
+
+
 class ItemOut(BaseModel):
     id: uuid.UUID
     client_id: uuid.UUID | None
@@ -288,6 +327,17 @@ class ItemOut(BaseModel):
     assistant_action_id: uuid.UUID | None = None  # tap on the mark: this action
     # Ф-69: {state: waiting|done, text_ru, text_kk, to: expense|tasks|note|null, action_id}
     parse_later: dict[str, Any] | None = None
+    # Ф-73 inline edit (items.md): what the assistant changed in this record, for the 24 h of
+    # the mark; null when the mark is gone or the change was not inside the record
+    assistant_edit: "AssistantEditOut | None" = None
+
+
+class AssistantEditOut(BaseModel):
+    action_id: uuid.UUID  # «Отменить» = POST /v1/actions/{action_id}/undo
+    at: datetime
+    said: str | None  # the person's phrase that asked for it («по какой просьбе»)
+    summary: str  # «Переименовал в «…»», «Исправил в заметке …»
+    changes: list[FieldDiffOut]
 
 
 class DuplicateOut(BaseModel):
@@ -477,7 +527,7 @@ class PageItemAddOut(BaseModel):
 # --- page views (week 11, docs/api/views.md) ---
 
 FieldType = Literal["text", "number", "money", "date", "bool"]
-NoteColor = Literal["yellow", "pink", "green", "blue", "peach", "white", "lilac"]
+NoteColor = Literal["yellow", "pink", "green", "blue", "peach", "white", "lilac", "aqua"]
 
 
 class FieldPrefIn(BaseModel):
@@ -790,6 +840,9 @@ class ActionChangeOut(BaseModel):
     task_id: uuid.UUID | None = None  # week 9: a task row
     reminder_id: uuid.UUID | None = None  # week 9: a reminder row (item_id null)
     key: str | None = None  # week 11: a view setting row (item_id null); «Вернуть» = undo keys
+    # Ф-73 inline edit: what the assistant changed in the record (old / new), else null
+    diff: list[FieldDiffOut] | None = None
+
 
 
 class ActionSummaryOut(BaseModel):
@@ -844,6 +897,7 @@ class ActionOut(BaseModel):
     parsed_later: bool = False  # Ф-69: made in the background from a «разберу позже» note
     notice: NoticeOut | None = None  # Ф-65: the 3-second notice (actions.md)
     group: ActionGroupOut | None = None  # step 6: the phrase made several actions
+    plan: PlanCardOut | None = None  # step 8: the «План» card of a plan made / changed (plans.md)
     undoable: bool
     undoable_until: datetime | None
     undone_at: datetime | None
@@ -1857,3 +1911,95 @@ SyncOut.model_rebuild()  # after the reminder shapes it refers to
 
 for _m in (BriefSpentOut, BriefMetricsOut, BriefOut, TodayOut, HistoryEntryOut, HistoryOut):
     _m.model_rebuild()  # week 20: BudgetOut and ChatMessageOut are defined later in the file
+
+
+# --- plans (step 8, docs/api/plans.md) ---
+
+
+class PlanPointOut(BaseModel):
+    id: str
+    title: str
+    note: str | None
+    source_id: uuid.UUID | None  # the record it came from; null = the assistant's own tip
+    own: bool
+    place: str | None  # a name to look up on a map (never coordinates)
+
+
+class PlanDayOut(BaseModel):
+    n: int
+    date: str | None
+    title: str
+    points: list[PlanPointOut]
+
+
+class PlanStepTaskOut(BaseModel):
+    id: uuid.UUID
+    done: bool
+    due_date: str | None
+
+
+class PlanStepOut(BaseModel):
+    id: str
+    n: int
+    title: str
+    note: str | None
+    due_date: str | None
+    after: list[str]
+    remind_at: str | None  # local time of the plan's person, YYYY-MM-DDTHH:MM
+    source_id: uuid.UUID | None
+    own: bool
+    task_id: uuid.UUID | None
+    reminder_id: uuid.UUID | None
+    task: PlanStepTaskOut | None  # the live task made from it, else null
+
+
+class PlanSourceOut(BaseModel):
+    item_id: uuid.UUID
+    title: str
+    kind: str
+    created_at: str
+    available: bool  # false: trashed, merged or gone
+    occurred_at: str | None
+
+
+class PlanOut(BaseModel):
+    id: uuid.UUID
+    kind: Literal["trip", "actions"] | None
+    title: str | None
+    start_date: str | None
+    end_date: str | None
+    days: list[PlanDayOut]
+    steps: list[PlanStepOut]
+    sources: list[PlanSourceOut]
+    counts: dict[str, int]
+    asked: str | None
+    text: str | None
+    pages: list[dict[str, Any]]
+    can_make_tasks: bool
+    check_note: str | None
+    ai_generated: bool
+    seq: int
+    created_at: str | None
+    updated_at: str | None
+    deleted_at: str | None
+
+
+class PlanListOut(BaseModel):
+    plans: list[PlanOut]
+
+
+class PlanTasksIn(BaseModel):
+    client_id: uuid.UUID | None = None  # the same tap again returns the first result
+    step_ids: list[str] | None = Field(default=None, max_length=50)  # null: every step
+
+
+class PlanTasksOut(BaseModel):
+    plan: PlanOut
+    group: ActionGroupOut | None  # «Отменить» = POST /v1/actions/groups/{group.id}/undo
+    actions: list[ActionOut]
+    tasks: list[TaskOut]
+    reminders: list[ReminderOut]
+    page_patches: list[dict[str, Any]]
+    skipped: int  # steps that were tasks already
+    repeated: bool
+    message_ru: str

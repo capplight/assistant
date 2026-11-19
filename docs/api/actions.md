@@ -143,6 +143,13 @@ One phrase may now make several actions («купил хлеб за 400 и мо�
 - In «История» each action stays a row with its own «Отменить».
 - At most 8 actions per phrase (`MAX_ACTIONS_PER_PHRASE`); the rest is said, not done.
 
+**Tap groups (step 8, 2026-11-19).** «Сделать делами» on a plan (`plans.md`) makes one action
+per step in one group without a chat answer: the group id is a new uuid kept in each action's
+`payload.group_id`. For such actions `group` is set **whatever the size** (also 1), its notice
+says what was made («Сделал 5 дел и 2 напоминания» / «Отменено: 5 дел и 2 напоминания»), and
+`POST /v1/actions/groups/{group.id}/undo` takes that id like an answer id. «сделай делами» said in
+the chat makes the same group under the answer (`group.id` = the answer id).
+
 ### `POST /v1/actions/groups/{group_id}/undo`
 
 `{"client_id": "0194..."}` (optional; a repeat with the same one changes nothing). Undoes every
@@ -204,6 +211,8 @@ undone alone counts as done (`repeated: true`).
 | `page` | The page it happened on (null: none / removed). |
 | `changes` | «Что изменилось»: one row per record, ready text in `text`. `kind`: `group`, `order`, `move`, `show`, `remove`, `trash`, `rename`, `create`, `create_page`, `place` (weeks 16а–16б: a sticker on the free board). `page_id`: the page the row is about, or null (a note placed only by the page rules). `reverted=true`: already returned with «Вернуть». At most 500 rows. |
 | `changes[].item_id` null | Only for `kind: "create_page"` (the row is the new page itself, `page_id` = that page). Show the row with its `text` («Новая страница «Ремонт»»), tap opens `page_id`; it has **no** «Вернуть» of its own: the page goes only with «Отменить» of the whole action. Every other row has an `item_id`. |
+| `changes[].diff` | Ф-73 inline edit (2026-11-19): on a row where the assistant changed what a record says — `[{"field": "title" \| "text", "before": str \| null, "after": str \| null}]` (each value at most 4000 chars), else absent / null. Set by a rename (`kind: "rename"`), an edit inside a note's text and a changed plan (`kind: "edit"`). Strike out `before`, highlight `after` (design-system §11.8 «правка помощника прямо в тексте»); the record has the same as `assistant_edit` for 24 h (`items.md`). |
+| `plan` | Step 8: the «План» card when this action made or changed a plan (`plans.md` «PlanCard»), else null. |
 | `changed_item_ids` | Highlight these for 600 ms. |
 | `created_page_id` | Set when the action made a page (open it). |
 | `saved_to` | Week 20 (Ф-50): the live pages the action's **new** records (`changes[].kind: "create"`) are on **now**, in tab order, each with those `item_ids`; `[]` for other actions, or when they were undone / moved off every page. The toast after a save: «Сохранил в «{saved_to[0].title}» · Переложить · Отменить». «Переложить» = `POST /v1/items/{item_id}/move-to-page` `{"mode": "move", "from_page_id": saved_to[0].page_id, "to_page_ids": [<chosen>]}` (`pages.md`, its own action and «Отменить»); afterwards the save's `saved_to` names the new page. |

@@ -301,12 +301,61 @@ async def _groups(session: AsyncSession, mids: set[int],
     return out
 
 
+def group_id_of(a: Action) -> str | None:
+    """Step 8: the group of one tap («Сделать делами»), kept in the payload."""
+    gid = (a.payload or {}).get("group_id")
+    return str(gid) if gid else None
+
+
+async def _tap_groups(session: AsyncSession, rows: list[Action]) -> dict[str, list[Action]]:
+    """Step 8: the actions of one tap group (`payload.group_id`), oldest first."""
+    gids = {g for a in rows if (g := group_id_of(a))}
+    if not gids:
+        return {}
+    users = {a.user_id for a in rows}
+    found = await session.scalars(select(Action).where(
+        Action.user_id.in_(users), Action.payload["group_id"].astext.in_(gids),
+        Action.undo_of_action_id.is_(None)).order_by(Action.id))  # fmt: skip
+    out: dict[str, list[Action]] = {}
+    for a in found:
+        out.setdefault(group_id_of(a) or "", []).append(a)
+    return out
+
+
+def _tap_group_of(members: list[Action] | None, gid: str, a: Action,
+                  now: datetime) -> dict[str, Any] | None:  # fmt: skip
+    """A tap group is shown whatever its size: the phone undoes it by its id."""
+    if not members:
+        return None
+    ids = [m.id for m in members]
+    return {"id": gid, "size": len(members), "index": ids.index(a.id) if a.id in ids else None,
+            "action_ids": [str(m.public_id) for m in members],
+            "notice": group_notice(members, now)}  # fmt: skip
+
+
+_RU_TASKS = ("дело", "дела", "дел")
+_RU_REMINDERS = ("напоминание", "напоминания", "напоминаний")
+
+
+def counts_text(counts: dict[str, Any]) -> str:
+    """«5 дел и 2 напоминания» (a plan made into tasks, plans.md)."""
+    parts = []
+    for key, forms in (("tasks", _RU_TASKS), ("reminders", _RU_REMINDERS)):
+        n = int(counts.get(key) or 0)
+        if n:
+            parts.append(f"{n} {_plural(n, forms)}")
+    return " и ".join(parts)
+
+
 def group_notice(members: list[Action], now: datetime) -> dict[str, Any]:
-    """«Сделал 3 дела · Отменить всё» (one notice for one phrase, design-system §10.1)."""
+    """«Сделал 3 дела · Отменить всё» (one notice for one phrase, design-system §10.1). A group
+    made by one tap (step 8 «Сделать делами») says what it made: «Сделал 5 дел и 2 напоминания»."""
     n = len(members)
     live = [a for a in members if a.undone_at is None]
-    text_ = (f"Сделал {n} {_plural(n, _RU_DEEDS)}" if live
-             else f"Отменено: {n} {_plural(n, _RU_DEEDS)}")  # fmt: skip
+    counts = next(((a.payload or {}).get("group_counts") for a in members
+                   if (a.payload or {}).get("group_counts")), None)  # fmt: skip
+    what = (counts_text(counts) if counts else "") or f"{n} {_plural(n, _RU_DEEDS)}"
+    text_ = f"Сделал {what}" if live else f"Отменено: {what}"
     any_undo = any(is_undoable(a, now) for a in members)
     return {"text_ru": text_, "text_kk": None, "target": None,
             "undo_label_ru": "Отменить всё" if any_undo else None, "undo_label_kk": None,
@@ -344,11 +393,14 @@ async def undo_group(session: AsyncSession, user_id: int, group_id: uuid.UUID, *
     left) is reported and the others still go back. Idempotent like `undo`."""
     msg = await session.scalar(select(ConversationMessage.id).where(
         ConversationMessage.user_id == user_id, ConversationMessage.public_id == group_id))
-    if msg is None:
-        raise ActionNotFound(str(group_id))
-    members = list(await session.scalars(select(Action).where(
-        Action.user_id == user_id, Action.message_id == msg,
-        Action.undo_of_action_id.is_(None)).order_by(Action.id.desc())))  # fmt: skip
+    if msg is not None:
+        members = list(await session.scalars(select(Action).where(
+            Action.user_id == user_id, Action.message_id == msg,
+            Action.undo_of_action_id.is_(None)).order_by(Action.id.desc())))  # fmt: skip
+    else:  # step 8: a group made by one tap (no chat answer), `payload.group_id`
+        members = list(await session.scalars(select(Action).where(
+            Action.user_id == user_id, Action.payload["group_id"].astext == str(group_id),
+            Action.undo_of_action_id.is_(None)).order_by(Action.id.desc())))  # fmt: skip
     if not members:
         raise ActionNotFound(str(group_id))
     out = GroupUndo([], [], False, set(), set())
@@ -389,6 +441,7 @@ async def actions_dicts(session: AsyncSession, rows: list[Action],
             select(Action.id, Action.public_id).where(Action.id.in_(oids)))).all())  # type: ignore[arg-type]  # fmt: skip
     where = await saved_to(session, rows)
     groups = await _groups(session, mids, now)
+    taps = await _tap_groups(session, rows)
     out = []
     for a in rows:
         reverted = set(a.payload.get("reverted") or [])
@@ -417,8 +470,12 @@ async def actions_dicts(session: AsyncSession, rows: list[Action],
             "undo_of": str(undo_of[a.undo_of_action_id]) if a.undo_of_action_id in undo_of
             else None,
             "message_id": str(msgs[a.message_id]) if a.message_id in msgs else None,
-            "group": _group_of(groups.get(a.message_id or 0), msgs.get(a.message_id or 0), a,
-                               now),
+            "group": (_tap_group_of(taps.get(gid), gid, a, now) if (gid := group_id_of(a))
+                      else _group_of(groups.get(a.message_id or 0), msgs.get(a.message_id or 0),
+                                     a, now)),
+            # step 8: the «План» card of a plan this action made or changed (plans.md)
+            "plan": {**a.payload["plan_card"], "action_id": str(a.public_id)}
+            if a.payload.get("plan_card") else None,
             "seq": a.seq,
             "created_at": a.created_at.isoformat(),
         })  # fmt: skip

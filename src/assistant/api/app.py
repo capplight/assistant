@@ -35,6 +35,7 @@ from assistant.api.routes import (
     misc,
     onboarding,
     pages,
+    plans,
     reminders,
     sync,
     tasks,
@@ -147,7 +148,7 @@ def create_app(
                    today.suggestions_router, duplicates.router, duplicates.pending_router,
                    imports.router, collections.router, events.router, expense_docs.router,
                    expenses.router, expenses.categories_router, kp.profile_router,
-                   kp.prices_router, documents.router, drafts.router):
+                   kp.prices_router, documents.router, drafts.router, plans.router):
         v1.include_router(router)
     if isinstance(storage, LocalObjectStorage):
         v1.include_router(misc.dev_storage)

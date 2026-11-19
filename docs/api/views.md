@@ -24,7 +24,7 @@ planned by the same server code (`pages/view.py`): the same white list, the same
 | Fields shown and their order | `page.field_prefs` | see below |
 | Own fields (≤5) | `page.custom_fields` | see below |
 | Checklist tick | the row: `link.done_at` | ISO time or null; any page shown as `checklist` («Своя страница», …). «Дела» / «Покупки» keep their ticks on tasks (`today.md`) |
-| Sticker colour, «приколоть» | the row: `link.appearance.color`, `link.pinned` | `yellow` \| `pink` \| `green` \| `blue` \| `peach` \| `white` \| null (`color.note.*`); colours only on «Заметки» |
+| Sticker colour, «приколоть» | the row: `link.appearance.color`, `link.pinned` | `yellow` \| `pink` \| `green` \| `blue` \| `peach` \| `white` \| `lilac` (0027) \| `aqua` (0032) \| null (`color.note.*`); colours only on «Заметки». The phone's 8 stickers map to these stored keys: lemon = `yellow`, sky = `blue`, rose = `pink`, mint = `green`, lilac = `lilac`, apricot = `peach`, aqua (бирюза) = `aqua`, paper = `white`. Old keys stay valid and are never rewritten |
 | Name, icon | `page.title`, `page.icon` | as in `pages.md` |
 
 `view_state.groups` (stack / «Разложи» group names) is not a view setting here and is never reset.

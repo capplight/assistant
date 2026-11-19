@@ -39,7 +39,7 @@ from assistant.actions.patch import page_patches
 from assistant.ai import LLMTask, Masker, TaskInputs, ToolSpec, UntrustedPart
 from assistant.ai.adapters import strict_json_schema
 from assistant.ai.store import period_starts
-from assistant.chat.intent import asks_view, is_delete, names_here, names_page
+from assistant.chat.intent import asks_text_edit, asks_view, is_delete, names_here, names_page
 from assistant.chat.sources import PageInfo, Source, SourceBook, title_of
 from assistant.chat.verify import Facts, check_sentence, facts_of
 from assistant.db.models import Item
@@ -115,10 +115,17 @@ class CreateArgs(BaseModel):
     title: str | None
 
 
+class TextEdit(BaseModel):
+    find: str
+    replace: str
+
+
 class UpdateArgs(BaseModel):
     records: list[str]
     title: str | None
     trash: bool
+    # Ф-73 inline edit: changes inside one record's text (shown struck out / highlighted)
+    edits: list[TextEdit] | None = None
 
 
 class MoveArgs(BaseModel):
@@ -155,7 +162,11 @@ UPDATE = ToolSpec(
     description=(
         "Change records. records: refs (s1, s2) of records you were shown. trash=true puts them "
         "in the trash (the person can undo); title: a new title for exactly one record, else "
-        "null. Only when the person asked to delete or rename these records."
+        "null. edits: changes inside exactly one record's text, only when the person asked to "
+        "fix, add to or change what that record says: [{find: the exact words of the record to "
+        "change, replace: the new words}] (replace \"\" removes them; find \"\" adds replace "
+        "as a new line at the end), else null. Only when the person asked to delete, rename or "
+        "edit these records."
     ),
     parameters=strict_json_schema(UpdateArgs),
 )
@@ -218,7 +229,8 @@ class SetViewArgs(BaseModel):
     title: str | None
     icon: Literal["people", "documents", "shopping", "money", "health", "home", "work",
                   "other"] | None
-    color: Literal["yellow", "pink", "green", "blue", "peach", "lilac", "white", "none"] | None
+    color: Literal["yellow", "pink", "green", "blue", "peach", "lilac", "aqua", "white",
+                   "none"] | None
     color_records: list[str] | None
     color_by: Literal["topic"] | None
     group_order: list[str] | None
@@ -360,6 +372,7 @@ class MutationState:
     changed: set[str] = field(default_factory=set)
     proposal: dict[str, Any] | None = None  # set: the turn stops and asks
     note: str | None = None  # a text answer code wrote instead of a change
+    finished: bool = False  # step 8: a tool ended the turn (a plan was made): no more steps
     calls: int = 0
     cost: Any = 0
 
@@ -679,6 +692,8 @@ async def tool_update(env: Any, args: UpdateArgs, *, confirmed: bool = False) ->
                             source_pks=[s.pk for s in records])  # fmt: skip
         return Result(_json({"done": True, "said": sentence, "action": out["id"]}), False,
                       "Убираю в корзину…")  # fmt: skip
+    if args.edits:
+        return await _edit_text(env, records, args, confirmed=confirmed)
     if args.title is None:
         return _err("nothing to change: give trash=true or a title")
     if len(records) != 1:
@@ -695,12 +710,89 @@ async def tool_update(env: Any, args: UpdateArgs, *, confirmed: bool = False) ->
             "value": title}]  # fmt: skip
     sentence = f"Переименовал в {_q(title)}."
     changes = [{"item_id": str(src.item_id), "title": title, "kind": "rename", "page_id": None,
-                "text": f"{_q(current or src.title)} → {_q(title)}"}]  # fmt: skip
+                "text": f"{_q(current or src.title)} → {_q(title)}",
+                "diff": [{"field": "title", "before": current, "after": title}]}]  # fmt: skip
     out = await _commit(env, kind=ActionKind.USER_EDIT, ops=ops, sentence=sentence,
                         changes=changes, screen_pk=m.page.pk if m.page else None,
                         source_pks=[src.pk])  # fmt: skip
     return Result(_json({"done": True, "said": sentence, "action": out["id"]}), False,
                   "Переименовываю…")  # fmt: skip
+
+
+EDITABLE_KINDS = frozenset({RecordKind.NOTE, RecordKind.VOICE, RecordKind.TG_MESSAGE,
+                            RecordKind.EMAIL, "text"})  # fmt: skip
+TEXT_MAX = 20000
+
+
+def apply_edits(text_: str, edits: list[TextEdit]) -> str | None:
+    """The record's text with the edits made, or None when a `find` is not in it (the model
+    must name the record's own words; nothing is guessed)."""
+    out = text_
+    for e in edits:
+        find, rep = e.find.strip(), " ".join(e.replace.split(" ")).strip()
+        if not find:
+            if rep:
+                out = (out.rstrip() + "\n" + rep) if out.strip() else rep
+            continue
+        at = out.find(find)
+        if at < 0:
+            low = out.lower().replace("ё", "е")
+            at = low.find(find.lower().replace("ё", "е"))
+            if at < 0:
+                return None
+        out = out[:at] + rep + out[at + len(find):]
+    return normalize_text(out)
+
+
+async def _edit_text(env: Any, records: list[Source], args: UpdateArgs, *,
+                     confirmed: bool) -> Result:  # fmt: skip
+    """Ф-73: an edit inside one record's text («исправь в заметке телефон», «допиши …»). Its old
+    and new text stay in the change (`diff`): the phone strikes out and highlights them."""
+    from assistant.chat.plan_line import diff_rows
+
+    m: MutationState = env.mut
+    if not confirmed and not asks_text_edit(m.phrase):
+        return _err("the person did not ask to change a record's text: change nothing")
+    if len(records) != 1:
+        return _err("edits are for exactly one record")
+    if not confirmed and (problem := _check_deictic(m, records)):
+        return _err(problem)
+    src = records[0]
+    async with env.sessionmaker() as s:
+        item = await s.get(Item, src.pk)
+        current = {"title": item.title, "text": item.text} if item is not None else None
+        kind = str(item.kind) if item is not None else ""
+        await s.commit()
+    if current is None or current["text"] is None:
+        return _err("this record has no text to edit")
+    if kind not in EDITABLE_KINDS:
+        return _err("only a note's text can be edited (a plan: make_plan with its ref)")
+    added = " ".join(e.replace for e in args.edits or [])
+    title = " ".join(args.title.split())[:120] if args.title else None
+    if not _numbers_ok(m, env.book, added + ("\n" + title if title else "")):
+        return _err("the edit has numbers or dates the person did not say: use their words only")
+    new = apply_edits(current["text"], args.edits or [])
+    if new is None:
+        return _err("`find` must be words that are in the record as it is: copy them exactly")
+    if not new or len(new) > TEXT_MAX:
+        return _err("the record's text would be empty or too long")
+    values: dict[str, Any] = {"text": new}
+    if title and title != current["title"]:
+        values["title"] = title
+    diff = diff_rows(current, values)
+    if not diff:
+        return _err("nothing would change: the record already says this")
+    name = title or current["title"] or src.title
+    ops = [{"op": "set_item_content", "entity": "items", "id": str(src.item_id),
+            "values": values}]  # fmt: skip
+    sentence = f"Исправил {_q(name)}."
+    changes = [{"item_id": str(src.item_id), "title": name, "kind": "edit", "page_id": None,
+                "text": f"Исправил в {_q(name)}", "diff": diff}]  # fmt: skip
+    out = await _commit(env, kind=ActionKind.USER_EDIT, ops=ops, sentence=sentence,
+                        changes=changes, screen_pk=m.page.pk if m.page else None,
+                        source_pks=[src.pk])  # fmt: skip
+    return Result(_json({"done": True, "said": sentence, "action": out["id"]}), False,
+                  "Исправляю…")  # fmt: skip
 
 
 # --- move ---
@@ -1356,7 +1448,8 @@ async def _rerun_view(env: Any, proposal: dict[str, Any], plan: dict[str, Any],
 # white = no colour, never a topic
 TOPIC_COLORS = ("yellow", "green", "blue", "pink", "peach", "lilac")
 COLOR_WORDS = {"yellow": "жёлтый", "green": "зелёный", "blue": "голубой", "pink": "розовый",
-               "peach": "персиковый", "lilac": "сиреневый"}  # fmt: skip
+               "peach": "персиковый", "lilac": "сиреневый",
+               "aqua": "бирюзовый"}  # fmt: skip
 LEGEND_TOPICS = 5
 RU_STICKERS = ("стикер", "стикера", "стикеров")
 

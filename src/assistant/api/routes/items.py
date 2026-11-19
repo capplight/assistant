@@ -139,7 +139,8 @@ def _error_code(item: Item) -> str | None:
     return item.error if item.telegram_chat_id is None else "legacy_failed"
 
 
-def item_out(item: Item, files: list[File], canonical_public_id: uuid.UUID | None) -> ItemOut:
+def item_out(item: Item, files: list[File], canonical_public_id: uuid.UUID | None,
+             edit: dict | None = None) -> ItemOut:  # fmt: skip
     kind, source, status = str(item.kind), str(item.source), str(item.status)
     return ItemOut(
         id=item.public_id, client_id=item.client_id,
@@ -162,6 +163,7 @@ def item_out(item: Item, files: list[File], canonical_public_id: uuid.UUID | Non
         purge_after=item.purge_after,
         **mark_fields(item.assistant_changed_at, item.assistant_action_id),
         parse_later=parse_status(item.source_meta),
+        assistant_edit=edit,
     )  # fmt: skip
 
 
@@ -173,12 +175,58 @@ async def items_out(db: AsyncSession, items: list[Item]) -> list[ItemOut]:
     files: dict[int, list[File]] = {}
     for f in await db.scalars(select(File).where(File.item_id.in_(ids)).order_by(File.id)):
         files.setdefault(f.item_id or 0, []).append(f)
+    edits = await assistant_edits(db, items)
     canon_ids = {i.canonical_item_id for i in items if i.canonical_item_id is not None}
     canon: dict[int, uuid.UUID] = {}
     if canon_ids:
         rows = await db.execute(select(Item.id, Item.public_id).where(Item.id.in_(canon_ids)))
         canon = {row.id: row.public_id for row in rows}
-    return [item_out(i, files.get(i.id, []), canon.get(i.canonical_item_id or 0)) for i in items]
+    return [item_out(i, files.get(i.id, []), canon.get(i.canonical_item_id or 0),
+                     edits.get(i.id)) for i in items]  # fmt: skip
+
+
+async def assistant_edits(db: AsyncSession, items: list[Item]) -> dict[int, dict]:
+    """Ф-73 inline edit: for a record still marked «изменил помощник» (24 h), what that action
+    changed inside it (old / new title and text) and the phrase that asked for it."""
+    from assistant.db.models_actions import Action
+    from assistant.db.models_chat import ConversationMessage
+
+    now = datetime.now(UTC)
+    marked = {i.id: i.assistant_action_id for i in items
+              if mark_fields(i.assistant_changed_at, i.assistant_action_id, now)
+              ["assistant_action_id"] is not None}  # fmt: skip
+    if not marked:
+        return {}
+    acts = {a.public_id: a for a in await db.scalars(
+        select(Action).where(Action.public_id.in_(set(marked.values())),
+                             Action.undone_at.is_(None)))}  # fmt: skip
+    if not acts:
+        return {}
+    said: dict[int, str] = {}
+    mids = {a.message_id for a in acts.values() if a.message_id}
+    if mids:
+        reply = ConversationMessage
+        asked = select(reply.id, reply.reply_to_id).where(reply.id.in_(mids)).subquery()
+        rows = await db.execute(select(asked.c.id, ConversationMessage.content)
+                                .join(ConversationMessage,
+                                      ConversationMessage.id == asked.c.reply_to_id))
+        said = {mid: content for mid, content in rows}
+    by_item = {i.id: i for i in items}
+    out: dict[int, dict] = {}
+    for pk, aid in marked.items():
+        a = acts.get(aid)  # type: ignore[arg-type]
+        if a is None:
+            continue
+        pid = str(by_item[pk].public_id)
+        rows_ = [c for c in (a.payload or {}).get("changes", [])
+                 if str(c.get("item_id")) == pid and c.get("diff")]  # fmt: skip
+        if not rows_ or pid in set((a.payload or {}).get("reverted") or []):
+            continue
+        out[pk] = {"action_id": a.public_id, "at": by_item[pk].assistant_changed_at,
+                   "said": (said.get(a.message_id or 0) or None),
+                   "summary": (a.summary or {}).get("ru") or "",
+                   "changes": [d for c in rows_ for d in c["diff"]]}  # fmt: skip
+    return out
 
 
 async def one_out(db: AsyncSession, item: Item) -> ItemOut:

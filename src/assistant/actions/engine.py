@@ -31,6 +31,8 @@ An op is a JSON object with ids as public uuids (strings), never database ids:
   (a rule moved to another page).
 - Week 11 (`ops_view`): `set_view_key`, `set_appearance`, `set_facet` (page views, own fields).
   Weeks 16а–16б: `set_board` (a sticker's place on the free board).
+- Step 8 (`ops_items`): `set_item_content` {id, values: {title?, text?, plan?}, expect?} (a plan
+  changed by the assistant, an edit inside a note's text).
 - Week 14 (`ops_kp`): `delete_entity_soft` / `restore_entity` take `entity: documents` (a КП and
   its record); `revert_document`, `set_document`, `set_company_profile`, `set_price_list`,
   `set_price_item`; `set_status` takes `entity: expense_duplicates` («Это разные», week 13).
@@ -80,7 +82,9 @@ OPS = frozenset({"restore_positions", "restore_view_state", "add_screen_item",
                  "set_expense_live",
                  # week 14 (actions/ops_kp.py): КП, company profile, price list
                  "revert_document", "set_document", "set_company_profile", "set_price_list",
-                 "set_price_item"})  # fmt: skip
+                 "set_price_item",
+                 # step 8 (actions/ops_items.py): a record's title / text / plan
+                 "set_item_content"})  # fmt: skip
 HABIT_STATUSES = frozenset({"candidate", "active", "disabled"})
 ENTITIES = frozenset({"items", "screens", "tasks", "expenses", "documents"})
 OWNED = frozenset({"tasks", "expenses", "documents"})  # a row with its own record
@@ -663,6 +667,7 @@ def _register_week10() -> None:
     from assistant.actions import (  # need Outcome and the helpers above
         ops_dedup,
         ops_expenses,
+        ops_items,
         ops_kp,
         ops_view,
     )
@@ -671,6 +676,7 @@ def _register_week10() -> None:
     _HANDLERS.update(ops_view.HANDLERS)
     _HANDLERS.update(ops_expenses.HANDLERS)
     _HANDLERS.update(ops_kp.HANDLERS)
+    _HANDLERS.update(ops_items.HANDLERS)
 
 
 _register_week10()

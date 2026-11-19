@@ -27,8 +27,8 @@ from assistant.db.ids import uuid7
 from assistant.db.models import Base
 
 TODAY_KEY = "today"
-# color.note.* (0016 CHECK, lilac from 0027)
-NOTE_COLORS = ("yellow", "pink", "green", "blue", "peach", "white", "lilac")
+# color.note.* (0016 CHECK, lilac from 0027, aqua from 0032)
+NOTE_COLORS = ("yellow", "pink", "green", "blue", "peach", "white", "lilac", "aqua")
 MAX_CUSTOM_FIELDS = 5  # R-51 (0007 CHECK)
 MAX_PAGES = 20  # pages.max_per_user, including «Сегодня»
 

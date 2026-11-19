@@ -295,6 +295,7 @@ class RecordKind(enum.StrEnum):
     TG_MESSAGE = "tg_message"
     AI_CHAT = "ai_chat"  # 0031: a conversation brought from a ChatGPT / Claude / Gemini export
     KP = "kp"
+    PLAN = "plan"  # 0033: a trip / action plan made by the assistant (plans.md)
     FILE_OTHER = "file_other"
 
 

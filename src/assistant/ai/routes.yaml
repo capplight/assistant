@@ -77,6 +77,9 @@ tasks:
   # Step 5 (Ф-60, Ф-61): facts about the person, every few phrases, in the background; light model,
   # capped per person per day in code (chat/memory.py MEMORY_RUNS_PER_DAY).
   memory_extract: {budget_class: background, max_tokens: 1500}
+  # Step 8 «Составь план»: a structured plan of up to 14 days / 12 steps; the only chat-path task
+  # with a bigger output cap. Haiku output at the cap: $0.003. The line waits for it.
+  plan: {budget_class: answers, timeout_s: 60, max_tokens: 7000}
   page_group: {budget_class: answers}
   # Receipts have a "within 1 min" promise (product spec, F-40).
   expense_extract: {budget_class: background, escalate: strong}
