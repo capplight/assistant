@@ -21,10 +21,14 @@ export function useAskPlace(): AskPlace {
   const current = useCurrentPage();
   const online = useConnectivity((s) => s.online);
   const hint = useChrome((s) => s.askHint);
-  if (current.kind === 'assistant') return { variant: 'full', placeholder: online ? t('line.placeholder_assistant') : t('ask.offline') };
-  if (current.kind === 'today') return { variant: 'strip', placeholder: t('ask.today') };
+  if (current.kind === 'assistant')
+    return { variant: 'full', placeholder: online ? t('line.placeholder_assistant') : t('ask.offline') };
+  // Ф-85: a future day shown on «Сегодня» says «Добавить на пятницу…».
+  if (current.kind === 'today') return { variant: 'strip', placeholder: hint ?? t('ask.today') };
   if (pathname === '/more') return { variant: 'strip', placeholder: t('ask.more') };
   if (pathname.startsWith('/record/')) return { variant: 'strip', placeholder: t('ask.note_detail') };
+  // plans.md: on an open plan the line changes it («поменяй план: …»; `selected_item_id` = the plan).
+  if (pathname.startsWith('/plan/')) return { variant: 'strip', placeholder: t('plan.ask') };
   if (current.kind === 'page' && !pathname.startsWith('/stack/')) {
     const k = current.page.templateKey;
     if (k === 'documents') return null;

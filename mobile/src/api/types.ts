@@ -150,7 +150,9 @@ export type UploadOut = {
 export type ItemKind =
   'note' | 'voice' | 'image' | 'screenshot' | 'pdf' | 'docx' | 'xlsx' | 'link' | 'email' | 'file_other'
   /** Step 7: one conversation brought from a ChatGPT / Claude / Gemini export (`source_meta.tag` «из ChatGPT»). */
-  | 'ai_chat';
+  | 'ai_chat'
+  /** plans.md: a plan made by «Составь план» (opens the plan screen). */
+  | 'plan';
 
 export type ItemSource = 'typed' | 'mic' | 'share' | 'camera' | 'files';
 
@@ -220,7 +222,30 @@ export type ItemOut = {
   assistant_action_id?: string | null;
   /** Ф-69: a note saved while the model was down — `waiting`, then `done` («Разобрал: перенёс в «Расходы»»). */
   parse_later?: ParseLaterOut | null;
+  /** items.md «Inline edit» (Ф-73): what the assistant changed inside the record, for 24 h. */
+  assistant_edit?: AssistantEditOut | null;
   seq: number;
+};
+
+export type AssistantEditOut = {
+  action_id: string;
+  at: string | null;
+  said: string | null;
+  summary: string | null;
+  changes: { field: 'title' | 'text'; before: string | null; after: string | null }[];
+};
+
+/** plans.md «Сделать делами». */
+export type PlanTasksOut = {
+  plan: import('@/plans/types').PlanOut | null;
+  group: ActionGroupOut | null;
+  actions: ActionOut[];
+  tasks: TaskOut[];
+  reminders: ReminderOut[];
+  page_patches: PagePatchOut[];
+  skipped: number;
+  repeated: boolean;
+  message_ru: string | null;
 };
 
 export type ParseLaterOut = { state: 'waiting' | 'done'; text_ru: string | null; text_kk: string | null; to: string | null; action_id: string | null };
@@ -431,7 +456,7 @@ export type PageItemFieldsIn = {
 export type PageItemFieldsOut = { values: Record<string, unknown>; action: ActionOut | null; link: PageItemOut | null };
 
 /** Week 11а: the six sticker colours (`color.note.*`, template-screens 3; views.md `link.appearance.color`). */
-export type NoteColor = 'yellow' | 'pink' | 'green' | 'blue' | 'peach' | 'white' | 'lilac';
+export type NoteColor = 'yellow' | 'pink' | 'green' | 'blue' | 'peach' | 'white' | 'lilac' | 'aqua';
 
 /** `link.appearance` (views.md «Rows and contents»): who set it decides when the assistant asks «Да». */
 export type AppearanceOut = { color: NoteColor | null; color_set_by?: SetBy | null; pinned_set_by?: SetBy | null };
@@ -728,6 +753,8 @@ export type ActionOut = {
   parsed_later?: boolean;
   /** Step 6: one phrase made several actions — the phrase's group (null for one action). */
   group?: ActionGroupOut | null;
+  /** plans.md: a `make_plan` action carries its card. */
+  plan?: import('@/plans/types').PlanCardOut | null;
 };
 
 /** actions.md «Groups»: show `notice` once («Сделал 3 дела · Отменить всё»). `id` = the answer's message id. */
@@ -840,6 +867,8 @@ export type ChatEvent = (
   | { type: 'sources'; sources: ChatSourceOut[] }
   /** Ф-87 (chat.md): pages a web search returned for this answer; the text also ends with «Источники: …». */
   | { type: 'web_sources'; sources: WebSourceOut[] }
+  /** plans.md: the «План» card of a `make_plan` turn (after its `action`). */
+  | { type: 'plan'; replyId: string | null; actionId: string | null; plan: import('@/plans/types').PlanCardOut }
   | { type: 'token'; text: string }
   | { type: 'citations'; citations: ChatCitationOut[] }
   | { type: 'checked'; ok: boolean; removed: number }

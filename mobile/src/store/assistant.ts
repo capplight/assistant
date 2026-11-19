@@ -82,6 +82,8 @@ export type ChatAction = {
   group?: { id: string; size: number; actionIds: string[]; notice: ActionNoticeOut | null } | null;
   /** Step 6: every action of the phrase, in order (this one first); each stays its own row in «История». */
   parts?: ChatAction[];
+  /** plans.md: the «План» card of a `make_plan` action. */
+  plan?: import('@/plans/types').PlanCardOut | null;
 };
 
 /**

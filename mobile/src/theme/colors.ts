@@ -278,9 +278,9 @@ export const stickerInk = {
  * Sticky-note keys stored with notes (v2). They are NOT rewritten: on read `legacyStickerMap` turns them into a v5
  * sticker, so saved data stays as it is.
  */
-export type NoteColorKey = 'white' | 'yellow' | 'peach' | 'pink' | 'lilac' | 'blue' | 'green';
+export type NoteColorKey = 'white' | 'yellow' | 'peach' | 'pink' | 'lilac' | 'blue' | 'green' | 'aqua';
 /** Every stored key (the data domain). */
-export const NOTE_COLOR_KEYS: readonly NoteColorKey[] = ['white', 'yellow', 'peach', 'pink', 'lilac', 'blue', 'green'];
+export const NOTE_COLOR_KEYS: readonly NoteColorKey[] = ['white', 'yellow', 'peach', 'pink', 'lilac', 'blue', 'green', 'aqua'];
 /** v2 NoteColorKey and the Ф-79 v5 keys → the current StickerKey (tokens-v5 `legacyStickerMap`). */
 export const legacyStickerMap: Record<string, StickerKey> = {
   white: 'paper',
@@ -295,18 +295,10 @@ export const legacyStickerMap: Record<string, StickerKey> = {
   graphite: 'lilac',
 };
 /**
- * The colour picker: the stored keys the server knows (views.md `color.note.*`), one per sticker — 7 of the 8
- * (aqua has no stored key yet; it comes only by the automatic round).
+ * The colour picker: the stored keys the server knows (views.md `color.note.*`), one per sticker — all 8 (Ф-85;
+ * `aqua` is a stored key since the views.md update of step 8).
  */
-export const STICKER_PICKER_KEYS: readonly NoteColorKey[] = [
-  'yellow',
-  'blue',
-  'pink',
-  'green',
-  'lilac',
-  'peach',
-  'white',
-];
+export const STICKER_PICKER_KEYS: readonly NoteColorKey[] = ['yellow', 'blue', 'pink', 'green', 'lilac', 'peach', 'aqua', 'white'];
 /** A stored key (old or new) → its sticker. Unknown keys are paper. */
 export function stickerOf(key: string | null | undefined): StickerKey {
   if (!key) return 'paper';

@@ -18,6 +18,7 @@ import { useView } from '@/store/view';
 import { SimilarNote } from '@/components/SimilarNote';
 import { RecordPreview, VoicePlayer } from '@/components/RecordMedia';
 import { ChangedPlate } from '@/components/ChangedMark';
+import { DiffText, editOf } from '@/components/EditDiff';
 import { MAX_FONT_SCALE, placeOfTemplate, useTheme } from '@/theme';
 import { usePageLabels } from '@/pages/usePageLabels';
 import { usePages } from '@/store/pages';
@@ -50,6 +51,12 @@ export default function RecordScreen() {
   useEffect(() => {
     if (serverId) void refreshRecord(serverId);
   }, [serverId]);
+
+  // plans.md: a plan record opens the plan screen, not the note card.
+  const isPlan = record?.kind === 'plan';
+  useEffect(() => {
+    if (isPlan && serverId) router.replace({ pathname: '/plan/[id]', params: { id: serverId } });
+  }, [isPlan, serverId]);
 
   // «Напомни про это», «удали это»: with the card open, «это» is this record (US-30).
   useFocusEffect(
@@ -102,14 +109,34 @@ export default function RecordScreen() {
   const status = statusLine(record, t);
   // The title may already be the text: do not print the same words twice.
   const body = record.text && record.text !== title ? record.text : null;
+  // items.md «Inline edit»: what the assistant changed, struck and marked right in the text (24 h).
+  const edit = record.assistantEdit ?? null;
+  const titleEdit = editOf(edit, 'title', record.title);
+  const textEdit = editOf(edit, 'text', record.text);
 
   return (
     <Screen testID="record-card" mode="strip" place={place} askRoom>
       {sheet}
-      <ChangedPlate at={record.assistantChangedAt} actionId={record.assistantActionId} />
-      <AppText variant="title1" accessibilityRole="header" style={{ marginBottom: 4, fontSize: 26, lineHeight: 31 }}>
-        {title}
-      </AppText>
+      {edit?.said ? (
+        // The one line «по какой просьбе» over the note.
+        <AppText testID="record-edit-said" variant="footnote" style={{ color: theme.colors.ink3, marginBottom: 4 }}>
+          {t('record.edit_said', { said: edit.said })}
+        </AppText>
+      ) : null}
+      <ChangedPlate at={record.assistantChangedAt} actionId={edit?.action_id ?? record.assistantActionId} />
+      {titleEdit ? (
+        <DiffText
+          testID="record-title-diff"
+          variant="title1"
+          before={titleEdit.before}
+          after={titleEdit.after}
+          style={{ marginBottom: 4, fontSize: 26, lineHeight: 31 }}
+        />
+      ) : (
+        <AppText variant="title1" accessibilityRole="header" style={{ marginBottom: 4, fontSize: 26, lineHeight: 31 }}>
+          {title}
+        </AppText>
+      )}
       {/* screens-v5-extra «Запись · скриншот»: the photo / the PDF on top; «Запись · голосовая»: the player. */}
       <RecordPreview files={record.files} kind={record.kind} />
       <AppText variant="footnote" style={{ marginBottom: theme.space[1] }}>
@@ -215,9 +242,13 @@ export default function RecordScreen() {
           <AppText variant="section" accessibilityRole="header">
             {t('record.text')}
           </AppText>
-          <AppText selectable testID="record-text" variant="noteBody">
-            {body}
-          </AppText>
+          {textEdit ? (
+            <DiffText testID="record-text" variant="noteBody" before={textEdit.before} after={textEdit.after} />
+          ) : (
+            <AppText selectable testID="record-text" variant="noteBody">
+              {body}
+            </AppText>
+          )}
         </View>
       ) : null}
 

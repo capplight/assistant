@@ -612,7 +612,8 @@
     "voice_pause": "Пауза",
     "open_photo": "Открыть фото",
     "open_pdf": "Открыть {{name}}",
-    "pdf_meta": "PDF · {{size}} КБ"
+    "pdf_meta": "PDF · {{size}} КБ",
+    "edit_said": "по просьбе: «{{said}}»"
   },
   "check": {
     "badge": "проверьте",
@@ -1196,7 +1197,8 @@
       "blue": "Небо",
       "peach": "Абрикос",
       "white": "Бумага",
-      "lilac": "Лаванда"
+      "lilac": "Лаванда",
+      "aqua": "Бирюза"
     },
     "colors_a11y": {
       "yellow": "жёлтый",
@@ -1204,7 +1206,8 @@
       "green": "зелёный",
       "blue": "голубой",
       "peach": "персиковый",
-      "white": "белый"
+      "white": "белый",
+      "aqua": "бирюзовый"
     },
     "pin": "Приколоть наверх",
     "unpin": "Открепить",
@@ -2333,7 +2336,36 @@
   "plan": {
     "min": "{{n}} мин",
     "hours": "{{h}} ч",
-    "free": "свободно {{time}}"
+    "free": "свободно {{time}}",
+    "day_n": "День {{n}}",
+    "due": "до {{day}}",
+    "after": "после шага {{n}}",
+    "make_tasks": "Сделать делами",
+    "open": "Открыть",
+    "becomes_tasks": "План · станет делами",
+    "more_steps_one": "ещё {{count}} шаг",
+    "more_steps_few": "ещё {{count}} шага",
+    "more_steps_many": "ещё {{count}} шагов",
+    "more_steps_other": "ещё {{count}} шага",
+    "lies_in": "План · в «{{page}}»",
+    "made": "Сделал дела по плану",
+    "ask": "Попросите поменять план…",
+    "title": "{{title}} · план",
+    "loading": "Открываю план…",
+    "error": "Не получилось открыть план. Проверьте связь.",
+    "src_link": "ссылка",
+    "src_note": "заметка",
+    "src_voice": "голосовое",
+    "src_image": "фото",
+    "src_screenshot": "скриншот",
+    "src_ai_chat": "переписка",
+    "src_pdf": "файл",
+    "src_email": "письмо",
+    "on_map": "на карте",
+    "own": "мой совет, не из ваших записей",
+    "steps": "Шаги",
+    "task_done": "сделано",
+    "task_open": "в делах"
   },
   "records": {
     "kind_all": "Все",

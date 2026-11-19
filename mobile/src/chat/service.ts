@@ -136,6 +136,7 @@ export function fromAction(a: ActionOut): ChatAction {
     group: a.group
       ? { id: a.group.id, size: a.group.size, actionIds: a.group.action_ids, notice: a.group.notice }
       : null,
+    plan: a.plan ?? null,
   };
 }
 
@@ -206,6 +207,12 @@ function apply(answerId: string, e: ChatEvent): void {
       return;
     case 'web_sources':
       updateMessage(answerId, { webSources: e.sources });
+      return;
+    case 'plan':
+      // plans.md: the card goes on the action of this answer (it is already saved, with «Отменить»).
+      updateMessage(answerId, (m) =>
+        m.action ? { action: { ...m.action, plan: e.plan } } : {},
+      );
       return;
     case 'token':
       updateMessage(answerId, (m) => ({ text: m.text + e.text, activity: null }));
@@ -391,7 +398,7 @@ function queuePatch(answerId: string, patch: PagePatchOut): void {
  * Rows upserted by (page, item), `removed_item_ids` dropped, the version and group titles kept
  * (a sort clears the groups). `answerId`: keep what the rows were, for «Отменить» offline.
  */
-async function applyPatch(patch: PagePatchOut, answerId?: string): Promise<void> {
+export async function applyPatch(patch: PagePatchOut, answerId?: string): Promise<void> {
   await whenReleased();
   const repo = await getPagesRepo();
   const now = new Map((await repo.linksFor(patch.page_id)).map((l) => [l.itemServerId, l]));

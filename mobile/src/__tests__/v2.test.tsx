@@ -46,7 +46,7 @@ const pageOf = (k: string) => usePages.getState().pages.find((p) => p.templateKe
 describe('tokens v5 (Ф-79): stored sticker keys stay, they show as the v5 palette', () => {
   it('old keys map through legacyStickerMap; the v5 sticker ink', () => {
     expect(darkColors.paper).toBe('#26252B'); // A8: one step lighter (Ф-84)
-    expect(NOTE_COLOR_KEYS).toEqual(['white', 'yellow', 'peach', 'pink', 'lilac', 'blue', 'green']);
+    expect(NOTE_COLOR_KEYS).toEqual(['white', 'yellow', 'peach', 'pink', 'lilac', 'blue', 'green', 'aqua']); // aqua: views.md 0032 (step 8)
     // Ф-85: the multicoloured palette — yellow → lemon, peach → apricot, green → mint, lilac → lilac.
     expect(lightNoteColors.yellow).toBe('#FFEFA6');
     expect(lightNoteColors.peach).toBe('#FFD8B5');

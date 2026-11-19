@@ -143,6 +143,7 @@ const SCREENS: Case[] = [
   { route: '(main)/index', url: () => '/' },
   { route: '(main)/page/[id]', url: (p) => `/page/${p.notes!.id}` },
   { route: '(main)/record/[id]', url: (p) => `/record/notes-r0?from=${p.notes!.id}` },
+  { route: '(main)/plan/[id]', url: () => '/plan/plan-x' },
   { route: '(main)/records', url: () => '/records' },
   { route: '(main)/more', url: () => '/more' },
   { route: '(main)/search', url: () => '/search?q=плитка' },

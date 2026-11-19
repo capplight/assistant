@@ -1,3 +1,4 @@
+import type { PlanCardOut, PlanKind, PlanOut } from '@/plans/types';
 import type { ApiClient } from './client';
 import { ApiError } from './errors';
 import { readSse, StreamDroppedError, type SseMessage } from './sse';
@@ -59,6 +60,7 @@ import type {
   MoveToPageIn,
   PageItemOut,
   PagePatchOut,
+  PlanTasksOut,
   PagesReorderIn,
   PendingBannerOut,
   ProposalOut,
@@ -364,6 +366,115 @@ export function actionOut(v: unknown): ActionOut | null {
     notice: noticeOut(o.notice),
     parsed_later: o.parsed_later === true,
     group: groupOut(o.group),
+    plan: planCardOut(o.plan),
+  };
+}
+
+// --- plans.md («Составь план») ---
+
+const planKind = (v: unknown): PlanKind => (v === 'actions' ? 'actions' : 'trip');
+
+export function planCardOut(v: unknown): PlanCardOut | null {
+  const o = obj(v);
+  const id = o && str(o.item_id);
+  if (!o || !id) return null;
+  const page = obj(o.page);
+  return {
+    item_id: id,
+    kind: planKind(o.kind),
+    title: str(o.title) ?? '',
+    subtitle: str(o.subtitle),
+    lead: str(o.lead),
+    rows: arr(o.rows).flatMap((x) => {
+      const r = obj(x);
+      return r
+        ? [
+            {
+              n: typeof r.n === 'number' ? r.n : 0,
+              date: str(r.date),
+              title: str(r.title) ?? '',
+              points: typeof r.points === 'number' ? r.points : null,
+              due_date: str(r.due_date),
+              after_n: arr(r.after_n).filter((n): n is number => typeof n === 'number'),
+              note: str(r.note),
+            },
+          ]
+        : [];
+    }),
+    start_date: str(o.start_date),
+    end_date: str(o.end_date),
+    page: page && str(page.page_id) ? { page_id: str(page.page_id)!, title: str(page.title) ?? '' } : null,
+    check_note: str(o.check_note),
+    can_make_tasks: o.can_make_tasks === true,
+    action_id: str(o.action_id),
+    edited: o.edited === true,
+  };
+}
+
+export function planOut(v: unknown): PlanOut | null {
+  const o = obj(v);
+  const id = o && str(o.id);
+  if (!o || !id) return null;
+  return {
+    id,
+    kind: planKind(o.kind),
+    title: str(o.title) ?? '',
+    start_date: str(o.start_date),
+    end_date: str(o.end_date),
+    days: arr(o.days).flatMap((x) => {
+      const d = obj(x);
+      return d
+        ? [
+            {
+              n: typeof d.n === 'number' ? d.n : 0,
+              date: str(d.date),
+              title: str(d.title),
+              points: arr(d.points).flatMap((y) => {
+                const p = obj(y);
+                const pid = p && str(p.id);
+                return p && pid
+                  ? [{ id: pid, title: str(p.title) ?? '', note: str(p.note), source_id: str(p.source_id), own: p.own === true, place: str(p.place) }]
+                  : [];
+              }),
+            },
+          ]
+        : [];
+    }),
+    steps: arr(o.steps).flatMap((x) => {
+      const s = obj(x);
+      const sid = s && str(s.id);
+      if (!s || !sid) return [];
+      const task = obj(s.task);
+      return [
+        {
+          id: sid,
+          n: typeof s.n === 'number' ? s.n : 0,
+          title: str(s.title) ?? '',
+          note: str(s.note),
+          due_date: str(s.due_date),
+          after: strs(s.after),
+          remind_at: str(s.remind_at),
+          source_id: str(s.source_id),
+          own: s.own === true,
+          task_id: str(s.task_id),
+          task: task && str(task.id) ? { id: str(task.id)!, done: task.done === true, due_date: str(task.due_date) } : null,
+        },
+      ];
+    }),
+    sources: arr(o.sources).flatMap((x) => {
+      const s = obj(x);
+      const sid = s && str(s.item_id);
+      return s && sid
+        ? [{ item_id: sid, title: str(s.title), kind: str(s.kind), created_at: str(s.created_at), occurred_at: str(s.occurred_at), available: s.available !== false }]
+        : [];
+    }),
+    asked: str(o.asked),
+    can_make_tasks: o.can_make_tasks === true,
+    check_note: str(o.check_note),
+    pages: arr(o.pages).flatMap((x) => {
+      const p = obj(x);
+      return p && str(p.page_id) ? [{ page_id: str(p.page_id)!, title: str(p.title) ?? '' }] : [];
+    }),
   };
 }
 
@@ -433,7 +544,7 @@ function linkOut(v: unknown): PageItemOut | null {
 
 const numOrNull = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
-const NOTE_COLOR_SET = new Set<string>(['yellow', 'pink', 'green', 'blue', 'peach', 'white', 'lilac']);
+const NOTE_COLOR_SET = new Set<string>(['yellow', 'pink', 'green', 'blue', 'peach', 'white', 'lilac', 'aqua']);
 const setByOf = (v: unknown) => (v === 'user' || v === 'agent' || v === 'template' ? v : null);
 
 /** `link.appearance` (views.md): an unknown colour reads as none. */
@@ -745,6 +856,10 @@ export function decodeChatEvent(m: SseMessage): ChatEvent | null {
       }
       case 'citations':
         return { type: 'citations', citations: citations(d.citations) };
+      case 'plan': {
+        const plan = planCardOut(d.plan);
+        return plan ? { type: 'plan', replyId: str(d.reply_id), actionId: str(d.action_id), plan } : null;
+      }
       case 'web_sources':
         return {
           type: 'web_sources',
@@ -2590,6 +2705,35 @@ export class Api {
   async pendingBanner(): Promise<PendingBannerOut> {
     const out = obj(await this.client.request<unknown>('GET', '/chat/pending-banner')) ?? {};
     return { message: chatMessageOut(out.message) };
+  }
+
+  /** plans.md: the plan with its days / steps. */
+  async getPlan(id: string): Promise<PlanOut> {
+    const p = planOut(await this.client.request<unknown>('GET', `/plans/${encodeURIComponent(id)}`));
+    if (!p) throw new Error('bad plan');
+    return p;
+  }
+
+  /** plans.md «Сделать делами»: every step without a live task becomes one, all in one group. */
+  async makePlanTasks(id: string, clientId: string, stepIds?: string[]): Promise<PlanTasksOut> {
+    const out =
+      obj(
+        await this.client.request<unknown>('POST', `/plans/${encodeURIComponent(id)}/tasks`, {
+          body: { client_id: clientId, ...(stepIds ? { step_ids: stepIds } : {}) },
+          idempotencyKey: clientId,
+        }),
+      ) ?? {};
+    return {
+      plan: planOut(out.plan),
+      group: groupOut(out.group),
+      actions: arr(out.actions).map(actionOut).filter((x): x is ActionOut => x !== null),
+      tasks: arr(out.tasks).map(taskOut).filter((x): x is TaskOut => x !== null),
+      reminders: arr(out.reminders).map(reminderOut).filter((x): x is ReminderOut => x !== null),
+      page_patches: arr(out.page_patches).map(pagePatchOut).filter((x): x is PagePatchOut => x !== null),
+      skipped: typeof out.skipped === 'number' ? out.skipped : 0,
+      repeated: out.repeated === true,
+      message_ru: str(out.message_ru),
+    };
   }
 
   /** «Отменить всё» of a phrase that made several actions (actions.md «Groups»). */

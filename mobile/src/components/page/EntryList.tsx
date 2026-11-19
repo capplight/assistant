@@ -157,6 +157,11 @@ export function EntryList({
       void pickRecord(rec.serverId);
       return;
     }
+    // plans.md: a plan opens the plan screen.
+    if (rec.kind === 'plan' && rec.serverId) {
+      router.navigate({ pathname: '/plan/[id]', params: { id: rec.serverId } });
+      return;
+    }
     router.navigate({ pathname: '/record/[id]', params: { id: rec.id, from: page.id } });
   };
 
@@ -174,17 +179,18 @@ export function EntryList({
           onUp: at > 0 ? () => step(rec.id, -1) : undefined,
           onDown: at >= 0 && at < shown.length - 1 ? () => step(rec.id, 1) : undefined,
           onMoveTo: () => setMoveSheet({ recordId: rec.id, mode: 'move' }),
-          onDragStart: canDrag && !onStep
-            ? () =>
-                drag.start(index, (to) => {
-                  const target = entryIndexAfterDrop(
-                    rows.map((r) => r.type === 'entry'),
-                    index,
-                    to,
-                  );
-                  if (target !== at) void dropRecord(page, rec.id, target);
-                })
-            : undefined,
+          onDragStart:
+            canDrag && !onStep
+              ? () =>
+                  drag.start(index, (to) => {
+                    const target = entryIndexAfterDrop(
+                      rows.map((r) => r.type === 'entry'),
+                      index,
+                      to,
+                    );
+                    if (target !== at) void dropRecord(page, rec.id, target);
+                  })
+              : undefined,
           showArrows: ordering,
         }
       : undefined;
@@ -263,14 +269,19 @@ export function EntryList({
           onScrollEndDrag={place?.onScrollEndDrag}
           scrollEventThrottle={place?.scrollEventThrottle}
           // The first row starts under the sheet's overlap; the end clears the assistant strip and the tabs.
-          contentContainerStyle={{ paddingTop: place ? place.inset : theme.space[2], paddingBottom: theme.m.ask.listBottomPadding + theme.space[2] }}
+          contentContainerStyle={{
+            paddingTop: place ? place.inset : theme.space[2],
+            paddingBottom: theme.m.ask.listBottomPadding + theme.space[2],
+          }}
           keyboardShouldPersistTaps="handled"
           ListHeaderComponent={header}
           ListFooterComponent={footer}
           ListEmptyComponent={empty ?? undefined}
           renderItem={({ item, index }) => {
             const shift = drag.shift(index);
-            const style = shift ? { transform: [{ translateY: shift }], zIndex: drag.isDragged(index) ? 10 : 0 } : undefined;
+            const style = shift
+              ? { transform: [{ translateY: shift }], zIndex: drag.isDragged(index) ? 10 : 0 }
+              : undefined;
             const measure = (e: LayoutChangeEvent) => drag.measure(index, e.nativeEvent.layout.height);
             if (item.type === 'group') {
               const own = renderGroup?.(item);
@@ -291,7 +302,14 @@ export function EntryList({
                     accessible
                     accessibilityRole="header"
                     accessibilityLabel={heading}
-                    style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, paddingTop: 18, paddingBottom: 6 }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'baseline',
+                      justifyContent: 'space-between',
+                      gap: 8,
+                      paddingTop: 18,
+                      paddingBottom: 6,
+                    }}
                   >
                     <AppText variant="section" style={{ flexShrink: 1 }}>
                       {m ? m[1] : heading}

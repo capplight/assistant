@@ -155,7 +155,7 @@ describe('contract (views.md, pages.md, today.md week 11а)', () => {
   });
 
   it('note colours v2: seven (lilac added, Ф-55), in the picker order; ink on each is ≥4.5:1', () => {
-    expect(NOTE_COLOR_KEYS).toEqual(['white', 'yellow', 'peach', 'pink', 'lilac', 'blue', 'green']);
+    expect(NOTE_COLOR_KEYS).toEqual(['white', 'yellow', 'peach', 'pink', 'lilac', 'blue', 'green', 'aqua']); // aqua: views.md 0032 (step 8)
     const lum = (hex: string) => {
       const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
       return 0.2126 * c[0]! + 0.7152 * c[1]! + 0.0722 * c[2]!;

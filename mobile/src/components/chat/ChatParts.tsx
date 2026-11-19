@@ -34,6 +34,7 @@ import { answerNotice, useLocalHitTitles } from '../answerText';
 import { ReplaceSheet } from '../ReplaceSheet';
 import { LocalHitChips, SourceChips } from '../SourceChips';
 import { answerBody, WebSources } from '../WebSources';
+import { PlanCard } from '../plan/PlanCard';
 import { Button } from '../ui/Button';
 import { ResultCard } from '../ui/Floating';
 import { Icon, type LucideIcon } from '../ui/Icon';
@@ -346,23 +347,31 @@ export function ActionResultCard({ m, action }: { m: ChatMessage; action: ChatAc
       {many && !groupNotice ? (
         <AppText variant="chat">{t('assistant.did_many', { count: rows.length })}</AppText>
       ) : null}
-      {shown.map((c, i) => {
-        const page = pageByServer(c.pageServerId) ?? (i === 0 ? firstPage : null);
-        const place = page ? placeOfTemplate(page.templateKey) : 'stone';
-        const caption = page ? title(page) : (action.pageTitle ?? t('assistant.saved'));
-        return (
-          <ResultCard
-            key={`${c.itemId ?? 'x'}-${i}`}
-            testID={many ? `chat-action-row-${i}` : undefined}
-            place={place}
-            icon={PLACE_ICON[place]}
-            caption={c.title && c.text && c.text !== c.title && many ? `${caption} · ${c.text}` : caption}
-            title={c.title ?? c.text}
-            onPress={() => void open(c.itemId)}
-            style={c.undone || !done ? { opacity: 0.55 } : undefined}
-          />
-        );
-      })}
+      {action.plan ? (
+        // plans.md: a plan answer is the «План» card (already saved); its lead above, «Отменить» below as usual.
+        <View style={{ gap: 10 }}>
+          {action.plan.lead ? <AppText variant="chat">{action.plan.lead}</AppText> : null}
+          <PlanCard plan={action.plan} testID={`plan-card-${m.id}`} />
+        </View>
+      ) : (
+        shown.map((c, i) => {
+          const page = pageByServer(c.pageServerId) ?? (i === 0 ? firstPage : null);
+          const place = page ? placeOfTemplate(page.templateKey) : 'stone';
+          const caption = page ? title(page) : (action.pageTitle ?? t('assistant.saved'));
+          return (
+            <ResultCard
+              key={`${c.itemId ?? 'x'}-${i}`}
+              testID={many ? `chat-action-row-${i}` : undefined}
+              place={place}
+              icon={PLACE_ICON[place]}
+              caption={c.title && c.text && c.text !== c.title && many ? `${caption} · ${c.text}` : caption}
+              title={c.title ?? c.text}
+              onPress={() => void open(c.itemId)}
+              style={c.undone || !done ? { opacity: 0.55 } : undefined}
+            />
+          );
+        })
+      )}
       {done ? (
         canUndo ? (
           <View style={[styles.row, { gap: 4, flexWrap: 'wrap', marginTop: 4 }]}>

@@ -234,6 +234,8 @@ export const OUTBOX_MIGRATIONS: readonly string[] = [
    ALTER TABLE records ADD COLUMN parse_later TEXT;`,
   // v11 (step 7): the «из ChatGPT» chip of an imported chat (`source_meta.tag`)
   `ALTER TABLE records ADD COLUMN tag TEXT;`,
+  // v12 (step 8): the inline edit of the assistant (items.md `assistant_edit`, Ф-73)
+  `ALTER TABLE records ADD COLUMN assistant_edit TEXT;`,
 ];
 
 type Row = {

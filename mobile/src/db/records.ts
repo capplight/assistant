@@ -1,4 +1,4 @@
-import type { ItemKind, ItemOut, ItemSource, ParseLaterOut, ReviewFieldOut } from '@/api/types';
+import type { AssistantEditOut, ItemKind, ItemOut, ItemSource, ParseLaterOut, ReviewFieldOut } from '@/api/types';
 
 import type { SqlDb } from './outbox';
 
@@ -69,6 +69,8 @@ export type LocalRecord = {
   parseLater?: ParseLaterOut | null;
   /** `source_meta.tag`: the chip «из ChatGPT» / «из Claude» / «из Gemini» of an imported chat (import.md). */
   tag?: string | null;
+  /** items.md «Inline edit» (Ф-73): what the assistant changed inside the record (24 h). */
+  assistantEdit?: AssistantEditOut | null;
 };
 
 export type NewRecord = Pick<LocalRecord, 'kind' | 'source'> &
@@ -149,6 +151,7 @@ function fromServer(item: ItemOut, now: number, base?: LocalRecord | null): Loca
     assistantActionId: item.assistant_action_id ?? null,
     parseLater: item.parse_later ?? null,
     tag: metaString(item.source_meta, 'tag'),
+    assistantEdit: item.assistant_edit ?? null,
   };
 }
 
@@ -328,6 +331,7 @@ type Row = {
   assistant_action_id?: string | null;
   parse_later?: string | null;
   tag?: string | null;
+  assistant_edit?: string | null;
 };
 
 const rowTo = (r: Row): LocalRecord => ({
@@ -358,12 +362,13 @@ const rowTo = (r: Row): LocalRecord => ({
   assistantActionId: r.assistant_action_id ?? null,
   parseLater: r.parse_later ? (JSON.parse(r.parse_later) as ParseLaterOut) : null,
   tag: r.tag ?? null,
+  assistantEdit: r.assistant_edit ? (JSON.parse(r.assistant_edit) as AssistantEditOut) : null,
 });
 
 const COLS =
   'id, server_id, kind, source, status, title, text, summary, url, files, page_id, review_fields, ai_generated, ' +
   'hidden_reason, canonical_id, error, pending, seq, occurred_at, created_at, updated_at, deleted_at, purge_after, ' +
-  'assistant_changed_at, assistant_action_id, parse_later, tag';
+  'assistant_changed_at, assistant_action_id, parse_later, tag, assistant_edit';
 
 export class SqliteRecordsRepository implements RecordsRepository {
   constructor(
@@ -378,7 +383,7 @@ export class SqliteRecordsRepository implements RecordsRepository {
 
   private async write(r: LocalRecord, mode: 'INSERT OR IGNORE' | 'INSERT OR REPLACE') {
     await this.db.runAsync(
-      `${mode} INTO records (${COLS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `${mode} INTO records (${COLS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       r.id,
       r.serverId,
       r.kind,
@@ -406,6 +411,7 @@ export class SqliteRecordsRepository implements RecordsRepository {
       r.assistantActionId ?? null,
       r.parseLater ? JSON.stringify(r.parseLater) : null,
       r.tag ?? null,
+      r.assistantEdit ? JSON.stringify(r.assistantEdit) : null,
     );
   }
 
