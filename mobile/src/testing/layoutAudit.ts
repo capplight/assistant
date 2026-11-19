@@ -10,7 +10,8 @@ import { Dimensions, PixelRatio, StyleSheet, type TextStyle, type ViewStyle } fr
  *                     except the label of a button or chip (`nativeID="v5-one-line"`): one line by design, the control
  *                     grows to its text and a row of them scrolls or stacks (QA v5-device-1 A6);
  * - `fixed-height`    a View with a fixed `height` / `maxHeight` around text (text grows, the box does not) — except
- *                     the v5 coloured sheet (`nativeID="v5-sheet"`), whose height is its measured content;
+ *                     the v5 coloured sheet (`nativeID="v5-sheet"`), whose height is its measured content, and the
+ *                     time wheel (`nativeID="v5-wheel"`): a snapping viewport whose rows grow with the (capped) font;
  * - `fixed-input`     a TextInput with a fixed `height`;
  * - `no-scale`        a Text that does not scale (`allowFontScaling={false}`, `maxFontSizeMultiplier` < 1.5)
  *                     unless hidden from screen readers (a drawn thumbnail) or allowed by the caller; v5 caps that
@@ -127,7 +128,7 @@ export function auditLayout(
     if (n.type === 'TextInput' && typeof style.height === 'number') push('fixed-input', id, `height ${style.height}`);
 
     const scroll = n.type === 'RCTScrollView' || n.type === 'ScrollView';
-    if (!scroll && !isHidden && n.props.nativeID !== 'v5-sheet' && hasText(n)) {
+    if (!scroll && !isHidden && n.props.nativeID !== 'v5-sheet' && n.props.nativeID !== 'v5-wheel' && hasText(n)) {
       if (typeof style.height === 'number') push('fixed-height', id, `height ${style.height}: ${textOf(n)}`);
       if (typeof style.maxHeight === 'number' && style.overflow !== 'visible') push('fixed-height', id, `maxHeight ${style.maxHeight}: ${textOf(n)}`);
     }

@@ -18,6 +18,7 @@ import { Button } from './ui/Button';
 import { Icon } from './ui/Icon';
 import { pressedStyle } from './ui/motion';
 import { LocalHitChips, SourceChips } from './SourceChips';
+import { answerBody } from './WebSources';
 import { useCurrentPage } from './useCurrentPage';
 
 /**
@@ -132,7 +133,7 @@ export function AnswerBanner() {
         <AppText numberOfLines={2}>{savedLine}</AppText>
       ) : message.text ? (
         <AppText testID="answer-text" numberOfLines={2}>
-          {message.text}
+          {answerBody(message)}
         </AppText>
       ) : null}
       {notice ? (

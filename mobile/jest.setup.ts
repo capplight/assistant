@@ -90,11 +90,24 @@ jest.mock('expo-audio', () => {
     record: jest.fn(),
     stop: jest.fn(async () => undefined),
   };
+  const player = {
+    playing: false,
+    play: jest.fn(function (this: { playing: boolean }) {
+      this.playing = true;
+    }),
+    pause: jest.fn(function (this: { playing: boolean }) {
+      this.playing = false;
+    }),
+    seekTo: jest.fn(async () => undefined),
+  };
   return {
     __esModule: true,
+    __player: player,
     AudioQuality: { MIN: 0, LOW: 32, MEDIUM: 64, HIGH: 96, MAX: 127 },
     IOSOutputFormat: { MPEG4AAC: 'aac ' },
     useAudioRecorder: () => recorder,
+    useAudioPlayer: () => player,
+    useAudioPlayerStatus: () => ({ playing: player.playing, currentTime: 0, duration: 14 }),
     useAudioRecorderState: () => ({ isRecording: false, durationMillis: 0, canRecord: true, metering: -20 }),
     requestRecordingPermissionsAsync: jest.fn(async () => ({ granted: true, status: 'granted', canAskAgain: true })),
     setAudioModeAsync: jest.fn(async () => undefined),

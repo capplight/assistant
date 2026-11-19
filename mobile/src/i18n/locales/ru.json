@@ -250,7 +250,12 @@
     "divider": "— на странице {{page}}, {{time}} —",
     "you": "Вы: {{text}}",
     "more": "Ещё",
-    "action_undone": "{{text}} — отменено"
+    "action_undone": "{{text}} — отменено",
+    "web_sources": "Источники",
+    "web_source_a11y": "Открыть {{site}}. {{title}}",
+    "shared_video": "видео по ссылке · вы поделились",
+    "shared_link": "ссылка · вы поделились",
+    "shared_text": "текст · вы поделились"
   },
   "today": {
     "hello": "Добрый день",
@@ -602,7 +607,12 @@
     "delete": "Удалить запись",
     "deleted": "Удалил запись",
     "back_answer": "Назад к ответу",
-    "processing_stuck": "Не получилось разобрать — откройте запись"
+    "processing_stuck": "Не получилось разобрать — откройте запись",
+    "voice_play": "Прослушать, {{time}}",
+    "voice_pause": "Пауза",
+    "open_photo": "Открыть фото",
+    "open_pdf": "Открыть {{name}}",
+    "pdf_meta": "PDF · {{size}} КБ"
   },
   "check": {
     "badge": "проверьте",
@@ -844,7 +854,16 @@
     "card_check": "Проверьте время",
     "card_done": "Готово",
     "card_change": "Изменить",
-    "card_understood": "Понял так · ляжет в «Дела» · {{kind}}"
+    "card_understood": "Понял так · ляжет в «Дела» · {{kind}}",
+    "wheel_hour": "Часы",
+    "wheel_minute": "Минуты",
+    "other_day": "Другой день",
+    "remind_more": "Напомнить ещё",
+    "cal_friday": "В пятницу",
+    "cal_week": "Через неделю",
+    "cal_prev": "Прошлый месяц",
+    "cal_next": "Следующий месяц",
+    "cal_done": "Готово · {{day}}"
   },
   "setup": {
     "title": "Чтобы будильник точно сработал",
@@ -1059,7 +1078,10 @@
     "err_consent_required": "Нужно согласие на перенос",
     "err_generic": "Попробуйте ещё раз",
     "err_not_saved_messages": "В файле нет «Избранного». Экспортируйте именно этот чат",
-    "err_running": "Перенос уже идёт — дождитесь конца"
+    "err_running": "Перенос уже идёт — дождитесь конца",
+    "moving": "Переношу…",
+    "count": "{{done}} из {{total}} заметок",
+    "can_close": "можно закрыть — продолжу сам"
   },
   "view": {
     "settings": "Настроить",
@@ -2290,7 +2312,9 @@
     "err_import_running": "Уже разбираю другой файл — подождите, пока закончу.",
     "undo_confirm_title": "Удалить импорт?",
     "undo_confirm_body": "Принесённые разговоры уйдут в корзину.",
-    "undo_keep": "Не удалять"
+    "undo_keep": "Не удалять",
+    "reading_name": "Разбираю {{name}}…",
+    "count": "{{done}} из {{total}} разговоров"
   },
   "ask": {
     "today": "Скажите или напишите…",

@@ -11,6 +11,7 @@ import type { ConsentTextOut, ImportOut } from '@/api/types';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/Screen';
+import { ProgressPlate, StepList } from '@/components/ui/Steps';
 import { Header } from '@/components/ui/Header';
 import {
   cancelImport,
@@ -61,12 +62,16 @@ const MEDIA_KEYS = new Set(['video', 'photo', 'sticker', 'voice', 'audio', 'file
  * cleanup of repeats as ONE «Да». The import itself has «Отменить перенос».
  * Not here (Full, weeks 24–25): «Войти в Telegram», «Переслать боту».
  */
+const fmtCount = (n: number) => n.toLocaleString('ru-RU').replace(/\u00a0|,/gu, ' ');
+
 export default function ImportScreen() {
   const theme = useTheme();
   const { t } = useTranslation();
   const showToast = useToast((s) => s.show);
   const online = useConnectivity((s) => s.online);
-  const { row, imports, cleanup } = useDedup(useShallow((s) => ({ row: s.importRow, imports: s.imports, cleanup: s.cleanup })));
+  const { row, imports, cleanup } = useDedup(
+    useShallow((s) => ({ row: s.importRow, imports: s.imports, cleanup: s.cleanup })),
+  );
   const imp: ImportOut | null = row?.importId ? (imports[row.importId] ?? null) : null;
   const [consent, setConsent] = useState<ConsentTextOut | null>(null);
   const [busy, setBusy] = useState(false);
@@ -102,7 +107,10 @@ export default function ImportScreen() {
       }
       await chooseFile();
     } catch (e) {
-      showToast(e instanceof ApiError && e.status === 404 ? t('import.consent_unavailable') : t('import.offline'), 4000);
+      showToast(
+        e instanceof ApiError && e.status === 404 ? t('import.consent_unavailable') : t('import.offline'),
+        4000,
+      );
     } finally {
       setBusy(false);
     }
@@ -135,7 +143,13 @@ export default function ImportScreen() {
 
   const errorText = (code: string | null) => t(`import.err_${code && ERRORS[code] ? ERRORS[code] : 'generic'}`);
 
-  const card = { borderColor: theme.colors.separator, backgroundColor: theme.colors.surface, borderRadius: theme.radius.lg, padding: theme.space[4], gap: theme.space[2] };
+  const card = {
+    borderColor: theme.colors.separator,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.lg,
+    padding: theme.space[4],
+    gap: theme.space[2],
+  };
 
   let body: React.ReactNode;
   if (row && !row.importId && !row.error) {
@@ -150,32 +164,37 @@ export default function ImportScreen() {
       <View testID="import-failed" style={[styles.card, card]} accessibilityLiveRegion="polite">
         <AppText variant="title2">{t('import.failed')}</AppText>
         <AppText>{errorText(row?.error ?? imp?.error ?? null)}</AppText>
-        <Button testID="import-again" label={t('import.again')} variant="secondary" onPress={() => useDedup.getState().set({ importRow: null })} />
+        <Button
+          testID="import-again"
+          label={t('import.again')}
+          variant="secondary"
+          onPress={() => useDedup.getState().set({ importRow: null })}
+        />
       </View>
     );
   } else if (imp && running) {
     body = (
-      <View testID="import-progress" style={[styles.card, card]} accessibilityLiveRegion="polite">
-        <AppText variant="title2">
-          {imp.total > 0 ? t('import.progress', { done: imp.processed, total: imp.total }) : t('import.reading')}
-        </AppText>
-        <Button testID="import-stop" label={t('import.stop')} variant="secondary" onPress={() => void cancelImport(imp.id)} />
-      </View>
+      // screens-v5-extra «Telegram · идёт перенос»: the paper2 plate, the percent, the bar in the text colour.
+      <ProgressPlate
+        testID="import-progress"
+        title={imp.total > 0 ? t('import.moving') : t('import.reading')}
+        share={imp.total > 0 ? imp.processed / imp.total : null}
+        count={imp.total > 0 ? t('import.count', { done: fmtCount(imp.processed), total: fmtCount(imp.total) }) : null}
+        note={t('import.can_close')}
+        stopLabel={t('import.stop')}
+        stopTestID="import-stop"
+        onStop={() => void cancelImport(imp.id)}
+      />
     );
   } else if (imp) {
     body = <Summary imp={imp} cleanupLive={!!liveCleanup(cleanup)} />;
   } else {
     body = (
       <View style={{ gap: theme.space[4] }}>
-        <View testID="import-tg" style={[styles.card, card]}>
-          <AppText variant="title2">{t('import.file_title')}</AppText>
-          <AppText>{t('import.file_hint')}</AppText>
-          <AppText variant="sectionLabel" accessibilityRole="header" style={{ marginTop: theme.space[2] }}>
-            {t('import.how')}
-          </AppText>
-          {[1, 2, 3, 4, 5].map((n) => (
-            <AppText key={n}>{`${n}. ${t(`import.step${n}`)}`}</AppText>
-          ))}
+        {/* screens-v5-extra «Telegram · как перенести»: the words, then the steps in circles, one action a row. */}
+        <View testID="import-tg">
+          <AppText variant="small">{t('import.file_hint')}</AppText>
+          <StepList testID="import-steps" steps={[1, 2, 3, 4].map((n) => ({ text: t(`import.step${n}`) }))} />
         </View>
         <Button testID="import-pick" label={t('import.pick')} disabled={busy} onPress={() => void pick()} />
         <AppText variant="callout">{t('import.again_hint')}</AppText>
@@ -186,7 +205,14 @@ export default function ImportScreen() {
   return (
     // screens-v5-extra «Telegram · …»: a stone second-level screen, the sheet collapsed «‹ Ещё · Из Telegram».
     <Screen testID="page-import" mode="strip">
-      <Header title={t('import.title')} back={{ onPress: () => (router.canGoBack() ? router.back() : router.replace('/')), label: t('more.title'), testID: 'import-back' }} />
+      <Header
+        title={t('import.title')}
+        back={{
+          onPress: () => (router.canGoBack() ? router.back() : router.replace('/')),
+          label: t('more.title'),
+          testID: 'import-back',
+        }}
+      />
       <AppText variant="title1" accessibilityRole="header" style={{ marginBottom: theme.space[2] }}>
         {t('import.tg_section')}
       </AppText>
@@ -196,7 +222,12 @@ export default function ImportScreen() {
           <SafeAreaView
             edges={['bottom']}
             testID="import-consent"
-            style={{ backgroundColor: theme.colors.surface, borderTopLeftRadius: theme.radius.sheet, borderTopRightRadius: theme.radius.sheet, maxHeight: '90%' }}
+            style={{
+              backgroundColor: theme.colors.surface,
+              borderTopLeftRadius: theme.radius.sheet,
+              borderTopRightRadius: theme.radius.sheet,
+              maxHeight: '90%',
+            }}
           >
             <ScrollView contentContainerStyle={{ padding: theme.space[5], gap: theme.space[3] }}>
               <AppText variant="title2" accessibilityRole="header">
@@ -205,7 +236,12 @@ export default function ImportScreen() {
               <AppText testID="import-consent-text">{consent?.text ?? ''}</AppText>
               {/* Both answers equally visible: consent must be free. */}
               <Button testID="import-consent-yes" label={t('import.consent_yes')} onPress={() => void agree()} />
-              <Button testID="import-consent-no" label={t('import.consent_no')} variant="secondary" onPress={() => setConsent(null)} />
+              <Button
+                testID="import-consent-no"
+                label={t('import.consent_no')}
+                variant="secondary"
+                onPress={() => setConsent(null)}
+              />
             </ScrollView>
           </SafeAreaView>
         </View>
@@ -221,7 +257,13 @@ function Summary({ imp, cleanupLive }: { imp: ImportOut; cleanupLive: boolean })
   const cleanup = useDedup((s) => s.cleanup);
   const preview = cleanupLive ? cleanupPreview(cleanup) : null;
   const media = Object.entries(imp.skipped_media);
-  const card = { borderColor: theme.colors.separator, backgroundColor: theme.colors.surface, borderRadius: theme.radius.lg, padding: theme.space[4], gap: theme.space[2] };
+  const card = {
+    borderColor: theme.colors.separator,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.lg,
+    padding: theme.space[4],
+    gap: theme.space[2],
+  };
   return (
     <View style={{ gap: theme.space[4] }}>
       <View testID="import-summary" style={[styles.card, card]} accessibilityLiveRegion="polite">
@@ -246,19 +288,40 @@ function Summary({ imp, cleanupLive }: { imp: ImportOut; cleanupLive: boolean })
           <AppText variant="title2">{t('import.cleanup', { count: preview.removed })}</AppText>
           <AppText>{t('dup.batch_detail', { removed: preview.removed, after: preview.after })}</AppText>
           <Button testID="import-cleanup-yes" label={t('dup.batch_yes')} onPress={() => void confirmCleanup()} />
-          <Button testID="import-cleanup-no" label={t('common.not_now')} variant="secondary" onPress={() => void rejectCleanup()} />
+          <Button
+            testID="import-cleanup-no"
+            label={t('common.not_now')}
+            variant="secondary"
+            onPress={() => void rejectCleanup()}
+          />
         </View>
       ) : null}
       {imp.similar_groups > 0 ? (
         <View style={[styles.card, card]}>
           <AppText>{t('import.similar', { count: imp.similar_groups })}</AppText>
-          <Button testID="import-similar" label={t('dup.look')} accessibilityLabel={t('dup.look_a11y')} variant="secondary" onPress={() => router.push('/duplicates')} />
+          <Button
+            testID="import-similar"
+            label={t('dup.look')}
+            accessibilityLabel={t('dup.look_a11y')}
+            variant="secondary"
+            onPress={() => router.push('/duplicates')}
+          />
         </View>
       ) : null}
       {imp.action_id ? (
-        <Button testID="import-undo" label={t('import.undo_import')} variant="text" onPress={() => void undoImport(imp)} />
+        <Button
+          testID="import-undo"
+          label={t('import.undo_import')}
+          variant="text"
+          onPress={() => void undoImport(imp)}
+        />
       ) : null}
-      <Button testID="import-again" label={t('import.again')} variant="secondary" onPress={() => useDedup.getState().set({ importRow: null })} />
+      <Button
+        testID="import-again"
+        label={t('import.again')}
+        variant="secondary"
+        onPress={() => useDedup.getState().set({ importRow: null })}
+      />
       <AppText variant="callout">{t('import.again_hint')}</AppText>
     </View>
   );

@@ -16,6 +16,7 @@ import { getRecordActions, refreshRecord } from '@/services';
 import { useUndo } from '@/store/undo';
 import { useView } from '@/store/view';
 import { SimilarNote } from '@/components/SimilarNote';
+import { RecordPreview, VoicePlayer } from '@/components/RecordMedia';
 import { ChangedPlate } from '@/components/ChangedMark';
 import { MAX_FONT_SCALE, placeOfTemplate, useTheme } from '@/theme';
 import { usePageLabels } from '@/pages/usePageLabels';
@@ -74,7 +75,12 @@ export default function RecordScreen() {
   const backLabel = ret ? t('record.back_answer') : fromPage ? pageLabel(fromPage) : t('common.back');
   const sheet = <Header title="" back={{ onPress: back, label: backLabel, testID: 'record-back' }} />;
 
-  if (record === undefined) return <Screen testID="record-loading" edges={['top']}>{null}</Screen>;
+  if (record === undefined)
+    return (
+      <Screen testID="record-loading" edges={['top']}>
+        {null}
+      </Screen>
+    );
   const closeSheet = () => {
     setAsking(null);
     setFixing(null);
@@ -104,9 +110,12 @@ export default function RecordScreen() {
       <AppText variant="title1" accessibilityRole="header" style={{ marginBottom: 4, fontSize: 26, lineHeight: 31 }}>
         {title}
       </AppText>
+      {/* screens-v5-extra «Запись · скриншот»: the photo / the PDF on top; «Запись · голосовая»: the player. */}
+      <RecordPreview files={record.files} kind={record.kind} />
       <AppText variant="footnote" style={{ marginBottom: theme.space[1] }}>
         {sourceLine(record, i18n.language, t)}
       </AppText>
+      {record.kind === 'voice' ? <VoicePlayer files={record.files} /> : null}
       {status ? (
         <AppText testID="record-status" variant="callout" style={{ marginBottom: theme.space[1] }}>
           {status}
@@ -166,13 +175,27 @@ export default function RecordScreen() {
               onPress={() => setAsking(row)}
               // screens-v5-extra «Запись · голосовая»: «Что я понял» as rows; a doubtful value is underlined with a dashed
               // line and «проверьте» — a request, not an error (no red, no terracotta).
-              style={{ minHeight: theme.m.row, paddingVertical: 8, borderTopWidth: 1, borderTopColor: theme.colors.line, gap: 2 }}
+              style={{
+                minHeight: theme.m.row,
+                paddingVertical: 8,
+                borderTopWidth: 1,
+                borderTopColor: theme.colors.line,
+                gap: 2,
+              }}
             >
               <AppText variant="footnote">{fieldLabel(row.kind)}</AppText>
               <View style={[styles.mark, { gap: 8 }]}>
                 <AppText
                   variant="number"
-                  style={row.verified ? null : { textDecorationLine: 'underline', textDecorationStyle: 'dashed', textDecorationColor: theme.colors.ink3 }}
+                  style={
+                    row.verified
+                      ? null
+                      : {
+                          textDecorationLine: 'underline',
+                          textDecorationStyle: 'dashed',
+                          textDecorationColor: theme.colors.ink3,
+                        }
+                  }
                 >
                   {row.value ?? ''}
                 </AppText>
@@ -214,74 +237,76 @@ export default function RecordScreen() {
 
       {asking ? (
         <Sheet visible testID="check-sheet" closeButton={false} onClose={closeSheet}>
-              <AppText variant="footnote">{fieldLabel(asking.kind)}</AppText>
-              {fixing === null ? (
-                <>
-                  {/* screens-v5-extra «Проверьте значение»: the value itself, large, then the question. */}
-                  {asking.value ? <AppText style={[theme.type.title, { fontVariant: ['tabular-nums'] }]}>{asking.value}</AppText> : null}
-                  <AppText variant="title2" accessibilityRole="header">
-                    {t('check.confirm', { value: asking.value ?? '' })}
-                  </AppText>
-                  <Button
-                    testID="check-ok"
-                    label={t('check.ok')}
-                    onPress={() => {
-                      const key = asking.key;
-                      closeSheet();
-                      void getRecordActions().then((a) => a.verify(record.id, key));
-                    }}
-                  />
-                  {asking.value !== null && asking.kind !== 'transcript' ? (
-                    <Button
-                      testID="check-fix"
-                      label={t('check.fix')}
-                      variant="text"
-                      onPress={() => setFixing(asking.value ?? '')}
-                    />
-                  ) : null}
-                  <Button testID="check-close" label={t('common.close')} variant="text" onPress={closeSheet} />
-                </>
-              ) : (
-                <>
-                  <AppText variant="title2" accessibilityRole="header">
-                    {t('check.fix_title')}
-                  </AppText>
-                  <TextInput
-                    testID="check-fix-input"
-                    accessibilityLabel={fieldLabel(asking.kind)}
-                    autoFocus
-                    value={fixing}
-                    onChangeText={setFixing}
-                    maxLength={MAX_FIX}
-                    keyboardType={NUMERIC_FIELDS.has(asking.kind) ? 'phone-pad' : 'default'}
-                    maxFontSizeMultiplier={MAX_FONT_SCALE}
-                    style={[
-                      theme.type.body,
-                      {
-                        minHeight: theme.size.buttonHeight,
-                        borderRadius: 16,
-                        borderWidth: 1.5,
-                        borderColor: theme.colors.ink,
-                        paddingHorizontal: theme.space[4],
-                        color: theme.colors.ink,
-                        backgroundColor: theme.colors.paper,
-                      },
-                    ]}
-                  />
-                  <Button
-                    testID="check-fix-save"
-                    label={t('check.save')}
-                    disabled={!fixing.trim()}
-                    onPress={() => {
-                      const { key } = asking;
-                      const value = fixing;
-                      closeSheet();
-                      void getRecordActions().then((a) => a.correct(record.id, key, value));
-                    }}
-                  />
-                  <Button testID="check-fix-cancel" label={t('check.cancel')} variant="text" onPress={closeSheet} />
-                </>
-              )}
+          <AppText variant="footnote">{fieldLabel(asking.kind)}</AppText>
+          {fixing === null ? (
+            <>
+              {/* screens-v5-extra «Проверьте значение»: the value itself, large, then the question. */}
+              {asking.value ? (
+                <AppText style={[theme.type.title, { fontVariant: ['tabular-nums'] }]}>{asking.value}</AppText>
+              ) : null}
+              <AppText variant="title2" accessibilityRole="header">
+                {t('check.confirm', { value: asking.value ?? '' })}
+              </AppText>
+              <Button
+                testID="check-ok"
+                label={t('check.ok')}
+                onPress={() => {
+                  const key = asking.key;
+                  closeSheet();
+                  void getRecordActions().then((a) => a.verify(record.id, key));
+                }}
+              />
+              {asking.value !== null && asking.kind !== 'transcript' ? (
+                <Button
+                  testID="check-fix"
+                  label={t('check.fix')}
+                  variant="text"
+                  onPress={() => setFixing(asking.value ?? '')}
+                />
+              ) : null}
+              <Button testID="check-close" label={t('common.close')} variant="text" onPress={closeSheet} />
+            </>
+          ) : (
+            <>
+              <AppText variant="title2" accessibilityRole="header">
+                {t('check.fix_title')}
+              </AppText>
+              <TextInput
+                testID="check-fix-input"
+                accessibilityLabel={fieldLabel(asking.kind)}
+                autoFocus
+                value={fixing}
+                onChangeText={setFixing}
+                maxLength={MAX_FIX}
+                keyboardType={NUMERIC_FIELDS.has(asking.kind) ? 'phone-pad' : 'default'}
+                maxFontSizeMultiplier={MAX_FONT_SCALE}
+                style={[
+                  theme.type.body,
+                  {
+                    minHeight: theme.size.buttonHeight,
+                    borderRadius: 16,
+                    borderWidth: 1.5,
+                    borderColor: theme.colors.ink,
+                    paddingHorizontal: theme.space[4],
+                    color: theme.colors.ink,
+                    backgroundColor: theme.colors.paper,
+                  },
+                ]}
+              />
+              <Button
+                testID="check-fix-save"
+                label={t('check.save')}
+                disabled={!fixing.trim()}
+                onPress={() => {
+                  const { key } = asking;
+                  const value = fixing;
+                  closeSheet();
+                  void getRecordActions().then((a) => a.correct(record.id, key, value));
+                }}
+              />
+              <Button testID="check-fix-cancel" label={t('check.cancel')} variant="text" onPress={closeSheet} />
+            </>
+          )}
         </Sheet>
       ) : null}
     </Screen>

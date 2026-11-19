@@ -1,8 +1,10 @@
+import { router } from 'expo-router';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { ShareIntentProvider, useShareIntentContext } from 'expo-share-intent';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { addSharedTurn } from '@/chat/service';
 import { getCapture } from '@/services';
 import { useToast } from '@/store/toast';
 
@@ -26,9 +28,14 @@ function ShareIntentSaver() {
       try {
         const capture = await getCapture();
         const saved = await saveSharedContent(capture, shareIntent);
-        if (saved.length > 0) show(t('saved'));
         // Week 13: one PDF or picture — a receipt, a statement or just a file? The person says.
         const ask = askFor(saved);
+        const one = saved.length === 1 ? saved[0]! : null;
+        if (!ask && one && one.files.length === 0) {
+          // screens-v5-extra «Поделились ссылкой»: a link or a text opens «Помощник» with it as a card.
+          addSharedTurn(one);
+          router.navigate('/assistant');
+        } else if (saved.length > 0) show(t('saved'));
         if (ask) useShareAsk.getState().set(ask);
       } catch (e) {
         console.warn('share save failed', e);

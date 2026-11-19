@@ -2,22 +2,30 @@ import { router } from 'expo-router';
 import { FileUp } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { ImportOut } from '@/api/types';
 import { AppText } from '@/components/AppText';
 import { Screen } from '@/components/Screen';
-import { ProgressBar } from '@/components/ui/Brief';
+import { ProgressPlate, StepList } from '@/components/ui/Steps';
+import { Chip } from '@/components/ui/Chip';
 import { Button } from '@/components/ui/Button';
 import { CompactConfirm } from '@/components/ui/Floating';
-import { BigNumber } from '@/components/ui/Leaf';
-import { Card, cardEdge } from '@/components/ui/Card';
+import { BigNumber, ChipRow } from '@/components/ui/Leaf';
+import { Card } from '@/components/ui/Card';
 import { Header } from '@/components/ui/Header';
 import { Icon } from '@/components/ui/Icon';
-import { pressedStyle } from '@/components/ui/motion';
 import { pickExportFile } from '@/dedup/pickFile';
-import { AI_IMPORT_MAX_BYTES, cancelImport, importRunning, isAiExportFile, pollImport, startAiImport, undoImport } from '@/dedup/service';
+import {
+  AI_IMPORT_MAX_BYTES,
+  cancelImport,
+  importRunning,
+  isAiExportFile,
+  pollImport,
+  startAiImport,
+  undoImport,
+} from '@/dedup/service';
 import { useDedup } from '@/dedup/store';
 import { syncBlocked } from '@/services';
 import { useConnectivity } from '@/store/connectivity';
@@ -33,7 +41,15 @@ const PROVIDERS: Provider[] = ['chatgpt', 'claude', 'gemini'];
 const NAMES: Record<string, string> = { chatgpt: 'ChatGPT', claude: 'Claude', gemini: 'Gemini' };
 
 /** import.md step 7 error codes → the line shown. */
-const ERRORS = new Set(['import_bad_file', 'import_no_chats_file', 'import_unknown_format', 'import_too_large', 'import_file_missing', 'import_not_chats_file', 'import_running']);
+const ERRORS = new Set([
+  'import_bad_file',
+  'import_no_chats_file',
+  'import_unknown_format',
+  'import_too_large',
+  'import_file_missing',
+  'import_not_chats_file',
+  'import_running',
+]);
 
 /**
  * «Принести переписку» (v4, design-system §10.7, import.md step 7): the person's own chats with ChatGPT, Claude or
@@ -87,7 +103,6 @@ export default function AiImportScreen() {
 
   const errorText = (code: string | null) => t(code && ERRORS.has(code) ? `aiimp.err_${code}` : 'import.err_generic');
   const name = imp?.provider ? (NAMES[imp.provider] ?? imp.provider) : null;
-  const percent = imp && imp.total > 0 ? Math.round((imp.processed / imp.total) * 100) : 0;
 
   let status: React.ReactNode = null;
   if (row && !row.importId && !row.error) {
@@ -102,21 +117,27 @@ export default function AiImportScreen() {
       <Card testID="aiimp-failed">
         <AppText variant="headline">{t('import.failed')}</AppText>
         <AppText testID="aiimp-error">{errorText(row?.error ?? imp?.error ?? null)}</AppText>
-        <Button testID="aiimp-again" label={t('import.again')} variant="secondary" onPress={() => useDedup.getState().set({ aiImportRow: null })} />
+        <Button
+          testID="aiimp-again"
+          label={t('import.again')}
+          variant="secondary"
+          onPress={() => useDedup.getState().set({ aiImportRow: null })}
+        />
       </Card>
     );
   } else if (imp && running) {
     status = (
-      <Card testID="aiimp-progress">
-        <AppText variant="headline" accessibilityLiveRegion="polite">
-          {imp.total > 0
-            ? t('aiimp.progress', { name: name ?? t('aiimp.chats'), done: imp.processed, total: imp.total })
-            : t('import.reading')}
-        </AppText>
-        {imp.total > 0 ? <ProgressBar testID="aiimp-bar" value={imp.processed / imp.total} color={theme.colors.brand} /> : null}
-        <AppText variant="footnote">{t('aiimp.can_close', { percent })}</AppText>
-        <Button testID="aiimp-stop" label={t('import.stop')} variant="text" onPress={() => void cancelImport(imp.id)} />
-      </Card>
+      <ProgressPlate
+        testID="aiimp-progress"
+        barTestID="aiimp-bar"
+        title={imp.total > 0 ? t('aiimp.reading_name', { name: name ?? t('aiimp.chats') }) : t('import.reading')}
+        share={imp.total > 0 ? imp.processed / imp.total : null}
+        count={imp.total > 0 ? t('aiimp.count', { done: imp.processed, total: imp.total }) : null}
+        note={t('import.can_close')}
+        stopLabel={t('import.stop')}
+        stopTestID="aiimp-stop"
+        onStop={() => void cancelImport(imp.id)}
+      />
     );
   } else if (imp) {
     status = (
@@ -124,12 +145,25 @@ export default function AiImportScreen() {
       <View testID="aiimp-done" style={{ gap: theme.space[2] }}>
         <BigNumber value={String(imp.conversations ?? imp.created_count ?? 0)} />
         <AppText variant="small">{t('aiimp.done_title')}</AppText>
-        <AppText testID="aiimp-summary">{imp.summary_ru ?? t('aiimp.done', { count: imp.conversations ?? imp.created_count, name: name ?? '' })}</AppText>
+        <AppText testID="aiimp-summary">
+          {imp.summary_ru ?? t('aiimp.done', { count: imp.conversations ?? imp.created_count, name: name ?? '' })}
+        </AppText>
         <View style={[styles.row, { gap: theme.space[2], flexWrap: 'wrap' }]}>
-          <Button testID="aiimp-open" label={t('aiimp.open_chats')} size="small" onPress={() => router.navigate('/ai-chats')} />
+          <Button
+            testID="aiimp-open"
+            label={t('aiimp.open_chats')}
+            size="small"
+            onPress={() => router.navigate('/ai-chats')}
+          />
           {imp.action_id ? (
             // screens-v5-extra «Переписки · готово»: «Удалить импорт» asks once, compactly (the chats go to the trash).
-            <Button testID="aiimp-undo" label={t('aiimp.undo')} variant="link" size="small" onPress={() => setAskUndo(true)} />
+            <Button
+              testID="aiimp-undo"
+              label={t('aiimp.undo')}
+              variant="link"
+              size="small"
+              onPress={() => setAskUndo(true)}
+            />
           ) : null}
         </View>
       </View>
@@ -138,68 +172,61 @@ export default function AiImportScreen() {
 
   return (
     <Screen testID="page-ai-import" mode="strip">
-      <Header title={t('aiimp.title')} meta={t('aiimp.meta')} back={{ onPress: () => (router.canGoBack() ? router.back() : router.replace('/more')), label: t('more.title'), testID: 'aiimp-back' }} />
+      <Header
+        title={t('aiimp.title')}
+        meta={t('aiimp.meta')}
+        back={{
+          onPress: () => (router.canGoBack() ? router.back() : router.replace('/more')),
+          label: t('more.title'),
+          testID: 'aiimp-back',
+        }}
+      />
       <View style={{ gap: theme.space[4] }}>
-        {/* One row of three; at a large font one under another (each tile whole). */}
-        <View accessibilityRole="radiogroup" style={[theme.largeFont ? null : styles.row, { gap: theme.space[2] }]}>
-          {PROVIDERS.map((p) => {
-            const on = provider === p;
-            return (
-              <Pressable
-                key={p}
-                testID={`aiimp-provider-${p}`}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: on }}
-                onPress={() => setProvider(p)}
-                style={({ pressed }) => [
-                  styles.tile,
-                  theme.largeFont ? null : styles.flex,
-                  {
-                    backgroundColor: on ? theme.colors.brandTint : theme.colors.surface,
-                    borderRadius: theme.radius.xl,
-                    padding: theme.space[3],
-                    borderWidth: on ? 2 : 0,
-                    borderColor: theme.colors.brand,
-                  },
-                  on ? null : [theme.elevation.card, cardEdge(theme)],
-                  pressedStyle(pressed),
-                ]}
-              >
-                <AppText variant="headline">{NAMES[p]}</AppText>
-                <AppText variant="footnote">{t(`aiimp.file_${p}`)}</AppText>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        <Card testID="aiimp-how">
-          <AppText variant="sectionLabel" accessibilityRole="header">
-            {t('aiimp.how', { name: NAMES[provider] })}
-          </AppText>
-          {[1, 2, 3].map((n) => (
-            <View key={n} style={[styles.row, { gap: theme.space[3], alignItems: 'flex-start' }]}>
-              <View style={[styles.num, { backgroundColor: theme.colors.brandTint, borderRadius: 12 }]}>
-                <AppText variant="caption" color="brand">
-                  {n}
-                </AppText>
-              </View>
-              <View style={styles.flex}>
-                <AppText>{t(`aiimp.${provider}_step${n}`)}</AppText>
-                <AppText variant="footnote">{t(`aiimp.${provider}_step${n}_hint`)}</AppText>
-              </View>
-            </View>
+        <ChipRow>
+          {PROVIDERS.map((p) => (
+            <Chip
+              key={p}
+              testID={`aiimp-provider-${p}`}
+              label={NAMES[p] ?? p}
+              variant={provider === p ? 'selected' : 'neutral'}
+              accessibilityLabel={`${NAMES[p]}. ${t(`aiimp.file_${p}`)}`}
+              onPress={() => setProvider(p)}
+            />
           ))}
-        </Card>
+        </ChipRow>
+
+        {/* screens-v5-extra «Переписки · принести архив»: the source a chip, the steps in circles under it. */}
+        <View testID="aiimp-how" accessibilityLabel={t('aiimp.how', { name: NAMES[provider] })}>
+          <AppText style={styles.srOnly}>{t('aiimp.how', { name: NAMES[provider] })}</AppText>
+          <StepList
+            testID="aiimp-steps"
+            steps={[1, 2, 3].map((n) => ({
+              text: t(`aiimp.${provider}_step${n}`),
+              hint: t(`aiimp.${provider}_step${n}_hint`),
+            }))}
+          />
+        </View>
 
         {status}
 
         {!row || row.error || (imp && !running) ? (
-          <Button testID="aiimp-pick" label={t('aiimp.pick')} icon={<Icon icon={FileUp} size="sm" color="onBrand" />} disabled={busy} onPress={() => void pick()} />
+          <Button
+            testID="aiimp-pick"
+            label={t('aiimp.pick')}
+            icon={<Icon icon={FileUp} size="sm" color="onBrand" />}
+            disabled={busy}
+            onPress={() => void pick()}
+          />
         ) : null}
         <AppText variant="footnote" color="ink2">
           {t('aiimp.private')}
         </AppText>
-        <Button testID="aiimp-telegram" label={t('aiimp.telegram')} variant="text" onPress={() => router.push('/import')} />
+        <Button
+          testID="aiimp-telegram"
+          label={t('aiimp.telegram')}
+          variant="text"
+          onPress={() => router.push('/import')}
+        />
       </View>
       <CompactConfirm
         visible={askUndo && !!imp}
@@ -218,6 +245,7 @@ export default function AiImportScreen() {
 }
 
 const styles = StyleSheet.create({
+  srOnly: { position: 'absolute', width: 1, height: 1, opacity: 0 },
   row: { flexDirection: 'row', alignItems: 'center' },
   flex: { flex: 1 },
   tile: { gap: 2, minHeight: 72 },

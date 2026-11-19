@@ -832,10 +832,14 @@ export type AnswerReadyPushData = { type: 'chat_reply'; reply_id: string | null 
 export type PendingBannerOut = { message: ChatMessageOut | null };
 
 /** SSE events of one reply, decoded (unknown events are dropped by the decoder). `eventId` = SSE `id:`. */
+export type WebSourceOut = { url: string; title: string | null };
+
 export type ChatEvent = (
   | { type: 'accepted'; messageId: string | null; replyId: string | null }
   | { type: 'status'; text: string }
   | { type: 'sources'; sources: ChatSourceOut[] }
+  /** Ф-87 (chat.md): pages a web search returned for this answer; the text also ends with «Источники: …». */
+  | { type: 'web_sources'; sources: WebSourceOut[] }
   | { type: 'token'; text: string }
   | { type: 'citations'; citations: ChatCitationOut[] }
   | { type: 'checked'; ok: boolean; removed: number }

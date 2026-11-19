@@ -204,6 +204,9 @@ function apply(answerId: string, e: ChatEvent): void {
         return { sources: [...(m.sources ?? []), ...e.sources.filter((s) => !have.has(s.ref)).map(fromSource)] };
       });
       return;
+    case 'web_sources':
+      updateMessage(answerId, { webSources: e.sources });
+      return;
     case 'token':
       updateMessage(answerId, (m) => ({ text: m.text + e.text, activity: null }));
       return;
@@ -625,7 +628,12 @@ async function saveInstead(answerId: string, question: ChatMessage): Promise<voi
   });
 }
 
-function addLocalTurn(text: string, page: AskPage, reply: Partial<ChatMessage>): string {
+function addLocalTurn(
+  text: string,
+  page: AskPage,
+  reply: Partial<ChatMessage>,
+  ask: Partial<ChatMessage> = {},
+): string {
   const now = Date.now();
   const question: ChatMessage = {
     id: newId(),
@@ -634,6 +642,7 @@ function addLocalTurn(text: string, page: AskPage, reply: Partial<ChatMessage>):
     pageId: page.id,
     pageTitle: page.title,
     at: new Date(now).toISOString(),
+    ...ask,
   };
   const answer: ChatMessage = {
     id: newId(),
@@ -758,6 +767,29 @@ export async function sendFromLine(text: string, page: AskPage): Promise<LineRes
   if (guess === 'action' && !chatAllowed()) return local('offline_action');
   void ask(text, page, { guess });
   return 'asked';
+}
+
+const VIDEO_URL = /(youtube\.com|youtu\.be|tiktok\.com|instagram\.com\/(reel|p)\/|vk\.com\/video|rutube\.ru)/iu;
+
+/**
+ * screens-v5-extra «Поделились ссылкой»: what came by «Поделиться» is a turn of the conversation — on the right as
+ * the person's card («видео по ссылке · вы поделились»), the saved line under it. The record is already saved.
+ */
+export function addSharedTurn(rec: {
+  id: string;
+  url: string | null;
+  title: string | null;
+  text: string | null;
+}): string {
+  const url = rec.url ?? null;
+  const kind = url ? (VIDEO_URL.test(url) ? 'video' : 'link') : 'text';
+  const title = ((rec.title ?? rec.text ?? url ?? '').split(/\r?\n/u)[0] ?? '').slice(0, 140);
+  return addLocalTurn(
+    title,
+    { id: 'assistant', title: i18n.t('tabs.assistant'), serverId: null },
+    { saved: true, text: i18n.t('line.saved') },
+    { shared: { kind, recordId: rec.id, url } },
+  );
 }
 
 /** «Спросить ещё раз»: resumes the same reply, or a new turn when the server asked for one. */

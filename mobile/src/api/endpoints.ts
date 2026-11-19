@@ -238,7 +238,9 @@ function sourceOut(v: unknown): ChatSourceOut | null {
     occurred_at: str(o.occurred_at),
     created_at: str(o.created_at),
     page: pageRef(o.page),
-    pages: arr(o.pages).map(pageRef).filter((x): x is ChatPageRef => x !== null),
+    pages: arr(o.pages)
+      .map(pageRef)
+      .filter((x): x is ChatPageRef => x !== null),
   };
 }
 
@@ -257,7 +259,10 @@ function citationOut(v: unknown): ChatCitationOut | null {
   };
 }
 
-const citations = (v: unknown) => arr(v).map(citationOut).filter((x): x is ChatCitationOut => x !== null);
+const citations = (v: unknown) =>
+  arr(v)
+    .map(citationOut)
+    .filter((x): x is ChatCitationOut => x !== null);
 
 /** ChatMessage of docs/api/chat.md → ChatMessageOut; null when it is not one. */
 export function chatMessageOut(v: unknown): ChatMessageOut | null {
@@ -291,7 +296,10 @@ export function chatMessageOut(v: unknown): ChatMessageOut | null {
 
 // --- week 6: Action (actions.md), PagePatch and Proposal (chat.md) ---
 
-const strs = (v: unknown): string[] => arr(v).map(str).filter((x): x is string => x !== null);
+const strs = (v: unknown): string[] =>
+  arr(v)
+    .map(str)
+    .filter((x): x is string => x !== null);
 
 function changeOut(v: unknown): ActionChangeOut | null {
   const o = obj(v);
@@ -323,7 +331,9 @@ export function actionOut(v: unknown): ActionOut | null {
     kind: str(o.kind) ?? 'action',
     summary: { ru, kk: summary ? str(summary.kk) : null },
     page: pageRef(o.page),
-    changes: arr(o.changes).map(changeOut).filter((x): x is ActionChangeOut => x !== null),
+    changes: arr(o.changes)
+      .map(changeOut)
+      .filter((x): x is ActionChangeOut => x !== null),
     changed_item_ids: strs(o.changed_item_ids),
     created_page_id: str(o.created_page_id),
     undoable: o.undoable === true,
@@ -339,7 +349,17 @@ export function actionOut(v: unknown): ActionOut | null {
     saved_to: arr(o.saved_to).flatMap((x) => {
       const s = obj(x);
       const pid = s && str(s.page_id);
-      return s && pid ? [{ page_id: pid, title: str(s.title) ?? '', icon: str(s.icon), template_key: str(s.template_key), item_ids: strs(s.item_ids) }] : [];
+      return s && pid
+        ? [
+            {
+              page_id: pid,
+              title: str(s.title) ?? '',
+              icon: str(s.icon),
+              template_key: str(s.template_key),
+              item_ids: strs(s.item_ids),
+            },
+          ]
+        : [];
     }),
     notice: noticeOut(o.notice),
     parsed_later: o.parsed_later === true,
@@ -374,7 +394,10 @@ function briefOut(v: unknown): BriefOut | null {
   return {
     part,
     headline: { ru, kk: str(head.kk) },
-    lines: { ru: lines ? strs(lines.ru).slice(0, 3) : [], kk: lines && Array.isArray(lines.kk) ? strs(lines.kk).slice(0, 3) : null },
+    lines: {
+      ru: lines ? strs(lines.ru).slice(0, 3) : [],
+      kk: lines && Array.isArray(lines.kk) ? strs(lines.kk).slice(0, 3) : null,
+    },
   };
 }
 
@@ -445,7 +468,9 @@ export function pagePatchOut(v: unknown): PagePatchOut | null {
     page_id: pageId,
     view_version: Number(d.view_version) || 0,
     view_state: vs ? { ...vs, ...(groups ? { groups } : {}) } : null,
-    rows: arr(d.rows).map(linkOut).filter((x): x is PageItemOut => x !== null),
+    rows: arr(d.rows)
+      .map(linkOut)
+      .filter((x): x is PageItemOut => x !== null),
     removed_item_ids: strs(d.removed_item_ids),
     ...(layout ? { layout } : {}),
     ...(Array.isArray(pv.field_prefs) ? { field_prefs: fieldPrefsOf(pv.field_prefs) } : {}),
@@ -460,7 +485,15 @@ export function itemFacetsOf(v: unknown): ItemFacetOut[] {
     const pageId = o && str(o.page_id);
     const itemId = o && str(o.item_id);
     if (!o || !pageId || !itemId) return [];
-    return [{ id: str(o.id) ?? `${pageId}|${itemId}`, page_id: pageId, item_id: itemId, data: obj(o.data) ?? {}, seq: num(o.seq) }];
+    return [
+      {
+        id: str(o.id) ?? `${pageId}|${itemId}`,
+        page_id: pageId,
+        item_id: itemId,
+        data: obj(o.data) ?? {},
+        seq: num(o.seq),
+      },
+    ];
   });
 }
 
@@ -495,7 +528,19 @@ export function customFieldsOf(v: unknown): CustomFieldOut[] {
   });
 }
 
-const FIELD_TYPES = new Set<string>(['text', 'long_text', 'number', 'money', 'date', 'datetime', 'enum', 'tags', 'bool', 'person', 'link']);
+const FIELD_TYPES = new Set<string>([
+  'text',
+  'long_text',
+  'number',
+  'money',
+  'date',
+  'datetime',
+  'enum',
+  'tags',
+  'bool',
+  'person',
+  'link',
+]);
 
 function i18nText(v: unknown): { ru: string; kk: string | null } | null {
   const o = obj(v);
@@ -531,7 +576,9 @@ export function pageTemplateOut(v: unknown): PageTemplateOut | null {
     title: i18nText(o.title) ?? { ru: key, kk: null },
     icon: str(o.icon) ?? 'other',
     singleton: o.singleton !== false,
-    fields: arr(o.fields).map(templateFieldOut).filter((x): x is TemplateFieldOut => x !== null),
+    fields: arr(o.fields)
+      .map(templateFieldOut)
+      .filter((x): x is TemplateFieldOut => x !== null),
     layouts,
     default_layout: str(o.default_layout) ?? layouts[0] ?? 'list',
     default_view: obj(o.default_view),
@@ -635,7 +682,9 @@ export function proposalOut(v: unknown): ProposalOut | null {
       const o = obj(x);
       const label = o && str(o.label);
       if (!o || !label) return null;
-      const kind = (OPTION_KINDS.has(String(o.kind)) ? o.kind : YES_WORDS.has(String(o.kind)) ? 'yes' : 'cancel') as ProposalOption['kind'];
+      const kind = (
+        OPTION_KINDS.has(String(o.kind)) ? o.kind : YES_WORDS.has(String(o.kind)) ? 'yes' : 'cancel'
+      ) as ProposalOption['kind'];
       return { id: str(o.id) ?? String(i), label, kind, item_id: str(o.item_id) };
     })
     .filter((x): x is ProposalOption => x !== null);
@@ -684,13 +733,27 @@ export function decodeChatEvent(m: SseMessage): ChatEvent | null {
         return text ? { type: 'status', text } : null;
       }
       case 'sources':
-        return { type: 'sources', sources: arr(d.sources).map(sourceOut).filter((x): x is ChatSourceOut => x !== null) };
+        return {
+          type: 'sources',
+          sources: arr(d.sources)
+            .map(sourceOut)
+            .filter((x): x is ChatSourceOut => x !== null),
+        };
       case 'token': {
         const text = str(d.text);
         return text !== null ? { type: 'token', text } : null;
       }
       case 'citations':
         return { type: 'citations', citations: citations(d.citations) };
+      case 'web_sources':
+        return {
+          type: 'web_sources',
+          sources: arr(d.sources).flatMap((x) => {
+            const o = (x ?? {}) as Record<string, unknown>;
+            const url = str(o.url);
+            return url && /^https?:\/\//iu.test(url) ? [{ url, title: str(o.title) }] : [];
+          }),
+        };
       case 'checked':
         return { type: 'checked', ok: d.ok !== false, removed: Number(d.removed) || 0 };
       case 'banner':
@@ -726,7 +789,14 @@ export function decodeChatEvent(m: SseMessage): ChatEvent | null {
         const expenses = expensesOf(d.expenses ?? obj(d.action)?.expenses);
         // Undo by phrase (Ф-67): `undone` is the action it undid, as it is now (mark it «отменено»).
         const undone = actionOut(d.undone);
-        return { type: 'action', action, changedItemIds: ids.length > 0 ? ids : action.changed_item_ids, tasks, expenses, undone };
+        return {
+          type: 'action',
+          action,
+          changedItemIds: ids.length > 0 ? ids : action.changed_item_ids,
+          tasks,
+          expenses,
+          undone,
+        };
       }
       case 'reminder_draft': {
         // Week 9 (reminders.md «From the assistant line»): S13, nothing is saved.
@@ -735,7 +805,9 @@ export function decodeChatEvent(m: SseMessage): ChatEvent | null {
       }
       case 'kp_started': {
         const id = str(d.document_id);
-        return id ? { type: 'kp_started', replyId: str(d.reply_id), documentId: id, fromThis: d.from_this === true } : null;
+        return id
+          ? { type: 'kp_started', replyId: str(d.reply_id), documentId: id, fromThis: d.from_this === true }
+          : null;
       }
       case 'page_patch': {
         const patch = pagePatchOut(d);
@@ -842,8 +914,14 @@ export function fireOut(v: unknown): FireOut | null {
   };
 }
 
-export const remindersOf = (v: unknown) => arr(v).map(reminderOut).filter((x): x is ReminderOut => x !== null);
-export const firesOf = (v: unknown) => arr(v).map(fireOut).filter((x): x is FireOut => x !== null);
+export const remindersOf = (v: unknown) =>
+  arr(v)
+    .map(reminderOut)
+    .filter((x): x is ReminderOut => x !== null);
+export const firesOf = (v: unknown) =>
+  arr(v)
+    .map(fireOut)
+    .filter((x): x is FireOut => x !== null);
 
 function withFires(v: unknown): ReminderWithFiresOut {
   const o = obj(v) ?? {};
@@ -880,7 +958,9 @@ export function parseOut(v: unknown): ReminderParseOut {
     reason: reason && PARSE_REASONS.has(reason) ? (reason as ReminderParseOut['reason']) : null,
     message: str(o.message),
     draft: draftOut(o.draft),
-    options: arr(o.options).map(draftOut).filter((x): x is ReminderDraft => x !== null),
+    options: arr(o.options)
+      .map(draftOut)
+      .filter((x): x is ReminderDraft => x !== null),
     parser: o.parser === 'rules_first' || o.parser === 'llm' ? o.parser : null,
   };
 }
@@ -891,7 +971,6 @@ export function reminderPushFrom(data: unknown): ReminderPushData | null {
   if (!o || (o.type !== 'reminder_backup' && o.type !== 'reminder_missed')) return null;
   return { type: o.type, fire_id: str(o.fire_id), reminder_id: str(o.reminder_id) };
 }
-
 
 // --- week 9: tasks, «Сегодня», suggestions, actions list, habits (today.md, actions.md, pages.md) ---
 
@@ -922,7 +1001,10 @@ export function taskOut(v: unknown): TaskOut | null {
 }
 
 /** Ф-73 «изменил помощник» on a record / task / expense. */
-export function markOut(o: Record<string, unknown>): { assistant_changed_at: string | null; assistant_action_id: string | null } {
+export function markOut(o: Record<string, unknown>): {
+  assistant_changed_at: string | null;
+  assistant_action_id: string | null;
+} {
   return { assistant_changed_at: str(o.assistant_changed_at), assistant_action_id: str(o.assistant_action_id) };
 }
 
@@ -948,15 +1030,23 @@ export function noticeOut(v: unknown): ActionNoticeOut | null {
   };
 }
 
-export const tasksOf = (v: unknown) => arr(v).map(taskOut).filter((x): x is TaskOut => x !== null);
-export const actionsOf = (v: unknown) => arr(v).map(actionOut).filter((x): x is ActionOut => x !== null);
+export const tasksOf = (v: unknown) =>
+  arr(v)
+    .map(taskOut)
+    .filter((x): x is TaskOut => x !== null);
+export const actionsOf = (v: unknown) =>
+  arr(v)
+    .map(actionOut)
+    .filter((x): x is ActionOut => x !== null);
 
 function taskWrite(v: unknown): TaskWriteOut {
   const o = obj(v) ?? {};
   return {
     task: taskOut(o.task),
     action: actionOut(o.action),
-    page_patches: arr(o.page_patches).map(pagePatchOut).filter((x): x is PagePatchOut => x !== null),
+    page_patches: arr(o.page_patches)
+      .map(pagePatchOut)
+      .filter((x): x is PagePatchOut => x !== null),
     repeated: o.repeated === true,
   };
 }
@@ -982,7 +1072,10 @@ export function suggestionOut(v: unknown): SuggestionOut | null {
   };
 }
 
-export const suggestionsOf = (v: unknown) => arr(v).map(suggestionOut).filter((x): x is SuggestionOut => x !== null);
+export const suggestionsOf = (v: unknown) =>
+  arr(v)
+    .map(suggestionOut)
+    .filter((x): x is SuggestionOut => x !== null);
 
 function todayReminderOut(v: unknown): TodayReminderOut | null {
   const o = obj(v);
@@ -997,7 +1090,10 @@ function todayReminderOut(v: unknown): TodayReminderOut | null {
   };
 }
 
-const todayReminders = (v: unknown) => arr(v).map(todayReminderOut).filter((x): x is TodayReminderOut => x !== null);
+const todayReminders = (v: unknown) =>
+  arr(v)
+    .map(todayReminderOut)
+    .filter((x): x is TodayReminderOut => x !== null);
 
 export function todayOut(v: unknown): TodayOut {
   const o = obj(v) ?? {};
@@ -1022,7 +1118,10 @@ export function todayOut(v: unknown): TodayOut {
     tip: suggestionOut(o.tip),
     empty: o.empty === true,
     example: str(o.example),
-    page_tiles: arr(o.page_tiles).map(todayTileOut).filter((x): x is TodayTileOut => x !== null).slice(0, 2),
+    page_tiles: arr(o.page_tiles)
+      .map(todayTileOut)
+      .filter((x): x is TodayTileOut => x !== null)
+      .slice(0, 2),
   };
 }
 
@@ -1068,7 +1167,8 @@ export function featuresOut(v: unknown): FeaturesOut {
   const o = obj(v) ?? {};
   const d = FEATURE_DEFAULTS;
   const flag = (x: unknown, def: boolean) => (typeof x === 'boolean' ? x : def);
-  const count = (x: unknown, def: number) => (typeof x === 'number' && Number.isFinite(x) && x >= 0 ? Math.floor(x) : def);
+  const count = (x: unknown, def: number) =>
+    typeof x === 'number' && Number.isFinite(x) && x >= 0 ? Math.floor(x) : def;
   const today = obj(o.today) ?? {};
   const pages = obj(o.pages) ?? {};
   return {
@@ -1098,7 +1198,9 @@ export function featuresOut(v: unknown): FeaturesOut {
 
 export function onboardingConfigOut(v: unknown): OnboardingConfigOut {
   const o = obj(v) ?? {};
-  const enabled = arr(o.paths_enabled).map(startPath).filter((x): x is StartPath => x !== null);
+  const enabled = arr(o.paths_enabled)
+    .map(startPath)
+    .filter((x): x is StartPath => x !== null);
   const paths = enabled.length > 0 ? enabled : START_PATHS;
   const def = startPath(o.default_path);
   const templates = strs(o.default_templates);
@@ -1115,7 +1217,9 @@ export function onboardingConfigOut(v: unknown): OnboardingConfigOut {
 export function pagesBatchOut(v: unknown): PagesBatchOut {
   const o = obj(v) ?? {};
   return {
-    pages: arr(o.pages).map(pageOutOf).filter((x): x is PageOut => x !== null),
+    pages: arr(o.pages)
+      .map(pageOutOf)
+      .filter((x): x is PageOut => x !== null),
     existing: arr(o.existing).flatMap((x) => {
       const e = obj(x);
       const key = str(e?.template_key);
@@ -1168,8 +1272,10 @@ export function deletionOut(v: unknown): DeletionOut {
   };
 }
 
-
-export const habitsOf = (v: unknown) => arr(v).map(habitOut).filter((x): x is HabitOut => x !== null);
+export const habitsOf = (v: unknown) =>
+  arr(v)
+    .map(habitOut)
+    .filter((x): x is HabitOut => x !== null);
 
 export function habitOut(v: unknown): HabitOut | null {
   const o = obj(v);
@@ -1197,7 +1303,17 @@ const DUP_STATUSES = new Set(['auto_merged', 'suggested', 'merged', 'dismissed',
 function memberOut(v: unknown): DuplicateMemberOut | null {
   const o = obj(v);
   // A member may come as a bare item id, or with the item nested (`item: {id, title, …}`).
-  if (typeof v === 'string') return { item_id: v, role: 'merge', title: null, snippet: null, kind: null, occurred_at: null, created_at: null, score: null };
+  if (typeof v === 'string')
+    return {
+      item_id: v,
+      role: 'merge',
+      title: null,
+      snippet: null,
+      kind: null,
+      occurred_at: null,
+      created_at: null,
+      score: null,
+    };
   const item = o ? (obj(o.item) ?? o) : null;
   const id = o && (str(o.item_id) ?? (item ? str(item.id) : null));
   if (!o || !item || !id) return null;
@@ -1217,7 +1333,9 @@ export function duplicateGroupOut(v: unknown): DuplicateGroupOut | null {
   const o = obj(v);
   const id = o && str(o.id);
   if (!o || !id) return null;
-  const members = arr(o.members ?? o.items).map(memberOut).filter((x): x is DuplicateMemberOut => x !== null);
+  const members = arr(o.members ?? o.items)
+    .map(memberOut)
+    .filter((x): x is DuplicateMemberOut => x !== null);
   const keep = str(o.keep_item_id) ?? members.find((m) => m.role === 'keep')?.item_id ?? null;
   return {
     id,
@@ -1236,7 +1354,9 @@ export function duplicateGroupOut(v: unknown): DuplicateGroupOut | null {
 }
 
 export const duplicateGroupsOf = (v: unknown) =>
-  arr(v).map(duplicateGroupOut).filter((x): x is DuplicateGroupOut => x !== null);
+  arr(v)
+    .map(duplicateGroupOut)
+    .filter((x): x is DuplicateGroupOut => x !== null);
 
 export function pendingActionOut(v: unknown): PendingActionOut | null {
   const o = obj(v);
@@ -1255,7 +1375,9 @@ export function pendingActionOut(v: unknown): PendingActionOut | null {
 }
 
 export const pendingActionsOf = (v: unknown) =>
-  arr(v).map(pendingActionOut).filter((x): x is PendingActionOut => x !== null);
+  arr(v)
+    .map(pendingActionOut)
+    .filter((x): x is PendingActionOut => x !== null);
 
 /** The numbers of a `cleanup_batch` preview; null when it has none to show. */
 export function cleanupPreview(p: PendingActionOut | null): CleanupPreview | null {
@@ -1299,18 +1421,31 @@ export function collectionOut(v: unknown): CollectionOut | null {
   };
 }
 
-export const collectionsOf = (v: unknown) => arr(v).map(collectionOut).filter((x): x is CollectionOut => x !== null);
+export const collectionsOf = (v: unknown) =>
+  arr(v)
+    .map(collectionOut)
+    .filter((x): x is CollectionOut => x !== null);
 
 function collectionWrite(v: unknown): CollectionWriteOut {
   const o = obj(v) ?? {};
   return {
     collection: collectionOut(o.collection),
     action: actionOut(o.action),
-    page_patches: arr(o.page_patches).map(pagePatchOut).filter((x): x is PagePatchOut => x !== null),
+    page_patches: arr(o.page_patches)
+      .map(pagePatchOut)
+      .filter((x): x is PagePatchOut => x !== null),
   };
 }
 
-const IMPORT_STATUSES = new Set(['created', 'awaiting_code', 'running', 'paused_budget', 'done', 'failed', 'cancelled']);
+const IMPORT_STATUSES = new Set([
+  'created',
+  'awaiting_code',
+  'running',
+  'paused_budget',
+  'done',
+  'failed',
+  'cancelled',
+]);
 
 export function importOut(v: unknown): ImportOut | null {
   const o = obj(v);
@@ -1319,7 +1454,8 @@ export function importOut(v: unknown): ImportOut | null {
   const summary = obj(o.summary) ?? {};
   const pick = (k: string) => o[k] ?? summary[k];
   const media: Record<string, number> = {};
-  for (const [k, n] of Object.entries(obj(pick('skipped_media')) ?? {})) if (typeof n === 'number' && n > 0) media[k] = n;
+  for (const [k, n] of Object.entries(obj(pick('skipped_media')) ?? {}))
+    if (typeof n === 'number' && n > 0) media[k] = n;
   return {
     id,
     client_id: str(o.client_id),
@@ -1346,13 +1482,26 @@ export function importOut(v: unknown): ImportOut | null {
   };
 }
 
-export const importsOf = (v: unknown) => arr(v).map(importOut).filter((x): x is ImportOut => x !== null);
+export const importsOf = (v: unknown) =>
+  arr(v)
+    .map(importOut)
+    .filter((x): x is ImportOut => x !== null);
 
 // --- week 14: КП (docs/api/kp.md) ---
 
 const VAT_MODES = new Set<string>(['included', 'on_top', 'none']);
-const DOC_STATES = new Set<string>(['extracting', 'draft', 'ready', 'sent', 'accepted', 'declined', 'archived', 'failed']);
-const vatMode = (v: unknown, d: KpVatMode = 'included'): KpVatMode => (typeof v === 'string' && VAT_MODES.has(v) ? (v as KpVatMode) : d);
+const DOC_STATES = new Set<string>([
+  'extracting',
+  'draft',
+  'ready',
+  'sent',
+  'accepted',
+  'declined',
+  'archived',
+  'failed',
+]);
+const vatMode = (v: unknown, d: KpVatMode = 'included'): KpVatMode =>
+  typeof v === 'string' && VAT_MODES.has(v) ? (v as KpVatMode) : d;
 /** A decimal as text; a JSON number is taken as its plain text (never rounded here). */
 const decText = (v: unknown): string | null =>
   typeof v === 'string' && v.trim() !== '' ? v.trim() : typeof v === 'number' && Number.isFinite(v) ? String(v) : null;
@@ -1390,7 +1539,10 @@ export function companyProfileOut(v: unknown): CompanyProfileOut {
     iban_hint: str((obj(o.bank) ?? {}).iban_hint),
     signer: { name: str(signer.name), title: str(signer.title) },
     license: { number: str(license.number), date: str(license.date), category: str(license.category) },
-    outgoing: { year: typeof outgoing.year === 'number' ? outgoing.year : null, next: typeof outgoing.next === 'number' ? outgoing.next : null },
+    outgoing: {
+      year: typeof outgoing.year === 'number' ? outgoing.year : null,
+      next: typeof outgoing.next === 'number' ? outgoing.next : null,
+    },
   };
 }
 
@@ -1415,7 +1567,10 @@ export function priceItemOut(v: unknown): PriceItemOut | null {
   };
 }
 
-export const priceItemsOf = (v: unknown) => arr(v).map(priceItemOut).filter((x): x is PriceItemOut => x !== null);
+export const priceItemsOf = (v: unknown) =>
+  arr(v)
+    .map(priceItemOut)
+    .filter((x): x is PriceItemOut => x !== null);
 
 export function priceListOut(v: unknown): PriceListOut | null {
   const o = obj(v);
@@ -1437,7 +1592,10 @@ export function priceListOut(v: unknown): PriceListOut | null {
   };
 }
 
-export const priceListsOf = (v: unknown) => arr(v).map(priceListOut).filter((x): x is PriceListOut => x !== null);
+export const priceListsOf = (v: unknown) =>
+  arr(v)
+    .map(priceListOut)
+    .filter((x): x is PriceListOut => x !== null);
 
 /** /sync `company_profile`: at most one row (a list, kp.md «Sync»); an object is taken too. Null when none. */
 export function syncedProfileOf(v: unknown): CompanyProfileOut | null {
@@ -1544,7 +1702,12 @@ export function kpVersionOut(v: unknown): KpVersionOut | null {
     totals,
     changed_paths: strs(o.changed_paths),
     valid_until: str(o.valid_until),
-    price_summary: { price_list: num(ps.price_list), past_kp: num(ps.past_kp), manual: num(ps.manual), missing: num(ps.missing) },
+    price_summary: {
+      price_list: num(ps.price_list),
+      past_kp: num(ps.past_kp),
+      manual: num(ps.manual),
+      missing: num(ps.missing),
+    },
     missing_required: strs(o.missing_required),
     sent_at: str(o.sent_at),
     sent_channel: str(o.sent_channel),
@@ -1584,7 +1747,13 @@ export function documentOut(v: unknown): DocumentOut | null {
     sent_at: str(o.sent_at),
     progress:
       progress && Object.keys(progress).length > 0
-        ? { state: str(progress.state), done: num(progress.done), total: num(progress.total), message: str(progress.message), partial: progress.partial === true }
+        ? {
+            state: str(progress.state),
+            done: num(progress.done),
+            total: num(progress.total),
+            message: str(progress.message),
+            partial: progress.partial === true,
+          }
         : null,
     error: str(o.error),
     ai_generated: o.ai_generated !== false,
@@ -1596,7 +1765,10 @@ export function documentOut(v: unknown): DocumentOut | null {
   };
 }
 
-export const documentsOf = (v: unknown) => arr(v).map(documentOut).filter((x): x is DocumentOut => x !== null);
+export const documentsOf = (v: unknown) =>
+  arr(v)
+    .map(documentOut)
+    .filter((x): x is DocumentOut => x !== null);
 
 export function kpFullOut(v: unknown): KpFullOut {
   const o = obj(v) ?? {};
@@ -1607,7 +1779,16 @@ export function kpFullOut(v: unknown): KpFullOut {
     const name = p && str(p.name);
     const price = p && decText(p.price);
     return p && name && price
-      ? [{ line_id: str(p.line_id) ?? '', name, unit: str(p.unit), price, price_item_id: str(p.price_item_id), old_price: decText(p.old_price) }]
+      ? [
+          {
+            line_id: str(p.line_id) ?? '',
+            name,
+            unit: str(p.unit),
+            price,
+            price_item_id: str(p.price_item_id),
+            old_price: decText(p.old_price),
+          },
+        ]
       : [];
   });
   return {
@@ -1670,7 +1851,10 @@ const kpVersionRowsOf = (v: unknown) =>
 
 export function kpVersionsOut(v: unknown): KpVersionsOut {
   const o = obj(v) ?? {};
-  return { versions: kpVersionRowsOf(o.versions), sent_version_n: typeof o.sent_version_n === 'number' ? o.sent_version_n : null };
+  return {
+    versions: kpVersionRowsOf(o.versions),
+    sent_version_n: typeof o.sent_version_n === 'number' ? o.sent_version_n : null,
+  };
 }
 
 function apiFileOut(v: unknown): ApiFileOut | null {
@@ -1688,7 +1872,10 @@ export function kpSendOut(v: unknown): KpSendOut {
     pending_action: pa,
     file: apiFileOut(o.file) ?? apiFileOut(pa?.preview.file),
     version_n: num(o.version_n ?? pa?.preview.version_n),
-    resend: resend && typeof resend.sent_version_n === 'number' ? { sent_version_n: resend.sent_version_n, sent_at: str(resend.sent_at), text: str(resend.text) } : null,
+    resend:
+      resend && typeof resend.sent_version_n === 'number'
+        ? { sent_version_n: resend.sent_version_n, sent_at: str(resend.sent_at), text: str(resend.text) }
+        : null,
     message: str(o.message),
     hint: str(o.hint),
     document: documentOut(o.document),
@@ -1741,11 +1928,18 @@ export function messageDraftOut(v: unknown): DraftOut | null {
   };
 }
 
-export const messageDraftsOf = (v: unknown) => arr(v).map(messageDraftOut).filter((x): x is DraftOut => x !== null);
+export const messageDraftsOf = (v: unknown) =>
+  arr(v)
+    .map(messageDraftOut)
+    .filter((x): x is DraftOut => x !== null);
 
 function draftWriteOut(v: unknown): DraftWriteOut {
   const o = obj(v) ?? {};
-  return { draft: messageDraftOut(o.draft), pending_action: pendingActionOut(o.pending_action), repeated: o.repeated === true };
+  return {
+    draft: messageDraftOut(o.draft),
+    pending_action: pendingActionOut(o.pending_action),
+    repeated: o.repeated === true,
+  };
 }
 
 /** Typed /v1 endpoints. The ONLY place that knows paths and request bodies. */
@@ -1779,7 +1973,10 @@ export function expenseOut(v: unknown): ExpenseOut | null {
     category_key: str(o.category_key),
     payee: str(o.payee),
     method: method && METHODS.has(method) ? (method as ExpenseOut['method']) : null,
-    direction: typeof o.direction === 'string' && DIRECTIONS.has(o.direction) ? (o.direction as ExpenseOut['direction']) : 'expense',
+    direction:
+      typeof o.direction === 'string' && DIRECTIONS.has(o.direction)
+        ? (o.direction as ExpenseOut['direction'])
+        : 'expense',
     note: str(o.note),
     source: str(o.source) ?? 'form',
     parse_source: ps && PARSE_SOURCES.has(ps) ? (ps as ExpenseOut['parse_source']) : null,
@@ -1796,7 +1993,10 @@ export function expenseOut(v: unknown): ExpenseOut | null {
   };
 }
 
-export const expensesOf = (v: unknown) => arr(v).map(expenseOut).filter((x): x is ExpenseOut => x !== null);
+export const expensesOf = (v: unknown) =>
+  arr(v)
+    .map(expenseOut)
+    .filter((x): x is ExpenseOut => x !== null);
 
 export function expenseCategoryOut(v: unknown): ExpenseCategoryOut | null {
   const o = obj(v);
@@ -1823,14 +2023,18 @@ export function expenseCategoryOut(v: unknown): ExpenseCategoryOut | null {
 }
 
 export const expenseCategoriesOf = (v: unknown) =>
-  arr(v).map(expenseCategoryOut).filter((x): x is ExpenseCategoryOut => x !== null);
+  arr(v)
+    .map(expenseCategoryOut)
+    .filter((x): x is ExpenseCategoryOut => x !== null);
 
 function expenseWrite(v: unknown): ExpenseWriteOut {
   const o = obj(v) ?? {};
   return {
     expense: expenseOut(o.expense),
     action: actionOut(o.action),
-    page_patches: arr(o.page_patches).map(pagePatchOut).filter((x): x is PagePatchOut => x !== null),
+    page_patches: arr(o.page_patches)
+      .map(pagePatchOut)
+      .filter((x): x is PagePatchOut => x !== null),
     repeated: o.repeated === true,
   };
 }
@@ -1844,19 +2048,29 @@ export function expenseAggregateOut(v: unknown): ExpenseAggregateOut {
       const total = t && money(t.total);
       const currency = t && str(t.currency);
       if (!t || !total || !currency) return null;
-      return { currency, total, expense: money(t.expense), refund: money(t.refund), income: money(t.income), count: num(t.count) };
+      return {
+        currency,
+        total,
+        expense: money(t.expense),
+        refund: money(t.refund),
+        income: money(t.income),
+        count: num(t.count),
+      };
     })
     .filter((x): x is ExpenseAggregateOut['totals'][number] => x !== null);
   const groups = arr(o.groups)
     .map((x) => {
       const g = obj(x);
       const total = g && money(g.total);
-      return g && total ? { key: str(g.key), title: str(g.title), currency: str(g.currency) ?? 'KZT', total, count: num(g.count) } : null;
+      return g && total
+        ? { key: str(g.key), title: str(g.title), currency: str(g.currency) ?? 'KZT', total, count: num(g.count) }
+        : null;
     })
     .filter((x): x is ExpenseAggregateOut['groups'][number] => x !== null);
   return {
     calc_version: str(o.calc_version),
-    period: p && str(p.from) && str(p.to) ? { kind: str(p.kind) ?? 'custom', from: str(p.from)!, to: str(p.to)! } : null,
+    period:
+      p && str(p.from) && str(p.to) ? { kind: str(p.kind) ?? 'custom', from: str(p.from)!, to: str(p.to)! } : null,
     totals,
     groups,
     review_count: num(o.review_count),
@@ -1898,7 +2112,10 @@ export function expenseDuplicateOut(v: unknown): ExpenseDuplicateOut | null {
   };
 }
 
-export const expenseDuplicatesOf = (v: unknown) => arr(v).map(expenseDuplicateOut).filter((x): x is ExpenseDuplicateOut => x !== null);
+export const expenseDuplicatesOf = (v: unknown) =>
+  arr(v)
+    .map(expenseDuplicateOut)
+    .filter((x): x is ExpenseDuplicateOut => x !== null);
 
 function receiptDraftOut(v: unknown): ReceiptDraftOut | null {
   const o = obj(v);
@@ -1925,7 +2142,9 @@ export function receiptOut(v: unknown): ReceiptOut {
     status: (status && RECEIPT_STATES.has(status) ? status : expense ? 'ok' : 'form') as ReceiptOut['status'],
     expense,
     action: actionOut(o.action),
-    page_patches: arr(o.page_patches).map(pagePatchOut).filter((x): x is PagePatchOut => x !== null),
+    page_patches: arr(o.page_patches)
+      .map(pagePatchOut)
+      .filter((x): x is PagePatchOut => x !== null),
     draft: receiptDraftOut(o.draft),
     duplicate: expenseDuplicateOut(o.duplicate),
     message: str(o.message) ?? str(o.message_ru),
@@ -1966,12 +2185,22 @@ export function statementOut(v: unknown): StatementOut | null {
             .map((x) => {
               const l = obj(x);
               const key = l && str(l.key);
-              return l && key ? { key, title: str(l.title) ?? key, bank: money(l.bank), ours: money(l.ours), ok: l.ok === true } : null;
+              return l && key
+                ? { key, title: str(l.title) ?? key, bank: money(l.bank), ours: money(l.ours), ok: l.ok === true }
+                : null;
             })
             .filter((x): x is NonNullable<StatementOut['check']>['lines'][number] => x !== null),
         }
       : null,
-    adds: adds ? { expense: m(adds.expense), refund: m(adds.refund), income: m(adds.income), transfers: m(adds.transfers), transfer_own: m(adds.transfer_own) } : null,
+    adds: adds
+      ? {
+          expense: m(adds.expense),
+          refund: m(adds.refund),
+          income: m(adds.income),
+          transfers: m(adds.transfers),
+          transfer_own: m(adds.transfer_own),
+        }
+      : null,
     summary_ru: str(o.summary_ru),
     error: str(o.error),
     pending_action_id: str(o.pending_action_id),
@@ -1981,7 +2210,10 @@ export function statementOut(v: unknown): StatementOut | null {
   };
 }
 
-export const statementsOf = (v: unknown) => arr(v).map(statementOut).filter((x): x is StatementOut => x !== null);
+export const statementsOf = (v: unknown) =>
+  arr(v)
+    .map(statementOut)
+    .filter((x): x is StatementOut => x !== null);
 
 const ROW_STATES = new Set<string>(['new', 'existing', 'similar']);
 
@@ -1998,7 +2230,10 @@ export function statementRowOut(v: unknown): StatementRowOut | null {
     amount,
     currency: (str(r.currency) ?? 'KZT').toUpperCase(),
     kind: str(r.kind) ?? 'other',
-    direction: typeof r.direction === 'string' && DIRECTIONS.has(r.direction) ? (r.direction as StatementRowOut['direction']) : 'expense',
+    direction:
+      typeof r.direction === 'string' && DIRECTIONS.has(r.direction)
+        ? (r.direction as StatementRowOut['direction'])
+        : 'expense',
     description: str(r.description),
     method: method && METHODS.has(method) ? (method as StatementRowOut['method']) : null,
     category_key: str(r.category_key),
@@ -2056,18 +2291,39 @@ export class Api {
    * Full upload of one local file. Safe to repeat after any failure: the same `clientId` returns
    * the same upload (fresh URL while pending; `put: null` once completed).
    */
-  async uploadFile(f: { clientId: string; uri: string; mime: string; bytes: number; sha256: string; role?: UploadRole }): Promise<string> {
+  async uploadFile(f: {
+    clientId: string;
+    uri: string;
+    mime: string;
+    bytes: number;
+    sha256: string;
+    role?: UploadRole;
+  }): Promise<string> {
     return (await this.uploadFull(f)).id;
   }
 
   /** Week 14: a logo / signature / stamp is named on PUT /company-profile by its `file_id`. */
-  async uploadFileId(f: { clientId: string; uri: string; mime: string; bytes: number; sha256: string; role?: UploadRole }): Promise<string> {
+  async uploadFileId(f: {
+    clientId: string;
+    uri: string;
+    mime: string;
+    bytes: number;
+    sha256: string;
+    role?: UploadRole;
+  }): Promise<string> {
     const out = await this.uploadFull(f);
     if (!out.file_id) throw new ApiError(409, { code: 'upload_mismatch' });
     return out.file_id;
   }
 
-  private async uploadFull(f: { clientId: string; uri: string; mime: string; bytes: number; sha256: string; role?: UploadRole }): Promise<UploadOut> {
+  private async uploadFull(f: {
+    clientId: string;
+    uri: string;
+    mime: string;
+    bytes: number;
+    sha256: string;
+    role?: UploadRole;
+  }): Promise<UploadOut> {
     const up = await this.createUpload({
       client_id: f.clientId,
       mime: f.mime,
@@ -2125,13 +2381,19 @@ export class Api {
   }
 
   patchPage(id: string, body: PagePatchIn): Promise<PageOut> {
-    return this.client.request('PATCH', `/pages/${encodeURIComponent(id)}`, { body, ...(body.client_id ? { idempotencyKey: body.client_id } : {}) });
+    return this.client.request('PATCH', `/pages/${encodeURIComponent(id)}`, {
+      body,
+      ...(body.client_id ? { idempotencyKey: body.client_id } : {}),
+    });
   }
 
   /** Rename with its action («Отменить» = the old name), pages.md / views.md «Renaming». */
   async renamePage(id: string, title: string, clientId: string): Promise<PageViewOut> {
     return pageViewOut(
-      await this.client.request<unknown>('PATCH', `/pages/${encodeURIComponent(id)}`, { body: { title, client_id: clientId }, idempotencyKey: clientId }),
+      await this.client.request<unknown>('PATCH', `/pages/${encodeURIComponent(id)}`, {
+        body: { title, client_id: clientId },
+        idempotencyKey: clientId,
+      }),
     );
   }
 
@@ -2140,7 +2402,9 @@ export class Api {
   /** The catalogue: fields with ★, allowed views. */
   async pageTemplates(): Promise<PageTemplateOut[]> {
     const o = await this.client.request<unknown>('GET', '/page-templates');
-    return arr(obj(o)?.templates ?? o).map(pageTemplateOut).filter((x): x is PageTemplateOut => x !== null);
+    return arr(obj(o)?.templates ?? o)
+      .map(pageTemplateOut)
+      .filter((x): x is PageTemplateOut => x !== null);
   }
 
   /**
@@ -2150,7 +2414,10 @@ export class Api {
    */
   async setView(pageId: string, body: PageViewIn): Promise<PageViewOut> {
     return pageViewOut(
-      await this.client.request<unknown>('POST', `/pages/${encodeURIComponent(pageId)}/view`, { body, idempotencyKey: body.client_id }),
+      await this.client.request<unknown>('POST', `/pages/${encodeURIComponent(pageId)}/view`, {
+        body,
+        idempotencyKey: body.client_id,
+      }),
     );
   }
 
@@ -2158,10 +2425,14 @@ export class Api {
   async setItemFields(pageId: string, itemId: string, body: PageItemFieldsIn): Promise<PageItemFieldsOut> {
     const o =
       obj(
-        await this.client.request<unknown>('PATCH', `/pages/${encodeURIComponent(pageId)}/items/${encodeURIComponent(itemId)}`, {
-          body,
-          idempotencyKey: body.client_id,
-        }),
+        await this.client.request<unknown>(
+          'PATCH',
+          `/pages/${encodeURIComponent(pageId)}/items/${encodeURIComponent(itemId)}`,
+          {
+            body,
+            idempotencyKey: body.client_id,
+          },
+        ),
       ) ?? {};
     return { values: obj(o.values) ?? {}, action: actionOut(o.action), link: linkOut(o.link) };
   }
@@ -2205,7 +2476,9 @@ export class Api {
 
   /** S34: the tab order. */
   async reorderPages(body: PagesReorderIn): Promise<ManualOut> {
-    return manualOut(await this.client.request<unknown>('POST', '/pages/reorder', { body, idempotencyKey: body.client_id }));
+    return manualOut(
+      await this.client.request<unknown>('POST', '/pages/reorder', { body, idempotencyKey: body.client_id }),
+    );
   }
 
   /** S34 «Убрать»: soft delete, the records stay. Repeatable. Week 9: `action` (null on a repeat). */
@@ -2226,7 +2499,11 @@ export class Api {
   // chat — docs/api/chat.md
 
   /** Reads one reply's stream; throws StreamDroppedError when it ends before `done`/`deferred`/`error`. */
-  private async readReply(res: Response, onEvent: (e: ChatEvent) => void, o: { signal?: AbortSignal; idleMs?: number }): Promise<void> {
+  private async readReply(
+    res: Response,
+    onEvent: (e: ChatEvent) => void,
+    o: { signal?: AbortSignal; idleMs?: number },
+  ): Promise<void> {
     let finished = false;
     await readSse(
       res,
@@ -2245,7 +2522,11 @@ export class Api {
    * One turn. Events arrive through `onEvent` as they stream. Throws NetworkError (never reached the
    * server), ApiError (refused before the stream), StreamDroppedError (cut off or silent before the end).
    */
-  async chat(body: ChatMessageIn, onEvent: (e: ChatEvent) => void, o: { signal?: AbortSignal; idleMs?: number } = {}): Promise<void> {
+  async chat(
+    body: ChatMessageIn,
+    onEvent: (e: ChatEvent) => void,
+    o: { signal?: AbortSignal; idleMs?: number } = {},
+  ): Promise<void> {
     const res = await this.client.openStream('POST', '/chat/messages', { body, signal: o.signal });
     await this.readReply(res, onEvent, o);
   }
@@ -2266,7 +2547,9 @@ export class Api {
 
   /** Переписка (S36): oldest first; `before` pages back, `around` opens on one answer. */
   /** Week 20 (chat.md «История»): what was said → what was done, newest first. */
-  async history(q: { only?: 'all' | 'changes' | 'questions' | 'waiting'; before?: string; limit?: number } = {}): Promise<{ entries: HistoryEntryOut[]; has_more: boolean }> {
+  async history(
+    q: { only?: 'all' | 'changes' | 'questions' | 'waiting'; before?: string; limit?: number } = {},
+  ): Promise<{ entries: HistoryEntryOut[]; has_more: boolean }> {
     const o = obj(await this.client.request<unknown>('GET', '/history', { query: { limit: 50, ...q } })) ?? {};
     const entries = arr(o.entries).flatMap((v) => {
       const e = obj(v);
@@ -2290,7 +2573,9 @@ export class Api {
   async chatHistory(q: { before?: string; around?: string; limit?: number } = {}): Promise<ChatHistoryOut> {
     const out = obj(await this.client.request<unknown>('GET', '/chat/messages', { query: { limit: 50, ...q } })) ?? {};
     return {
-      messages: arr(out.messages).map(chatMessageOut).filter((m): m is ChatMessageOut => m !== null),
+      messages: arr(out.messages)
+        .map(chatMessageOut)
+        .filter((m): m is ChatMessageOut => m !== null),
       has_more_before: out.has_more_before === true,
       has_more_after: out.has_more_after === true,
     };
@@ -2331,7 +2616,9 @@ export class Api {
       failed: actionsOf(out.failed),
       partial: out.partial === true,
       message_ru: str(out.message_ru),
-      page_patches: arr(out.page_patches).map(pagePatchOut).filter((x): x is PagePatchOut => x !== null),
+      page_patches: arr(out.page_patches)
+        .map(pagePatchOut)
+        .filter((x): x is PagePatchOut => x !== null),
     };
   }
 
@@ -2345,18 +2632,24 @@ export class Api {
       partial: out.partial === true,
       repeated: out.repeated === true,
       message_ru: str(out.message_ru),
-      page_patches: arr(out.page_patches).map(pagePatchOut).filter((x): x is PagePatchOut => x !== null),
+      page_patches: arr(out.page_patches)
+        .map(pagePatchOut)
+        .filter((x): x is PagePatchOut => x !== null),
     };
   }
 
   chatDelivery(messageId: string, delivery: ChatDeliveryState): Promise<unknown> {
-    return this.client.request('POST', `/chat/messages/${encodeURIComponent(messageId)}/delivery`, { body: { delivery } });
+    return this.client.request('POST', `/chat/messages/${encodeURIComponent(messageId)}/delivery`, {
+      body: { delivery },
+    });
   }
 
   // reminders — docs/api/reminders.md
 
   async createReminder(body: ReminderCreateIn): Promise<ReminderWithFiresOut> {
-    return withFires(await this.client.request<unknown>('POST', '/reminders', { body, idempotencyKey: body.client_id }));
+    return withFires(
+      await this.client.request<unknown>('POST', '/reminders', { body, idempotencyKey: body.client_id }),
+    );
   }
 
   /** Week 9: 200 {reminder, fires, action} (was 204): any 2xx is success. */
@@ -2428,7 +2721,9 @@ export class Api {
   }
 
   async setBudget(amount: string, currency = 'KZT'): Promise<BudgetOut | null> {
-    return budgetOut(obj(await this.client.request<unknown>('PUT', '/expenses/budget', { body: { amount, currency } }))?.budget);
+    return budgetOut(
+      obj(await this.client.request<unknown>('PUT', '/expenses/budget', { body: { amount, currency } }))?.budget,
+    );
   }
 
   async clearBudget(): Promise<void> {
@@ -2446,7 +2741,10 @@ export class Api {
   /** One tap = one call; `done: false` = «Вернуть». */
   async taskDone(id: string, body: TaskDoneIn): Promise<TaskWriteOut> {
     return taskWrite(
-      await this.client.request<unknown>('POST', `/tasks/${encodeURIComponent(id)}/done`, { body, idempotencyKey: body.client_id }),
+      await this.client.request<unknown>('POST', `/tasks/${encodeURIComponent(id)}/done`, {
+        body,
+        idempotencyKey: body.client_id,
+      }),
     );
   }
 
@@ -2457,11 +2755,17 @@ export class Api {
 
   /** «Убрать все купленные»: one action, one «Отменить»; a repeat of `client_id` returns the first result. */
   async clearDoneTasks(body: TasksClearDoneIn): Promise<TasksClearDoneOut> {
-    const o = obj(await this.client.request<unknown>('POST', '/tasks/clear-done', { body, idempotencyKey: body.client_id })) ?? {};
+    const o =
+      obj(await this.client.request<unknown>('POST', '/tasks/clear-done', { body, idempotencyKey: body.client_id })) ??
+      {};
     return {
-      tasks: arr(o.tasks).map(taskOut).filter((x): x is TaskOut => x !== null),
+      tasks: arr(o.tasks)
+        .map(taskOut)
+        .filter((x): x is TaskOut => x !== null),
       action: actionOut(o.action),
-      page_patches: arr(o.page_patches).map(pagePatchOut).filter((x): x is PagePatchOut => x !== null),
+      page_patches: arr(o.page_patches)
+        .map(pagePatchOut)
+        .filter((x): x is PagePatchOut => x !== null),
       repeated: o.repeated === true,
     };
   }
@@ -2511,7 +2815,9 @@ export class Api {
 
   async habits(): Promise<HabitOut[]> {
     const o = obj(await this.client.request<unknown>('GET', '/habits')) ?? {};
-    return arr(o.habits).map(habitOut).filter((x): x is HabitOut => x !== null);
+    return arr(o.habits)
+      .map(habitOut)
+      .filter((x): x is HabitOut => x !== null);
   }
 
   /** S30 «Изменить»: the rule's records go to another page from now on. `409 conflict` (`habit_exists`). */
@@ -2551,7 +2857,11 @@ export class Api {
     return duplicateGroupsOf(Array.isArray(o) ? o : obj(o)?.groups);
   }
 
-  private async decide(id: string, what: 'merge' | 'dismiss', body: DuplicateDecisionIn): Promise<DuplicateDecisionOut> {
+  private async decide(
+    id: string,
+    what: 'merge' | 'dismiss',
+    body: DuplicateDecisionIn,
+  ): Promise<DuplicateDecisionOut> {
     const o =
       obj(
         await this.client.request<unknown>('POST', `/duplicates/groups/${encodeURIComponent(id)}/${what}`, {
@@ -2569,7 +2879,9 @@ export class Api {
 
   /** «Объединить все отмеченные (N)»: one action, one «Отменить»; groups closed meanwhile are skipped. */
   async mergeGroups(body: DuplicatesMergeIn): Promise<DuplicatesMergeOut> {
-    const o = obj(await this.client.request<unknown>('POST', '/duplicates/merge', { body, idempotencyKey: body.client_id })) ?? {};
+    const o =
+      obj(await this.client.request<unknown>('POST', '/duplicates/merge', { body, idempotencyKey: body.client_id })) ??
+      {};
     return {
       groups: duplicateGroupsOf(o.groups),
       action: actionOut(o.action),
@@ -2586,9 +2898,18 @@ export class Api {
   /** «Убрать повторы: 37 → 1?»: a pending action for one «Да» on all exact repeats + the near groups. */
   async cleanupPlan(body: { client_id: string; import_id?: string }): Promise<CleanupPlanOut> {
     const o =
-      obj(await this.client.request<unknown>('POST', '/duplicates/cleanup/plan', { body, idempotencyKey: body.client_id })) ?? {};
+      obj(
+        await this.client.request<unknown>('POST', '/duplicates/cleanup/plan', {
+          body,
+          idempotencyKey: body.client_id,
+        }),
+      ) ?? {};
     const pending = pendingActionOut(o.pending_action ?? (obj(o)?.preview ? o : null));
-    return { pending_action: pending, preview: cleanupPreview(pending), groups: duplicateGroupsOf(o.near_groups ?? o.groups) };
+    return {
+      pending_action: pending,
+      preview: cleanupPreview(pending),
+      groups: duplicateGroupsOf(o.near_groups ?? o.groups),
+    };
   }
 
   /** «Да» of S25. Idempotent by `client_id`. `410` when it expired (24 h). */
@@ -2600,7 +2921,11 @@ export class Api {
           idempotencyKey: clientId,
         }),
       ) ?? {};
-    return { pending_action: pendingActionOut(o.pending_action), action: actionOut(o.action), execute: sendExecuteOut(o.execute) };
+    return {
+      pending_action: pendingActionOut(o.pending_action),
+      action: actionOut(o.action),
+      execute: sendExecuteOut(o.execute),
+    };
   }
 
   /** «Нет» / «Не сейчас» of S25. */
@@ -2627,10 +2952,14 @@ export class Api {
   /** «Убрать из стопки»: the assistant does not put it back (a `stack_exclusion` habit). */
   async removeFromCollection(id: string, itemId: string, clientId: string): Promise<CollectionWriteOut> {
     return collectionWrite(
-      await this.client.request<unknown>('DELETE', `/collections/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}`, {
-        query: { client_id: clientId },
-        idempotencyKey: clientId,
-      }),
+      await this.client.request<unknown>(
+        'DELETE',
+        `/collections/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}`,
+        {
+          query: { client_id: clientId },
+          idempotencyKey: clientId,
+        },
+      ),
     );
   }
 
@@ -2656,7 +2985,10 @@ export class Api {
 
   /** Step 7: a ChatGPT / Claude / Gemini export, uploaded through POST /uploads first. Idempotent by `client_id`. */
   async importAiChatsFile(body: ImportFileIn): Promise<ImportOut> {
-    const o = await this.client.request<unknown>('POST', '/imports/ai-chats/file', { body, idempotencyKey: body.client_id });
+    const o = await this.client.request<unknown>('POST', '/imports/ai-chats/file', {
+      body,
+      idempotencyKey: body.client_id,
+    });
     const out = importOut(obj(o)?.import ?? o);
     if (!out) throw new ApiError(502, { code: 'bad_answer' });
     return out;
@@ -2664,7 +2996,10 @@ export class Api {
 
   /** The Telegram Desktop export, uploaded through POST /uploads first. Idempotent by `client_id`. */
   async importTelegramFile(body: ImportFileIn): Promise<ImportOut> {
-    const o = await this.client.request<unknown>('POST', '/imports/telegram/file', { body, idempotencyKey: body.client_id });
+    const o = await this.client.request<unknown>('POST', '/imports/telegram/file', {
+      body,
+      idempotencyKey: body.client_id,
+    });
     const out = importOut(obj(o)?.import ?? o);
     if (!out) throw new ApiError(502, { code: 'bad_answer' });
     return out;
@@ -2684,13 +3019,18 @@ export class Api {
   // week 12 — «Расходы» (docs/api/expenses.md). Amounts are decimal strings both ways.
 
   async createExpense(body: ExpenseCreateIn): Promise<ExpenseWriteOut> {
-    return expenseWrite(await this.client.request<unknown>('POST', '/expenses', { body, idempotencyKey: body.client_id }));
+    return expenseWrite(
+      await this.client.request<unknown>('POST', '/expenses', { body, idempotencyKey: body.client_id }),
+    );
   }
 
   /** `409 conflict` on a stale `version`. */
   async patchExpense(id: string, body: ExpensePatchIn): Promise<ExpenseWriteOut> {
     return expenseWrite(
-      await this.client.request<unknown>('PATCH', `/expenses/${encodeURIComponent(id)}`, { body, idempotencyKey: body.client_id }),
+      await this.client.request<unknown>('PATCH', `/expenses/${encodeURIComponent(id)}`, {
+        body,
+        idempotencyKey: body.client_id,
+      }),
     );
   }
 
@@ -2711,13 +3051,25 @@ export class Api {
 
   async reorderExpenseCategories(body: ExpenseCategoriesReorderIn): Promise<ExpenseCategoriesOut> {
     const o =
-      obj(await this.client.request<unknown>('PATCH', '/expense-categories/reorder', { body, idempotencyKey: body.client_id })) ?? {};
-    return { categories: expenseCategoriesOf(o.categories), action: actionOut(o.action), repeated: o.repeated === true };
+      obj(
+        await this.client.request<unknown>('PATCH', '/expense-categories/reorder', {
+          body,
+          idempotencyKey: body.client_id,
+        }),
+      ) ?? {};
+    return {
+      categories: expenseCategoriesOf(o.categories),
+      action: actionOut(o.action),
+      repeated: o.repeated === true,
+    };
   }
 
   /** The server's own count (`calc.py`), to check the phone's against. */
   async expenseAggregate(q: ExpenseAggregateQuery): Promise<ExpenseAggregateOut> {
-    const query = Object.fromEntries(Object.entries(q).filter(([, v]) => typeof v === 'string')) as Record<string, string>;
+    const query = Object.fromEntries(Object.entries(q).filter(([, v]) => typeof v === 'string')) as Record<
+      string,
+      string
+    >;
     return expenseAggregateOut(await this.client.request<unknown>('GET', '/expenses/aggregate', { query }));
   }
 
@@ -2725,29 +3077,46 @@ export class Api {
 
   /** A receipt record → its spending (amount «Проверьте»), `waiting` (OCR still running), or `form`. */
   async expenseFromItem(body: ReceiptFromItemIn): Promise<ReceiptOut> {
-    return receiptOut(await this.client.request<unknown>('POST', '/expenses/from-item', { body, idempotencyKey: body.client_id }));
+    return receiptOut(
+      await this.client.request<unknown>('POST', '/expenses/from-item', { body, idempotencyKey: body.client_id }),
+    );
   }
 
   /** The QR link of a fiscal receipt; only official OFD domains (`422 qr_not_fiscal` otherwise). */
   async expenseFromQr(body: ReceiptFromQrIn): Promise<ReceiptOut> {
-    return receiptOut(await this.client.request<unknown>('POST', '/expenses/from-qr', { body, idempotencyKey: body.client_id }));
+    return receiptOut(
+      await this.client.request<unknown>('POST', '/expenses/from-qr', { body, idempotencyKey: body.client_id }),
+    );
   }
 
   /** A statement PDF (already a record) → the plan; nothing is saved before «Да». */
   async createStatement(body: StatementIn): Promise<StatementPlanOut> {
-    const o = obj(await this.client.request<unknown>('POST', '/expenses/statements', { body, idempotencyKey: body.client_id })) ?? {};
-    return { statement: statementOut(o.statement), pending_action: pendingActionOut(o.pending_action), repeated: o.repeated === true };
+    const o =
+      obj(
+        await this.client.request<unknown>('POST', '/expenses/statements', { body, idempotencyKey: body.client_id }),
+      ) ?? {};
+    return {
+      statement: statementOut(o.statement),
+      pending_action: pendingActionOut(o.pending_action),
+      repeated: o.repeated === true,
+    };
   }
 
   /** The plan with its rows (rows only while `proposed`). */
   async getStatement(id: string): Promise<StatementWithRowsOut> {
     const o = obj(await this.client.request<unknown>('GET', `/expenses/statements/${encodeURIComponent(id)}`)) ?? {};
-    return { statement: statementOut(o.statement), rows: arr(o.rows).map(statementRowOut).filter((x): x is StatementRowOut => x !== null) };
+    return {
+      statement: statementOut(o.statement),
+      rows: arr(o.rows)
+        .map(statementRowOut)
+        .filter((x): x is StatementRowOut => x !== null),
+    };
   }
 
   /** The latest plans, newest first. */
   async statements(limit = 10): Promise<StatementOut[]> {
-    const o = obj(await this.client.request<unknown>('GET', '/expenses/statements', { query: { limit: String(limit) } })) ?? {};
+    const o =
+      obj(await this.client.request<unknown>('GET', '/expenses/statements', { query: { limit: String(limit) } })) ?? {};
     return statementsOf(o.statements);
   }
 
@@ -2771,13 +3140,23 @@ export class Api {
 
   /** «Не сейчас»: nothing is saved. */
   async rejectStatement(id: string): Promise<StatementOut | null> {
-    const o = obj(await this.client.request<unknown>('POST', `/expenses/statements/${encodeURIComponent(id)}/reject`, { body: {} })) ?? {};
+    const o =
+      obj(
+        await this.client.request<unknown>('POST', `/expenses/statements/${encodeURIComponent(id)}/reject`, {
+          body: {},
+        }),
+      ) ?? {};
     return statementOut(o.statement);
   }
 
   /** «Похоже, эта трата уже есть» pairs (`suggested`). */
   async expenseDuplicates(): Promise<ExpenseDuplicateOut[]> {
-    const o = obj(await this.client.request<unknown>('GET', '/expenses/duplicates', { query: { status: 'suggested', limit: '50' } })) ?? {};
+    const o =
+      obj(
+        await this.client.request<unknown>('GET', '/expenses/duplicates', {
+          query: { status: 'suggested', limit: '50' },
+        }),
+      ) ?? {};
     return expenseDuplicatesOf(o.duplicates);
   }
 
@@ -2785,9 +3164,17 @@ export class Api {
   async mergeExpenseDuplicate(id: string, body: ExpenseMergeIn): Promise<ExpenseMergeOut> {
     const o =
       obj(
-        await this.client.request<unknown>('POST', `/expenses/duplicates/${encodeURIComponent(id)}/merge`, { body, idempotencyKey: body.client_id }),
+        await this.client.request<unknown>('POST', `/expenses/duplicates/${encodeURIComponent(id)}/merge`, {
+          body,
+          idempotencyKey: body.client_id,
+        }),
       ) ?? {};
-    return { duplicate: expenseDuplicateOut(o.duplicate), expense: expenseOut(o.expense), action: actionOut(o.action), repeated: o.repeated === true };
+    return {
+      duplicate: expenseDuplicateOut(o.duplicate),
+      expense: expenseOut(o.expense),
+      action: actionOut(o.action),
+      repeated: o.repeated === true,
+    };
   }
 
   /** [Это разные]: never suggested together again (no action: nothing changed). */
@@ -2810,7 +3197,9 @@ export class Api {
 
   /** Only the keys that changed; `409 conflict` (with `details.profile`) on a stale `base_version`. */
   async putCompanyProfile(body: CompanyProfileIn): Promise<CompanyProfileWriteOut> {
-    const o = obj(await this.client.request<unknown>('PUT', '/company-profile', { body, idempotencyKey: body.client_id })) ?? {};
+    const o =
+      obj(await this.client.request<unknown>('PUT', '/company-profile', { body, idempotencyKey: body.client_id })) ??
+      {};
     return { profile: companyProfileOut(o.profile), action: actionOut(o.action), repeated: o.repeated === true };
   }
 
@@ -2825,18 +3214,28 @@ export class Api {
 
   /** S28 «Из прошлых КП»: prices of past КП that are not in the price list. */
   async pastPrices(limit = 50): Promise<PastPriceOut[]> {
-    const o = obj(await this.client.request<unknown>('GET', '/price-lists/history', { query: { limit: String(limit) } })) ?? {};
-    return arr(o.items).map(pastPriceOut).filter((x): x is PastPriceOut => x !== null);
+    const o =
+      obj(await this.client.request<unknown>('GET', '/price-lists/history', { query: { limit: String(limit) } })) ?? {};
+    return arr(o.items)
+      .map(pastPriceOut)
+      .filter((x): x is PastPriceOut => x !== null);
   }
 
   async addPriceItems(body: PriceItemsIn): Promise<PriceItemsOut> {
-    const o = obj(await this.client.request<unknown>('POST', '/price-lists/items', { body, idempotencyKey: body.client_id })) ?? {};
+    const o =
+      obj(await this.client.request<unknown>('POST', '/price-lists/items', { body, idempotencyKey: body.client_id })) ??
+      {};
     return { items: priceItemsOf(o.items), action: actionOut(o.action), repeated: o.repeated === true };
   }
 
   async patchPriceItem(id: string, body: PriceItemPatchIn): Promise<PriceItemWriteOut> {
     const o =
-      obj(await this.client.request<unknown>('PATCH', `/price-lists/items/${encodeURIComponent(id)}`, { body, idempotencyKey: body.client_id })) ?? {};
+      obj(
+        await this.client.request<unknown>('PATCH', `/price-lists/items/${encodeURIComponent(id)}`, {
+          body,
+          idempotencyKey: body.client_id,
+        }),
+      ) ?? {};
     return { item: priceItemOut(o.item), action: actionOut(o.action), repeated: o.repeated === true };
   }
 
@@ -2853,7 +3252,9 @@ export class Api {
 
   /** The ТЗ records → `kp:extract` (202, `document.status: extracting`). Idempotent by `client_id`. */
   async createKp(body: KpCreateIn): Promise<KpFullOut> {
-    return kpFullOut(await this.client.request<unknown>('POST', '/documents/kp', { body, idempotencyKey: body.client_id }));
+    return kpFullOut(
+      await this.client.request<unknown>('POST', '/documents/kp', { body, idempotencyKey: body.client_id }),
+    );
   }
 
   async getDocument(id: string): Promise<KpFullOut> {
@@ -2868,13 +3269,23 @@ export class Api {
 
   /** Tap-edits (no model): a new version; the action's «Отменить» is the revert to the one before. */
   async patchKp(id: string, body: KpPatchIn): Promise<KpFullOut> {
-    return kpFullOut(await this.client.request<unknown>('POST', `/documents/${encodeURIComponent(id)}/patch`, { body, idempotencyKey: body.client_id }));
+    return kpFullOut(
+      await this.client.request<unknown>('POST', `/documents/${encodeURIComponent(id)}/patch`, {
+        body,
+        idempotencyKey: body.client_id,
+      }),
+    );
   }
 
   /** The step of the status strip («Клиент принял?» [Да] [Нет]). */
   async setDocumentStatus(id: string, body: DocumentStatusIn): Promise<DocumentStatusOut> {
     const o =
-      obj(await this.client.request<unknown>('POST', `/documents/${encodeURIComponent(id)}/status`, { body, idempotencyKey: body.client_id })) ?? {};
+      obj(
+        await this.client.request<unknown>('POST', `/documents/${encodeURIComponent(id)}/status`, {
+          body,
+          idempotencyKey: body.client_id,
+        }),
+      ) ?? {};
     return { document: documentOut(o.document), action: actionOut(o.action), repeated: o.repeated === true };
   }
 
@@ -2886,19 +3297,32 @@ export class Api {
     const format = r.format ?? 'pdf';
     const query: Record<string, string> = { format };
     if (r.n) query.n = String(r.n);
-    const o = obj(await this.client.request<unknown>('POST', `/documents/${encodeURIComponent(id)}/render`, { query })) ?? {};
+    const o =
+      obj(await this.client.request<unknown>('POST', `/documents/${encodeURIComponent(id)}/render`, { query })) ?? {};
     const file = obj(o.file) ?? {};
     const url = str(file.url);
     if (!url) throw new ApiError(502, { code: 'bad_answer' });
     const mime = str(file.mime) ?? (format === 'docx' ? DOCX_MIME : 'application/pdf');
-    return { url, file_name: str(file.name) ?? (format === 'docx' ? 'КП.docx' : 'КП.pdf'), mime, version_n: num(o.version_n), total: decText(o.total), document: documentOut(o.document) };
+    return {
+      url,
+      file_name: str(file.name) ?? (format === 'docx' ? 'КП.docx' : 'КП.pdf'),
+      mime,
+      version_n: num(o.version_n),
+      total: decText(o.total),
+      document: documentOut(o.document),
+    };
   }
 
   // week 15 — phrase edits, versions, sending
 
   /** A phrase → KP_EDIT → applied at once (a new version, `changed_paths`, the action's «Отменить»). Needs `ai_cross_border`. */
   async editKpPhrase(id: string, body: KpEditIn): Promise<KpEditOut> {
-    return kpEditOut(await this.client.request<unknown>('POST', `/documents/${encodeURIComponent(id)}/edit`, { body, idempotencyKey: body.client_id }));
+    return kpEditOut(
+      await this.client.request<unknown>('POST', `/documents/${encodeURIComponent(id)}/edit`, {
+        body,
+        idempotencyKey: body.client_id,
+      }),
+    );
   }
 
   async kpVersions(id: string): Promise<KpVersionsOut> {
@@ -2911,33 +3335,62 @@ export class Api {
 
   /** «Вернуть эту»: a new version equal to `n`, with its action («Отменить» goes back). */
   async revertKp(id: string, body: KpRevertIn): Promise<KpFullOut> {
-    return kpFullOut(await this.client.request<unknown>('POST', `/documents/${encodeURIComponent(id)}/revert`, { body, idempotencyKey: body.client_id }));
+    return kpFullOut(
+      await this.client.request<unknown>('POST', `/documents/${encodeURIComponent(id)}/revert`, {
+        body,
+        idempotencyKey: body.client_id,
+      }),
+    );
   }
 
   /** S18: the file of a version and a pending «Да» with the preview by code. The server sends nothing itself (decision №6). */
   async sendKp(id: string, body: KpSendIn): Promise<KpSendOut> {
-    return kpSendOut(await this.client.request<unknown>('POST', `/documents/${encodeURIComponent(id)}/send`, { body, idempotencyKey: body.client_id }));
+    return kpSendOut(
+      await this.client.request<unknown>('POST', `/documents/${encodeURIComponent(id)}/send`, {
+        body,
+        idempotencyKey: body.client_id,
+      }),
+    );
   }
 
   /** «Отправили?» [Да]: `sent_at`, `sent_version_n`, frozen, its file kept. Action `send_external`, no «Отменить». */
   async markKpSent(id: string, n: number, body: KpSentIn): Promise<KpSentOut> {
-    return kpFullOut(await this.client.request<unknown>('POST', `/documents/${encodeURIComponent(id)}/versions/${n}/sent`, { body, idempotencyKey: body.client_id }));
+    return kpFullOut(
+      await this.client.request<unknown>('POST', `/documents/${encodeURIComponent(id)}/versions/${n}/sent`, {
+        body,
+        idempotencyKey: body.client_id,
+      }),
+    );
   }
 
   /** «Отправили?» [Нет] (`not_sent`), or [Да] of a draft (`sent`). */
   async pendingResult(id: string, body: PendingResultIn): Promise<PendingResultOut> {
-    const o = obj(await this.client.request<unknown>('POST', `/pending-actions/${encodeURIComponent(id)}/result`, { body, ...(body.client_id ? { idempotencyKey: body.client_id } : {}) })) ?? {};
-    return { pending_action: pendingActionOut(o.pending_action), action: actionOut(o.action), document: documentOut(o.document), draft: messageDraftOut(o.draft) };
+    const o =
+      obj(
+        await this.client.request<unknown>('POST', `/pending-actions/${encodeURIComponent(id)}/result`, {
+          body,
+          ...(body.client_id ? { idempotencyKey: body.client_id } : {}),
+        }),
+      ) ?? {};
+    return {
+      pending_action: pendingActionOut(o.pending_action),
+      action: actionOut(o.action),
+      document: documentOut(o.document),
+      draft: messageDraftOut(o.draft),
+    };
   }
 
   // F-15 drafts (S25): the assistant writes, the person sends.
 
   async createDraft(body: DraftCreateIn): Promise<DraftWriteOut> {
-    return draftWriteOut(await this.client.request<unknown>('POST', '/drafts', { body, idempotencyKey: body.client_id }));
+    return draftWriteOut(
+      await this.client.request<unknown>('POST', '/drafts', { body, idempotencyKey: body.client_id }),
+    );
   }
 
   async drafts(): Promise<DraftOut[]> {
-    const o = obj(await this.client.request<unknown>('GET', '/drafts', { query: { status: 'draft', limit: '50' } })) ?? {};
+    const o =
+      obj(await this.client.request<unknown>('GET', '/drafts', { query: { status: 'draft', limit: '50' } })) ?? {};
     return messageDraftsOf(o.drafts);
   }
 
@@ -2952,7 +3405,10 @@ export class Api {
   /** A file of the API (`/v1/…`) as an absolute URL with the session's header, for the file system's download. */
   async authedFile(path: string): Promise<{ url: string; headers: Record<string, string> }> {
     const session = await this.client.tokens.getSession();
-    return { url: this.client.url(path.replace(/^\/v1(?=\/)/, '')), headers: session ? { Authorization: `Bearer ${session.accessToken}` } : {} };
+    return {
+      url: this.client.url(path.replace(/^\/v1(?=\/)/, '')),
+      headers: session ? { Authorization: `Bearer ${session.accessToken}` } : {},
+    };
   }
 
   // week 19: beta scope (features.md) — no sign-in.
@@ -2975,23 +3431,35 @@ export class Api {
 
   /** The page's tile on «Сегодня» (onboarding.md): an action with «Отменить»; a `client_id` repeat is safe. */
   async setTodayTile(pageId: string, body: TodayTileIn): Promise<TodayTileWriteOut> {
-    const o = await this.client.request<unknown>('PUT', `/pages/${encodeURIComponent(pageId)}/today-tile`, { body, idempotencyKey: body.client_id });
+    const o = await this.client.request<unknown>('PUT', `/pages/${encodeURIComponent(pageId)}/today-tile`, {
+      body,
+      idempotencyKey: body.client_id,
+    });
     return { page: pageOutOf(o), action: actionOut(obj(o)?.action) };
   }
 
   /** S35 ticks after the first phrase, by code (the phrase is read and dropped). */
   async suggestedPages(phrase: string | null, introMarks: string[]): Promise<SuggestedPagesOut> {
-    const o = obj(await this.client.request<unknown>('POST', '/onboarding/suggested-pages', { body: { phrase, intro_marks: introMarks } })) ?? {};
+    const o =
+      obj(
+        await this.client.request<unknown>('POST', '/onboarding/suggested-pages', {
+          body: { phrase, intro_marks: introMarks },
+        }),
+      ) ?? {};
     const reasons = obj(o.reasons) ?? {};
     return {
       template_keys: strs(o.template_keys),
-      reasons: Object.fromEntries(Object.entries(reasons).filter((e): e is [string, string] => typeof e[1] === 'string')),
+      reasons: Object.fromEntries(
+        Object.entries(reasons).filter((e): e is [string, string] => typeof e[1] === 'string'),
+      ),
     };
   }
 
   /** S35 «Подходит» / «Добавить (N)»: all chosen pages in one request, one action. */
   async createPagesBatch(body: PagesBatchIn): Promise<PagesBatchOut> {
-    return pagesBatchOut(await this.client.request<unknown>('POST', '/pages/batch', { body, idempotencyKey: body.client_id }));
+    return pagesBatchOut(
+      await this.client.request<unknown>('POST', '/pages/batch', { body, idempotencyKey: body.client_id }),
+    );
   }
 
   /** Product events (events.md): only with the `analytics` consent. */
@@ -3004,7 +3472,12 @@ export class Api {
 
   /** Starts the archive (or returns the one being made, or the one of this `client_id`). */
   async startExport(clientId: string): Promise<ExportOut | null> {
-    return exportOut(await this.client.request<unknown>('POST', '/export', { body: { client_id: clientId }, idempotencyKey: clientId }));
+    return exportOut(
+      await this.client.request<unknown>('POST', '/export', {
+        body: { client_id: clientId },
+        idempotencyKey: clientId,
+      }),
+    );
   }
 
   async getExport(id: string): Promise<ExportOut | null> {
@@ -3014,7 +3487,9 @@ export class Api {
   /** The newest archives (≤5), newest first. */
   async exports(): Promise<ExportOut[]> {
     const o = obj(await this.client.request<unknown>('GET', '/export')) ?? {};
-    return arr(o.exports).map(exportOut).filter((x): x is ExportOut => x !== null);
+    return arr(o.exports)
+      .map(exportOut)
+      .filter((x): x is ExportOut => x !== null);
   }
 
   async deletionState(): Promise<DeletionStateOut> {

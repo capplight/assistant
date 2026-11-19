@@ -2,6 +2,8 @@ import { router } from 'expo-router';
 import { AiLabel } from '@/components/AiLabel';
 import {
   Clock,
+  Film,
+  Link2,
   CloudOff,
   CreditCard,
   Lock,
@@ -31,6 +33,7 @@ import { AppText } from '../AppText';
 import { answerNotice, useLocalHitTitles } from '../answerText';
 import { ReplaceSheet } from '../ReplaceSheet';
 import { LocalHitChips, SourceChips } from '../SourceChips';
+import { answerBody, WebSources } from '../WebSources';
 import { Button } from '../ui/Button';
 import { ResultCard } from '../ui/Floating';
 import { Icon, type LucideIcon } from '../ui/Icon';
@@ -80,23 +83,61 @@ export function UserBubble({ m, testID }: { m: ChatMessage; testID?: string }) {
           {t('assistant.from_tab', { page: fromTab })}
         </AppText>
       ) : null}
-      <View
-        testID={testID}
-        accessible
-        accessibilityLabel={t('chat.you', { text: m.text })}
-        style={{
-          maxWidth: '82%',
-          backgroundColor: theme.colors.btn,
-          borderTopLeftRadius: 20,
-          borderTopRightRadius: 20,
-          borderBottomRightRadius: 6,
-          borderBottomLeftRadius: 20,
-          paddingHorizontal: 15,
-          paddingVertical: 11,
-        }}
-      >
-        <AppText style={{ color: theme.colors.onBtn, lineHeight: 22 }}>{m.text}</AppText>
-      </View>
+      {m.shared ? (
+        // screens-v5-extra «Поделились ссылкой»: a paper2 card on the right, «видео по ссылке · вы поделились».
+        <Pressable
+          testID={testID ? `${testID}-shared` : undefined}
+          accessibilityRole="button"
+          accessibilityLabel={`${t(`chat.shared_${m.shared.kind}`)}. ${m.text}`}
+          onPress={() => router.navigate({ pathname: '/record/[id]', params: { id: m.shared!.recordId } })}
+          style={({ pressed }) => ({
+            maxWidth: '84%',
+            backgroundColor: theme.colors.paper2,
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
+            borderBottomRightRadius: 6,
+            borderBottomLeftRadius: 20,
+            paddingHorizontal: 15,
+            paddingVertical: 12,
+            opacity: pressed ? 0.85 : 1,
+          })}
+        >
+          <View style={[styles.row, { gap: 6 }]}>
+            {m.shared.kind === 'video' ? (
+              <Film size={14} color={theme.colors.ink3} />
+            ) : (
+              <Link2 size={14} color={theme.colors.ink3} />
+            )}
+            <AppText variant="caption" style={{ color: theme.colors.ink3 }}>
+              {t(`chat.shared_${m.shared.kind}`)}
+            </AppText>
+          </View>
+          <AppText
+            numberOfLines={3}
+            style={{ marginTop: 4, fontFamily: theme.type.headline.fontFamily, fontSize: 16, lineHeight: 21 }}
+          >
+            {m.text}
+          </AppText>
+        </Pressable>
+      ) : (
+        <View
+          testID={testID}
+          accessible
+          accessibilityLabel={t('chat.you', { text: m.text })}
+          style={{
+            maxWidth: '82%',
+            backgroundColor: theme.colors.btn,
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
+            borderBottomRightRadius: 6,
+            borderBottomLeftRadius: 20,
+            paddingHorizontal: 15,
+            paddingVertical: 11,
+          }}
+        >
+          <AppText style={{ color: theme.colors.onBtn, lineHeight: 22 }}>{m.text}</AppText>
+        </View>
+      )}
     </View>
   );
 }
@@ -149,7 +190,7 @@ export function AssistantMessage({ m, testID }: { m: ChatMessage; testID?: strin
         </View>
       ) : m.text && !m.action && !m.saved ? (
         <AppText testID={testID ? `${testID}-text` : undefined} variant="chat">
-          {m.text}
+          {answerBody(m)}
         </AppText>
       ) : null}
       {m.proposal && !m.proposal.answered ? (
@@ -185,9 +226,7 @@ export function AssistantMessage({ m, testID }: { m: ChatMessage; testID?: strin
             </View>
           ) : null}
           <View style={retryable ? [styles.flex, { gap: 10 }] : undefined}>
-            <AppText style={{ fontSize: 15.5, lineHeight: 22 }}>
-              {notice}
-            </AppText>
+            <AppText style={{ fontSize: 15.5, lineHeight: 22 }}>{notice}</AppText>
             {retryable ? (
               <View style={styles.row}>
                 <Button
@@ -203,6 +242,7 @@ export function AssistantMessage({ m, testID }: { m: ChatMessage; testID?: strin
       ) : null}
       {hits.length > 0 ? <LocalHitChips messageId={m.id} recordIds={hits} titles={titles} /> : null}
       {m.sources && m.sources.length > 0 ? <SourceChips messageId={m.id} sources={m.sources} /> : null}
+      <WebSources m={m} />
       {m.status === 'done' && m.aiGenerated && !!m.text && !m.action ? (
         <AiLabel testID={testID ? `${testID}-ai` : undefined} variant="footnote" />
       ) : null}

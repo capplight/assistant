@@ -10,6 +10,11 @@ import { useAlarms } from '@/alarms/store';
 import type { ReminderDraft } from '@/api/types';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/ui/Button';
+import { CalendarSheet } from '@/components/ui/CalendarSheet';
+import { Row, RowChevron, RowMeta } from '@/components/ui/Leaf';
+import { ActionList, Sheet } from '@/components/ui/Sheet';
+import { TimeWheel } from '@/components/ui/TimeWheel';
+import { AlarmClock, Bell, CalendarDays, Check, Clock } from 'lucide-react-native';
 import { Screen } from '@/components/Screen';
 import { Header } from '@/components/ui/Header';
 import { useToast } from '@/store/toast';
@@ -45,7 +50,17 @@ function defaultDue(now: number): number {
 export default function ReminderScreen() {
   const theme = useTheme();
   const { t } = useTranslation();
-  const p = useLocalSearchParams<{ text?: string; draft?: string; options?: string; message?: string; phraseId?: string; missedKey?: string; editId?: string; messageId?: string; via?: string }>();
+  const p = useLocalSearchParams<{
+    text?: string;
+    draft?: string;
+    options?: string;
+    message?: string;
+    phraseId?: string;
+    missedKey?: string;
+    editId?: string;
+    messageId?: string;
+    via?: string;
+  }>();
   const caps = useAlarms((s) => s.caps);
   const showToast = useToast((s) => s.show);
   const [now] = useState(() => Date.now());
@@ -67,8 +82,21 @@ export default function ReminderScreen() {
   const mustChoose = options.length > 1;
   const [chose, setChose] = useState(false);
 
-  const move = (ms: number) => {
-    setDue((d) => d + ms);
+  const [calOpen, setCalOpen] = useState(false);
+  const [offsetOpen, setOffsetOpen] = useState(false);
+  // screens-v5-extra «Дело · редактор»: the time is a wheel (5 min steps), the day chips; «Другой день» — the calendar.
+  const setTime = (h: number, m: number) => {
+    const d = new Date(due);
+    d.setHours(h, m, 0, 0);
+    setDue(d.getTime());
+    setEdited(true);
+    setError(null);
+  };
+  const setDate = (dayStart: number) => {
+    const d = new Date(due);
+    const n = new Date(dayStart);
+    d.setFullYear(n.getFullYear(), n.getMonth(), n.getDate());
+    setDue(d.getTime());
     setEdited(true);
     setError(null);
   };
@@ -111,12 +139,13 @@ export default function ReminderScreen() {
     showToast(t('rem.saved', { when: whenWord(due, Date.now()), time: timeText(due) }), 3000);
     // R-12 / 2-design 5.3: the first reminder asks for notifications (S04) if nobody asked yet.
     const s = useAlarms.getState();
-    if (s.caps?.notifications !== 'granted' && !s.notifyAskedAt) router.replace({ pathname: '/notify', params: { saved: text } });
+    if (s.caps?.notifications !== 'granted' && !s.notifyAskedAt)
+      router.replace({ pathname: '/notify', params: { saved: text } });
     else if (router.canGoBack()) router.back();
     else router.replace('/');
   };
 
-  const chip = (key: string, label: string, selected: boolean, onPress: () => void) => (
+  const chip = (key: string, label: string, selected: boolean, onPress: () => void, icon?: typeof Bell) => (
     <Pressable
       key={key}
       testID={`rem-${key}`}
@@ -136,28 +165,25 @@ export default function ReminderScreen() {
         },
       ]}
     >
-      <AppText color={selected ? 'onBtn' : 'ink'} style={{ fontFamily: theme.type.sheetMeta.fontFamily, fontSize: 15 }}>
-        {label}
-      </AppText>
+      <View style={[styles.row, { gap: 6 }]}>
+        {icon
+          ? (() => {
+              const I = icon;
+              return <I size={18} color={selected ? theme.colors.onBtn : theme.colors.ink} strokeWidth={2} />;
+            })()
+          : null}
+        <AppText
+          color={selected ? 'onBtn' : 'ink'}
+          style={{ fontFamily: theme.type.sheetMeta.fontFamily, fontSize: 15 }}
+        >
+          {label}
+        </AppText>
+      </View>
     </Pressable>
   );
 
-  const step = (key: string, label: string, sign: string, onPress: () => void) => (
-    <Pressable
-      testID={`rem-${key}`}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={onPress}
-      style={[
-        styles.step,
-        { minWidth: theme.size.buttonHeight + 16, minHeight: theme.size.minTouch, paddingHorizontal: theme.space[2], borderRadius: theme.radius.round, borderWidth: 1.5, borderColor: theme.colors.ink },
-      ]}
-    >
-      <AppText variant="buttonSmall" style={{ fontVariant: ['tabular-nums'] }}>
-        {sign}
-      </AppText>
-    </Pressable>
-  );
+  const offsetLabel = (o: number) =>
+    o === 0 ? t('rem.at_moment') : o === 15 ? t('rem.before15') : o === 60 ? t('rem.before60') : t('rem.day_before');
 
   const off = Math.round((new Date(due).setHours(0, 0, 0, 0) - new Date(now).setHours(0, 0, 0, 0)) / 86_400_000);
 
@@ -169,13 +195,18 @@ export default function ReminderScreen() {
       mode="strip"
       footer={<Button testID="rem-save" label={t('rem.save')} onPress={() => void save()} />}
     >
-      <Header title={parsed ? t('rem.title_parsed') : t('rem.title_new')} back={{ onPress: () => router.back(), label: t('rem.close'), testID: 'rem-close' }} />
+      <Header
+        title={parsed ? t('rem.title_parsed') : t('rem.title_new')}
+        back={{ onPress: () => router.back(), label: t('rem.close'), testID: 'rem-close' }}
+      />
       {p.message ? (
         <AppText testID="rem-message" style={{ marginBottom: theme.space[3] }}>
           {p.message}
         </AppText>
       ) : null}
-      <AppText variant="caption" style={styles.label}>{t('rem.what')}</AppText>
+      <AppText variant="caption" style={styles.label}>
+        {t('rem.what')}
+      </AppText>
       <TextInput
         testID="rem-title"
         accessibilityLabel={t('rem.what')}
@@ -205,54 +236,92 @@ export default function ReminderScreen() {
         ]}
       />
 
-      <AppText variant="caption" style={styles.label}>{t('rem.when')}</AppText>
+      <AppText variant="caption" style={styles.label}>
+        {t('rem.when')}
+      </AppText>
       {options.length > 1 ? (
         <View style={[styles.wrap, { gap: theme.space[2], marginTop: theme.space[2] }]}>
           {options.map((o, i) =>
-            chip(`option-${i}`, o.local?.time ?? (o.due_at ? timeText(Date.parse(o.due_at)) : ''), chose && !!o.due_at && Date.parse(o.due_at) === due, () => {
-              if (o.due_at) setDue(Date.parse(o.due_at));
-              setChose(true);
-              setError(null);
-            }),
+            chip(
+              `option-${i}`,
+              o.local?.time ?? (o.due_at ? timeText(Date.parse(o.due_at)) : ''),
+              chose && !!o.due_at && Date.parse(o.due_at) === due,
+              () => {
+                if (o.due_at) setDue(Date.parse(o.due_at));
+                setChose(true);
+                setError(null);
+              },
+            ),
           )}
         </View>
       ) : null}
-      <AppText testID="rem-day" variant="section" style={{ marginTop: theme.space[3] }}>
-        {dayText(due, now)}
-      </AppText>
-      <AppText
-        testID="rem-time"
-        nativeID="v5-capped"
-        maxFontSizeMultiplier={theme.m.heroMaxScale}
-        style={theme.type.bigNumber}
-        accessibilityLabel={t('rem.time_a11y', { time: timeText(due) })}
-      >
-        {timeText(due)}
-      </AppText>
+      <View style={[styles.wrap, { gap: theme.space[2], marginTop: theme.space[2] }]}>
+        {chip('today', t('rem.today'), off === 0, () => setDay(0))}
+        {chip('tomorrow', t('rem.tomorrow'), off === 1, () => setDay(1))}
+        <Pressable
+          testID="rem-other-day"
+          accessibilityRole="button"
+          accessibilityState={{ selected: off > 1 }}
+          accessibilityLabel={off > 1 ? `${t('rem.other_day')}: ${dayText(due, now)}` : t('rem.other_day')}
+          onPress={() => setCalOpen(true)}
+          style={[
+            styles.chip,
+            styles.row,
+            {
+              gap: 6,
+              minHeight: theme.size.minTouch,
+              borderRadius: theme.radius.round,
+              paddingHorizontal: 15,
+              backgroundColor: off > 1 ? theme.colors.btn : 'transparent',
+              borderWidth: off > 1 ? 0 : 1.5,
+              borderColor: theme.colors.line2,
+            },
+          ]}
+        >
+          <CalendarDays size={18} color={off > 1 ? theme.colors.onBtn : theme.colors.ink} strokeWidth={2} />
+          <AppText
+            color={off > 1 ? 'onBtn' : 'ink'}
+            style={{ fontFamily: theme.type.sheetMeta.fontFamily, fontSize: 15 }}
+          >
+            {off > 1 ? dayText(due, now).split(',').slice(0, 2).join(',') : t('rem.other_day')}
+          </AppText>
+        </Pressable>
+      </View>
       {first?.time_assumed && !edited ? (
         // The assistant set the time itself: the terracotta mark «проверьте» (not a warning colour).
-        <AppText variant="mark" color="assistantText">
+        <AppText variant="mark" color="assistantText" style={{ marginTop: theme.space[2] }}>
           {t('rem.time_assumed')}
         </AppText>
       ) : null}
-      {/* 200%: «−1:00 +1:00 −0:05 +0:05» do not fit one 320 pt row; they wrap to two. */}
-      <View testID="rem-steps" style={[styles.row, { flexWrap: 'wrap', gap: theme.space[2], marginTop: theme.space[3] }]}>
-        {step('hour-minus', t('rem.hour_minus'), '−1:00', () => move(-60 * MIN))}
-        {step('hour-plus', t('rem.hour_plus'), '+1:00', () => move(60 * MIN))}
-        {step('min-minus', t('rem.min_minus'), '−0:05', () => move(-5 * MIN))}
-        {step('min-plus', t('rem.min_plus'), '+0:05', () => move(5 * MIN))}
+      <View style={{ marginTop: 6 }} accessibilityLabel={t('rem.time_a11y', { time: timeText(due) })}>
+        <TimeWheel
+          testID="rem-wheel"
+          hour={new Date(due).getHours()}
+          minute={new Date(due).getMinutes()}
+          onChange={setTime}
+        />
       </View>
-      <View style={[styles.wrap, { gap: theme.space[2], marginTop: theme.space[3], marginBottom: theme.space[5] }]}>
-        {chip('today', t('rem.today'), off === 0, () => setDay(0))}
-        {chip('tomorrow', t('rem.tomorrow'), off === 1, () => setDay(1))}
-        {chip('day-next', t('rem.day_next'), false, () => setDay(off + 1))}
-        {off > 0 ? chip('day-prev', t('rem.day_prev'), false, () => setDay(off - 1)) : null}
-      </View>
+      <AppText
+        testID="rem-time"
+        style={styles.hidden}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      >
+        {timeText(due)}
+      </AppText>
 
-      <AppText variant="caption" style={styles.label}>{t('rem.how')}</AppText>
+      <AppText variant="caption" style={[styles.label, { marginTop: theme.space[3] }]}>
+        {t('rem.how')}
+      </AppText>
       <View style={[styles.wrap, { gap: theme.space[2], marginTop: theme.space[2] }]}>
-        {chip('level-alarm', `🔔 ${t('alarm.level_alarm')}`, level === 'alarm', () => setLevel('alarm'))}
-        {chip('level-notification', t('alarm.level_notification'), level === 'notification', () => setLevel('notification'))}
+        {chip(
+          'level-notification',
+          t('alarm.level_notification'),
+          level === 'notification',
+          () => setLevel('notification'),
+          Bell,
+        )}
+        {chip('level-alarm', t('alarm.level_alarm'), level === 'alarm', () => setLevel('alarm'), AlarmClock)}
       </View>
       {lateRisk(caps) ? (
         <AppText testID="rem-late-risk" variant="small" style={{ marginTop: theme.space[2] }}>
@@ -260,24 +329,62 @@ export default function ReminderScreen() {
         </AppText>
       ) : null}
 
-      <AppText variant="caption" style={[styles.label, { marginTop: theme.space[5] }]}>
-        {t('rem.remind')}
-      </AppText>
-      <View style={[styles.wrap, { gap: theme.space[2], marginTop: theme.space[2] }]}>
-        {OFFSETS.map((o) =>
-          chip(
-            `offset-${o}`,
-            o === 0 ? t('rem.at_moment') : o === 15 ? t('rem.before15') : o === 60 ? t('rem.before60') : t('rem.day_before'),
-            offset === o,
-            () => setOffset(o),
-          ),
-        )}
-      </View>
+      <Row
+        testID="rem-offset"
+        onPress={() => setOffsetOpen(true)}
+        accessibilityLabel={`${t('rem.remind_more')}: ${offsetLabel(offset)}`}
+        style={{ marginTop: theme.space[2] }}
+      >
+        <Clock size={22} color={theme.colors.ink} strokeWidth={theme.icon.strokeWidth} />
+        <AppText numberOfLines={1} style={styles.flex}>
+          {t('rem.remind_more')}
+        </AppText>
+        <RowMeta>{offsetLabel(offset)}</RowMeta>
+        <RowChevron />
+      </Row>
+      {calOpen ? (
+        <CalendarSheet
+          value={due}
+          now={now}
+          onClose={() => setCalOpen(false)}
+          onPick={(d) => {
+            setDate(d);
+            setCalOpen(false);
+          }}
+        />
+      ) : null}
+      {offsetOpen ? (
+        <Sheet
+          visible
+          testID="rem-offset-sheet"
+          title={t('rem.remind_more')}
+          onClose={() => setOffsetOpen(false)}
+          place="tasks"
+        >
+          <ActionList
+            actions={OFFSETS.map((o) => ({
+              key: `o-${o}`,
+              testID: `rem-offset-${o}`,
+              label: offsetLabel(o),
+              icon: offset === o ? Check : undefined,
+              onPress: () => {
+                setOffset(o);
+                setOffsetOpen(false);
+              },
+            }))}
+          />
+        </Sheet>
+      ) : null}
       <AppText variant="callout" style={{ marginTop: theme.space[3] }}>
         {t('rem.no_repeat')}
       </AppText>
       {error ? (
-        <AppText testID="rem-error" color="danger" accessibilityLiveRegion="polite" style={{ marginTop: theme.space[3] }}>
+        <AppText
+          testID="rem-error"
+          color="danger"
+          accessibilityLiveRegion="polite"
+          style={{ marginTop: theme.space[3] }}
+        >
           {error}
         </AppText>
       ) : null}
@@ -291,5 +398,5 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   chip: { justifyContent: 'center' },
   label: { fontFamily: fontFamily.semibold, marginBottom: 2 },
-  step: { alignItems: 'center', justifyContent: 'center' },
+  hidden: { position: 'absolute', width: 1, height: 1, opacity: 0 },
 });

@@ -131,6 +131,10 @@ export type ChatMessage = {
   /** «Сейчас: Ищу в Заметках…» while streaming. */
   activity?: string | null;
   sources?: ChatSource[];
+  /** Ф-87: web pages of the answer (`web_sources`): shown as links, the text's «Источники: …» line is hidden. */
+  webSources?: { url: string; title: string | null }[];
+  /** screens-v5-extra «Поделились ссылкой»: a phrase that came by «Поделиться» (shown as a card on the right). */
+  shared?: { kind: 'video' | 'link' | 'text'; recordId: string; url: string | null };
   aiGenerated?: boolean;
   notice?: ChatNotice;
   /** Offline: records found on the phone by words (local ids). */

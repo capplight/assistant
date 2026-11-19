@@ -253,7 +253,12 @@
     "divider": "— {{page}} бетінде, {{time}} —",
     "you": "Сіз: {{text}}",
     "more": "Тағы",
-    "action_undone": "{{text}} — болдырылмады"
+    "action_undone": "{{text}} — болдырылмады",
+    "web_sources": "Дереккөздер",
+    "web_source_a11y": "{{site}} ашу. {{title}}",
+    "shared_video": "сілтемедегі бейне · сіз бөлістіңіз",
+    "shared_link": "сілтеме · сіз бөлістіңіз",
+    "shared_text": "мәтін · сіз бөлістіңіз"
   },
   "today": {
     "hello": "Қайырлы күн",
@@ -605,7 +610,12 @@
     "delete": "Жазбаны өшіру",
     "deleted": "Жазбаны өшірдім",
     "back_answer": "Жауапқа оралу",
-    "processing_stuck": "Талдау болмады — жазбаны ашыңыз"
+    "processing_stuck": "Талдау болмады — жазбаны ашыңыз",
+    "voice_play": "Тыңдау, {{time}}",
+    "voice_pause": "Кідірту",
+    "open_photo": "Суретті ашу",
+    "open_pdf": "{{name}} ашу",
+    "pdf_meta": "PDF · {{size}} КБ"
   },
   "check": {
     "badge": "тексеріңіз",
@@ -847,7 +857,16 @@
     "card_check": "Уақытты тексеріңіз",
     "card_done": "Дайын",
     "card_change": "Өзгерту",
-    "card_understood": "Былай түсіндім · «Істерге» түседі · {{kind}}"
+    "card_understood": "Былай түсіндім · «Істерге» түседі · {{kind}}",
+    "wheel_hour": "Сағат",
+    "wheel_minute": "Минут",
+    "other_day": "Басқа күн",
+    "remind_more": "Тағы еске салу",
+    "cal_friday": "Жұмада",
+    "cal_week": "Бір аптадан соң",
+    "cal_prev": "Өткен ай",
+    "cal_next": "Келесі ай",
+    "cal_done": "Дайын · {{day}}"
   },
   "setup": {
     "title": "Оятқыш міндетті түрде шырылдауы үшін",
@@ -1062,7 +1081,10 @@
     "err_consent_required": "Көшіруге келісім керек",
     "err_generic": "Қайта көріңіз",
     "err_not_saved_messages": "Файлда «Таңдаулылар» жоқ. Дәл осы чатты экспорттаңыз",
-    "err_running": "Көшіру жүріп жатыр — аяқталуын күтіңіз"
+    "err_running": "Көшіру жүріп жатыр — аяқталуын күтіңіз",
+    "moving": "Көшіріп жатырмын…",
+    "count": "{{total}} жазбаның {{done}}",
+    "can_close": "жабуға болады — өзім жалғастырамын"
   },
   "view": {
     "settings": "Баптау",
@@ -2293,7 +2315,9 @@
     "err_import_running": "Басқа файлды талдап жатырмын — аяқтағанымды күтіңіз.",
     "undo_confirm_title": "Импортты өшіру керек пе?",
     "undo_confirm_body": "Әкелінген әңгімелер себетке түседі.",
-    "undo_keep": "Өшірмеу"
+    "undo_keep": "Өшірмеу",
+    "reading_name": "{{name}} талдап жатырмын…",
+    "count": "{{total}} әңгіменің {{done}}"
   },
   "ask": {
     "today": "Айтыңыз немесе жазыңыз…",

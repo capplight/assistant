@@ -94,13 +94,15 @@ export const darkColors: ColorTokens = {
   tray: '#0F0E12',
   trayInk: '#F1EEE8',
   trayInk2: '#9A95A2', // 6.6 on tray
-  paper: '#1E1D23',
-  paper2: '#2A2930',
-  line: '#34323A',
-  line2: '#4A4752',
+  // A8 (v5-device-qa-1, Ф-84, in the app since 2026-11-18): the paper one step lighter so its edge and corners show
+  // over the tray on a phone; ink3 5.8 on paper · 5.0 on paper2, assistantText 6.5 on paper.
+  paper: '#26252B',
+  paper2: '#312F37',
+  line: '#3B3942',
+  line2: '#504D58',
   ink: '#F1EEE8', // 14.5 on paper
   ink2: '#C2BDC8', // 9.1
-  ink3: '#A29DAA', // 6.3 on paper · 5.4 on paper2
+  ink3: '#A29DAA', // 5.8 on paper · 5.0 on paper2 (A8)
   place: {
     today: '#C9A23A',
     notes: '#5E93DC',
