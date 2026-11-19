@@ -9,7 +9,7 @@ the API has no admin auth yet, so this is a CLI for the server (no personal data
 python -m assistant.ai.costs report [--days 7] [--json]
 ```
 
-From `provider_usage` (task `chat`, one successful call = one step), `usage_counters.chat_turns`
+From `provider_usage` (tasks `chat` and, since Ф-88, `chat_change` (Sonnet), one successful call = one step), `usage_counters.chat_turns`
 and the `budgets` day wallets, per local day (`budget_tz`, Asia/Almaty):
 
 | column | meaning |

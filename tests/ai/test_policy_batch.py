@@ -21,7 +21,12 @@ from assistant.ai import (
 )
 from assistant.ai.adapters import AnthropicAdapter
 from assistant.ai.adapters.base import strict_json_schema
-from assistant.ai.policy import ALWAYS_STRONG, ESCALATION_RULES, strong_denial
+from assistant.ai.policy import (
+    ALWAYS_STRONG,
+    ESCALATION_RULES,
+    STRONG_BY_DECISION,
+    strong_denial,
+)
 from assistant.ai.types import AdapterRequest, Message, ProviderRequestError, ServerError, Usage
 from tests.ai.conftest import ROUTES, Note, make_env, make_settings
 
@@ -72,6 +77,8 @@ def test_route_table_cannot_widen_the_rules():
         table(draft={"budget_class": "answers", "tier": "strong"})
     with pytest.raises(ValueError, match="no escalation rule"):
         table(draft={"budget_class": "answers", "escalate": "strong"})
+    with pytest.raises(ValueError, match="answers budget"):  # Ф-88
+        table(chat_change={"budget_class": "documents", "tier": "strong"})
     with pytest.raises(ValueError, match="documents budget"):
         table(kp_extract={"budget_class": "background", "tier": "strong"})
     with pytest.raises(ValueError, match="may not use batches"):
@@ -85,7 +92,8 @@ def test_packaged_routes():
     # Off by founder decision (2026-11-07, see routes.yaml): on again only with their approval.
     assert {task for task in LLMTask if t.route(task).batch is not BatchMode.OFF} == set()
     for task in LLMTask:
-        assert (t.route(task).tier.value == "strong") == (task in ALWAYS_STRONG)
+        assert (t.route(task).tier.value == "strong") == (task in ALWAYS_STRONG
+                                                          or task in STRONG_BY_DECISION)
         assert t.route(task).escalate is None or task in ESCALATION_RULES
     assert t.batch_multiplier("anthropic") == Decimal("0.5")
     assert t.batch_multiplier("openai") == Decimal(1)

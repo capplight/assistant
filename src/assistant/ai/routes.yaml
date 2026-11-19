@@ -72,6 +72,14 @@ tasks:
   # Ф-86: conversational answers (advice, plans) are longer than record answers; 3000 covers
   # thinking at low effort plus an answer up to ANSWER_MAX_CHARS. Haiku output: $0.0015 at the cap.
   chat: {budget_class: answers, escalate: strong, timeout_s: 8, max_tokens: 3000}
+  # Ф-88: a phrase that may change something (code said CHANGE, or a follow-up to a change):
+  # Sonnet first, then the fallback provider's strong model. A change turn does not stream, so
+  # timeout_s is the whole step. Per token Sonnet is 20x Haiku (prices above), so a change turn
+  # costs ~$0.01-0.03 instead of ~$0.001; questions and conversation stay on `chat` (Haiku).
+  chat_change: {budget_class: answers, tier: strong, timeout_s: 20, max_tokens: 3000}
+  # Ф-88: a mixed phrase («завтра на СТО…, сегодня кофе за 1000 тенге») code could not split:
+  # the strong model cuts it into parts, code checks every word and does each part.
+  phrase_split: {budget_class: answers, tier: strong, timeout_s: 15, max_tokens: 1500}
   # The next chat turn may need it (spec 5.10, layer 5).
   chat_summarize: {budget_class: background}
   # Step 5 (Ф-60, Ф-61): facts about the person, every few phrases, in the background; light model,

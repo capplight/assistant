@@ -161,6 +161,8 @@ class AnthropicAdapter:
             kwargs["tools"] = tools
             if req.tool_choice == "none":
                 kwargs["tool_choice"] = {"type": "none"}
+            # "required" (Ф-88) stays "auto": forced any/tool is a 400 on claude-*-5-5; the chat
+            # re-asks once in code when a change turn called no tool (chat/service.py).
         return kwargs
 
     # --- Message Batches: half price, most finish within an hour, 24 hours at most ---

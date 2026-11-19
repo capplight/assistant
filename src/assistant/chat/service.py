@@ -52,10 +52,10 @@ from assistant.ai import (
     WebSource,
 )
 from assistant.ai.policy import StrongReason, StrongRequest
-from assistant.ai.prompting import TaskInputs, ToolRound
+from assistant.ai.prompting import TaskInputs, ToolRound, UntrustedPart
 from assistant.ai.router import Router
 from assistant.ai.store import period_starts
-from assistant.ai.types import ToolResult
+from assistant.ai.types import Message, ToolResult
 from assistant.chat import jobs, kp_line, limits, memory, plan_line, store, undo_line
 from assistant.chat.context import (
     PROMPT_VERSION,
@@ -66,14 +66,20 @@ from assistant.chat.context import (
     est_tokens,
 )
 from assistant.chat.intent import (
+    SPLIT_SYSTEM,
     Intent,
     IntentReply,
+    PhraseParts,
     Reading,
     UndoPhrase,
     asks_web,
+    check_parts,
+    claims_action,
     fast_path,
+    follow_up_phrase,
     from_model,
     is_comparison,
+    looks_mixed,
     note_by_code,
     rules_first,
     save_text,
@@ -153,6 +159,19 @@ TEXT_LIMITED = {"ru": "На сегодня достаточно — продол
 TEXT_LIMITED_FOUND = {"ru": " Вот что нашёл в записях.", "kk": " Жазбалардан тапқаным осы."}
 TEXT_NOT_DONE = {"ru": "Не получилось сделать — скажите ещё раз, пожалуйста.",
                  "kk": "Не получилось сделать — скажите ещё раз, пожалуйста."}  # fmt: skip
+# Ф-88: the answer said «создаю / записал», nothing ran, and a second try did not do it either
+TEXT_CLAIM_FAILED = {"ru": "Не получилось — ничего не изменил. Скажите, пожалуйста, ещё раз.",
+                     "kk": "Не получилось — ничего не изменил. Скажите, пожалуйста, ещё "
+                           "раз."}  # kk: until reviewed (R-39)  # fmt: skip
+# Ф-88: our words to the model (trusted), never shown to the person
+CLAIM_RETRY = ("Ты написал, что делаешь или сделал изменение, но не вызвал ни одного инструмента "
+               "— ничего не изменилось. Если человек просит изменение, вызови нужный инструмент "
+               "сейчас (новая страница — create_page_from_template, запись — create, перенос — "
+               "move). Если сделать нельзя или не хватает данных, честно скажи, что не сделал, и "
+               "спроси, чего не хватает. Не пиши, что сделано, если инструмент не вызван.")
+FOLLOW_LINE = ("Человек возвращается к своей прошлой просьбе, которая не была выполнена: «{0}». "
+               "Выполни её сейчас инструментами; если не можешь — честно скажи почему.")
+FOLLOW_WINDOW = timedelta(minutes=30)
 TEXT_STALE_CHOICE = {"ru": "Это уже неактуально — скажите ещё раз, пожалуйста.",
                      "kk": "Это уже неактуально — скажите ещё раз, пожалуйста."}  # fmt: skip
 TEXT_CANCELLED = {"ru": "Хорошо, ничего не менял.", "kk": "Хорошо, ничего не менял."}
@@ -620,8 +639,18 @@ class ChatService:
                 # step 8: on an open plan («Попросите поменять план…») a phrase is about the plan
                 turn = dataclasses.replace(turn, plan_open=True)
             prior: MutationState | None = None
+            given: list[tuple[str, str]] | None = None
+            mixed = False  # Ф-88: a spend phrase with another thought never takes the spend path
+            if turn.input_kind != "share" and not turn.plan_open \
+                    and len(split_parts(turn.text)) < 2 \
+                    and await self._mixed_spend(turn):  # fmt: skip
+                given = await self._model_parts(turn)  # the strong model cuts it, code checks
+                mixed = not (given is not None and len(given) == 1 and given[0][1] == "expense")
+                if given is not None and len(given) < 2:
+                    given = None
             if turn.input_kind != "share" and not turn.plan_open:
-                finished, prior, rest = await self._several(run, turn, background=background)
+                finished, prior, rest = await self._several(run, turn, background=background,
+                                                            given=given)  # fmt: skip
                 if finished:
                     return  # «купил хлеб за 400, молоко за 600 и напомни оплатить свет» (step 6)
                 if prior is not None and rest:  # code did its parts; the model gets the rest
@@ -641,9 +670,16 @@ class ChatService:
                     and (order := kp_line.read(turn.text)) is not None:  # fmt: skip
                 await self._start_kp(run, turn, order)  # «сделай КП для …» (Ф-50)
                 return
-            if prior is None and turn.input_kind != "share" and await self._save_expense(run, turn):
+            if prior is None and not mixed and turn.input_kind != "share" \
+                    and await self._save_expense(run, turn):  # fmt: skip
                 return  # «потратил 5000 на бензин» → «Расходы», one action (US-31)
             reading = rules_first(turn.text, input_kind=turn.input_kind)
+            follow: str | None = None
+            if prior is None and turn.input_kind != "share" and follow_up_phrase(turn.text):
+                follow = await self._pending_change(turn)  # «ну и где?» after «Создаю…» (Ф-88)
+                if follow is not None:
+                    reading = Reading(Intent.CHANGE, "follow_up", False,
+                                      max(1, rules_first(follow).verbs))  # fmt: skip
             if reading.intent == Intent.UNCLEAR and (turn.plan_open
                                                      or plan_line.asks_plan(turn.text)):
                 # «план поездки в Стамбул на 4 дня»: a plan is asked for, never a note (step 8)
@@ -682,6 +718,9 @@ class ChatService:
                 min_similarity=self.s.search_vector_min_similarity, tools=tools,
             )  # fmt: skip
             env.mut = self._mutation(run, turn, env.book, change, reading.deictic)
+            if follow is not None:  # code's checks read both phrases, the person's own words
+                env.mut.phrase = f"{follow}\n{turn.text}"
+                ctx.inputs.context.insert(len(ctx.inputs.context) - 1, FOLLOW_LINE.format(follow))
             if prior is not None:  # step 6: the code's parts and the model's are one group
                 env.mut.action_pk, env.mut.action_public = prior.action_pk, prior.action_public
                 env.mut.more_action_pks = list(prior.more_action_pks)
@@ -834,7 +873,8 @@ class ChatService:
                                   [{"name": "create", "arguments": {}, "error": res.is_error,
                                     "by": "code"}])  # fmt: skip
 
-    async def _several(self, run: ReplyRun, turn: TurnInput, *, background: bool
+    async def _several(self, run: ReplyRun, turn: TurnInput, *, background: bool,
+                       given: list[tuple[str, str]] | None = None,
                        ) -> tuple[bool, MutationState | None, str | None]:  # fmt: skip
         """Step 6, code first: a phrase of several simple parts (spends, to-dos, «запиши …»,
         «напомни …»), each read by the same code readers as alone. Each part is its own action,
@@ -842,13 +882,19 @@ class ChatService:
         else the parts code reads are done here and the rest goes to the model (`(False, m,
         rest)`, the same group); no part code reads: `(False, None, None)`, the usual way.
         A reminder part gets its S13 draft (`reminder_draft`), nothing is set without «Сохранить»;
-        in the background (nobody sees a draft) such a phrase is not split."""
-        parts = split_parts(turn.text)
+        in the background (nobody sees a draft) such a phrase is not split.
+        `given` (Ф-88): parts and kinds the strong model cut a mixed phrase into (`_model_parts`,
+        every word checked); code still reads each part and decides what it is, the model's kind
+        only names a part code would leave to the chat model."""
+        parts = [p for p, _ in given] if given else split_parts(turn.text)
+        hints = [k for _, k in given] if given else [""] * len(parts)
         if len(parts) < 2:
             return False, None, None
         kinds: list[str] = []
+        lists: list[str | None] = []  # the list a model-named to-do / purchase goes to
         on_expenses = await self._page_template(turn) == expenses_service.PAGE_TEMPLATE
-        for part in parts:
+        for part, hint in zip(parts, hints, strict=True):
+            lists.append({"task": "todo", "shopping": "shopping"}.get(hint))
             if is_reminder_phrase(part):
                 kinds.append("reminder")
             elif expenses_parse.mentions_expense(part, on_page=on_expenses):
@@ -858,6 +904,10 @@ class ChatService:
                     and rules_first(part).intent != Intent.CHANGE):  # «переложи … в Дела»: model
                 kinds.append("tasks")
             elif save_text(part) is not None:
+                kinds.append("note")
+            elif hint in ("task", "shopping"):
+                kinds.append("tasks")
+            elif hint == "note":
                 kinds.append("note")
             else:
                 kinds.append("model")
@@ -869,7 +919,7 @@ class ChatService:
         m = self._mutation(run, turn, book, True, False)
         list_page = await self._list_of_page(turn)
         done: list[str] = []
-        for part, kind in zip(parts, kinds, strict=True):
+        for part, kind, hint_list in zip(parts, kinds, lists, strict=True):
             ok = True
             if kind == "model":
                 continue
@@ -878,7 +928,8 @@ class ChatService:
             elif kind == "expense":
                 ok = await self._save_expense(run, turn, text_=part, m=m)
             elif kind == "tasks":
-                ok = await self._save_tasks(run, turn, save_text(part) or part, list_page, m=m)
+                ok = await self._save_tasks(run, turn, save_text(part) or part,
+                                            list_page or hint_list, m=m)  # fmt: skip
             else:
                 env = ToolEnv(self.sessionmaker, self.embedder, turn.user_id, book,
                               self.s.search_embed_timeout_seconds,
@@ -900,6 +951,65 @@ class ChatService:
                                   [{"name": "several", "arguments": {"parts": done},
                                     "error": "none" in done, "by": "code"}])  # fmt: skip
         return True, None, None
+
+    async def _mixed_spend(self, turn: TurnInput) -> bool:
+        """Ф-88: the phrase talks about a spend *and* something else (a to-do for tomorrow,
+        «потом», a second sentence). Routing only, code on the person's words."""
+        if not looks_mixed(turn.text) or is_reminder_phrase(turn.text):
+            return False
+        on_page = await self._page_template(turn) == expenses_service.PAGE_TEMPLATE
+        return expenses_parse.mentions_expense(turn.text, on_page=on_page)
+
+    async def _model_parts(self, turn: TurnInput) -> list[tuple[str, str]] | None:
+        """Ф-88: the strong model (PHRASE_SPLIT) cuts a mixed phrase into its thoughts; code
+        checks every word and number of each part against the phrase (`check_parts`). None: no
+        model, or a part the person did not say (nothing is guessed)."""
+        if self.router is None:
+            return None
+        inputs = TaskInputs(system=SPLIT_SYSTEM, instruction="Split the phrase in the data block.",
+                            context=[], untrusted=[UntrustedPart("phrase", turn.text)],
+                            prompt_version="phrase_split.v1")  # fmt: skip
+        try:
+            result = await self.router.run(LLMTask.PHRASE_SPLIT, PhraseParts, inputs,
+                                           user_id=turn.user_id)  # fmt: skip
+        except Exception as exc:  # down, no consent, an odd reply: the phrase goes the usual way
+            log.info("chat: phrase split unavailable: %s", type(exc).__name__)
+            return None
+        return check_parts(turn.text, result.data) if result.data is not None else None
+
+    async def _pending_change(self, turn: TurnInput) -> str | None:
+        """Ф-88: «ну и где?», «давай», «сделай это» right after a change that did not happen
+        (the answer promised it, or said it failed, and no action ran): the person's request
+        it points back at. Code reads the conversation; None when there is nothing pending."""
+        since = self.clock() - FOLLOW_WINDOW
+        async with self.sessionmaker() as session:
+            rows = (await session.execute(
+                select(ConversationMessage.role, ConversationMessage.content,
+                       ConversationMessage.action_ids, ConversationMessage.proposal)
+                .where(ConversationMessage.conversation_id == turn.conversation_id,
+                       ConversationMessage.id < turn.message_id,
+                       ConversationMessage.deleted_at.is_(None),
+                       ConversationMessage.created_at >= since,
+                       ConversationMessage.role.in_(("user", "assistant")))
+                .order_by(ConversationMessage.id.desc()).limit(6))).all()  # fmt: skip
+            await session.commit()
+        answer_claimed = False
+        for role, content, action_ids, proposal in rows:
+            if role == "assistant":
+                if action_ids or (proposal and proposal.get("state") == "open"):
+                    return None  # something was done, or the person is being asked
+                answer_claimed = answer_claimed or claims_action(content) \
+                    or content in TEXT_CLAIM_FAILED.values()  # fmt: skip
+                continue
+            text_ = " ".join((content or "").split())
+            if not text_:
+                return None
+            if follow_up_phrase(text_):
+                continue  # «ну и где?» after «Создай страницу…»: look one phrase further back
+            if rules_first(text_).intent == Intent.CHANGE or answer_claimed:
+                return text_[:500]
+            return None
+        return None
 
     async def _memory_phrase(self, run: ReplyRun, turn: TurnInput, ask: memory.MemoryAsk) -> None:
         """Step 5 (Ф-59: no screen): the memory is seen and changed by phrase, by code."""
@@ -1408,17 +1518,30 @@ class ChatService:
             await self._deferred(run, lang)
             return
         failed: tuple[str, ...] = ()
+        # Ф-88: a change turn runs on the strong model (its own route) and must call a tool:
+        # forced where the provider can (Gemini ANY, OpenAI required; Anthropic rejects it), and
+        # an answer that says «создаю / записал» while nothing ran is asked again once, in code.
+        task = LLMTask.CHAT_CHANGE if change else LLMTask.CHAT
+        if change:
+            strong = None  # the route is strong already; no escalation evidence to check
+        limit = self.s.chat_max_tool_steps
+        forced = change  # the first step of a change turn, and the one re-ask
+        retried = False
+        step = -1
         try:
-            for step in range(self.s.chat_max_tool_steps + 1):
-                final = (step == self.s.chat_max_tool_steps
+            while True:
+                step += 1
+                final = (step >= limit
                          or ctx.total_tokens + round_tokens >= self.s.chat_max_input_tokens)
+                choice = "none" if final else "required" if forced else "auto"
+                forced = False
                 try:
                     result = await self.router.run(
-                        LLMTask.CHAT, ChatReply, ctx.inputs, user_id=turn.user_id,
+                        task, ChatReply, ctx.inputs, user_id=turn.user_id,
                         stream=None if change else AnswerHook(gate), tools=tools,
                         web_search=web,
                         masker=masker, pin_provider=provider,
-                        tool_choice="none" if final else "auto", strong=strong, avoid=failed,
+                        tool_choice=choice, strong=strong, avoid=failed,
                     )  # fmt: skip
                 except AIUnavailable:
                     # Device test 2026-11-12: the pinned provider of a tool loop failed while
@@ -1431,10 +1554,10 @@ class ChatService:
                     failed, provider = (*failed, provider), None
                     gate.reset()
                     result = await self.router.run(
-                        LLMTask.CHAT, ChatReply, ctx.inputs, user_id=turn.user_id,
+                        task, ChatReply, ctx.inputs, user_id=turn.user_id,
                         stream=None if change else AnswerHook(gate), tools=tools,
                         web_search=web,
-                        masker=masker, tool_choice="none" if final else "auto",
+                        masker=masker, tool_choice=choice,
                         strong=strong, avoid=failed,
                     )  # fmt: skip
                 provider = result.provider
@@ -1471,6 +1594,19 @@ class ChatService:
                         break  # the person is asked / told, or a plan is made: no more steps
                     continue
                 reply = result.data
+                if (change and not retried and not final and reply is not None
+                        and m.action_out is None and m.proposal is None and m.note is None
+                        and claims_action(reply.answer)):  # fmt: skip
+                    # Ф-88 (device 2026-11-19: «Создаю страницу «Стамбул».», no tool call):
+                    # the answer claims a change nothing made. Ask once more, a tool forced.
+                    log.info("chat: a change was claimed with no action, asking again")
+                    retried = forced = True
+                    limit = max(limit, step + 2)
+                    ctx.inputs.after += [Message("assistant", reply.answer[:2000]),
+                                         Message("user", CLAIM_RETRY)]  # fmt: skip
+                    tool_log.append({"name": "claim_retry", "arguments": {}, "error": True,
+                                     "by": "code"})  # fmt: skip
+                    continue
                 break
         except BudgetExceeded:
             if m.action_out is not None:
@@ -1492,6 +1628,10 @@ class ChatService:
                 await self._deferred(run, lang, cost=cost)
             return
 
+        if (change and m.action_out is None and m.proposal is None and m.note is None
+                and (reply is None or claims_action(reply.answer))):  # fmt: skip
+            # Ф-88: still nothing done: say so, never a made-up «Готово»
+            m.note = TEXT_CLAIM_FAILED[lang]
         if m.action_out is not None or m.proposal is not None or m.note is not None:
             await self._finish_change(run, turn, m, cost + (m.cost or 0), tool_log)
             return

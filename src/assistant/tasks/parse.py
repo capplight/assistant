@@ -119,7 +119,9 @@ _SHOP_HEAD = re.compile(
 )  # fmt: skip
 _TODO_HEAD = re.compile(
     r"^(?:добав(?:ь|ьте)|запиш(?:и|ите)|внеси(?:те)?)\s+в\s+дела\s*[:,—-]?\s*(?P<rest>.+)$"
-    r"|^(?:мне\s+)?(?:надо|нужно|не\s+забыть)\s+(?P<rest2>.+)$",
+    # Ф-88: «Мне завтра надо поехать в СТО…» — the day before «надо» is the to-do's day
+    r"|^(?:мне\s+)?(?:(?P<day>сегодня|завтра|послезавтра)\s+)?(?:мне\s+)?"
+    r"(?:надо|нужно|не\s+забыть)\s+(?P<rest2>.+)$",
     re.IGNORECASE,
 )  # fmt: skip
 _SPLIT = re.compile(r"\s*(?:,|;|\s+и\s+|\s+а\s+также\s+)\s*", re.IGNORECASE)
@@ -211,7 +213,7 @@ def rules_parse(text: str, today: date, default_list: str | None = None) -> Read
     m = _TODO_HEAD.match(phrase)
     if m:
         rest = (m.group("rest") or m.group("rest2") or "").strip()
-        due = to_date(day_in(rest), today)
+        due = to_date(day_in(rest), today) or to_date(day_in(m.group("day") or ""), today)
         title = _cap(_DAY_TAIL.sub("", rest) if due else rest)
         if not 1 <= len(title) <= TITLE_MAX or len(title.split()) < 2:
             return None  # «надо же» is not a to-do

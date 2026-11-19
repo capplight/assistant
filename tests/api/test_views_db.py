@@ -294,8 +294,12 @@ async def test_assistant_changes_a_view_at_once_and_asks_for_what_is_mine(env): 
 
         # ★ is never hidden
         evs = await say(c, h, "скрой поле заголовок", page_id=pid)
-        assert "Без этого поля" in script.calls["ChatReply"][-1].messages[-1] \
-            .tool_results[0].content or not by_name(evs, "action")  # fmt: skip
+        results = [r.content for req in script.calls["ChatReply"] for m in req.messages
+                   for r in m.tool_results]  # fmt: skip
+        assert any("Без этого поля" in r for r in results) or not by_name(evs, "action")
+        # Ф-88: the model's «Готово.» after a refused change is not passed on as done
+        assert not by_name(evs, "action")
+        assert last(evs, "banner")["text"].startswith("Не получилось — ничего не изменил.")
         fields = (await c.get(f"/v1/pages/{pid}", headers=h)).json()["field_prefs"]
         assert all(f["visible"] for f in fields if f["field_id"] == "title")
 

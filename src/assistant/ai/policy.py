@@ -4,7 +4,9 @@ The route table only names models; it cannot widen these rules: `validate_route`
 a table that breaks them, and `Router.run` asks `strong_denial` before every escalation.
 
 Strong model (spec 5.2, 5.4, founder's option B):
-1. Always strong: only the `documents` tasks in ALWAYS_STRONG (KP; numbers are computed by code).
+1. Always strong: only the `documents` tasks in ALWAYS_STRONG (KP; numbers are computed by code),
+   and by founder decision Ф-88 the change turns of the line (STRONG_BY_DECISION: CHAT_CHANGE,
+   PHRASE_SPLIT, `answers` budget): code still performs and checks every change.
 2. Any other task runs light unless it names an allowed reason from ESCALATION_RULES, backed by a
    number our code holds: confidence of a light attempt < 0.6, more than 5 sources, >= 2 steps.
 3. A low-confidence escalation also needs >= 80 characters of input: a short phrase is not
@@ -50,6 +52,9 @@ MULTI_STEP_FROM = 2
 
 ALWAYS_STRONG = frozenset({LLMTask.KP_EXTRACT, LLMTask.KP_EDIT, LLMTask.PROFILE_EXTRACT,
                            LLMTask.PRICE_LIST_EXTRACT})  # fmt: skip
+# Ф-88 (2026-11-19, founder approved): requests to change something and the splitting of a mixed
+# phrase run on the strong model; questions and conversation stay on the light one (CHAT).
+STRONG_BY_DECISION = frozenset({LLMTask.CHAT_CHANGE, LLMTask.PHRASE_SPLIT})
 _CONFIDENCE = frozenset({StrongReason.LOW_CONFIDENCE})
 _SOURCES = frozenset({StrongReason.MANY_SOURCES})
 ESCALATION_RULES: dict[LLMTask, frozenset[StrongReason]] = {
@@ -94,8 +99,10 @@ class _RouteLike(Protocol):
 
 def validate_route(route: _RouteLike) -> None:
     """A route may not grant more than the rules above."""
-    if route.tier is Tier.STRONG and route.task not in ALWAYS_STRONG:
+    if route.tier is Tier.STRONG and route.task not in ALWAYS_STRONG | STRONG_BY_DECISION:
         raise ValueError(f"routes: {route.task} may not run on the strong tier")
+    if route.task in STRONG_BY_DECISION and route.budget_class is not BudgetClass.ANSWERS:
+        raise ValueError(f"routes: {route.task} must use the answers budget")
     if route.task in ALWAYS_STRONG and route.budget_class is not BudgetClass.DOCUMENTS:
         raise ValueError(f"routes: {route.task} must use the documents budget")
     if route.escalate is not None and route.task not in ESCALATION_RULES:

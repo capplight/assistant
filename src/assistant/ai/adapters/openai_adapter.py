@@ -157,8 +157,8 @@ class OpenAIAdapter:
             kwargs["tools"] = [{"type": "function", "name": t.name, "description": t.description,
                                 "parameters": t.parameters, "strict": True} for t in req.tools]
             kwargs["include"] = ["reasoning.encrypted_content"]
-            if req.tool_choice == "none":
-                kwargs["tool_choice"] = "none"
+            if req.tool_choice in ("none", "required"):
+                kwargs["tool_choice"] = req.tool_choice
         return kwargs  # fmt: skip
 
     async def generate(self, req: AdapterRequest) -> AdapterResponse:
@@ -281,8 +281,8 @@ class GroqAdapter:
             kwargs["tools"] = [{"type": "function", "function": {
                 "name": t.name, "description": t.description, "parameters": t.parameters}}
                 for t in req.tools]
-            if req.tool_choice == "none":
-                kwargs["tool_choice"] = "none"
+            if req.tool_choice in ("none", "required"):
+                kwargs["tool_choice"] = req.tool_choice
         return kwargs  # fmt: skip
 
     async def generate(self, req: AdapterRequest) -> AdapterResponse:

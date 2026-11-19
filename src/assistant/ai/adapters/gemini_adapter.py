@@ -111,6 +111,9 @@ class GeminiAdapter:
             if req.tool_choice == "none":
                 cfg["tool_config"] = types.ToolConfig(
                     function_calling_config=types.FunctionCallingConfig(mode="NONE"))
+            elif req.tool_choice == "required":  # Ф-88: a change turn must call a tool
+                cfg["tool_config"] = types.ToolConfig(
+                    function_calling_config=types.FunctionCallingConfig(mode="ANY"))
         if req.json_schema is not None:
             cfg["response_mime_type"] = "application/json"
             cfg["response_json_schema"] = req.json_schema

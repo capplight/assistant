@@ -51,7 +51,7 @@ from assistant.notify import Notifier, OutMessage
 
 log = logging.getLogger(__name__)
 
-CHAT_TASKS = (LLMTask.CHAT.value,)
+CHAT_TASKS = (LLMTask.CHAT.value, LLMTask.CHAT_CHANGE.value)  # Ф-88: change turns on Sonnet
 MEDIAN_MIN_STEPS = 20  # fewer steps in a day: the median says nothing yet
 FALLBACK_LOOKBACK = timedelta(hours=6)
 

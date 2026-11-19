@@ -32,6 +32,10 @@ class LLMTask(enum.StrEnum):
     PRICE_LIST_EXTRACT = "price_list_extract"
     CHAT = "chat"
     CHAT_SUMMARIZE = "chat_summarize"
+    # Ф-88: a turn that may change something runs on the strong model (Sonnet), questions stay
+    # on CHAT (light); PHRASE_SPLIT: a mixed phrase code could not split, cut into parts
+    CHAT_CHANGE = "chat_change"
+    PHRASE_SPLIT = "phrase_split"
     PAGE_GROUP = "page_group"
     EXPENSE_EXTRACT = "expense_extract"
     TASKS_PARSE = "tasks_parse"  # week 9: a phrase as to-dos / a shopping list
@@ -179,8 +183,10 @@ class AdapterRequest:
     effort: str | None = None  # Anthropic output_config.effort; others ignore it
     on_token: TokenHook | None = None  # set = stream text deltas through this hook
     cache_ttl: str | None = "5m"  # "5m" | "1h" | None; adapters without the choice ignore it
-    # "auto" | "none" ("none": answer now, tools stay declared so the cached prefix holds).
-    # Forced choices are not offered: current Anthropic models reject them.
+    # "auto" | "none" ("none": answer now, tools stay declared so the cached prefix holds) |
+    # "required" (Ф-88: a change turn must call a tool). Current Anthropic models reject a forced
+    # choice (400), so their adapter sends "auto" and the caller re-asks (chat/service.py);
+    # Gemini sends mode ANY, OpenAI "required".
     tool_choice: str = "auto"
     web_search: WebSearchSpec | None = None  # Ф-86: off unless settings.web_search_enabled
 

@@ -387,6 +387,35 @@ date («вы писали 3 марта»).
 - «отмени» / «верни как было» without words undoes the whole last phrase (all its actions).
 - Irreversible things still ask: «Да» rules are unchanged.
 
+**Ф-88 (2026-11-19): no claimed changes, mixed phrases, follow-ups.** No new events or fields;
+what the phone sees changes as follows.
+- **Mixed phrases.** «потом» / «затем» / «после этого» and a new sentence also split a phrase,
+  whatever word follows (each side keeps 2+ words). «Мне завтра надо поехать в сто, ходовку машины
+  посмотреть, потом я сегодня купил кофе за 1000 тенге» → a to-do «Поехать в сто, ходовку машины
+  посмотреть» due tomorrow + a spend 1 000 ₸ with `note` «кофе» today: two `action` events, one
+  `group` («Сделал 2 дела · Отменить всё»). A spend phrase that also says something else (a day
+  ahead, «надо», an errand verb, a second sentence) never takes the instant spend path with the
+  whole phrase as its name: when code cannot split it, the strong model cuts it into parts (task
+  `phrase_split`), code checks every word and number of each part against the phrase and reads
+  each part as usual; a part with a word the person did not say → nothing is split (the phrase
+  goes the usual way, no spend is made of it). To-do titles stay in the person's words (code
+  checks that), so «поехать», not «съездить».
+- **Changes run on the strong model.** A turn that may change something (the intent rule says
+  change, or a follow-up below) runs on task `chat_change` (Sonnet first, then the fallback
+  provider's strong model; `routes.yaml`); questions and conversation stay on `chat` (Haiku).
+  Cost per answer is recorded as before (`cost_usd`, `provider_usage`).
+- **No «Создаю…» without an action.** The first step of a change turn asks for a tool call
+  (forced on Gemini / OpenAI; Anthropic models reject a forced choice, so it is checked in code).
+  If the answer says a change is made or being made («создаю», «записал», «перенёс»…, Kazakh
+  «жасадым», «жаздым»…) and no change ran, code asks the model once more with a tool required. If
+  still nothing ran, the answer is a code text «Не получилось — ничего не изменил. Скажите,
+  пожалуйста, ещё раз.» (`answer_kind: "text"`, not AI-labelled), never a made-up «Готово».
+- **Follow-ups.** «Ну и где эта страница?», «давай», «создай», «сделай это», «да» within 30
+  minutes after a change request that did not happen (no action under its answer) get the change
+  tools; the model is told the earlier request, and code's checks (a page only on a direct
+  request, delete words, view words) read both of the person's phrases. With nothing pending, such
+  a phrase is a question as before.
+
 **Week 20 (Ф-50).**
 - Every save from the line carries `action.saved_to` (`actions.md`): «Сохранил в «…» · Переложить
   · Отменить».

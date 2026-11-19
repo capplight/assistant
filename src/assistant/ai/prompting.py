@@ -65,7 +65,8 @@ class TaskInputs:
 
     Conversation tasks (CHAT) also use: `system_context` - stable per person (profile), appended
     to the system prompt so it is part of the cached prefix; `history` - earlier phrases and
-    answers, before the main message; `tool_rounds` - steps of this turn, after it."""
+    answers, before the main message; `tool_rounds` - steps of this turn, after it; `after` -
+    our own words to the model after those steps (Ф-88: «you said it is done, nothing ran»)."""
 
     system: str
     instruction: str
@@ -76,6 +77,7 @@ class TaskInputs:
     system_context: list[str] = field(default_factory=list)
     history: list[Message] = field(default_factory=list)
     tool_rounds: list[ToolRound] = field(default_factory=list)
+    after: list[Message] = field(default_factory=list)
 
 
 def wrap_untrusted(text: str, masker: Masker) -> str:
@@ -110,4 +112,5 @@ def build_messages(inputs: TaskInputs, masker: Masker) -> tuple[str, tuple[Messa
         results = tuple(ToolResult(r.call_id, r.name, wrap_untrusted(r.content, masker),
                                    r.is_error) for r in rnd.results)  # fmt: skip
         messages.append(Message("user", "", tool_results=results))
+    messages += [Message(m.role, masker.mask(neutralize(m.text))) for m in inputs.after if m.text]
     return system, tuple(messages)
