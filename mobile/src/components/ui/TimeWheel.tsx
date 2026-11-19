@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 
@@ -35,6 +35,18 @@ function Column({
   const { ITEM, HEIGHT } = useSizes();
   const ref = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const settled = useRef(index);
+  // QA v5-device-3 J13: the bold number is the one in the band WHILE the wheel turns (it followed only the end of the
+  // fling, ~130 ms late). It changes only when another row crosses the band, not per frame.
+  const [live, setLive] = useState(index);
+  const [seen, setSeen] = useState(index);
+  if (seen !== index) {
+    setSeen(index);
+    setLive(index);
+  }
+  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const i = Math.max(0, Math.min(values.length - 1, Math.round(e.nativeEvent.contentOffset.y / ITEM)));
+    setLive((was) => (was === i ? was : i));
+  };
   useEffect(() => {
     if (settled.current === index) return;
     settled.current = index;
@@ -66,13 +78,15 @@ function Column({
         contentOffset={{ x: 0, y: index * ITEM }}
         contentContainerStyle={{ paddingVertical: (HEIGHT - ITEM) / 2 }}
         onMomentumScrollEnd={end}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
         onScrollEndDrag={(e) => {
           if (Math.abs(e.nativeEvent.velocity?.y ?? 0) < 0.05) end(e);
         }}
         nestedScrollEnabled
       >
         {values.map((v, i) => {
-          const on = i === index;
+          const on = i === live;
           return (
             <View key={v} nativeID="v5-wheel" style={{ height: ITEM, alignItems: 'center', justifyContent: 'center' }}>
               <AppText

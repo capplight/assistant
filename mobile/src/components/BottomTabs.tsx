@@ -1,5 +1,6 @@
 import { router, useGlobalSearchParams, usePathname } from 'expo-router';
 import { CreditCard, Ellipsis, MessageSquareText, StickyNote, Sun } from 'lucide-react-native';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -84,7 +85,13 @@ export function BottomTabs({ bottomInset = 0 }: { bottomInset?: number }) {
           : current.kind === 'today'
             ? 'today'
             : null;
+  // QA v5-device-3 J7: the tapped tab lights at once, not when its screen has come — until the route changes.
+  const [tapped, setTapped] = useState<{ key: string; from: string } | null>(null);
+  const lit = tapped && tapped.from === pathname ? tapped.key : activeKey;
   const open = async (tab: MainTab) => {
+    const lightNow = () => {
+      if (tab.key !== activeKey) setTapped({ key: tab.key, from: pathname });
+    };
     if (tab.ensure === 'expenses') {
       // A second tap on «Расходы» while it is open: the expense keypad (design-system v2 TabBar).
       if (tab.page && current.kind === 'page' && current.id === tab.page.id) {
@@ -96,12 +103,16 @@ export function BottomTabs({ bottomInset = 0 }: { bottomInset?: number }) {
         showToast(t('gallery.limit'), 4000);
         return;
       }
+      lightNow();
       router.navigate({ pathname: '/page/[id]', params: { id: page.id } });
       return;
     }
     // Also on a record card opened from this page: the tab leads back to the page.
     if (tab.key === 'today' && pathname === '/') useChrome.getState().tapToday();
-    if (tab.href && pathname !== tab.href) router.navigate(tab.href);
+    if (tab.href && pathname !== tab.href) {
+      lightNow();
+      router.navigate(tab.href);
+    }
   };
   return (
     <TabBar
@@ -113,7 +124,7 @@ export function BottomTabs({ bottomInset = 0 }: { bottomInset?: number }) {
         icon: tab.icon,
         centre: tab.centre,
         place: tab.place,
-        active: tab.key === activeKey,
+        active: tab.key === lit,
         accessibilityLabel: t('tabs.a11y', { name: tab.label }),
         onPress: () => void open(tab),
       }))}

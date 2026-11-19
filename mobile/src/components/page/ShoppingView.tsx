@@ -83,7 +83,7 @@ export function ShoppingView({ page, entries, frameTop, ordering }: ViewProps) {
   useEffect(() => () => setShopMode(null), [page.id, setShopMode]);
 
   const tasks = useMemo(() => Object.values(tasksMap).map((x) => shownTask(x, edits)), [tasksMap, edits]);
-  const lr = useMemo(() => listRows(entries ?? [], tasks, ticks, { lists, today }), [entries, tasks, ticks, lists, today]);
+  const lr = useMemo(() => listRows(entries, tasks, ticks, { lists, today }), [entries, tasks, ticks, lists, today]);
   const grouped = page.view?.groupBy === 'where';
   const order = page.view?.groupOrder;
   const groups = useMemo(() => byPlace(lr.open, { grouped, order }), [lr.open, grouped, order]);

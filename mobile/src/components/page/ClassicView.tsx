@@ -56,7 +56,7 @@ export function ClassicView({ page, entries, frameTop, ordering, simple = false 
 
   const rows = useMemo(() => {
     if (!listMode) return withGroups(entries ?? [], page.groups ?? []);
-    const lr = listRows(entries ?? [], Object.values(tasksMap), ticks, { lists, segment: tasksSegment, today });
+    const lr = listRows(entries, Object.values(tasksMap), ticks, { lists, segment: tasksSegment, today });
     const out: Row[] = lr.open.map(fromList);
     if (lr.done.length > 0) {
       out.push({ type: 'group', key: 'done', title: '' });

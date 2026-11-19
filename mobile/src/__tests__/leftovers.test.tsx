@@ -28,7 +28,8 @@ describe('«Дело · редактор»: the time wheel and the calendar (no 
     });
     const [h0, m0] = before.split(':').map(Number);
     expect(String(screen.getByTestId('rem-time', { includeHiddenElements: true }).props.children)).toBe(
-      `${String((h0! + 1) % 24).padStart(2, '0')}:${String(m0).padStart(2, '0')}`,
+      // `timeText` («7:00»): the hour unpadded — the old padStart failed from 23:00 to 9:59 on the test machine's clock.
+      `${(h0! + 1) % 24}:${String(m0).padStart(2, '0')}`,
     );
     await fireEvent(screen.getByTestId('rem-wheel-minute'), 'accessibilityAction', {
       nativeEvent: { actionName: 'increment' },

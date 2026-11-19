@@ -1,11 +1,10 @@
 import { Redirect, Tabs } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView } from 'react-native';
+import { View } from 'react-native';
 
 import { useAccount } from '@/account/data';
 import { MainFooter } from '@/components/MainFooter';
 import { AiConsentUpdate } from '@/consent/AiConsentUpdate';
-import { KEYBOARD_BEHAVIOR } from '@/components/useKeyboard';
 import { finishWithDefaults } from '@/onboarding/service';
 import { InTabsContext } from '@/store/chrome';
 import { useOnboarding } from '@/store/onboarding';
@@ -36,10 +35,16 @@ export default function MainLayout() {
   if (needsSignIn && !signInPostponed) return <Redirect href="/phone?reason=expired" />;
   if (needsConsent && !consentPostponed) return <Redirect href="/account-consent" />;
   return (
-    // Keep the assistant line above the keyboard on both platforms: Android is edge-to-edge and no longer resizes (week 17).
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={KEYBOARD_BEHAVIOR}>
+    // QA v5-device-3 J3: no KeyboardAvoidingView around the tabs — only the footer rides with the keyboard
+    // (`MainFooter`, react-native-keyboard-controller); the screens never re-layout for it.
+    <View style={{ flex: 1 }}>
       <InTabsContext.Provider value>
-      <Tabs backBehavior="history" screenOptions={{ headerShown: false, animation: 'none' }} tabBar={() => <MainFooter />}>
+      <Tabs
+        backBehavior="history"
+        // L1: the scene paints nothing — the tray behind is the root stack's, the paper is the screen's.
+        screenOptions={{ headerShown: false, animation: 'none', sceneStyle: { backgroundColor: 'transparent' } }}
+        tabBar={() => <MainFooter />}
+      >
         <Tabs.Screen name="index" />
         <Tabs.Screen name="page/[id]" />
         <Tabs.Screen name="more" />
@@ -59,6 +64,6 @@ export default function MainLayout() {
       </Tabs>
       </InTabsContext.Provider>
       <AiConsentUpdate />
-    </KeyboardAvoidingView>
+    </View>
   );
 }

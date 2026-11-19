@@ -4,10 +4,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   AccessibilityInfo,
-  Animated,
   AppState,
   BackHandler,
-  Easing,
   Keyboard,
   Pressable,
   StyleSheet,
@@ -18,6 +16,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
+import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { caught } from '@/chat/caught';
 import { chatAllowed, sendFromLine, showSavedToast } from '@/chat/service';
@@ -525,7 +524,9 @@ function AskFold({
   const collapsed = useChrome((s) => s.askCollapsed) && enabled;
   const [reduced, setReduced] = useState(false);
   const [width, setWidth] = useState(0);
-  const [p] = useState(() => new Animated.Value(1));
+  // QA v5-device-3 L4: the fold runs on the UI thread (Reanimated) — the width, the text and the icon are animated
+  // there; JS only flips `collapsed` and hears the end. Same shape and timing as before.
+  const p = useSharedValue(collapsed ? 0 : 1);
   // QA v5-device-2 A1: no shadow while the shape changes (on Android the old shape's elevation drew a «second circle»).
   const [moving, setMoving] = useState(false);
   const [seenFold, setSeenFold] = useState(collapsed);
@@ -545,15 +546,36 @@ function AskFold({
     };
   }, []);
   useEffect(() => {
-    const a = Animated.timing(p, {
-      toValue: collapsed ? 0 : 1,
-      duration: reduced ? reducedMotionFade : collapsed ? motionV5.askCollapse : motionV5.askExpand,
-      easing: reduced ? Easing.linear : Easing.bezier(0.2, 0, 0, 1),
-      useNativeDriver: false,
-    });
-    a.start(() => setMoving(false));
-    return () => a.stop();
+    const done = () => setMoving(false);
+    p.value = withTiming(
+      collapsed ? 0 : 1,
+      {
+        duration: reduced ? reducedMotionFade : collapsed ? motionV5.askCollapse : motionV5.askExpand,
+        easing: reduced ? Easing.linear : Easing.bezier(0.2, 0, 0, 1),
+      },
+      (finished) => {
+        'worklet';
+        if (finished) runOnJS(done)();
+      },
+    );
   }, [collapsed, reduced, p]);
+
+  // 260 ms collapse: the words and the mic go in the first 90 ms, the icon (and its 9 dp dot) comes at 150–260 ms.
+  const textFrom = 1 - 90 / motionV5.askCollapse;
+  const iconTo = 1 - 150 / motionV5.askCollapse;
+  const shape = useAnimatedStyle(() => {
+    const v = p.value;
+    if (reduced || width === 0) return { width: '100%', opacity: reduced ? (collapsed ? 1 : v) : 1 };
+    return { width: height + (width - height) * v, opacity: 1 };
+  }, [reduced, width, height, collapsed]);
+  const textStyle = useAnimatedStyle(() => {
+    const v = p.value;
+    return { opacity: reduced ? 1 : Math.min(1, Math.max(0, (v - textFrom) / (1 - textFrom))) };
+  }, [reduced, textFrom]);
+  const iconStyle = useAnimatedStyle(() => {
+    const v = p.value;
+    return { opacity: reduced ? 1 - v : Math.min(1, Math.max(0, 1 - v / iconTo)) };
+  }, [reduced, iconTo]);
 
   if (!enabled)
     return (
@@ -562,15 +584,6 @@ function AskFold({
       </View>
     );
 
-  // 260 ms collapse: the words and the mic go in the first 90 ms, the icon (and its 9 dp dot) comes at 150–260 ms.
-  const textOpacity = p.interpolate({
-    inputRange: [1 - 90 / motionV5.askCollapse, 1],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
-  const iconOpacity = reduced
-    ? p.interpolate({ inputRange: [0, 1], outputRange: [1, 0] })
-    : p.interpolate({ inputRange: [0, 1 - 150 / motionV5.askCollapse], outputRange: [1, 0], extrapolate: 'clamp' });
   return (
     <View
       onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
@@ -579,30 +592,17 @@ function AskFold({
     >
       {/* ONE layer morphs: the strip narrows to a 48 circle at the right edge (radius h/2 all the time, the one 1.5
           ink border of the strip); the circle's icon is inside it. Never a strip and a circle at once. */}
-      <Animated.View
-        testID={testID}
-        style={[
-          style,
-          styles.clip,
-          moving ? styles.flat : null,
-          reduced || width === 0
-            ? {
-                width: '100%',
-                opacity: reduced ? p.interpolate({ inputRange: [0, 1], outputRange: [collapsed ? 1 : 0, 1] }) : 1,
-              }
-            : { width: p.interpolate({ inputRange: [0, 1], outputRange: [height, width] }) },
-        ]}
-      >
+      <Animated.View testID={testID} style={[style, styles.clip, moving ? styles.flat : null, shape]}>
         <Animated.View
           pointerEvents={collapsed ? 'none' : 'auto'}
           accessibilityElementsHidden={collapsed}
           importantForAccessibility={collapsed ? 'no-hide-descendants' : 'auto'}
-          style={{ width: width > 0 ? width : '100%', alignSelf: 'flex-end', opacity: reduced ? 1 : textOpacity }}
+          style={[{ width: width > 0 ? width : '100%', alignSelf: 'flex-end' }, textStyle]}
         >
           {children}
         </Animated.View>
         {collapsed ? (
-          <Animated.View style={[styles.bubbleWrap, { width: height, height, opacity: iconOpacity }]}>
+          <Animated.View style={[styles.bubbleWrap, { width: height, height }, iconStyle]}>
             <Pressable
               testID={`${testID}-bubble`}
               accessibilityRole="button"

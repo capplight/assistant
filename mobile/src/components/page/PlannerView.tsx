@@ -97,7 +97,7 @@ export function PlannerView({ page, entries, frameTop, ordering }: ViewProps) {
     // A row whose record has a live reminder is drawn in its hour, not here (today.md).
     const notTimed = (r: ListRow) => !(r.kind === 'entry' && r.entry.record.serverId && timed.has(r.entry.record.serverId));
     const isOverdue = (r: ListRow) => !!r.task?.due_date && r.task.due_date < today;
-    const base = listRows(entries ?? [], tasks, ticks, { lists: lists, segment: 'today', today });
+    const base = listRows(entries, tasks, ticks, { lists: lists, segment: 'today', today });
     const late = base.open
       .filter((r) => notTimed(r) && isOverdue(r))
       .sort((a, b) => (a.task!.due_date! < b.task!.due_date! ? -1 : a.task!.due_date! > b.task!.due_date! ? 1 : 0));
@@ -105,7 +105,7 @@ export function PlannerView({ page, entries, frameTop, ordering }: ViewProps) {
     if (segment === 'missed') return { rows: late.map(fromList), overdue: late.length };
     if (segment === 'soon') {
       // «Скоро»: the same sheet by days; dates with nothing are left out.
-      const soon = listRows(entries ?? [], tasks, ticks, { lists: lists, segment: 'soon', today });
+      const soon = listRows(entries, tasks, ticks, { lists: lists, segment: 'soon', today });
       let last: string | null = null;
       for (const r of soon.open.filter(notTimed)) {
         const due = r.task?.due_date ?? null;

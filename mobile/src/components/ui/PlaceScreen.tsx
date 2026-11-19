@@ -1,5 +1,6 @@
 import { ChevronLeft } from 'lucide-react-native';
-import React, { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Animated,
   FlatList,
@@ -15,10 +16,10 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
 
 import { feedAskScroll, InTabsContext, useChrome } from '@/store/chrome';
-import { askBar, onPlace, sheet as S, useTheme, type PlaceKey, type Theme } from '@/theme';
+import { askBar, MAX_FONT_SCALE, onPlace, sheet as S, useTheme, type LayoutMetrics, type PlaceKey, type Theme } from '@/theme';
 
 import { AppText } from '../AppText';
 import type { LucideIcon } from './Icon';
@@ -51,6 +52,11 @@ export type PlaceScreenProps = {
   sub?: string;
   /** More on the sheet under the title (a search field, the big number). */
   sheetExtra?: ReactNode;
+  /**
+   * QA v5-device-3 J1: the height of `sheetExtra` in dp, known from tokens (the week, the big number). With it the sheet
+   * height is right on the first frame; without it the paper waits for the first measure (hidden, never a jump).
+   */
+  sheetExtraHeight?: number;
   /** Replaces the meta line's text (e.g. a month picker). */
   metaNode?: ReactNode;
   back?: SheetBack;
@@ -102,6 +108,47 @@ export function sheetInset(sheetHeight: number): number {
 export function sheetFits(contentHeight: number, viewportHeight: number, collapseRange: number): boolean {
   return contentHeight <= viewportHeight + collapseRange + 1;
 }
+
+/** Height of a text line in dp at the system font scale, capped like the `Text` that draws it. */
+export const scaledLine = (lineHeight: number, fontScale: number, cap: number = MAX_FONT_SCALE) =>
+  lineHeight * Math.min(fontScale, cap);
+
+/**
+ * QA v5-device-3 J1 / §4.1: the expanded sheet height from the tokens, BEFORE the first frame (never from `onLayout`):
+ * padTop + the top row + the phrase (its lines are ours: `\n`, §11.4) or the title + `sub` + the extra + padBottom.
+ * Pure for tests; `PlaceScreen` only checks it against the measure (dev warning past 1 dp).
+ */
+export function expandedSheetHeight(o: {
+  m: LayoutMetrics;
+  back?: boolean;
+  /** A meta line or a meta node (both 1 line). */
+  meta?: boolean;
+  /** Lines of the shown phrase (0: no phrase). */
+  phraseLines?: number;
+  /** The title is drawn (not hidden into the strip). */
+  title?: boolean;
+  sub?: boolean;
+  extra?: number;
+}): number {
+  const { m } = o;
+  const fs = m.fontScale;
+  const row = Math.max(S.topRow, o.back ? 48 : 0, o.meta ? scaledLine(18, fs) : 0, o.back ? scaledLine(20, fs) : 0);
+  let body = 0;
+  if (o.phraseLines && o.phraseLines > 0) body += 4 + o.phraseLines * scaledLine(Math.round(m.phraseSize * 1.12), fs, m.heroMaxScale);
+  else if (o.title) body += 2 + scaledLine(m.largeText ? 40 : 34, fs, 1.2);
+  if (o.sub) body += 4 + scaledLine(20, fs);
+  body += o.extra ?? 0;
+  return Math.ceil(S.padTop + row + body + m.sheetPadBottom);
+}
+
+/** Lines of a phrase as we wrap it ourselves (at most 2). */
+export function phraseLines(phrase: string | undefined): number {
+  if (!phrase) return 0;
+  return Math.min(2, phrase.split('\n').length);
+}
+
+/** Last measured sheet heights by content: a revisited screen starts at its real height even where the tokens guess. */
+const measuredSheets = new Map<string, number>();
 
 /**
  * A screen whose list is its own (a FlatList of a page tool) makes THAT list the scroll of the sheet: the list asks
@@ -273,19 +320,36 @@ function PaperCorners({ color }: { color: string }) {
   );
 }
 
-/** The 34 dp fade at the bottom of the paper under the assistant strip (transparent → paper at 70 %). */
+/** `#RRGGBB` → the same colour at alpha 0 (a gradient to plain `transparent` greys out on Android). */
+export function clearOf(color: string): string {
+  return /^#[0-9a-f]{6}$/i.test(color) ? `${color}00` : 'transparent';
+}
+
+/**
+ * The fade at the bottom of the paper under the assistant strip (transparent → paper at 50 %, as before). QA
+ * v5-device-3 L1: one native gradient, not an SVG layer over the scrolling content.
+ */
 export function BottomPaperFade({ color, height }: { color: string; height: number }) {
   return (
-    <View pointerEvents="none" style={[styles.fade, { height }]}>
-      <Svg width="100%" height="100%" preserveAspectRatio="none">
-        <Defs>
-          <LinearGradient id="pf" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={color} stopOpacity={0} />
-            <Stop offset="0.5" stopColor={color} stopOpacity={1} />
-            <Stop offset="1" stopColor={color} stopOpacity={1} />
-          </LinearGradient>
-        </Defs>
-        <Rect x="0" y="0" width="100%" height="100%" fill="url(#pf)" />
+    <LinearGradient
+      pointerEvents="none"
+      colors={[clearOf(color), color, color]}
+      locations={[0, 0.5, 1]}
+      style={[styles.fade, { height }]}
+    />
+  );
+}
+
+/** The paper's rounded bottom over the tray (two quarter circles in the tray colour) instead of a full-screen clip. */
+function TrayCorners({ color }: { color: string }) {
+  const r = S.radius;
+  return (
+    <View pointerEvents="none" style={[styles.corners, { height: r }]}>
+      <Svg width={r} height={r}>
+        <Path d={`M0 0 A${r} ${r} 0 0 0 ${r} ${r} H0 Z`} fill={color} />
+      </Svg>
+      <Svg width={r} height={r}>
+        <Path d={`M${r} 0 A${r} ${r} 0 0 1 0 ${r} H${r} Z`} fill={color} />
       </Svg>
     </View>
   );
@@ -299,6 +363,7 @@ export function PlaceScreen({
   phrase,
   sub,
   sheetExtra,
+  sheetExtraHeight,
   metaNode,
   back,
   actions = [],
@@ -336,8 +401,36 @@ export function PlaceScreen({
   const strip = mode === 'strip';
   const bare = mode === 'bare';
 
-  // Expanded height = 10 + content + padBottom; measured (estimate until then).
-  const [expandedH, setExpandedH] = useState(() => S.padTop + S.topRow + 40 + m.sheetPadBottom);
+  // QA v5-device-3 J1: the expanded height is computed from the tokens before the first frame. The measure only
+  // corrects what the tokens cannot know (a title that wraps, an extra without a height) and is remembered by content.
+  const extraKnown = !sheetExtra || sheetExtraHeight !== undefined;
+  const estimate = expandedSheetHeight({
+    m,
+    back: !!back,
+    meta: !!(meta || metaNode),
+    phraseLines: showPhrase ? phraseLines(phrase) : 0,
+    title: !showPhrase && !hideTitle,
+    sub: !!sub,
+    extra: sheetExtraHeight ?? 0,
+  });
+  const sheetKey = [
+    place,
+    title,
+    showPhrase ? phrase : '',
+    sub ?? '',
+    !!back,
+    !!(meta || metaNode),
+    hideTitle,
+    sheetExtraHeight ?? (sheetExtra ? '?' : '-'),
+    m.width,
+    m.fontScale,
+    theme.scheme,
+  ].join('|');
+  const [measured, setMeasured] = useState<{ key: string; h: number } | null>(null);
+  const known = measured?.key === sheetKey ? measured.h : measuredSheets.get(sheetKey);
+  const expandedH = known ?? estimate;
+  // Unknown yet (an extra without a height, never measured): the paper waits one frame rather than jump (J1 п. 2).
+  const ready = strip || bare || extraKnown || known !== undefined;
   const H = bare ? S.overlap : strip ? collapsedH : Math.max(expandedH, collapsedH);
   const range = Math.max(1, H - collapsedH);
   const [y] = useState(() => new Animated.Value(0));
@@ -346,22 +439,26 @@ export function PlaceScreen({
   const collapsed = strip || collapsedState;
   const innerRef = useRef<SV | null>(null);
   const viewport = useRef({ h: 0, content: 0 });
+  /** The last scroll offset JS heard (the scroll listener): the collapsed flag and the reset on a page change. */
+  const offset = useRef(0);
 
-  // QA v5-device-1 A3/A4: another page in the same screen (tabs reuse it) or a new list starts expanded at the top —
-  // the sheet must never stay collapsed from an old scroll.
-  // (The value listener below turns the collapsed flag back by itself.)
+  // QA v5-device-1 A3/A4: another page in the same screen (tabs reuse it) starts expanded at the top — the sheet must
+  // never stay collapsed from an old scroll. Only on a page change (QA v5-device-3 J2), never on a re-render.
   useEffect(() => {
+    if (offset.current === 0) return;
+    offset.current = 0;
     y.setValue(0);
+    setCollapsed(false);
   }, [title, y]);
 
-  useEffect(() => {
-    if (strip || bare) return;
-    const id = y.addListener(({ value }) => {
-      const next = value >= range / 2;
-      setCollapsed((was) => (was === next ? was : next));
-    });
-    return () => y.removeListener(id);
-  }, [y, range, strip, bare]);
+  const onSheetLayout = (e: LayoutChangeEvent) => {
+    const h = Math.ceil(S.padTop + e.nativeEvent.layout.height + m.sheetPadBottom);
+    measuredSheets.set(sheetKey, h);
+    if (__DEV__ && extraKnown && Math.abs(h - estimate) > 1) {
+      console.warn(`PlaceScreen «${title}»: the sheet measured ${h} dp, the tokens said ${estimate} dp`);
+    }
+    if (Math.abs(h - expandedH) > 1 || !ready) setMeasured({ key: sheetKey, h });
+  };
 
   const setRef = (r: SV | null) => {
     innerRef.current = r;
@@ -371,33 +468,57 @@ export function PlaceScreen({
   // After release: settle in one of the two states (200 ms snap).
   const external = useRef<((y: number, animated: boolean) => void) | null>(null);
   const [hasList, setHasList] = useState(false);
-  const settle = (e: NativeSyntheticEvent<NativeScrollEvent>, drag = false) => {
-    if (strip || bare) return;
-    const n = e.nativeEvent;
-    // QA v5-device-2 A6: the snap waits for the fling to end — a scrollTo during the momentum made the sheet jump.
-    if (drag && Math.abs(n.velocity?.y ?? 0) > 0.05) return;
-    const at = n.contentOffset.y;
-    // QA A4: content that fits once the sheet is collapsed is not a reason to collapse — it goes back expanded.
-    const fits = sheetFits(n.contentSize.height, n.layoutMeasurement.height, range);
-    if (at > 0 && (at < range || fits)) {
-      const to = fits || at < range / 2 ? 0 : range;
-      if (external.current) external.current(to, !reduced);
-      else innerRef.current?.scrollTo({ y: to, animated: !reduced });
-    }
-  };
+  // The handlers read the latest values through a ref, so their identity stays (QA v5-device-3 J2: a new handler on
+  // every render re-attached the native scroll event and re-registered the list, which reset the sheet mid-scroll).
+  const live = useRef({ strip, bare, range, reduced, askRoom, onScroll });
+  useEffect(() => {
+    live.current = { strip, bare, range, reduced, askRoom, onScroll };
+  });
+  const settle = useMemo(
+    () =>
+      (e: NativeSyntheticEvent<NativeScrollEvent>, drag = false) => {
+        const L = live.current;
+        if (L.strip || L.bare) return;
+        const n = e.nativeEvent;
+        // QA v5-device-2 A6: the snap waits for the fling to end — a scrollTo during the momentum made the sheet jump.
+        if (drag && Math.abs(n.velocity?.y ?? 0) > 0.05) return;
+        const at = n.contentOffset.y;
+        // QA A4: content that fits once the sheet is collapsed is not a reason to collapse — it goes back expanded.
+        const fits = sheetFits(n.contentSize.height, n.layoutMeasurement.height, L.range);
+        if (at > 0 && (at < L.range || fits)) {
+          const to = fits || at < L.range / 2 ? 0 : L.range;
+          if (external.current) external.current(to, !L.reduced);
+          else innerRef.current?.scrollTo({ y: to, animated: !L.reduced });
+        }
+      },
+    [],
+  );
 
   // A6/A7: the sheet follows the scroll on the UI thread (native driver, transforms and opacity only — no layout
-  // and no setState per frame); JS only hears the scroll for the strip rules and the collapsed flag.
-  const handleScroll = Animated.event([{ nativeEvent: { contentOffset: { y } } }], {
-    useNativeDriver: true,
-    listener: (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      if (askRoom) {
-        const n = e.nativeEvent;
-        feedAskScroll(n.contentOffset.y, n.contentSize.height, n.layoutMeasurement.height);
-      }
-      onScroll?.(e);
-    },
-  });
+  // and no setState per frame); JS only hears the scroll for the strip rules and the collapsed flag (a re-render only
+  // when it flips; nothing the list depends on changes with it).
+  const handleScroll = useMemo(
+    () =>
+      // The listener reads the refs only when a scroll event comes, never during render.
+      // eslint-disable-next-line react-hooks/refs
+      Animated.event([{ nativeEvent: { contentOffset: { y } } }], {
+        useNativeDriver: true,
+        listener: (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+          const L = live.current;
+          const n = e.nativeEvent;
+          offset.current = n.contentOffset.y;
+          if (!L.strip && !L.bare) {
+            const next = n.contentOffset.y >= L.range / 2;
+            setCollapsed((was) => (was === next ? was : next));
+          }
+          if (L.askRoom) feedAskScroll(n.contentOffset.y, n.contentSize.height, n.layoutMeasurement.height);
+          L.onScroll?.(e);
+        },
+      }),
+    [y],
+  );
+  const onScrollEndDrag = useMemo(() => (e: NativeSyntheticEvent<NativeScrollEvent>) => settle(e, true), [settle]);
+  const onMomentumScrollEnd = useMemo(() => (e: NativeSyntheticEvent<NativeScrollEvent>) => settle(e), [settle]);
 
   // The sheet keeps its full height H and slides up by the scroll (clamped to the range): its bottom edge moves 1:1 with
   // the paper, the top row (the strip, the rounded cap) slides back down by the same amount, so it stays in place.
@@ -420,28 +541,40 @@ export function PlaceScreen({
 
   const pad = paperPadding ?? m.gutter;
   const askPad = askRoom ? m.ask.listBottomPadding : 0;
-  const listApi: PlaceListApi = {
-    inset: sheetInset(H),
-    onScroll: handleScroll as unknown as PlaceListApi['onScroll'],
-    onScrollEndDrag: (e) => settle(e, true),
-    onMomentumScrollEnd: settle,
-    register: (fn) => {
-      external.current = fn;
-      // A new list starts at its top: the sheet is expanded (A3).
-      y.setValue(0);
-      setHasList(true);
-      return () => {
-        if (external.current === fn) external.current = null;
-        setHasList(false);
-      };
-    },
-  };
+  const inset = sheetInset(H);
+  // QA v5-device-3 J2: one api per sheet geometry. `register` does not reset the scroll of a list that keeps scrolling:
+  // only a list that comes in under a sheet JS last heard scrolled (a list swapped on the same page) starts expanded.
+  const listApi = useMemo<PlaceListApi>(
+    () => ({
+      inset,
+      onScroll: handleScroll as unknown as PlaceListApi['onScroll'],
+      onScrollEndDrag,
+      onMomentumScrollEnd,
+      register: (fn) => {
+        external.current = fn;
+        if (offset.current !== 0) {
+          offset.current = 0;
+          y.setValue(0);
+          setCollapsed(false);
+        }
+        setHasList(true);
+        return () => {
+          if (external.current === fn) {
+            external.current = null;
+            setHasList(false);
+          }
+        };
+      },
+    }),
+    [inset, handleScroll, onScrollEndDrag, onMomentumScrollEnd, y],
+  );
   const listMode = !scroll && hasList;
+  // QA v5-device-3 L1: every area is painted once — the paper by its one container (or the list backdrop), never
+  // again by the body.
   const body = (
     <View
       style={[
         {
-          backgroundColor: listMode ? 'transparent' : paperBg,
           paddingHorizontal: pad,
           paddingTop: listMode ? 0 : S.paperPadTop,
           paddingBottom: (scroll ? theme.space[6] : 0) + (listMode ? 0 : askPad),
@@ -453,30 +586,27 @@ export function PlaceScreen({
       {children}
     </View>
   );
+  const hidden = ready ? null : styles.hidden;
 
   return (
     <View
       testID={testID}
-      style={[styles.flex, { backgroundColor: theme.colors.tray, paddingTop: m.top, paddingBottom: bottomRoom }]}
+      // L1: in the tabs the tray is the root's (the stack screen behind); elsewhere (a modal) the screen brings its own.
+      style={[styles.flex, { paddingTop: m.top, paddingBottom: bottomRoom }, inTabs ? null : { backgroundColor: theme.colors.tray }]}
     >
       {peek ? <StackPeek places={peek} /> : null}
-      <View
-        style={[
-          styles.flex,
-          { borderBottomLeftRadius: S.radius, borderBottomRightRadius: S.radius, overflow: 'hidden' },
-        ]}
-      >
+      <View style={styles.flex}>
         {scroll ? (
           <Animated.ScrollView
             ref={setRef}
             testID={testID ? `${testID}-scroll` : undefined}
-            style={styles.flex}
+            style={[styles.flex, hidden]}
             bounces={false}
             overScrollMode="never"
             scrollEventThrottle={16}
             onScroll={handleScroll}
-            onScrollEndDrag={(e) => settle(e, true)}
-            onMomentumScrollEnd={settle}
+            onScrollEndDrag={onScrollEndDrag}
+            onMomentumScrollEnd={onMomentumScrollEnd}
             onLayout={(e: LayoutChangeEvent) => (viewport.current.h = e.nativeEvent.layout.height)}
             onContentSizeChange={(w: number, h: number) => {
               viewport.current.content = h;
@@ -491,21 +621,21 @@ export function PlaceScreen({
         ) : (
           <PlaceListContext.Provider value={listApi}>
             {listMode ? (
-              <Animated.View
+              // The paper behind the list: from the collapsed sheet's edge down (the sheet covers the rest above), so
+              // it needs no transform and nothing reaches past the screen.
+              <View
                 pointerEvents="none"
-                style={[
-                  styles.backdrop,
-                  {
-                    top: (strip ? collapsedH : H) - S.overlap,
-                    bottom: strip ? 0 : -range,
-                    backgroundColor: paperBg,
-                    transform: [{ translateY: lift }],
-                  },
-                ]}
+                style={[styles.backdrop, hidden, { top: collapsedH - S.overlap, backgroundColor: paperBg }]}
               />
             ) : null}
-            <View style={[styles.flex, { paddingTop: listMode ? 0 : H - S.overlap }]}>
-              <View style={[styles.flex, { backgroundColor: listMode ? 'transparent' : paperBg }]}>{body}</View>
+            <View
+              style={[
+                styles.flex,
+                hidden,
+                listMode ? null : { marginTop: H - S.overlap, backgroundColor: paperBg },
+              ]}
+            >
+              {body}
             </View>
           </PlaceListContext.Provider>
         )}
@@ -517,6 +647,8 @@ export function PlaceScreen({
           </View>
         ) : null}
         {askRoom ? <BottomPaperFade color={paperBg} height={askBar.bottomFade} /> : null}
+        {/* The paper's rounded bottom corners (were a clip of the whole screen). */}
+        <TrayCorners color={theme.colors.tray} />
 
         {/* The coloured sheet over the scroll; its bottom 28 dp are the paper's rounded corners. */}
         {bare ? (
@@ -555,10 +687,7 @@ export function PlaceScreen({
                 pointerEvents={collapsed ? 'none' : 'box-none'}
                 importantForAccessibility={collapsed ? 'no-hide-descendants' : 'auto'}
                 accessibilityElementsHidden={collapsed}
-                onLayout={(e: LayoutChangeEvent) => {
-                  const h = Math.ceil(S.padTop + e.nativeEvent.layout.height + m.sheetPadBottom);
-                  if (Math.abs(h - expandedH) > 0.5) setExpandedH(h);
-                }}
+                onLayout={onSheetLayout}
                 style={[styles.full, { top: S.padTop, paddingHorizontal: m.gutter, opacity: fullOpacity }]}
               >
                 <View style={[styles.row, { minHeight: S.topRow, gap: 6 }]}>
@@ -686,7 +815,7 @@ const styles = StyleSheet.create({
   icon: { alignItems: 'center', justifyContent: 'center' },
   back: { flexDirection: 'row', alignItems: 'center', gap: 2, flexShrink: 1 },
   peek: { position: 'absolute', height: 30, borderTopLeftRadius: 18, borderTopRightRadius: 18, overflow: 'hidden' },
-  sheet: { position: 'absolute', left: 0, right: 0, top: 0, overflow: 'hidden' },
+  sheet: { position: 'absolute', left: 0, right: 0, top: 0 },
   full: { position: 'absolute', left: 0, right: 0 },
   cap: { position: 'absolute', left: 0, right: 0, top: 0 },
   strip: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -706,6 +835,7 @@ const styles = StyleSheet.create({
   backdrop: { position: 'absolute', left: 0, right: 0, bottom: 0 },
   fill: { position: 'absolute', left: 0, right: 0, top: 0 },
   srOnly: { position: 'absolute', width: 1, height: 1, opacity: 0 },
+  hidden: { opacity: 0 },
 });
 
 /**

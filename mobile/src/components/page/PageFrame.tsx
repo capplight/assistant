@@ -14,7 +14,7 @@ import {
   Wallet,
   X,
 } from 'lucide-react-native';
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppState, BackHandler, View } from 'react-native';
 
@@ -52,6 +52,8 @@ import { entryRow, shownEntries, sortEntries } from './rows';
 export type SheetSlot = {
   metaNode?: ReactNode;
   sheetExtra?: ReactNode;
+  /** The extra's height from tokens (QA v5-device-3 J1): the sheet is right on its first frame. */
+  sheetExtraHeight?: number;
   phrase?: string;
   sub?: string;
   hideTitle?: boolean;
@@ -67,10 +69,12 @@ const SheetSlotContext = createContext<((s: SheetSlot | null) => void) | null>(n
 export function useSheetSlot(slot: SheetSlot | null, key: string): void {
   const set = useContext(SheetSlotContext);
   const ref = useRef(slot);
-  useEffect(() => {
+  // QA v5-device-3 J1 / J7: layout effects — the sheet gets its slot (and its height) before the first frame is
+  // painted, not one frame later with the plain title in between.
+  useLayoutEffect(() => {
     ref.current = slot;
   });
-  useEffect(() => {
+  useLayoutEffect(() => {
     set?.(ref.current);
   }, [key, set]);
   useEffect(() => () => set?.(null), [set]);
@@ -423,6 +427,7 @@ export function PageFrame({ page }: { page: Page }) {
         sub={slot?.sub}
         metaNode={slot?.metaNode}
         sheetExtra={slot?.sheetExtra}
+        sheetExtraHeight={slot?.sheetExtraHeight}
         hideTitle={slot?.hideTitle}
         {...(slot?.strip
           ? {

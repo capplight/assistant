@@ -3,7 +3,8 @@ import { Keyboard, StyleSheet, type KeyboardEvent } from 'react-native';
 import type { JsonElement } from 'test-renderer';
 
 import { amountEm, fitAmount } from '@/components/AmountText';
-import { aboveLineMaxHeight, KEYBOARD_BEHAVIOR, lineInputMaxHeight } from '@/components/useKeyboard';
+import { keyboardLift, rideOffset } from '@/components/MainFooter';
+import { aboveLineMaxHeight, lineInputMaxHeight } from '@/components/useKeyboard';
 import { usePages } from '@/store/pages';
 import { useUndo } from '@/store/undo';
 import { type as typeScale } from '@/theme';
@@ -44,8 +45,13 @@ afterEach(() => resetWindow());
 describe('the assistant line above the keyboard at 200%, 320 × 568', () => {
   const KB = 260;
 
-  it('KeyboardAvoidingView lifts on both platforms (Android is edge-to-edge)', () => {
-    expect(KEYBOARD_BEHAVIOR).toBe('padding');
+  it('QA v5-device-3 J3: only the footer rides with the keyboard — 8 above it, still until it reaches the strip', () => {
+    const lift = keyboardLift({ tabsHeight: 68 + 24, gap: 10, aboveKeyboard: 8 });
+    expect(lift).toBe(94);
+    expect(rideOffset(0, lift)).toBe(0);
+    expect(rideOffset(50, lift)).toBe(0);
+    // Open keyboard of 300: the strip's bottom (92 + 10 at rest) ends at 300 + 8.
+    expect(92 + 10 - rideOffset(300, lift)).toBe(308);
   });
 
   it('typing: tabs step aside, no safe-area gap, the field grows to a cap and scrolls, mic / send ≥48 at the bottom edge', async () => {
@@ -57,7 +63,8 @@ describe('the assistant line above the keyboard at 200%, 320 × 568', () => {
     expect(screen.getByTestId('bottom-tabs')).toBeTruthy();
 
     await kb.open(KB);
-    expect(screen.queryByTestId('bottom-tabs')).toBeNull();
+    // J3: the tabs stay (under the keyboard, so nothing re-lays out) but out of reach while typing.
+    expect(screen.getByTestId('bottom-tabs-wrap', { includeHiddenElements: true }).props.importantForAccessibility).toBe('no-hide-descendants');
     expect(flat('main-footer').paddingBottom).toBe(0);
     // Ф-47: no scope label in the line at any size.
     expect(screen.queryByTestId('context-chip')).toBeNull();
@@ -91,6 +98,7 @@ describe('the assistant line above the keyboard at 200%, 320 × 568', () => {
 
     await kb.close();
     expect(screen.getByTestId('bottom-tabs')).toBeTruthy();
+    expect(screen.getByTestId('bottom-tabs-wrap').props.importantForAccessibility).toBe('auto');
     // Keyboard closed: the cap is 30% of the window (3 lines at 200% would be 172).
     expect(StyleSheet.flatten(screen.getByTestId('assistant-input').props.style).maxHeight).toBe(
       lineInputMaxHeight({ lineHeight: typeScale.body.lineHeight!, fontScale: 2, largeFont: true, windowHeight: NARROW.height, keyboardHeight: 0, padding: 16 }),

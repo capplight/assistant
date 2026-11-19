@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 
+import { clockOf } from '@/alarms/format';
 import { AppText } from '@/components/AppText';
 import { PageNameSheet } from '@/components/PageNameSheet';
 import { Screen } from '@/components/Screen';
@@ -77,7 +78,7 @@ export default function MoreScreen() {
     try {
       return new Date(iso).toLocaleTimeString(i18n.language, { hour: '2-digit', minute: '2-digit' });
     } catch {
-      return iso.slice(11, 16);
+      return clockOf(iso);
     }
   };
   const openTemplate = (k: 'tasks' | 'notes' | 'expenses') =>

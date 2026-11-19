@@ -67,9 +67,10 @@ export function AddSheet({ visible, onClose }: { visible: boolean; onClose: () =
       label: t('add.receipt_photo'),
       icon: ReceiptText,
       onPress: () => {
-        onClose();
+        // QA v5-device-3 J12: the next screen opens first; the sheet closes under it (no in-between state).
         const exp = usePages.getState().pages.find((p) => p.templateKey === 'expenses');
         router.push({ pathname: '/receipt', params: { kind: 'camera', ...(exp ? { page: exp.id } : {}) } });
+        onClose();
       },
     },
     {
@@ -78,8 +79,8 @@ export function AddSheet({ visible, onClose }: { visible: boolean; onClose: () =
       label: t('add.reminder'),
       icon: AlarmClock,
       onPress: () => {
-        onClose();
         router.push('/reminder-new');
+        onClose();
       },
     },
     {
@@ -88,8 +89,8 @@ export function AddSheet({ visible, onClose }: { visible: boolean; onClose: () =
       label: t('add.write'),
       icon: PencilLine,
       onPress: () => {
-        onClose();
         router.push('/note-new');
+        onClose();
       },
     },
   ];

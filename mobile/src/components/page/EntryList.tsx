@@ -14,6 +14,7 @@ import type { Page } from '@/store/pages';
 import { useUndo } from '@/store/undo';
 import { useView } from '@/store/view';
 import { setDone } from '@/tasks/service';
+import { LOCAL_TASK } from '@/tasks/store';
 import { useTheme } from '@/theme';
 
 import { AppText } from '../AppText';
@@ -324,14 +325,15 @@ export function EntryList({
               );
             }
             if (item.type === 'task') {
-              // Added on this phone, its page row not here yet: a box, no moves until the server has it.
+              // A task without its page row: a box, no moves until the server has it. «Ждёт связи» only when it really
+              // waits in the outbox (a `local:` id) — QA v5-device-3 J6.
               return (
                 <View style={style} onLayout={measure}>
                   <TaskRow
                     task={item.task}
                     done={item.done}
                     showReturn={item.task.list_key === 'shopping'}
-                    meta={t('queue')}
+                    meta={item.task.id.startsWith(LOCAL_TASK) ? t('queue') : undefined}
                     onToggle={() => void setDone(item.task.id, !item.done)}
                   />
                 </View>

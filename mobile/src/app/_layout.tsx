@@ -11,10 +11,12 @@ import {
 } from '@expo-google-fonts/onest';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { NavigationBar } from 'expo-navigation-bar';
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useAlarmsLifecycle } from '@/alarms/useAlarms';
@@ -28,6 +30,15 @@ import { useBackgroundSync } from '@/sync/useBackgroundSync';
 import { useLayout, useTheme } from '@/theme';
 
 export { ErrorBoundary } from 'expo-router';
+
+// QA v5-device-3 J14: the native splash (the tray colour, app.json) stays until the fonts are in and the first screen
+// is drawn — no white → grey → dark between them.
+void SplashScreen.preventAutoHideAsync().catch(() => undefined);
+try {
+  SplashScreen.setOptions({ duration: 200, fade: true });
+} catch {
+  // an old native build without the module
+}
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
@@ -44,19 +55,36 @@ export default function RootLayout() {
   useAlarmsLifecycle();
   useFeaturesLifecycle();
 
+  const ready = loaded || !!error;
+  useEffect(() => {
+    if (!ready) return;
+    // One frame after the first layout of the tree: the first screen is drawn under the splash.
+    const id = requestAnimationFrame(() => {
+      try {
+        SplashScreen.hide();
+      } catch {
+        // no native splash (tests, web)
+      }
+    });
+    return () => cancelAnimationFrame(id);
+  }, [ready]);
+
   // Fall back to the system font if Onest / Geologica fail to load — never block the app on a font.
-  if (!loaded && !error) return null;
+  if (!ready) return null;
 
   const nav = theme.scheme === 'dark' ? DarkTheme : DefaultTheme;
   return (
     <ShareIntentRoot>
+      {/* QA v5-device-3 J3: one keyboard mechanism for the app — the footer rides with the keyboard on the UI thread. */}
+      <KeyboardProvider>
       <SafeAreaProvider>
         <ThemeProvider
           value={{
             ...nav,
             colors: {
               ...nav.colors,
-              background: theme.colors.bg,
+              // QA v5-device-3 J14 / L1: behind the screens is the tray (a light scene under it flashed and overdrew).
+              background: theme.colors.tray,
               card: theme.colors.surface,
               text: theme.colors.ink,
               primary: theme.colors.brand,
@@ -71,6 +99,7 @@ export default function RootLayout() {
           <TopNoticeHost />
         </ThemeProvider>
       </SafeAreaProvider>
+      </KeyboardProvider>
     </ShareIntentRoot>
   );
 }

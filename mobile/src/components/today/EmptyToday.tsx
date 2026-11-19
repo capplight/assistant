@@ -25,6 +25,16 @@ export type WeekDay = {
   selected?: boolean;
 };
 
+/**
+ * The week's height from its tokens (QA v5-device-3 J1: the sheet knows it before the first frame): the margin + a day
+ * cell — 7 + label 15 + 4 + number 20 (19 small) + 4 + dots 5 + 7, the text capped at ×1.5, never under 56.
+ */
+export function weekStripHeight(m: { size: 'small' | 'regular' | 'large'; fontScale: number }): number {
+  const small = m.size === 'small';
+  const s = Math.min(m.fontScale, 1.5);
+  return (small ? 10 : 14) + Math.max(56, 7 + 15 * s + 4 + (small ? 19 : 20) * s + 4 + 5 + 7);
+}
+
 export function WeekStrip({
   days,
   onDay,
@@ -95,7 +105,8 @@ export function WeekStrip({
               on
                 ? { backgroundColor: c.ink }
                 : ring
-                  ? { borderWidth: 1.5, borderColor: c.ink }
+                  ? // QA v5-device-3 D11: the ring takes its 1.5 from the padding, so the number stays level with the others.
+                    { borderWidth: 1.5, borderColor: c.ink, paddingVertical: 7 - 1.5 }
                   : pressed
                     ? { backgroundColor: 'rgba(0,0,0,0.06)' }
                     : null,

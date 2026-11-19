@@ -15,7 +15,7 @@ import { PendingAnswerCard } from '@/components/PendingAnswerCard';
 import { useMinuteClock, useMissed } from '@/components/ReminderLists';
 import { PageTiles, ShoppingLine } from '@/components/TodaySheet';
 import { BackToToday, DayFade, DayRows, EmptyDay, PlaceRows } from '@/components/today/DayView';
-import { FirstPhrases, RecentSaved, WeekStrip } from '@/components/today/EmptyToday';
+import { FirstPhrases, RecentSaved, WeekStrip, weekStripHeight } from '@/components/today/EmptyToday';
 import { useChrome } from '@/store/chrome';
 import { useView } from '@/store/view';
 import { Button } from '@/components/ui/Button';
@@ -294,7 +294,10 @@ export default function TodayScreen() {
   const hasExpense = live.length > 0;
   const hasReminder = Object.keys(alarmSrc.reminders).length > 0 || liveTasks(tasks, 'todo').length > 0;
   const hasRecord = (records ?? []).length > 0;
-  const steps = firstSteps({ ageDays: ageDays0, note: hasRecord, reminder: hasReminder, expense: hasExpense });
+  // QA v5-device-3 J5: loading is not empty — «Три первые фразы» (and anything that depends on the records) waits for them.
+  const recordsLoading = records === null;
+  const firstStepsRaw = firstSteps({ ageDays: ageDays0, note: hasRecord, reminder: hasReminder, expense: hasExpense });
+  const steps = recordsLoading ? { ...firstStepsRaw, show: false } : firstStepsRaw;
   const blank = ageDays0 < 7 && records !== null && !hasRecord && !hasReminder && !hasExpense;
   const phrase =
     emptyDay && missed.length === 0
@@ -325,7 +328,8 @@ export default function TodayScreen() {
     label: weekdayOf(d, 'short').replace(/\.$/u, ''),
     num: String(Number(d.slice(8))),
     name: weekdayOf(d, 'long'),
-    count: countOf(d),
+    // J5: a past day's dots count its records — none until they are read (never 2 → 3).
+    count: recordsLoading && d < today ? 0 : countOf(d),
     past: d < today,
     today: d === today,
     selected: day === d,
@@ -577,6 +581,7 @@ export default function TodayScreen() {
       stripMeta={stripDate}
       phrase={dayPhrase ?? phrase}
       sheetExtra={<WeekStrip days={week} onDay={openDay} onWeek={stepWeek} />}
+      sheetExtraHeight={weekStripHeight(theme.m)}
       askRoom
       accessory={day ? <BackToToday onPress={backToToday} /> : undefined}
       actions={
@@ -715,7 +720,12 @@ export default function TodayScreen() {
                 }
                 onAll={() => openPage('notes')}
               />
-              {missedRows.length === 0 &&
+              {/* J5: the room of the list while the records load (3 rows of 54), no blocks that would swap. */}
+              {recordsLoading ? (
+                <View testID="today-loading" style={{ height: theme.m.row * 3 }} accessibilityElementsHidden />
+              ) : null}
+              {!recordsLoading &&
+              missedRows.length === 0 &&
               forgetRows.length === 0 &&
               !steps.show &&
               nearRows.length === 0 &&

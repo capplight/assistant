@@ -1,4 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import { clockOf } from '@/alarms/format';
 import { AiLabel } from '@/components/AiLabel';
 import { Flag } from 'lucide-react-native';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -78,7 +79,7 @@ export default function HistoryScreen() {
     try {
       return new Date(ms).toLocaleTimeString(i18n.language, { hour: '2-digit', minute: '2-digit' });
     } catch {
-      return new Date(ms).toISOString().slice(11, 16);
+      return clockOf(new Date(ms).toISOString());
     }
   };
   const dayTitle = (ms: number) => {

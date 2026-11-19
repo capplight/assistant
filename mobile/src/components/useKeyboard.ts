@@ -4,13 +4,11 @@ import { Keyboard, Platform, type KeyboardEvent } from 'react-native';
 /**
  * Week 17: the assistant line above the keyboard (2-design §4.3 «Пишу: поле над клавиатурой»).
  *
- * Expo apps are edge-to-edge on Android, so the window no longer resizes for the keyboard: a
- * `KeyboardAvoidingView` needs a `behavior` on both platforms, `padding` (docs.expo.dev
- * «Keyboard handling», SDK 58). No `softwareKeyboardLayoutMode: pan` in app.json (it would move
- * the line twice). No new dependency: react-native-keyboard-controller is not in Expo Go.
+ * QA v5-device-3 J3: the motion itself is react-native-keyboard-controller's (`KeyboardProvider` at the root,
+ * `MainFooter` translates only the footer on the UI thread). There is no KeyboardAvoidingView around the tabs any
+ * more. The JS height below only bounds things that may change after the keyboard is up (the field's cap, the
+ * scroll box above the line, the tabs hidden from screen readers).
  */
-export const KEYBOARD_BEHAVIOR = 'padding' as const;
-
 /** The keyboard's height while it is open, 0 when closed. iOS: «will» events (moves with it); Android: «did». */
 export function useKeyboardHeight(): number {
   const [height, setHeight] = useState(0);

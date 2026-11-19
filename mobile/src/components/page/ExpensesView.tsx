@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Svg, { Defs, Path, Pattern, Rect } from 'react-native-svg';
 
+import { clockOf } from '@/alarms/format';
 import type { ExpenseOut } from '@/api/types';
 import { formatMinor, inPeriod, minorToDecimal, periodOf, shiftPeriod, toMinor, type Period } from '@/expenses/calc';
 import { categoryByKey, categoryTitle, chipCategories, orderedCategories, type Category } from '@/expenses/categories';
@@ -28,7 +29,7 @@ import { useMinuteClock } from '../ReminderLists';
 import { Button } from '../ui/Button';
 import { ActionList } from '../ui/Sheet';
 import { Bar, BigNumber, CategorySquare, Row, RowMeta } from '../ui/Leaf';
-import { AnimatedList, usePlaceList } from '../ui/PlaceScreen';
+import { AnimatedList, scaledLine, usePlaceList } from '../ui/PlaceScreen';
 import { useSheetSlot } from './PageFrame';
 import { Card } from '../ui/Card';
 import { Chip } from '../ui/Chip';
@@ -184,7 +185,7 @@ export function ExpensesView({ page, entries, frameTop, ordering }: ViewProps) {
         }
       : sub?.kind === 'receipt'
         ? { strip: { title: t('exp.receipt'), back: backToMonth } }
-        : { metaNode: ovSheet.metaNode, sheetExtra: ovSheet.sheetExtra, hideTitle: true };
+        : { metaNode: ovSheet.metaNode, sheetExtra: ovSheet.sheetExtra, sheetExtraHeight: ovSheet.height, hideTitle: true };
   useSheetSlot(slot, sub ? `${sub.kind}:${sub.kind === 'category' ? sub.key : sub.id}:${subBar?.title ?? ''}` : ovSheet.key);
   const askHint = sub?.kind === 'category' ? t('ask.category', { category: subBar?.title ?? '' }) : sub?.kind === 'receipt' ? t('ask.receipt') : null;
   useEffect(() => {
@@ -551,7 +552,7 @@ function ReceiptView({ e, today, onCategory }: { e: ExpenseOut; today: string; o
   const cat = categoryByKey(server, e.category_key);
   const lines = e.line_items ?? [];
   const total = formatMinor(toMinor(e.amount) ?? 0n, e.currency);
-  const time = e.created_at ? e.created_at.slice(11, 16) : '';
+  const time = clockOf(e.created_at);
   const caption = [`${dayLabel(e.spent_on, today, lang, t)}${time ? `, ${time}` : ''}`, sourceWord(e.source, t), t('exp.receipt_lines', { n: lines.length })]
     .filter(Boolean)
     .join(' · ');
@@ -680,8 +681,15 @@ function useOverviewSheet(o: OverviewProps) {
       ) : null}
     </View>
   );
-  const key = [o.title, amount, phrase, sub, theme.m.titleOnly, theme.scheme, phraseSize].join('|');
-  return { metaNode, sheetExtra, key };
+  // QA v5-device-3 J1: the board's height from its tokens — 4 + the number (46 × 1.08) + the phrase (1 line) + sub.
+  const fs = theme.m.fontScale;
+  const height =
+    4 +
+    scaledLine(Math.round(46 * 1.08), fs, theme.m.heroMaxScale) +
+    (phrase && !theme.m.titleOnly ? 10 + scaledLine(Math.round(phraseSize * 1.12), fs, theme.m.heroMaxScale) : 0) +
+    (sub ? 4 + scaledLine(20, fs) : 0);
+  const key = [o.title, amount, phrase, sub, theme.m.titleOnly, theme.scheme, phraseSize, fs].join('|');
+  return { metaNode, sheetExtra, key, height };
 }
 
 /** Under the sheet: the count, «проверить N», «Задать бюджет», income and other currencies — small, on the paper. */
@@ -793,7 +801,7 @@ function FeedLine({ e, today, first, marked, onOpen }: { e: ExpenseOut; today: s
   const waits = e.id.startsWith('local:');
   const from = sourceWord(e.source, t);
   const meta = [catTitle, from, waits ? t('exp.waits') : null].filter(Boolean).join(' · ');
-  const time = e.created_at ? e.created_at.slice(11, 16) : null;
+  const time = clockOf(e.created_at) || null;
   return (
     <Pressable
       testID={`exp-row-${e.id}`}

@@ -19,6 +19,7 @@
     "expo-image-manipulator": "~58.0.16",
     "expo-image-picker": "~58.0.10",
     "expo-keep-awake": "~58.0.3",
+    "expo-linear-gradient": "~58.0.4",
     "expo-linking": "~58.0.16",
     "expo-localization": "~58.0.5",
     "expo-mail-composer": "~58.0.3",
@@ -28,6 +29,7 @@
     "expo-secure-store": "~58.0.2",
     "expo-share-intent": "^9.0.0",
     "expo-sharing": "~58.0.22",
+    "expo-splash-screen": "~58.0.14",
     "expo-sqlite": "~58.0.15",
     "expo-status-bar": "~58.0.4",
     "expo-system-ui": "~58.0.7",
@@ -37,9 +39,12 @@
     "react-dom": "^19.3.0",
     "react-i18next": "^17.1.13",
     "react-native": "0.88.1",
+    "react-native-keyboard-controller": "1.22.7",
+    "react-native-reanimated": "4.7.1",
     "react-native-safe-area-context": "~5.11.1",
     "react-native-screens": "~4.30.1",
     "react-native-svg": "15.16.0",
+    "react-native-worklets": "0.13.0",
     "zustand": "^5.0.16"
   },
   "devDependencies": {
@@ -78,7 +83,9 @@
       "/node_modules/"
     ],
     "moduleNameMapper": {
-      "^lucide-react-native$": "<rootDir>/node_modules/lucide-react-native/dist/cjs/lucide-react-native.js"
+      "^lucide-react-native$": "<rootDir>/node_modules/lucide-react-native/dist/cjs/lucide-react-native.js",
+      "^react-native-reanimated$": "<rootDir>/src/testing/reanimatedEntry.ts",
+      "^react-native-reanimated/mock$": "<rootDir>/src/testing/reanimatedMock.ts"
     },
     "testTimeout": 60000,
     "maxWorkers": "50%"

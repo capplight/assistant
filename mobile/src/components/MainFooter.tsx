@@ -1,6 +1,8 @@
 import { usePathname } from 'expo-router';
 import { useEffect } from 'react';
-import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { StyleSheet, View, useWindowDimensions } from 'react-native';
+import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
+import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAssistant } from '@/store/assistant';
@@ -24,7 +26,24 @@ import { aboveLineMaxHeight, useKeyboardHeight } from './useKeyboard';
  * (Ф-82: on the tab screens; the full field 12 above on «Помощник»; none on service screens) → what is above it
  * (the answer card, the reminder draft, the toast), 8 above.
  * Typing: the strip rides 8 above the keyboard and the tabs go under it; what is above scrolls inside a bounded box.
+ *
+ * QA v5-device-3 J3 / L7: the strip moves WITH the keyboard — a translate on the UI thread from the keyboard's own
+ * animation (react-native-keyboard-controller), nothing else re-lays out. The tabs stay where they are (under the
+ * keyboard, hidden from screen readers while typing), so the screens above never change their bottom.
  */
+export function keyboardLift(o: { tabsHeight: number; gap: number; aboveKeyboard: number }): number {
+  // Translate = min(0, −keyboard + lift): the strip's bottom ends `aboveKeyboard` over the keyboard's top.
+  return o.tabsHeight + o.gap - o.aboveKeyboard;
+}
+
+/**
+ * The footer translate for an open keyboard (`keyboard` ≥ 0 dp, the live height while it moves): 0 until the keyboard
+ * reaches the strip, then 1:1 with it. Pure (a worklet) for tests.
+ */
+export function rideOffset(keyboard: number, lift: number): number {
+  'worklet';
+  return Math.min(0, lift - keyboard);
+}
 export function MainFooter() {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
@@ -34,7 +53,7 @@ export function MainFooter() {
   const pathname = usePathname();
   // «Я в магазине» (template-screens 3): the line folds to its chip and the mic but stays; no tabs.
   const shop = useView((s) => s.shopMode !== null);
-  const tabs = !(shop || typing);
+  const tabs = !shop;
   const listening = useAssistant((s) => s.listening);
   const ask = useAskPlace();
   const current = useCurrentPage();
@@ -58,7 +77,11 @@ export function MainFooter() {
     resetAskScroll();
   }, [pathname]);
 
-  const gap = typing ? askBar.aboveKeyboard : ask?.variant === 'full' ? 12 : askBar.aboveTabBar;
+  const gap = ask?.variant === 'full' ? 12 : askBar.aboveTabBar;
+  const lift = keyboardLift({ tabsHeight, gap, aboveKeyboard: askBar.aboveKeyboard });
+  // The keyboard's height on the UI thread (negative while open: the library's convention).
+  const kb = useReanimatedKeyboardAnimation();
+  const ride = useAnimatedStyle(() => ({ transform: [{ translateY: rideOffset(-kb.height.value, lift) }] }), [lift]);
   return (
     <View pointerEvents="box-none" style={styles.root}>
       {listening && current.kind !== 'assistant' ? (
@@ -72,10 +95,10 @@ export function MainFooter() {
       ) : null}
       <View testID="main-footer" pointerEvents="box-none" style={[styles.column, { paddingBottom: 0 }]}>
         {/* Always the same ScrollView (no remount of «Отменить» when the keyboard opens); bounded only while typing. */}
-        <ScrollView
+        <Animated.ScrollView
           testID="footer-above-line"
           scrollEnabled={typing}
-          style={{ flexGrow: 0, ...(typing ? { maxHeight: aboveLineMaxHeight(height, keyboard) } : null) }}
+          style={[{ flexGrow: 0, ...(typing ? { maxHeight: aboveLineMaxHeight(height, keyboard) } : null) }, ride]}
           contentContainerStyle={{ paddingHorizontal: theme.m.ask.inset, gap: theme.space[2], paddingBottom: askBar.noticeGap }}
           keyboardShouldPersistTaps="handled"
         >
@@ -83,13 +106,27 @@ export function MainFooter() {
           <ConfirmCard />
           <ReminderDraftStrip />
           <ToastLine />
-        </ScrollView>
+        </Animated.ScrollView>
         {ask ? (
-          <View testID="assistant-strip-column" pointerEvents="box-none" style={{ paddingBottom: gap, width: '100%', maxWidth: 600, alignSelf: 'center' }}>
+          <Animated.View
+            testID="assistant-strip-column"
+            pointerEvents="box-none"
+            style={[{ paddingBottom: gap, width: '100%', maxWidth: 600, alignSelf: 'center', zIndex: 1 }, ride]}
+          >
             <AssistantLine compact={shop} keyboardHeight={keyboard} variant={ask.variant} placeholderText={ask.placeholder} />
+          </Animated.View>
+        ) : null}
+        {tabs ? (
+          // Under the keyboard while typing: out of reach for screen readers until it closes.
+          <View
+            testID="bottom-tabs-wrap"
+            pointerEvents={typing ? 'none' : 'box-none'}
+            accessibilityElementsHidden={typing}
+            importantForAccessibility={typing ? 'no-hide-descendants' : 'auto'}
+          >
+            <BottomTabs bottomInset={bottomPad} />
           </View>
         ) : null}
-        {tabs ? <BottomTabs bottomInset={bottomPad} /> : null}
       </View>
     </View>
   );

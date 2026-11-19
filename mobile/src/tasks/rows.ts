@@ -33,7 +33,8 @@ function inSegment(t: TaskOut, segment: Segment | null, today: string): boolean 
  * Plain records on the page stay where they are; on «Дела» they show under «Сегодня» only.
  */
 export function listRows(
-  entries: PageEntry[],
+  /** null while the page rows are still being read (QA v5-device-3 J6: loading is not «no row on this phone»). */
+  entries: PageEntry[] | null,
   tasks: TaskOut[],
   ticks: Record<string, Tick>,
   o: { lists: TaskListKey[]; segment?: Segment | null; today: string },
@@ -47,7 +48,7 @@ export function listRows(
   const used = new Set<string>();
   const open: ListRow[] = [];
   const done: ListRow[] = [];
-  for (const entry of entries) {
+  for (const entry of entries ?? []) {
     const sid = entry.record.serverId;
     if (sid && other.has(sid)) continue;
     const task = sid ? (byItem.get(sid) ?? null) : null;
@@ -60,8 +61,10 @@ export function listRows(
     if (d) done.push({ kind: 'entry', entry, task, done: true });
     else if (inSegment(task, segment, o.today)) open.push({ kind: 'entry', entry, task, done: false });
   }
+  // While the rows load, a task that has a record (`item_id`) waits for its row instead of showing as «not on this
+  // phone yet» and swapping the list a moment later.
   const loose = mine
-    .filter((t) => !used.has(t.id))
+    .filter((t) => !used.has(t.id) && (entries !== null || !t.item_id))
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
   const looseOpen: ListRow[] = [];
   for (const task of loose) {

@@ -37,6 +37,11 @@ jest.mock('@expo-google-fonts/geologica', () => ({
 
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
 
+// QA v5-device-3: Reanimated (UI-thread animations) and the keyboard controller have no native side under Jest.
+// Reanimated: `moduleNameMapper` → `src/testing/reanimatedMock.ts` (its own mock throws under the native preset).
+jest.mock('react-native-keyboard-controller', () => require('react-native-keyboard-controller/jest'));
+jest.mock('expo-splash-screen', () => ({ preventAutoHideAsync: jest.fn(async () => true), hide: jest.fn(), hideAsync: jest.fn(async () => undefined), setOptions: jest.fn() }));
+
 jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(async () => undefined),
   ImpactFeedbackStyle: { Light: 'light', Medium: 'medium', Heavy: 'heavy' },

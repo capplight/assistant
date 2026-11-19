@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { clockOf } from '@/alarms/format';
 import type { ActionOut } from '@/api/types';
 import { getApi } from '@/services';
 import { useToast } from '@/store/toast';
@@ -146,7 +147,7 @@ export function ChangedPlate({ at, actionId, testID = 'changed-plate' }: { at: s
   try {
     time = new Date(at!).toLocaleTimeString(i18n.language, { hour: '2-digit', minute: '2-digit' });
   } catch {
-    time = at!.slice(11, 16);
+    time = clockOf(at);
   }
   const summary = action ? (i18n.language === 'kk' && action.summary.kk) || action.summary.ru : null;
   const canUndo = !!actionId && (!action || (action.undoable && !action.undone_at));

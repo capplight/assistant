@@ -19,7 +19,7 @@ type Props = {
   testID?: string;
   /** v5: the sheet colour of the place (default stone — service screens). */
   place?: PlaceKey;
-} & Pick<PlaceScreenProps, 'peek' | 'phrase' | 'mode' | 'askRoom' | 'stripMeta' | 'sub' | 'paperTone' | 'scrollRef' | 'onScroll' | 'onContentSizeChange' | 'metaNode' | 'sheetExtra' | 'paperPadding' | 'hideTitle'> &
+} & Pick<PlaceScreenProps, 'peek' | 'phrase' | 'mode' | 'askRoom' | 'stripMeta' | 'sub' | 'paperTone' | 'scrollRef' | 'onScroll' | 'onContentSizeChange' | 'metaNode' | 'sheetExtra' | 'sheetExtraHeight' | 'paperPadding' | 'hideTitle'> &
   /** Overrides of what the first `<Header>` gives (a tool's own sub-screen: «‹ Расходы · Транспорт»). */
   Partial<Pick<PlaceScreenProps, 'title' | 'back' | 'actions'>>;
 

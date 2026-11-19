@@ -7,6 +7,7 @@
     "icon": "./assets/icon.png",
     "scheme": "assistant",
     "userInterfaceStyle": "automatic",
+    "backgroundColor": "#1A191E",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "kz.assistant.mobile",
@@ -25,7 +26,9 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "blockedPermissions": ["android.permission.WRITE_CONTACTS"],
+      "blockedPermissions": [
+        "android.permission.WRITE_CONTACTS"
+      ],
       "package": "kz.assistant.mobile"
     },
     "web": {
@@ -35,6 +38,18 @@
     "plugins": [
       "expo-router",
       "expo-status-bar",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#1A191E",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 120,
+          "dark": {
+            "backgroundColor": "#0F0E12",
+            "image": "./assets/splash-icon.png"
+          }
+        }
+      ],
       "expo-font",
       "expo-sqlite",
       "expo-localization",

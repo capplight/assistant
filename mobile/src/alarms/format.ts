@@ -6,6 +6,18 @@ export function timeText(ms: number): string {
   return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
+/**
+ * «19:14» — the hours and minutes of an ISO moment on the phone's clock (QA v5-device-3 D1, §4.11: never a `slice` of
+ * the UTC string, which showed 14:14 in Almaty). '' for a missing or broken value.
+ */
+export function clockOf(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return '';
+  const d = new Date(ms);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
 function startOfDay(ms: number): number {
   const d = new Date(ms);
   d.setHours(0, 0, 0, 0);
