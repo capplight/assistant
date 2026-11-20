@@ -24,20 +24,21 @@ async def test_spends_and_a_reminder_from_one_phrase(env):  # noqa: F811
         evs = await say(c, h, "купил хлеб за 400 и молоко за 600, и напомни завтра в 9 утра "
                               "оплатить свет")  # fmt: skip
         actions = [a["action"] for a in by_name(evs, "action")]
-        assert [a["kind"] for a in actions] == ["create_expense", "create_expense"]
-        assert len(by_name(evs, "reminder_draft")) == 1  # set only after «Сохранить» (S13)
+        assert [a["kind"] for a in actions] == ["create_expense", "create_expense",
+                                                "create_reminder"]  # Ф-95 (1): set at once
+        assert by_name(evs, "reminder_draft") == []
         done = last(evs, "done")
         assert done["answer_kind"] == "action"
         group = done["group"]
-        assert group["id"] == done["reply_id"] and group["size"] == 2
+        assert group["id"] == done["reply_id"] and group["size"] == 3
         assert group["action_ids"] == [a["id"] for a in actions] == done["action_ids"]
-        assert group["notice"] == {"text_ru": "Сделал 2 дела", "text_kk": None, "target": None,
+        assert group["notice"] == {"text_ru": "Сделал 3 дела", "text_kk": None, "target": None,
                                    "undo_label_ru": "Отменить всё", "undo_label_kk": None,
                                    "ms": 3000}  # fmt: skip
         spends = (await c.get("/v1/expenses", headers=h)).json()["expenses"]
         assert sorted(e["amount"] for e in spends) == ["400.00", "600.00"]
         msg = (await c.get(f"/v1/chat/messages/{done['reply_id']}", headers=h)).json()
-        assert "Сохранить?" in msg["text"] or "вручную" in msg["text"]
+        assert "Напомню" in msg["text"]
 
         # each action alone, in «История»…
         r = await c.post(f"/v1/actions/{actions[0]['id']}/undo", headers=h)
@@ -48,14 +49,16 @@ async def test_spends_and_a_reminder_from_one_phrase(env):  # noqa: F811
                          headers=h)  # fmt: skip
         assert r.status_code == 200, r.text
         body = r.json()
-        assert [u["action"]["id"] for u in body["undone"]] == [actions[1]["id"], actions[0]["id"]]
-        assert body["undone"][1]["repeated"] is True and body["failed"] == []
+        assert [u["action"]["id"] for u in body["undone"]] == [actions[2]["id"], actions[1]["id"],
+                                                               actions[0]["id"]]
+        assert body["undone"][2]["repeated"] is True and body["failed"] == []
+        assert (await c.get("/v1/reminders", headers=h)).json()["reminders"] == []
         assert (await c.get("/v1/expenses", headers=h)).json()["expenses"] == []
         again = await c.post(f"/v1/actions/groups/{group['id']}/undo", json={"client_id": cid},
                              headers=h)  # fmt: skip
         assert all(u["repeated"] for u in again.json()["undone"])
         listed = (await c.get(f"/v1/actions/{actions[1]['id']}", headers=h)).json()
-        assert listed["group"]["notice"]["text_ru"] == "Отменено: 2 дела"
+        assert listed["group"]["notice"]["text_ru"] == "Отменено: 3 дела"
         assert listed["group"]["notice"]["undo_label_ru"] is None
 
 

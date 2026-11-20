@@ -18,7 +18,10 @@ checks and stores in `ops_alerts` (one row per dedup key, so a repeat never fire
 - `family_daily`: a `family_beta` person over `budget_family_alert_daily_usd` ($0.50) today;
 - `chat_steps`: a person over `ops_chat_steps_per_user_day` (60) chat steps today;
 - `chat_step_cost`: a chat step dearer than `ops_chat_step_alert_usd` ($0.05) today;
-- `chat_median`: yesterday's median step over the target (at least `MEDIAN_MIN_STEPS` steps).
+- `chat_median`: yesterday's median step over the target (at least `MEDIAN_MIN_STEPS` steps);
+- `change_turn_cost` (Ф-95 (6)): yesterday's average cost of a change turn (an answer that made
+  an action or asked «Да» / «Какую?») over `CHANGE_TURN_ALERT_USD` ($0.04), at least
+  `CHANGE_TURN_MIN` such turns; the details also give the average of the turns the model ran.
 New alerts are committed first, then sent through `notify.Notifier` to `ops_alert_chat_id`
 (Telegram, the founder / developer) or, without one, logged; then marked `sent_at`. Texts hold
 internal user ids and numbers only (spec 8: no personal data). The router keeps its own
@@ -53,6 +56,8 @@ log = logging.getLogger(__name__)
 
 CHAT_TASKS = (LLMTask.CHAT.value, LLMTask.CHAT_CHANGE.value)  # Ф-88: change turns on Sonnet
 MEDIAN_MIN_STEPS = 20  # fewer steps in a day: the median says nothing yet
+CHANGE_TURN_ALERT_USD = 0.04  # Ф-95 (6): the average change turn of a day stays under this
+CHANGE_TURN_MIN = 10  # fewer change turns in a day: the average says nothing yet
 FALLBACK_LOOKBACK = timedelta(hours=6)
 
 
@@ -216,6 +221,10 @@ class Snapshot:
     dear_steps: dict[int, tuple[int, float]] = field(default_factory=dict)  # (count, max $)
     yesterday_steps: int = 0
     yesterday_median: float | None = None
+    change_turns: int = 0  # yesterday: answers that changed something or asked «Да»
+    change_avg: float | None = None  # their average cost
+    change_model_turns: int = 0  # of them, the ones the model ran (cost > 0)
+    change_model_avg: float | None = None
 
 
 def evaluate(snap: Snapshot, s: Settings) -> list[AlertOut]:
@@ -267,6 +276,18 @@ def evaluate(snap: Snapshot, s: Settings) -> list[AlertOut]:
             f"${target:.4f} ({snap.yesterday_steps} шагов).",
             details={"median_usd": round(snap.yesterday_median, 6), "target_usd": target,
                      "steps": snap.yesterday_steps}))
+    cap_turn = float(getattr(s, "ops_change_turn_alert_usd", CHANGE_TURN_ALERT_USD))
+    if (snap.change_avg is not None and snap.change_turns >= CHANGE_TURN_MIN
+            and snap.change_avg > cap_turn):  # fmt: skip
+        out.append(AlertOut(
+            "change_turn_cost", f"change_turn_cost:{snap.yesterday}",
+            f"Средний ход изменения за {snap.yesterday}: ${snap.change_avg:.4f} — выше "
+            f"${cap_turn:.2f} ({snap.change_turns} ходов, из них через модель "
+            f"{snap.change_model_turns}).",
+            details={"avg_usd": round(snap.change_avg, 6), "cap_usd": cap_turn,
+                     "turns": snap.change_turns, "model_turns": snap.change_model_turns,
+                     "model_avg_usd": round(snap.change_model_avg, 6)
+                     if snap.change_model_avg is not None else None}))
     return out
 
 
@@ -391,6 +412,18 @@ async def load_snapshot(session: AsyncSession, s: Settings, now: datetime,
     """), {"tasks": list(CHAT_TASKS), "y": yday, "t": today})).one()  # fmt: skip
     snap.yesterday_steps = int(row.n)
     snap.yesterday_median = float(row.med) if row.med is not None else None
+    row = (await session.execute(text("""
+        SELECT count(*) AS n, avg(cost_usd) AS avg,
+               count(*) FILTER (WHERE cost_usd > 0) AS model_n,
+               avg(cost_usd) FILTER (WHERE cost_usd > 0) AS model_avg
+        FROM conversation_messages
+        WHERE role = 'assistant' AND created_at >= :y AND created_at < :t
+          AND (cardinality(action_ids) > 0 OR proposal IS NOT NULL)
+    """), {"y": yday, "t": today})).one()  # fmt: skip
+    snap.change_turns = int(row.n)
+    snap.change_avg = float(row.avg) if row.avg is not None else None
+    snap.change_model_turns = int(row.model_n)
+    snap.change_model_avg = float(row.model_avg) if row.model_avg is not None else None
     return snap
 
 

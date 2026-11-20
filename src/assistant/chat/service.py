@@ -58,7 +58,7 @@ from assistant.ai.prompting import TaskInputs, ToolRound, UntrustedPart
 from assistant.ai.router import Router
 from assistant.ai.store import period_starts
 from assistant.ai.types import Message, ToolResult
-from assistant.chat import jobs, kp_line, limits, memory, plan_line, store, undo_line
+from assistant.chat import jobs, kp_line, limits, memory, ops_line, plan_line, store, undo_line
 from assistant.chat.context import (
     PROMPT_VERSION,
     Assembled,
@@ -183,6 +183,7 @@ TEXT_CANCELLED = {"ru": "Хорошо, ничего не менял.", "kk": "Х
 TEXT_NOT_CHANGED = {"ru": "Не понял, что изменить. Скажите, пожалуйста, ещё раз.",
                     "kk": "Не понял, что изменить. Скажите, пожалуйста, ещё раз."}  # fmt: skip
 TEXT_NOTHING_HERE = {"ru": "Здесь пока нет записей.", "kk": "Здесь пока нет записей."}
+TEXT_ALREADY = {"ru": "Уже так — ничего не менял.", "kk": "Уже так — ничего не менял."}
 TEXT_WHICH = {"ru": "Какую?", "kk": "Какую?"}  # kk: until reviewed (R-39)
 # Ф-50: a КП started from the line (kk: until reviewed, R-39)
 TEXT_KP_STARTED = {"ru": "Готовлю КП — открою, когда будет готово.",
@@ -683,10 +684,15 @@ class ChatService:
                     and await self._plan_selected(turn):  # fmt: skip
                 # step 8: on an open plan («Попросите поменять план…») a phrase is about the plan
                 turn = dataclasses.replace(turn, plan_open=True)
+            if not assist and turn.input_kind != "share" and not turn.plan_open \
+                    and (ask := ops_line.read_code(turn.text)) is not None \
+                    and await self._ops_by_code(run, turn, ask, background):  # fmt: skip
+                return  # Ф-95 §3.5: «хлеб купил», «перенеси врача на пятницу», «не напоминай…»
             prior: MutationState | None = None
             given: list[tuple[str, str]] | None = None
             mixed = False  # Ф-88: a spend phrase with another thought never takes the spend path
             if not assist and turn.input_kind != "share" and not turn.plan_open \
+                    and not ops_line.fixes_expense(turn.text) \
                     and len(split_parts(turn.text)) < 2 \
                     and await self._mixed_spend(turn):  # fmt: skip
                 given = await self._model_parts(turn)  # the strong model cuts it, code checks
@@ -717,6 +723,7 @@ class ChatService:
                 await self._start_kp(run, turn, order)  # «сделай КП для …» (Ф-50)
                 return
             if prior is None and not mixed and not assist and turn.input_kind != "share" \
+                    and not ops_line.fixes_expense(turn.text) \
                     and await self._save_expense(run, turn):  # fmt: skip
                 return  # «потратил 5000 на бензин» → «Расходы», one action (US-31)
             if prior is None and not mixed and not assist and turn.input_kind != "share" \
@@ -767,6 +774,11 @@ class ChatService:
                 min_similarity=self.s.search_vector_min_similarity, tools=tools,
             )  # fmt: skip
             env.mut = self._mutation(run, turn, env.book, change, reading.deictic)
+            try:  # Ф-95: the domains of the phrase, the objects it names (refs t, c, r, e)
+                env.mut.line = await ops_line.prepare(self.sessionmaker, turn, ctx, env,
+                                                      change=change, now=self.clock())
+            except Exception as exc:  # the line answers without them
+                log.warning("chat: line objects not loaded: %s", type(exc).__name__)
             if follow is not None:  # code's checks read both phrases, the person's own words
                 env.mut.phrase = f"{follow}\n{turn.text}"
                 ctx.inputs.context.insert(len(ctx.inputs.context) - 1, FOLLOW_LINE.format(follow))
@@ -1599,6 +1611,11 @@ class ChatService:
         for patch in patches:
             m.emit("page_patch", patch)
         m.cost = Decimal(str(m.cost or 0)) + Decimal(str(draft.cost_usd))
+        if (what := ops_line.purchase_of(phrase)) is not None:
+            try:
+                await self._tick_purchase(run, turn, m, book, what)
+            except Exception as exc:  # the spend is saved; the tick is extra
+                log.warning("chat: purchase not ticked: %s", type(exc).__name__)
         if own:
             await self._finish_change(run, turn, m, Decimal(str(draft.cost_usd)),
                                       [{"name": "expense", "arguments": {}, "error": False,
@@ -1780,6 +1797,20 @@ class ChatService:
                                      user_id=turn.user_id)  # fmt: skip
         drafts = _jsonable(drafts_dicts(outcome.drafts, now, tz))
         one = drafts[0] if drafts and outcome.status != "ambiguous" else None
+        if outcome.status == "ok" and one is not None and not one.get("time_assumed"):
+            # Ф-95 (1): a clear time — set at once with «Отменить»; the form only when unclear
+            own = m is None
+            book = await book_for(self.sessionmaker, turn.user_id, turn.page_pk)
+            if m is None:
+                m = self._mutation(run, turn, book, True, False)
+            m.cost = Decimal(str(m.cost or 0)) + Decimal(str(outcome.cost_usd))
+            await self._set_reminder(run, turn, m, book, one, created_via, outcome.source)
+            if own:
+                await self._finish_change(run, turn, m, Decimal(str(outcome.cost_usd)),
+                                          [{"name": "reminder", "arguments": {},
+                                            "error": m.action_out is None,
+                                            "by": outcome.source or "none"}])  # fmt: skip
+            return
         run.emit("reminder_draft", {
             "reply_id": str(run.reply_id), "status": outcome.status, "source": outcome.source,
             "reason": outcome.reason, "message": outcome.message, "draft": one,
@@ -1819,6 +1850,75 @@ class ChatService:
                                   [{"name": "reminder_parse", "arguments": {},
                                     "error": outcome.status == "form",
                                     "by": outcome.source or "none"}])  # fmt: skip
+
+    def _line_env(self, turn: TurnInput, m: MutationState, book: SourceBook) -> ToolEnv:
+        m.line = m.line or ops_line.LineState()
+        return ToolEnv(self.sessionmaker, self.embedder, turn.user_id, book,
+                       self.s.search_embed_timeout_seconds, self.s.search_vector_min_similarity,
+                       counts=set(), mut=m)  # fmt: skip
+
+    async def _set_reminder(self, run: ReplyRun, turn: TurnInput, m: MutationState,
+                            book: SourceBook, draft: dict[str, Any], created_via: str | None,
+                            source: str | None) -> None:  # fmt: skip
+        """Ф-95 (1): the reminder of a clear phrase is set at once (`reminders.create`, the
+        screen's operation), one action with «Отменить»."""
+        env = self._line_env(turn, m, book)
+        args = {k: draft.get(k) for k in ("title", "due_at", "tz", "rrule", "offsets", "level")}
+        args.update(created_via=created_via, parse_source=source)
+        run.emit("tool_activity", {"tool": "reminder", "text": "Ставлю напоминание…",
+                                   "page_id": None})  # fmt: skip
+        _, error = await ops_line.run_planned(env, [("reminders.create", args)])
+        if error and m.action_out is None:
+            m.note = TEXT_NOT_DONE[turn.lang]
+
+    async def _ops_by_code(self, run: ReplyRun, turn: TurnInput, ask: "ops_line.CodeAsk",
+                           background: bool) -> bool:  # fmt: skip
+        """Ф-95 §3.5: a frequent phrase code reads, when exactly one object fits (else False:
+        the usual way, the model). One action with «Отменить»; «Да» first by the Ф-95 (3) rule;
+        an unclear time is a short question with choices."""
+        book = await book_for(self.sessionmaker, turn.user_id, turn.page_pk)
+        m = self._mutation(run, turn, book, True, False)
+        env = self._line_env(turn, m, book)
+        async with self.sessionmaker() as s:
+            objs = await ops_line.code_objects(s, turn.user_id, book, ask, self.clock())
+            await s.commit()
+        p = ops_line.plan_code(env, ask, objs)
+        if p is None:
+            return False
+        asks = p.ask is not None or ops_line.needs_yes(p, turn.text) or ask.all_of_day
+        if asks and background:  # a question waits for the person
+            await self._fail(run, "not_done", text=TEXT_NOT_DONE[turn.lang], retry=True)
+            return True
+        if p.ask is not None:
+            ops_line.propose_choice(m, p)
+        elif asks:
+            ops_line.propose_yes(m, p, ops_line.count_question(p))
+        else:
+            run.emit("tool_activity", {"tool": "op", "text": "Делаю…", "page_id": None})
+            _, error = await ops_line.run_planned(env, p.calls, many=p.many)
+            if m.action_out is None:
+                m.note = TEXT_NOT_DONE[turn.lang] if error else TEXT_ALREADY[turn.lang]
+        await self._finish_change(run, turn, m, Decimal(0),
+                                  [{"name": "op", "arguments": {"kind": ask.kind},
+                                    "error": m.action_out is None and m.proposal is None,
+                                    "by": "code"}])  # fmt: skip
+        return True
+
+    async def _tick_purchase(self, run: ReplyRun, turn: TurnInput, m: MutationState,
+                             book: SourceBook, what: str) -> None:  # fmt: skip
+        """Ф-95 (2): «купил хлеб за 400» — the spend and the open purchase «Хлеб» ticked, one
+        group («Отменить всё»). Only when exactly one open purchase fits."""
+        env = self._line_env(turn, m, book)
+        async with self.sessionmaker() as s:
+            # no list filter: with «Покупки» off a purchase lives in «Дела» (as_todo)
+            objs = await ops_line.load_tasks(s, turn.user_id, book, what, done=False,
+                                             limit=300)  # fmt: skip
+            await s.commit()
+        hits = ops_line.pick(objs, what, "купил")
+        if len({o.id for o in hits}) != 1 or hits[0].repeat:
+            return
+        await ops_line.run_planned(env, [("tasks.set_done", {"task_id": hits[0].id,
+                                                             "done": True})])
 
     async def _candidates(self, turn: TurnInput, env: ToolEnv) -> list[Source]:
         """What «это» could be: the records on screen, else the newest on the page."""
@@ -1883,6 +1983,10 @@ class ChatService:
             draft = (prop["plan"].get("drafts") or {}).get(option)
             if draft is None:
                 m.note = TEXT_CANCELLED[lang]
+            elif not draft.get("time_assumed"):  # Ф-95 (1): the time is clear now: set at once
+                plan = prop["plan"]
+                await self._set_reminder(run, turn, m, book, draft, plan.get("created_via"),
+                                         plan.get("source"))  # fmt: skip
             else:
                 plan = prop["plan"]
                 run.emit("reminder_draft", {
@@ -1891,6 +1995,13 @@ class ChatService:
                     "parser": plan.get("parser"), "created_via": plan.get("created_via"),
                 })  # fmt: skip
                 m.note = f"Понял так: {draft['when_text']} — {draft['title']}. Сохранить?"
+        elif prop["plan"].get("tool") == "op":  # Ф-95: «Да» / a time of a line operation
+            env = self._line_env(turn, m, book)
+            run.emit("tool_activity", {"tool": "op", "text": "Делаю…", "page_id": None})
+            if not await ops_line.run_choice(env, prop["plan"], str(option)):
+                m.note = TEXT_CANCELLED[lang]
+            elif m.action_out is None and m.note is None:
+                m.note = TEXT_ALREADY[lang]
         elif prop["plan"].get("tool") == "rerun":
             pk = prop["plan"].get("options", {}).get(option)
             if pk is None:
@@ -1961,10 +2072,15 @@ class ChatService:
         seen: set[str] = set()
         tool_log: list[dict[str, Any]] = []
         reply: ChatReply | None = None
-        tools = (*READ_TOOLS, *self._mutating()) if change else READ_TOOLS
+        base_tools = (*READ_TOOLS, *self._mutating()) if change else READ_TOOLS
         if turn.input_kind != "share" and (turn.plan_open or plan_line.asks_plan(turn.text)):
-            tools = (*tools, plan_line.MAKE_PLAN)
+            base_tools = (*base_tools, plan_line.MAKE_PLAN)
             ctx.inputs.context.insert(len(ctx.inputs.context) - 1, plan_line.CONTEXT_LINE)
+
+        def step_tools() -> tuple[ToolSpec, ...]:  # Ф-95: need_tools may add a domain
+            return (*base_tools, *ops_line.tools_of(m.line, change=change))
+
+        tools = step_tools()
         allowed = {t.name for t in tools}
         strong = self._strong(turn, book, reading)
         web = self._web_search(turn, ctx, change)
@@ -1987,6 +2103,8 @@ class ChatService:
         try:
             while True:
                 step += 1
+                tools = step_tools()
+                allowed = {t.name for t in tools}
                 final = (step >= limit
                          or ctx.total_tokens + round_tokens >= self.s.chat_max_input_tokens)
                 choice = "none" if final else "required" if forced else "auto"
@@ -2033,7 +2151,8 @@ class ChatService:
                         else:
                             seen.add(key)
                             outcome = await execute(env, call, allowed=allowed)
-                            known = call.name in TOOLS or call.name in MUTATING_NAMES
+                            known = (call.name in TOOLS or call.name in MUTATING_NAMES
+                                     or call.name in ops_line.LINE_NAMES)
                             if known and not outcome.is_error:
                                 run.emit("tool_activity", {"tool": call.name,
                                                            "text": outcome.activity,

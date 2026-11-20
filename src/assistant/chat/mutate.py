@@ -375,6 +375,7 @@ class MutationState:
     finished: bool = False  # step 8: a tool ended the turn (a plan was made): no more steps
     calls: int = 0
     cost: Any = 0
+    line: Any = None  # Ф-95: ops_line.LineState of the turn (domain tools, need_tools)
 
     @property
     def summary(self) -> str:

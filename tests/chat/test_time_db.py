@@ -25,7 +25,7 @@ pytestmark = [
 TZ = ZoneInfo("Asia/Almaty")
 
 
-async def test_unclear_hour_is_a_question_with_choices_then_the_draft(env9):  # noqa: F811
+async def test_unclear_hour_is_a_question_with_choices_then_set(env9):  # noqa: F811
     app = env9.make_app(router9(env9.maker, Script9()), reminders_rules_first=True)
     day = datetime.now(UTC).astimezone(TZ).date() + timedelta(days=2)
     async with client(app) as c:
@@ -42,12 +42,13 @@ async def test_unclear_hour_is_a_question_with_choices_then_the_draft(env9):  # 
 
         evs = await say(c, h, ask["options"][1]["label"],
                         choice={"reply_id": ask["reply_id"], "option": "t2"})
-        d = last(evs, "reminder_draft")
-        assert d["status"] == "ok" and d["draft"]["local"] == {"date": day.isoformat(),
-                                                               "time": "21:00"}
-        assert d["draft"]["title"] == "К стоматологу"
-        assert last(evs, "banner")["text"].startswith("Понял так:")
-        assert (await c.get("/v1/reminders", headers=h)).json()["reminders"] == []
+        # Ф-95 (1): the tap made the time clear — set at once with «Отменить»
+        assert "reminder_draft" not in [n for _, n, _ in evs]
+        assert last(evs, "action")["action"]["kind"] == "create_reminder"
+        rems = (await c.get("/v1/reminders", headers=h)).json()["reminders"]
+        assert len(rems) == 1 and rems[0]["title"] == "К стоматологу"
+        local = datetime.fromisoformat(rems[0]["due_at"]).astimezone(TZ)
+        assert (local.date(), local.hour, local.minute) == (day, 21, 0)
         # a second tap on the same question is stale
         evs = await say(c, h, "x", choice={"reply_id": ask["reply_id"], "option": "t1"})
         assert "reminder_draft" not in [n for _, n, _ in evs]

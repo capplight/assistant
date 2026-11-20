@@ -5,9 +5,10 @@ Public surface: `run(name, session, user_id, args, by=, now=)` → `OpResult` (o
 its undo, in the caller's transaction), `build(name, …)` → `Built` (the engine ops without
 writing, for the line's own action), `get`, `names`, `REGISTRY`, `OpError`.
 
-Registered: `tasks.delete`, `tasks.set_done`, `tasks.clear_done`, `expenses.delete`,
-`reminders.delete`, `records.trash`, `plans.to_calendar`, `calendar.remove_plan`,
-`calendar.shift_plan`.
+Registered (see `names()`): tasks (create, update, reschedule, remove_occurrence, set_done,
+delete, clear_done), `calendar.shift_many`, expenses (update, delete), reminders (create, update,
+delete), `records.trash`, plans on the calendar (`plans.to_calendar`, `calendar.remove_plan`,
+`calendar.shift_plan`). The line's domain tools are built from these (`chat/ops_line.py`).
 """
 
 from assistant.operations import expenses, plans, records, reminders, tasks

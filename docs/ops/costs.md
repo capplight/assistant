@@ -49,6 +49,7 @@ Run it every few minutes (cron / systemd timer). Rules:
 | `chat_steps` | > `ops_chat_steps_per_user_day` (60) chat steps today | user + day |
 | `chat_step_cost` | a chat step > `ops_chat_step_alert_usd` ($0.05) today | user + day |
 | `chat_median` | yesterday's median step over the target (≥ 20 steps) | day |
+| `change_turn_cost` | Ф-95 (6): yesterday's average cost of a change turn (an answer with an action or a «Да» / «Какую?» question; code-only turns count as $0) over $0.04, at least 10 such turns; details: the average of the turns the model ran | day |
 
 A known dedup key only bumps `hits` / `last_at`; new alerts are committed first, then sent through
 `notify.Notifier` (Telegram) to `OPS_ALERT_CHAT_ID` with the bot token, or logged when it is not

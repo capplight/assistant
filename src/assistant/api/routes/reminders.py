@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy import select
 
-from assistant.actions import actions_dicts, engine, record
+from assistant.actions import actions_dicts, record
 from assistant.api.consent_gate import AI_CONSENTS, missing_consents, require_base_consent
 from assistant.api.deps import Ctx, CurrentUser, Db, get_active_consent_kinds
 from assistant.api.errors import ApiError
@@ -37,7 +37,7 @@ from assistant.api.schemas import (
     ReminderSettingsPatchIn,
     ReminderWithFiresOut,
 )
-from assistant.db.models import Item, Reminder, User
+from assistant.db.models import Reminder, User
 from assistant.db.models_actions import Action, ActionKind, Initiator
 from assistant.db.models_chat import ConversationMessage
 from assistant.db.models_reminders import (
@@ -316,53 +316,42 @@ async def fires_window(
 # --- CRUD ---
 
 
+async def _op(name: str, db: Db, user_id: int, args: dict[str, Any], *,
+              client_id: uuid.UUID | None = None, message_pk: int | None = None) -> Any:
+    """The same operation the assistant line runs (assistant.operations, Ф-95)."""
+    from assistant import operations
+
+    try:
+        return await operations.run(name, db, user_id, args, by=Initiator.USER, now=_now(),
+                                    client_id=client_id, message_pk=message_pk)  # fmt: skip
+    except operations.OpError as exc:
+        raise ApiError(exc.status, exc.code) from exc
+
+
 @router.post("", response_model=ReminderWithFiresOut, status_code=201)
 async def create(
     body: ReminderIn, user: GatedUser, db: Db, response: Response
 ) -> ReminderWithFiresOut:
     tz = _tz(body.tz) if body.tz else await _user_tz(db, user.id)
-    item_pk = None
-    if body.item_id is not None:
-        item_pk = await db.scalar(
-            select(Item.id).where(Item.user_id == user.id, Item.public_id == body.item_id)
-        )
-        if item_pk is None:
-            raise ApiError(404, "not_found")
-    data = service.ReminderInput(
-        title=body.title,
-        due_at=_due(body.due_at, body.local, tz),
-        tz=tz,
-        body=body.body,
-        rrule=body.rrule,
-        offsets=body.offsets,
-        level=body.level,
-        created_via=body.created_via,
-        parse_source=body.parse_source,
-        sensitivity=body.sensitivity,
-        item_id=item_pk,
-        client_id=body.client_id,
-        duration_min=body.duration_min,
-    )
-    try:
-        r, fires, created = await service.create(db, user.id, data, _now())
-    except service.ReminderError as exc:
-        raise _error(exc) from exc
-    if not created:
-        response.status_code = 200
-        first = await db.scalar(select(Action).where(Action.user_id == user.id,
-                                                     Action.client_id == body.client_id))
-        return await _with_fires(db, r, fires, first)
     message_pk = None
     if body.message_id is not None:
         message_pk = await db.scalar(select(ConversationMessage.id).where(
             ConversationMessage.user_id == user.id,
             ConversationMessage.public_id == body.message_id))  # fmt: skip
-    action = await _write_action(
-        db, user.id, r, ActionKind.CREATE_REMINDER, f"{_saved(r)}: {_lower(r.title or '')}",
-        [{"op": "cancel_reminder", "id": str(r.public_id), "expect": r.version}],
-        client_id=body.client_id, message_pk=message_pk,
-    )  # fmt: skip
-    return await _with_fires(db, r, fires, action)
+    args = {"title": body.title, "due_at": _due(body.due_at, body.local, tz), "tz": tz,
+            "body": body.body, "rrule": body.rrule, "offsets": list(body.offsets),
+            "level": body.level, "created_via": body.created_via,
+            "parse_source": body.parse_source, "sensitivity": body.sensitivity,
+            "item_id": body.item_id, "duration_min": body.duration_min}
+    res = await _op("reminders.create", db, user.id, args, client_id=body.client_id,
+                    message_pk=message_pk)  # fmt: skip
+    r, fires = res.data["reminder"], res.data["fires"]
+    if not res.data["created"]:
+        response.status_code = 200
+        first = await db.scalar(select(Action).where(Action.user_id == user.id,
+                                                     Action.client_id == body.client_id))
+        return await _with_fires(db, r, fires, first)
+    return await _with_fires(db, r, fires, res.action)
 
 
 @router.get("", response_model=ReminderListOut)
@@ -393,55 +382,22 @@ async def patch(
     reminder_id: uuid.UUID, body: ReminderPatchIn, user: GatedUser, db: Db
 ) -> ReminderWithFiresOut:
     sent = body.model_fields_set - {"version"}
-    fields: dict[str, Any] = {k: getattr(body, k) for k in sent if k not in ("local", "due_at")}
-    if "tz" in fields and fields["tz"] is None:
-        fields.pop("tz")
-    if ("title" in fields and fields["title"] is None) or (
-        "level" in fields and fields["level"] is None
-    ):
-        raise ApiError(422, "validation_error")
-    if "offsets" in fields and fields["offsets"] is None:
-        fields["offsets"] = []
+    args: dict[str, Any] = {k: getattr(body, k) for k in sent if k not in ("local", "due_at")}
     if "due_at" in sent or "local" in sent:
         current = await service.get(db, user.id, reminder_id)
         if current is None:
             raise ApiError(404, "not_found")
-        tz = fields.get("tz") or current.tz or await _user_tz(db, user.id)
-        fields["due_at"] = _due(body.due_at, body.local if body.due_at is None else None, tz)
-    before_row = await service.get(db, user.id, reminder_id)
-    before = engine.reminder_state(before_row) if before_row is not None else None
-    try:
-        out = await service.change(db, user.id, reminder_id, body.version, fields, _now())
-    except service.VersionConflict as exc:
-        raise ApiError(409, "conflict") from exc
-    except service.ReminderError as exc:
-        raise _error(exc) from exc
-    if out is None:
-        raise ApiError(404, "not_found")
-    r, fires = out
-    action = None
-    if before is not None and engine.reminder_state(r) != before:
-        moved = before["due_at"] != r.due_at.isoformat() or before["rrule"] != r.rrule
-        title = r.title or ""
-        sentence = (f"Вы перенесли напоминание «{title}»: {_lower(_saved(r))}" if moved
-                    else f"Изменил напоминание «{title}»")  # fmt: skip
-        action = await _write_action(db, user.id, r, ActionKind.EDIT_REMINDER, sentence, [
-            {"op": "restore_reminder", "id": str(r.public_id), "state": before,
-             "expect": r.version}])  # fmt: skip
-    return await _with_fires(db, r, fires, action)
+        tz = args.get("tz") or current.tz or await _user_tz(db, user.id)
+        args["due_at"] = _due(body.due_at, body.local if body.due_at is None else None, tz)
+    res = await _op("reminders.update", db, user.id,
+                    {"reminder_id": reminder_id, "version": body.version, **args})
+    return await _with_fires(db, res.data["reminder"], res.data["fires"], res.action)
 
 
 @router.delete("/{reminder_id}", response_model=ReminderWithFiresOut)
 async def delete(reminder_id: uuid.UUID, user: GatedUser, db: Db) -> ReminderWithFiresOut:
     """200 with the action since week 9 (was 204): «Отменить» brings it back."""
-    from assistant import operations  # the same operation as the assistant line (Ф-95)
-
-    try:
-        res = await operations.run("reminders.delete", db, user.id,
-                                   {"reminder_id": reminder_id}, by=Initiator.USER,
-                                   now=_now())  # fmt: skip
-    except operations.OpError as exc:
-        raise ApiError(exc.status, exc.code) from exc
+    res = await _op("reminders.delete", db, user.id, {"reminder_id": reminder_id})
     return await _with_fires(db, res.data["reminder"], res.data["fires"], res.action)
 
 

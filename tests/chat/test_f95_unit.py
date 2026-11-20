@@ -11,10 +11,13 @@ from assistant.chat.intent import Intent, Reading, asks_assistant, note_by_code,
 
 def test_registry_has_the_phase0_operations() -> None:
     assert operations.names() == [
-        "calendar.remove_plan", "calendar.shift_plan", "expenses.delete", "plans.to_calendar",
-        "records.trash", "reminders.delete", "tasks.clear_done", "tasks.delete",
-        "tasks.set_done"]  # fmt: skip
-    assert operations.names("tasks") == ["tasks.clear_done", "tasks.delete", "tasks.set_done"]
+        "calendar.remove_plan", "calendar.shift_many", "calendar.shift_plan", "expenses.delete",
+        "expenses.update", "plans.to_calendar", "records.trash", "reminders.create",
+        "reminders.delete", "reminders.update", "tasks.clear_done", "tasks.create",
+        "tasks.delete", "tasks.remove_occurrence", "tasks.reschedule", "tasks.set_done",
+        "tasks.update"]  # fmt: skip
+    assert operations.names("tasks") == ["tasks.clear_done", "tasks.create", "tasks.delete",
+                                         "tasks.set_done", "tasks.update"]  # fmt: skip
     assert operations.get("tasks.clear_done").risk == "bulk"
     with pytest.raises(operations.OpError) as exc:
         operations.get("records.delete_forever")  # never from the line (Ф-95 rec. 4)

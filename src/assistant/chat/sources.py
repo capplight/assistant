@@ -66,6 +66,30 @@ def snippet_of(text: str) -> str:
     return flat if len(flat) <= SNIPPET_CHARS else flat[:SNIPPET_CHARS - 1].rstrip() + "…"
 
 
+@dataclass
+class Obj:
+    """A to-do (`t1`), a calendar entry (`c1`: a to-do with its time, one occurrence of a repeat),
+    a reminder (`r1`) or an expense (`e1`) the model was shown (Ф-95, chat-full-control.md §3.3).
+    The model names it only by this ref; code turns the ref back into the row."""
+
+    ref: str
+    kind: str  # task | event | reminder | expense
+    id: uuid.UUID
+    title: str
+    line: str  # what the model saw
+    occurrence_at: datetime | None = None  # an occurrence of a repeat
+    start: datetime | None = None  # aware: a calendar entry's / reminder's moment
+    duration_min: int | None = None
+    repeat: bool = False
+    done: bool = False
+    list_key: str | None = None
+    day: Any = None  # an all-day to-do's day / an expense's day
+    data: dict[str, Any] = field(default_factory=dict)
+
+
+OBJ_PREFIX = {"task": "t", "event": "c", "reminder": "r", "expense": "e"}
+
+
 class SourceBook:
     def __init__(self, tz: str, current_page: PageInfo | None = None) -> None:
         self.tz = ZoneInfo(tz)
@@ -76,6 +100,26 @@ class SourceBook:
         self._by_pk: dict[int, Source] = {}
         self._announced: set[str] = set()
         self._next = 1
+        self.objects: dict[str, Obj] = {}
+        self._obj_key: dict[tuple[str, str, str], Obj] = {}
+
+    # --- objects (Ф-95): to-dos, calendar entries, reminders, expenses ---
+
+    def add_obj(self, kind: str, id_: uuid.UUID, title: str, line: str, **kw: Any) -> Obj:
+        at = kw.get("occurrence_at")
+        key = (kind, str(id_), at.isoformat() if at else "")
+        found = self._obj_key.get(key)
+        if found is not None:
+            return found
+        prefix = OBJ_PREFIX[kind]
+        n = 1 + sum(1 for r in self.objects if r[:1] == prefix)
+        obj = Obj(f"{prefix}{n}", kind, id_, title, f"{prefix}{n} · {line}", **kw)
+        self.objects[obj.ref] = obj
+        self._obj_key[key] = obj
+        return obj
+
+    def obj(self, ref: str | None) -> Obj | None:
+        return self.objects.get(ref.strip().lower()) if ref else None
 
     # --- pages ---
 

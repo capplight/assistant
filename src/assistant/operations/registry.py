@@ -32,10 +32,12 @@ Risk = Literal["safe", "bulk", "irreversible"]
 class OpError(ValueError):
     """The operation cannot run: `code` is the API error code («not_found», «validation_error»)."""
 
-    def __init__(self, code: str, status: int = 422) -> None:
+    def __init__(self, code: str, status: int = 422,
+                 details: dict[str, Any] | None = None) -> None:  # fmt: skip
         super().__init__(code)
         self.code = code
         self.status = status
+        self.details = details
 
 
 @dataclass
@@ -77,6 +79,9 @@ class Operation:
     build: BuildFn | None = None
     execute: ExecuteFn | None = None
     description: str = ""
+    # `build` ops: after they are applied, before the action is written (its text reads the
+    # changed rows, e.g. the new amount)
+    after: Callable[[AsyncSession, Built], Awaitable[None]] | None = None
 
 
 REGISTRY: dict[str, Operation] = {}
@@ -132,6 +137,8 @@ async def run(name: str, session: AsyncSession, user_id: int, args: BaseModel | 
     assert op.build is not None
     b = await op.build(session, user_id, parsed, now=now)
     out = await engine.apply(session, user_id, b.ops, by=by, check=False, now=now)
+    if op.after is not None:
+        await op.after(session, b)
     action = None
     if out.inverse:
         action = await record(

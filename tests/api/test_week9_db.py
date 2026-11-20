@@ -250,28 +250,23 @@ async def test_tasks_by_hand_tick_edit_delete_undo(env9):
 # --- reminders from the line, reminder actions ---
 
 
-async def test_reminder_phrase_gives_a_draft_and_saves_nothing(env9):
+async def test_reminder_phrase_is_set_at_once_with_undo(env9):
+    # Ф-95 (1): a clear time — the reminder is set at once («Отменить»); S13 only when unclear
     script = Script9()
     app = env9.make_app(router9(env9.maker, script), reminders_rules_first=True)
     async with client(app) as c:
         h = await signed_in(c)
         evs = await say(c, h, "Напомни завтра в 7:30 выпить таблетку", input_kind="voice")
-        d = last(evs, "reminder_draft")
-        assert d["status"] == "ok" and d["source"] == "rules" and d["created_via"] == "voice"
-        assert d["draft"]["local"]["time"] == "07:30" and d["draft"]["level"] == "alarm"
-        assert last(evs, "banner")["text"].startswith("Понял так:")
-        assert (await c.get("/v1/reminders", headers=h)).json()["reminders"] == []
-        # [Сохранить] → the action with «Отменить», linked to the line's answer.
-        body = {"client_id": str(uuid.uuid4()), **{k: d["draft"][k] for k in
-                                                    ("title", "due_at", "tz", "rrule", "offsets",
-                                                     "level")},
-                "created_via": "voice", "parse_source": "rules", "message_id": d["reply_id"]}
-        r = await c.post("/v1/reminders", json=body, headers=h)
-        assert r.status_code == 201, r.text
-        action = r.json()["action"]
-        assert action["kind"] == "create_reminder" and action["message_id"] == d["reply_id"]
+        assert "reminder_draft" not in [n for _, n, _ in evs]
+        action = last(evs, "action")["action"]
+        reply_id = last(evs, "done")["reply_id"]
+        assert action["kind"] == "create_reminder" and action["message_id"] == reply_id
+        assert action["initiated_by"] == "agent" and "reminders" in action["touched"]
         assert action["summary"]["ru"].startswith("Напомню")
-        rid = r.json()["reminder"]["id"]
+        rems = (await c.get("/v1/reminders", headers=h)).json()["reminders"]
+        assert len(rems) == 1 and rems[0]["level"] == "alarm"
+        assert rems[0]["created_via"] == "voice"
+        rid = rems[0]["id"]
         p = await c.patch(f"/v1/reminders/{rid}", json={"version": 1, "title": "Таблетка"},
                           headers=h)
         assert p.json()["action"]["kind"] == "edit_reminder"

@@ -462,8 +462,29 @@ async def execute(env: ToolEnv, call: ToolCall, *, allowed: set[str]) -> ToolOut
     """Run one call. Unknown / not allowed tools and bad arguments come back as an error the
     model can read; nothing outside the white list ever runs. A mutating tool runs only when the
     person's phrase asked for a change (the intent rule), whatever `allowed` says."""
-    from assistant.chat import mutate
+    from assistant.chat import mutate, ops_line
 
+    if call.name in ops_line.LINE_NAMES:  # Ф-95: the screens' operations, by domain
+        m = env.mut
+        if call.name not in allowed:
+            return _error(f"tool {call.name} is not available")
+        if call.name != "lookup":
+            if m is None or not m.allowed:
+                return _error(f"tool {call.name} is not available: the person did not ask for "
+                              "a change")  # fmt: skip
+            if m.proposal is not None:
+                return _error("a question to the person is pending: answer with text now")
+            if len(m.action_pks) >= mutate.MAX_ACTIONS_PER_PHRASE:
+                return _error(f"at most {mutate.MAX_ACTIONS_PER_PHRASE} changes per phrase: stop "
+                              "and tell the person what is left to do")  # fmt: skip
+        try:
+            res = await ops_line.execute(env, call.name, call.arguments)
+        except Exception:
+            log.exception("chat tool %s failed", call.name)
+            return _error("the change failed; nothing was changed by this call")
+        if call.name in ops_line.MUTATING and m is not None:
+            m.calls += 1
+        return ToolOutcome(res.content, res.is_error, res.activity)
     if call.name == "make_plan":  # step 8: only offered when the person's words ask for a plan
         from assistant.chat import plan_line
 

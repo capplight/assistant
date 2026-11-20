@@ -48,6 +48,9 @@ _CHANGE = re.compile(_W + r"(?:"
     # Ф-73: an edit inside a record's text («исправь в заметке …», «допиши …»)
     r"исправ(?:ь|ьте)|поправ(?:ь|ьте)|допиш(?:и|ите)|дополн(?:и|ите)|перепиш(?:и|ите)|"
     r"вычеркн(?:и|ите)|"
+    # Ф-95 phase 1: to-dos, the calendar, reminders, expenses from the line
+    r"отмет(?:ь|ьте|ить)|сдвин(?:ь|ьте|уть)|передвин(?:ь|ьте|уть)|отмен(?:и|ите|ить)|"
+    r"измен(?:и|ите|ить)|помен(?:яй|яйте|ять)|пропуст(?:и|ите|ить)|не\s+напоминай(?:те)?|"
     # «покажи (плитку / это / её) ещё на …»: up to three words of the record (week 17: the
     # golden set found «покажи плитку ещё на странице Дом» read as a question); not a question
     r"покажи\s+(?![^?]*\?)(?!(?:что|где|как\w*|сколько|кто|какие)\s)(?:[^\s?]+\s+){0,3}?"
@@ -269,6 +272,9 @@ _UNDO = re.compile(r"^(?:пожалуйста[,\s]+)?(?:(?P<verb>верни(?:т
 # «верни страницу как было», «верни вид / поле»: the page view (set_view reset), not an undo
 _UNDO_VIEW = re.compile(r"страниц|(?<!\w)вид[ау]?(?!\w)|(?<!\w)пол(?:е|я|ю|ей)(?!\w)|колонк|столбц|"
                         r"(?<!\w)бет", re.IGNORECASE)  # fmt: skip
+# Ф-95: «отмени напоминание про свет», «отмени встречу» cancel an object, not the last change
+_UNDO_OBJECT = re.compile(r"^\s*(?:мо\w+\s+)?(?:напоминани|будильник|встреч|событи|созвон|"
+                          r"при[её]м|тренировк|запись\s+к)", re.IGNORECASE)  # fmt: skip
 _UNDO_FILLER = {"как", "было", "все", "обратно", "назад", "последнее", "последний", "последнюю",
                 "последние", "действие", "действия", "изменение", "изменения", "это", "эти",
                 "пожалуйста", "мне", "то", "что", "ты", "вы", "сделал", "сделала", "сделали",
@@ -298,7 +304,7 @@ def undo_phrase(text: str) -> UndoPhrase | None:
     if m.group("verb") is None:  # «не туда»
         return UndoPhrase()
     rest = m.group("rest") or ""
-    if _UNDO_VIEW.search(rest):
+    if _UNDO_VIEW.search(rest) or _UNDO_OBJECT.match(rest):
         return None
     words = _WORDS.findall(rest)
     about = tuple(w for w in words if w not in _UNDO_FILLER and w not in _UNDO_LINK)

@@ -66,8 +66,11 @@ async def test_line_reads_spends_and_todos_by_code_when_the_model_is_down(env): 
         ev = last(await _say(c, h, "Я сегодня потратил 5000"), "action")
         assert ev["expenses"][0]["amount"] == "5000.00"
 
-        ev = last(await _say(c, h, "купить хлеб на завтра, и напомни в 10 утра"), "action")
-        task = ev["tasks"][0]
+        evs = await _say(c, h, "купить хлеб на завтра, и напомни в 10 утра")
+        acts = [d for _, n, d in evs if n == "action"]
+        # Ф-95 (1): the reminder part is set at once too (its own action in the group)
+        assert [a["action"]["kind"] for a in acts] == ["save_item", "create_reminder"]
+        task = acts[0]["tasks"][0]
         assert (task["list_key"], task["title"]) == ("todo", "Купить хлеб")
         assert task["due_date"] is not None
         assert task["item_id"] in await _ids(c, h, pages["tasks"]["id"])

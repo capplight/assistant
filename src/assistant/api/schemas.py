@@ -899,6 +899,8 @@ class ActionOut(BaseModel):
     notice: NoticeOut | None = None  # Ф-65: the 3-second notice (actions.md)
     group: ActionGroupOut | None = None  # step 6: the phrase made several actions
     plan: PlanCardOut | None = None  # step 8: the «План» card of a plan made / changed (plans.md)
+    # Ф-95: what the action changed — refetch what does not come through /v1/sync (actions.md)
+    touched: list[str] = Field(default_factory=list)
     undoable: bool
     undoable_until: datetime | None
     undone_at: datetime | None

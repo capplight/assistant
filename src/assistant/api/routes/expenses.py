@@ -49,7 +49,6 @@ from assistant.db.models_expenses import (
     UNHIDEABLE,
     ExpenseCategory,
     ExpenseEntry,
-    ParseSource,
 )
 from assistant.db.models_pages import Screen
 from assistant.expenses import calc, parse, service
@@ -321,65 +320,17 @@ async def patch_expense(expense_id: uuid.UUID, body: ExpensePatchIn, user: Gated
     if entry.version != body.version:
         raise ApiError(409, "conflict", details={"version": entry.version})
     sent = body.model_fields_set - {"version", "client_id", "confirm"}
-    values: dict[str, Any] = {}
-    review = [f for f in entry.review_fields or [] if f not in body.confirm]
+    from assistant import operations  # the same operation as the assistant line (Ф-95)
+
+    args = {"expense_id": entry.public_id, "confirm": list(body.confirm),
+            **{k: getattr(body, k) for k in sent}}
     try:
-        if "amount" in sent or "expression" in sent:
-            amount, expression = service.resolve_amount(
-                body.amount if "amount" in sent else None,
-                body.expression if "expression" in sent else None)  # fmt: skip
-            if calc.money(entry.amount) != amount:
-                values["amount"] = f"{amount:.2f}"
-                values["parse_source"] = ParseSource.USER_EDIT.value
-            values["expression"] = expression
-            review = [f for f in review if f != "amount"]  # the person typed it: theirs
-        if "currency" in sent and body.currency:
-            values["currency"] = body.currency
-        if "spent_on" in sent and body.spent_on:
-            values["spent_on"] = date.fromisoformat(body.spent_on).isoformat()
-            review = [f for f in review if f != "spent_on"]  # the person set the day
-        if "category_id" in sent:
-            cat = await _category(db, user.id, body.category_id)
-            values["category_id"] = str(cat.public_id) if cat else None
-        if "note" in sent:
-            values["note"] = service.clean_note(body.note)
-        if "payee" in sent:
-            values["payee"] = service.clean_payee(body.payee)
-            review = [f for f in review if f != "payee"]
-        if "method" in sent:
-            values["method"] = body.method
-        if "direction" in sent and body.direction:
-            values["direction"] = body.direction
-    except service.ExpenseError as exc:
-        raise ApiError(422, exc.code) from exc
-    except ValueError as exc:
-        raise ApiError(422, "validation_error") from exc
-    if review != list(entry.review_fields or []):
-        values["review_fields"] = review
-    item_pid = await service.item_public_id(db, entry)
-    out = engine.Outcome()
-    if values:
-        out = await engine.apply(db, user.id, [{"op": "set_expense", "id": str(entry.public_id),
-                                                "item": str(item_pid), "values": values}],
-                                 by=Initiator.USER, check=False, now=now)  # fmt: skip
-    action = None
-    if out.inverse:
-        cat = await db.get(ExpenseCategory, entry.category_id) if entry.category_id else None
-        title = service.label(entry.note, entry.payee, cat)
-        only_confirm = set(values) == {"review_fields"} and "amount" in body.confirm
-        text_ = (f"Сумма верна: {calc.format_money(entry.amount, entry.currency)}" if only_confirm
-                 else f"Изменил трату: {calc.format_money(entry.amount, entry.currency)} · "
-                      f"{title}")  # fmt: skip
-        action = await record(
-            db, user_id=user.id, kind=ActionKind.EDIT_EXPENSE, initiated_by=Initiator.USER,
-            summary={"ru": text_, "kk": None},
-            changes=[_change_row(entry, item_pid, "edit", text_, title)],
-            inverse=out.inverse, now=now, source_item_ids=[entry.item_id],
-            client_id=body.client_id,
-        )  # fmt: skip
-    await db.flush()
+        res = await operations.run("expenses.update", db, user.id, args, by=Initiator.USER,
+                                   now=now, client_id=body.client_id)  # fmt: skip
+    except operations.OpError as exc:
+        raise ApiError(exc.status, exc.code, details=exc.details) from exc
     return ExpenseChangedOut(expense=await _out(db, entry),
-                             action=await _action_out(db, action, now))  # fmt: skip
+                             action=await _action_out(db, res.action, now))  # fmt: skip
 
 
 @router.delete("/{expense_id}", response_model=ExpenseChangedOut)

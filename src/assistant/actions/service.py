@@ -423,6 +423,34 @@ async def undo_group(session: AsyncSession, user_id: int, group_id: uuid.UUID, *
     return out
 
 
+TOUCHED_ORDER = ("records", "pages", "tasks", "calendar", "reminders", "expenses", "budget",
+                 "plans", "today")  # fmt: skip
+
+
+def touched_of(a: Action) -> list[str]:
+    """What an action changed, for the phone to refetch what does not come through `/v1/sync`
+    (Ф-95): the operation's own list (`payload.touched`), else read from its change rows."""
+    own = a.payload.get("touched")
+    got: set[str] = set(own) if own else set()
+    if not own:
+        for c in a.payload.get("changes", []):
+            if c.get("task_id"):
+                got |= {"tasks", "calendar"}
+            elif c.get("expense_id"):
+                got |= {"expenses", "budget"}
+            elif c.get("reminder_id"):
+                got |= {"reminders", "calendar"}
+            elif c.get("item_id"):
+                got.add("records")
+        if a.screen_id or a.payload.get("created_page_id"):
+            got.add("pages")
+        if a.payload.get("plan_card"):
+            got.add("plans")
+    if got & {"tasks", "calendar", "reminders", "expenses"}:
+        got.add("today")
+    return [k for k in TOUCHED_ORDER if k in got] + sorted(got - set(TOUCHED_ORDER))
+
+
 async def actions_dicts(session: AsyncSession, rows: list[Action],
                         now: datetime) -> list[dict[str, Any]]:  # fmt: skip
     screens = {s for a in rows for s in (a.screen_id,) if s}
@@ -480,6 +508,7 @@ async def actions_dicts(session: AsyncSession, rows: list[Action],
             # step 8: the «План» card of a plan this action made or changed (plans.md)
             "plan": {**a.payload["plan_card"], "action_id": str(a.public_id)}
             if a.payload.get("plan_card") else None,
+            "touched": touched_of(a),  # Ф-95: what to refetch (additive)
             "seq": a.seq,
             "created_at": a.created_at.isoformat(),
         })  # fmt: skip

@@ -599,3 +599,61 @@ none of the code's save / spend / to-do / reminder paths run, nothing is saved, 
 it unless the phrase names the person's own («мои», «в записях», «сохранённые»). Not such a
 request: «запиши …» (a note), «напиши в заметку …», «исправь ошибки в этой заметке» (an edit,
 Ф-73), «переведи 5000 маме». INTENT prompt `intent.v2` adds the same class.
+
+## The line runs the screens' operations (Ф-95 phase 1, chat-full-control.md §3, 2026-11-21)
+
+What the screens do to to-dos, the calendar, reminders and expenses the line now does through the
+same operations (`assistant.operations`, actions.md «Operations»): one action with «Отменить»,
+the reply says only what really happened (Ф-88).
+
+**Code first, no model** (`chat/ops_line.read_code`), only when exactly one object fits (else
+the usual model turn):
+
+| Phrase | Does |
+|---|---|
+| «хлеб купил», «купила молоко», «я позвонил маме», «оплатил интернет», «отметь корм коту купленным», «вычеркни батарейки», «молоко куплено» | `tasks.set_done` (the verb's stem picks between «Позвонить маме» and «Купить маме подарок»; a repeat: today's occurrence) |
+| «не купил хлеб» | untick (`done: false`) |
+| «купил хлеб за 400» | the spend as before **and** the open purchase «Хлеб» ticked — one group, «Отменить всё» (Ф-95 (2)); no such purchase: just the spend |
+| «перенеси встречу с Ерланом на 16:00 / на пятницу / на 3 декабря в 11:00 / на час позже», «передвинь созвон на полчаса позже» | `tasks.reschedule` (a day only keeps the time, a time only keeps the day; a bare «на 4» takes the hour nearer the entry's own; a repeat: that occurrence only); an all-day to-do moves its day (`tasks.update`) |
+| «сдвинь всё завтра на час» | `confirm` «Сдвинуть N дел?» [Да] [Не сейчас], then `calendar.shift_many` as one action |
+| «не напоминай про свет», «отмени напоминание о таблетке» | `reminders.delete` («Больше не напомню: …»); not an undo by phrase any more |
+| «перенеси напоминание про таблетку на 8 утра» | `reminders.update` |
+
+An unclear time («на завтра в 9»: 9:00 or 21:00; a time already past) is a `needs_choice` with
+the moments (Ф-89); the tap runs the operation. Nothing is done in the background that would ask.
+
+**Reminders are set at once (Ф-95 (1)).** «Напомни завтра в 7:30 выпить таблетку» no longer sends
+`reminder_draft`: the reminder is created (`reminders.create`, `initiated_by: agent`), the answer is
+an `action` («Напомню завтра в 7:30: выпить таблетку · Отменить»). The S13 form (`reminder_draft`)
+stays only when the time is unclear: no time («напомни позвонить маме»), an assumed time, or the
+model could not read it. A tap on a time choice («Послезавтра в 21:00») now sets it at once too.
+
+**The model's tools, by domain** (`ops_line`): one tool per domain — `tasks` (done, undone, move,
+rename, delete), `calendar` (move, set_duration, delete, shift), `reminders` (create, move, rename,
+cancel), `expenses` (fix, delete) — with `op` as an enum; descriptions are built from the
+registry, irreversible operations are never offered (Ф-95 (4)). Code picks the domains of a change
+turn from the phrase (`напомин` → reminders, `встреч` / a day / an hour → calendar + tasks,
+`трат` / `сумм` / `₸` → expenses, `отметь` / `купил` → tasks; nothing → tasks + calendar), adds a
+one-line catalogue «Ещё умею менять: …» and `need_tools(domain)` (the domain is there on the next
+step). `lookup(domain, words, date_from, date_to)` reads more objects.
+
+- **Refs.** The objects the phrase names are shown by code before the first step, as a data block
+  «Дела, события, напоминания и траты» with refs `t1` (to-do), `c1` (calendar entry: a to-do with
+  its time, one occurrence of a repeat), `r1` (reminder), `e1` (expense). The model names objects
+  only by these; an unknown ref is an error, nothing changes. Their times / amounts may be said
+  back (the number check allows them).
+- **Times by code.** The model passes the person's own words (`when: "на пятницу в 16:00"`);
+  code computes the moment (`timewords`, the person's zone).
+- **«Да» (Ф-95 (3)).** More than 10 objects, or «все / всё» in the phrase over several → `confirm`
+  with the count first, then one action. One object: at once.
+- **Words guard.** A delete / cancel needs a delete word in the person's phrase («удали», «убери»,
+  «отмени», «не напоминай»); an expense is fixed only when the phrase says so («исправь», «не 500, а
+  5000», «это было вчера», «сумма», «категория»), with the amount the person said. A phrase that
+  fixes a spend never makes a new one.
+- **Questions.** «Что у меня в пятницу?», «я свободен завтра?», «какие у меня напоминания?» —
+  code reads that day's calendar (or the reminders) into the turn and offers `lookup`; no change
+  tool is offered on a question.
+
+`tool_activity.tool` may be `tasks`, `calendar`, `reminders`, `expenses`, `lookup`, `op` (code),
+`reminder`. The proposal of an operation has `plan.tool: "op"` (a tap / «Да» runs the stored
+operations). Cost guard: actions.md / ops `change_turn_cost` alert (Ф-95 (6), costs.md).

@@ -310,19 +310,45 @@ cannot do different things. REST contracts do not change.
 
 | Operation | Called by | What it does |
 |---|---|---|
-| `tasks.delete` | `DELETE /v1/tasks/{id}` (whole task) | the to-do and its record to the trash, its linked reminders cancelled, one `delete_item` |
-| `tasks.set_done` | `POST /v1/tasks/{id}/done` | tick / untick (one occurrence of a repeat), `facet_edit` |
+| `tasks.create` | `POST /v1/tasks` | a to-do / purchase (day, time, repeat, alert), `save_item` |
+| `tasks.update` | `PATCH /v1/tasks/{id}` (title, qty, where, due_date, list_key); the line «перенеси купить шины на пятницу» | `facet_edit` |
+| `tasks.reschedule` | `PATCH /v1/tasks/{id}` (start_at, duration_min, tz, rrule, occurrence_at, scope, reminder_offset_min); the line «перенеси встречу на 16:00», «на час позже», set_duration | move / resize / repeat; one occurrence, «это и следующие», the series; the alert follows; `facet_edit` |
+| `tasks.remove_occurrence` | `DELETE /v1/tasks/{id}?occurrence_at=&scope=this\|following`; the line «удали тренировку в этот вторник» | one occurrence skipped, or the repeat ended there |
+| `calendar.shift_many` (`bulk`) | the line «сдвинь всё завтра на час» (after «Да») | several calendar entries moved by the same minutes, one action |
+| `tasks.delete` | `DELETE /v1/tasks/{id}` (whole task); the line | the to-do and its record to the trash, its linked reminders cancelled, one `delete_item` |
+| `tasks.set_done` | `POST /v1/tasks/{id}/done`; the line «хлеб купил», «я позвонил маме», «не купил хлеб» | tick / untick (one occurrence of a repeat), `facet_edit` |
 | `tasks.clear_done` (`bulk`) | `POST /v1/tasks/clear-done` | the done to-dos of a list to the trash |
-| `expenses.delete` | `DELETE /v1/expenses/{id}` | the expense and its record to the trash |
-| `reminders.delete` | `DELETE /v1/reminders/{id}` | cancel, `edit_reminder` with `restore_reminder` |
+| `expenses.update` | `PATCH /v1/expenses/{id}`; the line «не 500, а 5000», «это было вчера», «это продукты» | `edit_expense` |
+| `expenses.delete` | `DELETE /v1/expenses/{id}`; the line | the expense and its record to the trash |
+| `reminders.create` | `POST /v1/reminders`; the line («напомни завтра в 7:30 …», Ф-95 (1): set at once) | `create_reminder` with `cancel_reminder` |
+| `reminders.update` | `PATCH /v1/reminders/{id}`; the line «перенеси напоминание про таблетку на 8 утра» | `edit_reminder` with `restore_reminder` |
+| `reminders.delete` | `DELETE /v1/reminders/{id}`; the line «не напоминай про свет» | cancel, `edit_reminder` with `restore_reminder` |
 | `records.trash` | the line («удали это», `update.trash`) | each record as its own screen deletes it: a to-do's record → as `tasks.delete`, an expense's → as `expenses.delete`, any other → the record |
 | `plans.to_calendar`, `calendar.remove_plan`, `calendar.shift_plan` | the line (plans.md «A plan on the calendar») | a plan on / off / moved on the calendar |
+
+The routes keep only the HTTP part (idempotency by `client_id`, the `version` check, the
+response shape); request and response bodies are unchanged. An action the line makes says
+«Перенёс …», «Больше не напомню: …»; the screen's own texts stay as before («Вы перенесли
+напоминание …», «Удалил напоминание …»).
+
+**Not moved: `DELETE /v1/items/{id}`.** Its contract has no action (the restore is
+`POST /v1/items/{id}/restore`, which brings back only the record). Routing a to-do's / expense's
+record through `records.trash` would leave `/restore` unable to bring the to-do and its reminder
+back, so it stays as it is; the phone deletes a to-do through `DELETE /v1/tasks/{id}`.
 
 **Trash fix.** Before, «удали это» on a to-do's record in the line put only the record in the
 trash: the to-do row stayed live and its alert kept ringing. Now it is the screen's delete (the
 to-do, its record and its reminder; «Восстановить» brings all back). The action's change row then
 has `task_id` (or `expense_id`).
 
-New optional `payload` keys on actions made by an operation: `op` (its name) and `touched`
-(`tasks`, `calendar`, `reminders`, `expenses`, `budget`, `records`, `plans`) — not in the Action
-JSON yet (phase 0 mobile item: refetch by `touched`).
+New optional `payload` keys on actions made by an operation: `op` (its name) and `touched`.
+
+**`touched` in the Action JSON (Ф-95, additive).** Every action (`GET /v1/actions`, the `action`
+event of the line, every REST response with an `action`) has `touched`: what it changed, in this
+order — `records`, `pages`, `tasks`, `calendar`, `reminders`, `expenses`, `budget`, `plans`,
+`today`. The operation's own list when it has one, else read from the change rows (`task_id` →
+tasks + calendar, `expense_id` → expenses + budget, `reminder_id` → reminders + calendar,
+`item_id` → records; a page action → pages); `today` whenever to-dos, the calendar, reminders or
+expenses changed. The phone refetches by it what does not come through `/v1/sync`:
+`calendar` → `GET /v1/calendar` (its cached range), `budget` → `GET /v1/expenses/budget`,
+`today` → `GET /v1/today`. Old phones ignore the field.
