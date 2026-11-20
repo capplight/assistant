@@ -213,6 +213,29 @@ title}» («Стамбул: Балат и Фенер»); a point that says its o
 в обед 13:00, днём 14:00, после работы 18:30, вечером 19:00), `duration_min` from
 `timewords.default_duration` (60 by default), in the person's `tz`. Never guessed: «до 10 утра»,
 «до 23:00», «после 15» are limits (no time); a bare «в 7» (7:00 or 19:00?) stays untimed.
+- **Ф-96 (2026-11-21): how, asked first, one question at a time.** Unless the phrase says it,
+  the line asks «Как поставить «Стамбул» в календарь: каждый день одним делом (все пункты
+  внутри) или каждый пункт отдельным делом со своим временем?» — options `m_days` «По дню одним
+  делом», `m_points` «Каждый пункт отдельно» (`kind: "mode"`), `cancel`. Typed answers work too:
+  «нет», «просто», «без разницы», «не надо отдельно», «по дням» → by day (the behaviour above);
+  «каждый пункт отдельно», «по пунктам» → each point. Said in the phrase («добавь каждый пункт
+  отдельно в календарь», «просто добавь план в календарь», «… по дням …») → no question.
+  A date typed instead of an answer = by day from that date.
+- **Each point separately.** After the day is known the line proposes the times and asks once:
+  «Предлагаю так:\n10 декабря, чт: 9:00 Голубая мечеть · 13:00 Обед у Сулеймание …\nПоставить
+  так? Можно поправить одной фразой: «ужин в 20, музей утром».» — options `t_ok` «Поставить
+  так» (`kind: "yes"`), `m_days` «По дню одним делом», `cancel`. Proposed times: a point's own
+  time is kept (as above), «завтрак / обед / ужин» take 9:00 / 13:00 / 19:00 (`timewords`), the
+  rest go in order into free slots 9:00, 11:00, 13:00, 15:00, 17:00, 19:00, 21:00, 22:00.
+  Answers: «да», «ок», «поставь так» → done; «ужин в 20, музей утром» → those points get those
+  times (every point whose title the part names best; a bare hour takes the reading nearest the
+  proposal: «ужин в 8» = 20:00) and it is done at once; a part naming no point → «Не нашёл в
+  плане: «…»» and the question stays open; «лучше по дням» → by day; «отмена» → nothing. Every
+  point becomes its own timed to-do (no per-day to-do), all in **one action**, «Добавил в
+  календарь «Стамбул»: 7 дел — каждый пункт отдельно, 10–11 декабря.»
+- The questions are `needs_choice` proposals with `plan.tool: "plan_calendar"` and `plan.step`
+  `mode` | `date` | `times` (the state so far in `plan`: `start`, `mode`, `times`); a question
+  saved before Ф-96 (no `step`) still works as a date question for «by day».
 - Dates: the date the phrase says (`с 10 декабря`, `10.12`, `с понедельника`, `со следующей
   недели`, `завтра`), else the plan's `start_date`. Neither → **one question**, nothing written:
   `needs_choice` «В плане «Стамбул» нет дат. С какого дня поставить его в календарь (5 дней)?»,

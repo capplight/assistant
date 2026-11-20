@@ -69,8 +69,14 @@ async def test_trip_plan_to_calendar_ask_date_shift_remove_and_undo(env):  # noq
         pid = last(evs, "plan")["plan"]["item_id"]
         n_chat = script.n("ChatReply")
 
-        # no dates in the plan and none said: ONE question, nothing written
+        # Ф-96: first «по дню или каждый пункт?»; «нет» = no preference = one to-do per day
         evs = await say(c, h, "добавь план в календарь")
+        ask = last(evs, "needs_choice")
+        assert ask["question"].startswith("Как поставить «Стамбул» в календарь: каждый день")
+        assert [o["id"] for o in ask["options"]] == ["m_days", "m_points", "cancel"]
+        assert await plan_tasks(env.maker, pid) == []
+        # then, no dates in the plan and none said: ONE more question, nothing written
+        evs = await say(c, h, "нет")
         ask = last(evs, "needs_choice")
         assert ask["question"] == ("В плане «Стамбул» нет дат. С какого дня поставить его в "
                                    "календарь (2 дня)?")  # fmt: skip
@@ -205,3 +211,62 @@ async def test_action_plan_to_calendar_is_one_group(env):  # noqa: F811
         evs = await say(c, h, "убери план из календаря")
         assert last(evs, "action")["action"]["kind"] == "delete_item"
         assert await plan_tasks(env.maker, pid) == []
+
+
+async def test_each_point_separately_with_proposed_times_and_a_correction(env):  # noqa: F811
+    """Ф-96: «каждый пункт отдельно» said → no «how?» question; the times are proposed (own
+    times kept, a meal at its part of the day), one phrase corrects them, one action."""
+    script = PlanScript([make_plan_call(days=2)], [trip_reply])
+    async with client(env.make_app(router_with(env.maker, script))) as c:
+        h = await signed_in(c)
+        for t in TIPS:
+            await record(c, h, env.maker, t)
+        evs = await say(c, h, "составь план поездки в Стамбул на 2 дня")
+        pid = last(evs, "plan")["plan"]["item_id"]
+        start = today() + timedelta(days=5)
+        evs = await say(c, h, f"добавь каждый пункт отдельно в календарь с {said(start)}")
+        ask = last(evs, "needs_choice")
+        assert ask["question"].startswith("Предлагаю так:\n")
+        assert "9:00 Цветные дома Балата · 13:00 Обед у Сулеймание" in ask["question"]
+        assert "9:00 Паром в Кадыкёй · 11:00 Кафе на крыше" in ask["question"]
+        assert [o["id"] for o in ask["options"]] == ["t_ok", "m_days", "cancel"]
+        assert await plan_tasks(env.maker, pid) == []
+
+        evs = await say(c, h, "кафе в 20, а обед в 14")
+        action = last(evs, "action")["action"]
+        tasks = await plan_tasks(env.maker, pid)
+        got = {t.title: (t.due_date, t.start_at.astimezone(TZ).strftime("%H:%M"))
+               for t in tasks}  # fmt: skip
+        assert got == {"Цветные дома Балата": (start, "09:00"),
+                       "Обед у Сулеймание": (start, "14:00"),
+                       "Паром в Кадыкёй": (start + timedelta(days=1), "09:00"),
+                       "Кафе на крыше": (start + timedelta(days=1), "20:00")}
+        msgs = (await c.get("/v1/chat/messages", headers=h)).json()["messages"]
+        assert msgs[-1]["text"].startswith("Добавил в календарь «Стамбул»: 4 дела — каждый пункт "
+                                           "отдельно")
+        r = await c.post(f"/v1/actions/{action['id']}/undo", headers=h)
+        assert r.status_code == 200, r.text
+        assert await plan_tasks(env.maker, pid) == []
+
+        # the buttons: «Каждый пункт отдельно» → «Поставить так»; «лучше по дням» typed
+        ask = last(await say(c, h, "поставь поездку в календарь"), "needs_choice")
+        ask = last(await say(c, h, "Каждый пункт отдельно",
+                             choice={"reply_id": ask["reply_id"], "option": "m_points"}),
+                   "needs_choice")  # fmt: skip
+        # the undo took the dates back: one question at a time — the day, then the times
+        assert ask["question"].startswith("В плане «Стамбул» нет дат.")
+        ask = last(await say(c, h, "С завтра", choice={"reply_id": ask["reply_id"],
+                                                       "option": "d1"}), "needs_choice")
+        assert ask["question"].startswith("Предлагаю так:")
+        evs = await say(c, h, "Поставить так", choice={"reply_id": ask["reply_id"],
+                                                         "option": "t_ok"})
+        assert len(await plan_tasks(env.maker, pid)) == 4
+        r = await c.post(f"/v1/actions/{last(evs, 'action')['action']['id']}/undo", headers=h)
+        assert r.status_code == 200
+
+        last(await say(c, h, "добавь каждый пункт отдельно в календарь"), "needs_choice")
+        ask = last(await say(c, h, "нет, лучше по дням"), "needs_choice")  # the day, again
+        evs = await say(c, h, "С завтра", choice={"reply_id": ask["reply_id"], "option": "d1"})
+        assert last(evs, "action")["action"]["kind"] == "save_item"
+        assert sorted(t.title for t in await plan_tasks(env.maker, pid) if t.start_at is None) \
+            == ["Стамбул: Балат и Фенер", "Стамбул: Кадыкёй"]  # fmt: skip

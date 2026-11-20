@@ -7,7 +7,7 @@ import pytest
 
 from assistant.chat import plan_line
 from assistant.plans import build
-from assistant.plans.calendar import point_time, range_text
+from assistant.plans.calendar import point_time, propose_times, range_text
 
 TODAY = date(2026, 11, 20)  # a Friday
 
@@ -99,3 +99,55 @@ def test_text_of_writes_the_dates() -> None:
         {"n": 1, "date": "2026-12-10", "title": "Балат",
          "points": [{"title": "Дома", "note": "утром", "own": False}]}]}  # fmt: skip
     assert build.text_of(plan) == "Стамбул · 1 день\n\n10 декабря, чт · Балат\n1. Дома — утром"
+
+
+# --- Ф-96 ---
+
+
+@pytest.mark.parametrize("phrase,answer,mode", [
+    ("добавь каждый пункт отдельно в календарь", False, "points"),
+    ("по пунктам", True, "points"),
+    ("Каждый пункт отдельно", True, "points"),
+    ("просто добавь план в календарь", False, "days"),
+    ("перенеси план по дням в календарь", False, "days"),
+    ("нет", True, "days"),
+    ("нет", False, None),
+    ("без разницы", True, "days"),
+    ("не надо отдельно", True, "days"),
+    ("добавь план в календарь", False, None),
+])  # fmt: skip
+def test_mode_of(phrase: str, answer: bool, mode: str | None) -> None:
+    assert plan_line.mode_of(phrase, answer=answer) == mode
+
+
+@pytest.mark.parametrize("phrase,out", [
+    ("да", "ok"), ("Поставь так", "ok"), ("ок", "ok"), ("отмена", "cancel"),
+    ("лучше по дням", "days"), ("ужин в 20", None),
+])  # fmt: skip
+def test_times_reply(phrase: str, out: str | None) -> None:
+    assert plan_line.times_reply(phrase) == out
+
+
+DAYS = [{"n": 1, "title": "Султанахмет", "points": [
+            {"id": "d1p1", "title": "Голубая мечеть", "note": "до 10 утра"},
+            {"id": "d1p2", "title": "Обед у Сулеймание", "note": None},
+            {"id": "d1p3", "title": "Музей Топкапы", "note": None},
+            {"id": "d1p4", "title": "Ужин на крыше", "note": "в 20:30"}]},
+        {"n": 2, "title": "Кадыкёй", "points": [
+            {"id": "d2p1", "title": "Рынок Кадыкёя", "note": "утром"},
+            {"id": "d2p2", "title": "Ужин в Мода", "note": None}]}]  # fmt: skip
+
+
+def test_propose_times_keeps_own_and_fills_slots() -> None:
+    times = propose_times(DAYS, [date(2026, 12, 10), date(2026, 12, 11)])
+    assert times == {"d1p1": "09:00", "d1p2": "13:00", "d1p3": "15:00", "d1p4": "20:30",
+                     "d2p1": "09:00", "d2p2": "19:00"}  # fmt: skip
+
+
+def test_apply_edits_one_phrase() -> None:
+    times = propose_times(DAYS, [date(2026, 12, 10), date(2026, 12, 11)])
+    new, missed = plan_line.apply_edits("ужин в 8, музей утром и вертолёт в 12", DAYS, times,
+                                        TODAY)  # fmt: skip
+    # «ужин в 8» → 20:00 (nearest the proposed evening), both dinners; «музей утром» → 9:00
+    assert new["d1p4"] == "20:00" and new["d2p2"] == "20:00" and new["d1p3"] == "09:00"
+    assert new["d1p2"] == "13:00" and missed == ["вертолёт в 12"]

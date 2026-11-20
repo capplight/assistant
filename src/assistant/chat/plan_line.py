@@ -330,7 +330,7 @@ _CAL_OUT_VERB = re.compile(r"(?<!\w)(?:убер|убра|удал|сотр|вы�
 _SHIFT_VERB = re.compile(r"^(?:пожалуйста[,\s]+)?(?:перенес|перенос|сдвин|подвин|передвин|отлож|"
                          r"перестав)\w*")  # fmt: skip
 _PLAN_WORD = re.compile(r"(?<!\w)(?:план\w*|поездк\w*|путешеств\w*|отпуск\w*|маршрут\w*|"
-                        r"тур(?!\w)|программ\w*|жоспар\w*)")  # fmt: skip
+                        r"тур(?!\w)|программ\w*|жоспар\w*|пункт\w*)")  # fmt: skip
 _DEICTIC = re.compile(r"(?<!\w)(?:его|ее|это|эту|этот|их)(?!\w)")
 _MONTHS = ("январ", "феврал", "март", "апрел", "ма", "июн", "июл", "август", "сентябр", "октябр",
            "ноябр", "декабр")  # fmt: skip
@@ -480,3 +480,104 @@ def date_options(today: date) -> list[tuple[str, date]]:
 
 TEXT_NO_CAL_PLAN = ("Не нашёл плана для календаря. Сначала составьте его, например: «составь "
                     "план поездки в Стамбул на 4 дня».")
+
+
+# --- Ф-96: «по дню одним делом или каждый пункт отдельно?», and the times of the points ---
+
+_MODE_POINTS = re.compile(r"(?<!\w)(?:кажд\w*\s+(?:пункт|мест|точк|дел)\w*|по\s+пунктам|"
+                          r"по\s+местам|отдельн\w*|по\s+отдельности|поштучно|разбей\w*)")
+_MODE_DAYS = re.compile(r"(?<!\w)(?:по\s+дням|по\s+дню|одним\s+делом|просто\s+(?:добав|постав|"
+                        r"закин|внес)\w*|как\s+есть|разом|целиком|неважно|не\s+важно|без\s+разницы|"
+                        r"вс[её]\s+равно|как\s+удобно|на\s+твой\s+выбор|по\s+умолчанию)")
+_NO_PREF = re.compile(r"^(?:нет|не|неа|не\s+надо|не\s+нужно|просто|обычно|любой|любым|давай\s+"
+                      r"просто|да\s+просто)$")  # fmt: skip
+_OK = re.compile(r"^(?:да|ок|окей|ok|ага|угу|давай|хорошо|отлично|поставь|ставь|подходит|норм\w*|"
+                 r"годится|супер|можно|верно|вс[её]\s+верно|так\s+и\s+сделай|поставь\s+так|"
+                 r"ставь\s+так|так|пойдет|идет|согласен|согласна)(?:\s+так)?$")  # fmt: skip
+_CANCEL = re.compile(r"^(?:отмена|отмени|не\s+надо|не\s+нужно|не\s+ставь|передумал\w*|стоп)$")
+
+
+def mode_of(text: str, *, answer: bool = False) -> str | None:
+    """`points` («каждый пункт отдельно»), `days` («просто добавь», «по дням»; as an answer also
+    a bare «нет» / «просто» — no preference, Ф-96), else None."""
+    norm = _norm(text).strip(" .!?,")
+    if re.search(r"(?<!\w)не\s+(?:надо\s+|нужно\s+)?(?:кажд\w*\s+\w+\s+)?отдельн", norm):
+        return "days"  # «не надо отдельно»
+    if _MODE_POINTS.search(norm):
+        return "points"
+    if _MODE_DAYS.search(norm) or (answer and _NO_PREF.match(norm)):
+        return "days"
+    return None
+
+
+def times_reply(text: str) -> str | None:
+    """The answer to «Поставить так?»: `ok`, `days` (one to-do per day after all), `cancel`."""
+    norm = _norm(text).strip(" .!?,")
+    if _OK.match(norm):
+        return "ok"
+    if _CANCEL.match(norm):
+        return "cancel"
+    if mode_of(norm) == "days":
+        return "days"
+    return None
+
+
+def _point_stems(title: str) -> list[str]:
+    return [w[:max(4, len(w) - 2)] for w in re.findall(r"\w+", _norm(title)) if len(w) >= 4]
+
+
+def apply_edits(text: str, days: list[dict[str, Any]], times: dict[str, str],
+                on: date) -> tuple[dict[str, str], list[str]]:  # fmt: skip
+    """«ужин в 20, музей утром» → the proposed times with those points moved (every point whose
+    title the part names best; a bare hour takes the reading nearest the proposed time). Returns
+    the new times and the parts that named no point (to say so)."""
+    from datetime import time as time_
+
+    from assistant import timewords
+
+    out = dict(times)
+    missed: list[str] = []
+    points = [p for d in days for p in d.get("points") or [] if p["id"] in times]
+    for part in re.split(r",|;|(?<!\w)и(?!\w)|(?<!\w)а(?!\w)", text):
+        part = part.strip(" .!?")
+        if not part:
+            continue
+        r = timewords.read(part, datetime.combine(on, time_(0, 0)))
+        if r is None or r.rel is not None or not r.times():
+            continue
+        words = [w for w in re.findall(r"\w+", _norm(timewords.strip(part, r.spans)))
+                 if len(w) >= 4]
+        score = {p["id"]: sum(any(w.startswith(s) for w in words) for s in _point_stems(p["title"]))
+                 for p in points}
+        best = max(score.values(), default=0)
+        if not best:
+            missed.append(part)
+            continue
+        for p in points:
+            if score[p["id"]] != best:
+                continue
+            was = time_.fromisoformat(out[p["id"]])
+            pick = min(r.times(), key=lambda t: abs((t.hour * 60 + t.minute)
+                                                    - (was.hour * 60 + was.minute)))
+            out[p["id"]] = f"{pick.hour:02d}:{pick.minute:02d}"
+    return out, missed
+
+
+def mode_question(title: str) -> str:
+    return (f"Как поставить «{title}» в календарь: каждый день одним делом (все пункты внутри) "
+            f"или каждый пункт отдельным делом со своим временем?")
+
+
+def times_question(lines: list[str]) -> str:
+    return ("Предлагаю так:\n" + "\n".join(lines)
+            + "\nПоставить так? Можно поправить одной фразой: «ужин в 20, музей утром».")
+
+
+def example_point(days: list[dict[str, Any]]) -> str:
+    """A point title to show in «например: «…» в 10»."""
+    for d in days:
+        for p in d.get("points") or []:
+            words = re.findall(r"\w+", p.get("title") or "")
+            if words:
+                return words[0].lower()
+    return "ужин"

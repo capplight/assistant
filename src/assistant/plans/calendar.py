@@ -44,8 +44,9 @@ _LIMIT = re.compile(r"(?<!\w)(до|к|не\s+позже|не\s+позднее|п
 
 @dataclass
 class Outcome:
-    """What one calendar phrase did. `status`: done | already | need_date | past | empty |
-    none (nothing of the plan on the calendar) | same (a shift of 0 days)."""
+    """What one calendar phrase did. `status`: done | already | need_mode (Ф-96: «по дню или
+    каждый пункт?») | need_date | need_times (each point: the proposed times in `times`) | past |
+    empty | none (nothing of the plan on the calendar) | same (a shift of 0 days)."""
 
     status: str
     sentence: str = ""
@@ -56,6 +57,8 @@ class Outcome:
     group: bool = False  # an action plan: the actions are a group («Отменить всё»)
     first: date | None = None
     last: date | None = None
+    dates: list[date] = field(default_factory=list)  # the plan's days (need_times)
+    times: dict[str, str] = field(default_factory=dict)  # point id → «HH:MM» (need_times)
 
 
 def range_text(a: date, b: date) -> str:
@@ -133,10 +136,69 @@ def _plan_row(item: Item, plan: dict[str, Any], text: str) -> dict[str, Any]:
             "page_id": None, "text": text}  # fmt: skip
 
 
+# Ф-96: proposed times for «каждый пункт отдельно» — a point's own time is kept; a meal word
+# takes its part of the day; the rest go in order into free slots (timewords defaults).
+_MEALS = (("завтрак", "morning"), ("обед", "lunch"), ("ужин", "evening"))
+_SLOTS = (timewords.TIME_DEFAULTS["morning"], timewords.TIME_DEFAULTS["before_lunch"],
+          timewords.TIME_DEFAULTS["lunch"], time(15, 0), time(17, 0),
+          timewords.TIME_DEFAULTS["evening"], time(21, 0),
+          timewords.TIME_DEFAULTS["late_evening"])  # fmt: skip
+
+
+def _hm(t: time) -> str:
+    return f"{t.hour:02d}:{t.minute:02d}"
+
+
+def propose_times(days: list[dict[str, Any]], dates: list[date]) -> dict[str, str]:
+    """point id → «HH:MM» for every point of every day (Ф-96: the person may correct it)."""
+    out: dict[str, str] = {}
+    for d, on in zip(days, dates, strict=False):
+        points = d.get("points") or []
+        fixed: dict[str, time] = {}
+        for p in points:
+            at = point_time(p, on)
+            if at is None:
+                low = str(p.get("title") or "").lower()
+                part = next((k for w, k in _MEALS if w in low), None)
+                at = timewords.TIME_DEFAULTS[part] if part else None
+            if at is not None:
+                fixed[p["id"]] = at
+        taken = set(fixed.values())
+        prev = time(8, 0)
+        for p in points:
+            at = fixed.get(p["id"])
+            if at is None:
+                at = next((t for t in _SLOTS if t > prev and t not in taken), None)
+                if at is None:
+                    at = time(min(prev.hour + 1, 23), prev.minute)
+                taken.add(at)
+            out[p["id"]] = _hm(at)
+            prev = max(prev, at)
+    return out
+
+
+def schedule_lines(days: list[dict[str, Any]], dates: list[date],
+                   times: dict[str, str]) -> list[str]:  # fmt: skip
+    """«10 декабря, чт: 9:00 Голубая мечеть · 13:00 Обед у Сулеймание»."""
+    from assistant.plans.build import day_text
+
+    lines = []
+    for d, on in zip(days, dates, strict=False):
+        pts = sorted(d.get("points") or [], key=lambda p: times.get(p["id"], "99"))
+        bits = [f"{timewords.clock(time.fromisoformat(times[p['id']]))} {p['title']}"
+                for p in pts if p["id"] in times]  # fmt: skip
+        lines.append(f"{day_text(on)}: " + " · ".join(bits))
+    return lines
+
+
 async def add(session: AsyncSession, user_id: int, item: Item, *, start: date | None, by: str,
               now: datetime, tz: str, message_pk: int | None = None,
-              group_id: str | None = None) -> Outcome:  # fmt: skip
-    """The plan onto the calendar. `start`: a first day the person said (wins over the plan's)."""
+              group_id: str | None = None, mode: str | None = "days",
+              times: dict[str, str] | None = None) -> Outcome:  # fmt: skip
+    """The plan onto the calendar. `start`: a first day the person said (wins over the plan's).
+    `mode` (Ф-96): `days` — one all-day to-do per day (a point with its own time also a timed
+    one); `points` — every point its own timed to-do at `times` (point id → «HH:MM»; without it
+    → `need_times` with the proposal); None → `need_mode` (the line asks first)."""
     await lock_user(session, user_id)
     plan = plan_of(item)
     if plan is None or item.deleted_at is not None:
@@ -159,17 +221,24 @@ async def add(session: AsyncSession, user_id: int, item: Item, *, start: date | 
         return Outcome("already", f"План «{title}» уже в календаре: {range_text(a, b)}. Чтобы "
                        f"перенести, скажите: «перенеси поездку на {move}»." if a and b else "",
                        first=a, last=b)  # fmt: skip
+    missing = [i for i, d in enumerate(days) if not set(d.get("task_ids") or []) & live_ids]
+    if not missing:
+        a, b = _span(live)
+        return Outcome("already", f"План «{title}» уже в календаре: {range_text(a, b)}."
+                       if a and b else f"План «{title}» уже в календаре.", first=a, last=b)
+    if mode not in ("days", "points"):
+        return Outcome("need_mode")
     first = start or had
     if first is None:
         return Outcome("need_date")
     dates = [first + timedelta(days=i) for i in range(len(days))]
     if dates[-1] < today:
         return Outcome("past", first=dates[0], last=dates[-1])
-    missing = [i for i, d in enumerate(days) if not set(d.get("task_ids") or []) & live_ids]
-    if not missing:
-        a, b = _span(live)
-        return Outcome("already", f"План «{title}» уже в календаре: {range_text(a, b)}."
-                       if a and b else f"План «{title}» уже в календаре.", first=a, last=b)
+    if mode == "points" and times is None:
+        want = [days[i] for i in missing]
+        return Outcome("need_times", first=dates[missing[0]], last=dates[missing[-1]],
+                       dates=[dates[i] for i in missing],
+                       times=propose_times(want, [dates[i] for i in missing]))  # fmt: skip
     from assistant.tasks import TaskSpec
     from assistant.tasks import service as tasks_service
 
@@ -179,9 +248,17 @@ async def add(session: AsyncSession, user_id: int, item: Item, *, start: date | 
     timed = 0
     for i in missing:
         d, on = days[i], dates[i]
-        specs = [TaskSpec(ListKey.TODO, f"{title}: {d['title']}"[:TITLE_CHARS], due_date=on)]
+        specs = [] if mode == "points" else [
+            TaskSpec(ListKey.TODO, f"{title}: {d['title']}"[:TITLE_CHARS], due_date=on)]
         for p in d.get("points") or []:
             at = point_time(p, on)
+            if mode == "points":
+                said = (times or {}).get(p["id"])
+                at = time.fromisoformat(said) if said else None
+                if at is None:  # a point with no time given: a to-do of that day
+                    specs.append(TaskSpec(ListKey.TODO, str(p["title"])[:TITLE_CHARS],
+                                          due_date=on))  # fmt: skip
+                    continue
             if at is not None:
                 specs.append(TaskSpec(ListKey.TODO, str(p["title"])[:TITLE_CHARS], due_date=on,
                                       start_at=datetime.combine(on, at, tzinfo=zone),
@@ -211,10 +288,18 @@ async def add(session: AsyncSession, user_id: int, item: Item, *, start: date | 
     out.items |= res.items
     n_days = len(missing)
     more = "ещё " if len(missing) < len(days) else ""
-    sentence = (f"Добавил в календарь «{title}»: {more}{n_days} {_plural(n_days, _DAYS)}, "
-                f"{range_text(out.first, out.last)}.")  # type: ignore[arg-type]
-    if timed:
-        sentence += f" Со временем — {timed} {_plural(timed, _DEEDS)}."
+    when = range_text(out.first, out.last)  # type: ignore[arg-type]
+    if mode == "points":
+        n = len(out.tasks)
+        sentence = (f"Добавил в календарь «{title}»: {more}{n} {_plural(n, _DEEDS)} — каждый "
+                    f"пункт отдельно, {when}.")
+        if timed < n:
+            sentence += f" Без времени — {n - timed}."
+    else:
+        sentence = (f"Добавил в календарь «{title}»: {more}{n_days} {_plural(n_days, _DAYS)}, "
+                    f"{when}.")
+        if timed:
+            sentence += f" Со временем — {timed} {_plural(timed, _DEEDS)}."
     if len(missing) < len(days):
         sentence += " Остальные дни уже были в календаре."
     out.sentence = sentence
@@ -413,8 +498,8 @@ async def plan_by_id(session: AsyncSession, user_id: int, public_id: str) -> Ite
     return item if item is not None and plan_of(item) is not None else None
 
 
-__all__ = ["Outcome", "add", "linked_tasks", "plan_by_id", "point_time", "range_text", "remove",
-           "shift"]  # fmt: skip
+__all__ = ["Outcome", "add", "linked_tasks", "plan_by_id", "point_time", "propose_times",
+           "range_text", "remove", "schedule_lines", "shift"]  # fmt: skip
 
 
 def days_word(n: int) -> str:

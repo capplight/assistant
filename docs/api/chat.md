@@ -258,7 +258,8 @@ Proposal (in `needs_choice`, `confirm`, `confirm_manual` and on the message):
 - `kind`: `choice` (which record), `count` («Да» with a number), `manual` (records placed by hand).
 - `options[].kind`: `item` (this record), `pick` (let the person tap a record on the page, then
   send the **original phrase again** with that `selected_item_id` and a new `client_id`), `yes`,
-  `no`, `keep_mine`, `cancel`, `time` (Ф-89, see below), `date` (a first day for a plan on the
+  `no`, `keep_mine`, `cancel`, `time` (Ф-89, see below), `mode` (Ф-96: «По дню одним делом» /
+  «Каждый пункт отдельно»), `date` (a first day for a plan on the
   calendar, `plans.md` «A plan on the calendar»: «С завтра, 21 ноября»; send it back as any tap).
 - Ф-89 (2026-11-20) «когда?»: a reminder phrase whose time is unclear (a bare «в 7», or a time
   already past today) also ends as a `choice`: `question` is the `reminder_draft` message («В 7
