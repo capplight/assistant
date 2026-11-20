@@ -327,7 +327,7 @@ async def _reading(case: Case, router: Router) -> Any:
     from assistant.chat.service import INTENT_SYSTEM
 
     inputs = TaskInputs(system=INTENT_SYSTEM, instruction="Classify the phrase.",
-                        context=[f"Фраза человека: {text}"], prompt_version="intent.v1")
+                        context=[f"Фраза человека: {text}"], prompt_version="intent.v2")
     try:
         res = await router.run(LLMTask.INTENT, IntentReply, inputs, user_id=GOLDEN_USER)
     except AIError:

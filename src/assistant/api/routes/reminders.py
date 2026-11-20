@@ -434,20 +434,15 @@ async def patch(
 @router.delete("/{reminder_id}", response_model=ReminderWithFiresOut)
 async def delete(reminder_id: uuid.UUID, user: GatedUser, db: Db) -> ReminderWithFiresOut:
     """200 with the action since week 9 (was 204): «Отменить» brings it back."""
-    current = await service.get(db, user.id, reminder_id)
-    if current is None:
-        raise ApiError(404, "not_found")
-    before = engine.reminder_state(current)
-    fires = await service.delete(db, user.id, reminder_id, _now())
-    assert fires is not None
-    action = None
-    if not before["deleted"]:
-        action = await _write_action(
-            db, user.id, current, ActionKind.EDIT_REMINDER,
-            f"Удалил напоминание «{current.title or ''}»",
-            [{"op": "restore_reminder", "id": str(current.public_id), "state": before,
-              "expect": current.version}])  # fmt: skip
-    return await _with_fires(db, current, fires, action)
+    from assistant import operations  # the same operation as the assistant line (Ф-95)
+
+    try:
+        res = await operations.run("reminders.delete", db, user.id,
+                                   {"reminder_id": reminder_id}, by=Initiator.USER,
+                                   now=_now())  # fmt: skip
+    except operations.OpError as exc:
+        raise ApiError(exc.status, exc.code) from exc
+    return await _with_fires(db, res.data["reminder"], res.data["fires"], res.action)
 
 
 __all__ = ["router"]

@@ -11,6 +11,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy import select
 
+from assistant import operations
 from assistant.actions import actions_dicts, engine, record
 from assistant.actions.patch import page_patches
 from assistant.api.consent_gate import require_base_consent
@@ -41,6 +42,16 @@ GatedUser = Annotated[CurrentUser, Depends(require_base_consent)]
 
 def _now() -> datetime:
     return datetime.now(UTC)
+
+
+async def _op(name: str, db: Db, user_id: int, args: dict[str, Any], *, now: datetime,
+              client_id: uuid.UUID | None = None) -> operations.OpResult:  # fmt: skip
+    """The same operation the assistant line runs (assistant.operations, Ф-95)."""
+    try:
+        return await operations.run(name, db, user_id, args, by=Initiator.USER, now=now,
+                                    client_id=client_id)  # fmt: skip
+    except operations.OpError as exc:
+        raise ApiError(exc.status, exc.code) from exc
 
 
 async def _task_out(db: Db, task: Task) -> TaskOut:
@@ -252,30 +263,11 @@ async def tick_task(task_id: uuid.UUID, body: TaskDoneIn, user: GatedUser,
                               action=await _action_out(db, first, now), repeated=True)
     if not await service.is_live(db, task):
         raise ApiError(404, "not_found")
-    item_pid = await service.item_public_id(db, task)
     at = await _occurrence(db, task, body.occurrence_at)
-    if task.rrule and at is None:
-        raise ApiError(422, "validation_error")  # a repeat is done one occurrence at a time
-    done_at = now.isoformat() if body.done else None
-    if at is not None:
-        op: dict[str, Any] = {"op": "set_occurrence", "task": str(task.public_id),
-                              "item": str(item_pid), "occurrence_at": at.isoformat(),
-                              "values": {"done_at": done_at}}  # fmt: skip
-    else:
-        op = {"op": "set_task", "id": str(task.public_id), "item": str(item_pid),
-              "values": {"done_at": done_at}}
-    out = await engine.apply(db, user.id, [op], by=Initiator.USER, check=False, now=now)
-    action = None
-    if out.inverse:
-        sentence = service.done_sentence(task, body.done)
-        action = await record(
-            db, user_id=user.id, kind=ActionKind.FACET_EDIT, initiated_by=Initiator.USER,
-            summary={"ru": sentence, "kk": None},
-            changes=[_change_row(task, item_pid, "done", sentence)],
-            inverse=out.inverse, now=now, source_item_ids=[task.item_id],
-            client_id=body.client_id,
-        )  # fmt: skip
-    await db.flush()
+    res = await _op("tasks.set_done", db, user.id, {"task_id": task.public_id, "done": body.done,
+                                                    "occurrence_at": at},
+                    now=now, client_id=body.client_id)  # fmt: skip
+    action = res.action
     occ = _occ_out(await _occ_row(db, task, at), task)
     return TaskChangedOut(task=await _task_out(db, task), action=await _action_out(db, action, now),
                           occurrence=occ)  # type: ignore[arg-type]
@@ -299,33 +291,16 @@ async def clear_done(body: TasksClearDoneIn, user: GatedUser, db: Db) -> TasksCl
         return TasksClearedOut(
             tasks=[TaskOut.model_validate(d) for d in await service.tasks_dicts(db, done)],
             action=await _action_out(db, first, now), repeated=True)  # fmt: skip
-    q = (select(Task).join(Item, Item.id == Task.item_id)
-         .where(Task.user_id == user.id, Task.list_key == body.list_key,
-                Task.done_at.is_not(None), Task.deleted_at.is_(None),
-                Item.deleted_at.is_(None)))  # fmt: skip
-    if body.task_ids is not None:
-        q = q.where(Task.public_id.in_(body.task_ids))
-    done = list(await db.scalars(q.order_by(Task.id).limit(500)))
+    built = await operations.build("tasks.clear_done", db, user.id,
+                                   {"list_key": body.list_key, "task_ids": body.task_ids},
+                                   now=now)  # fmt: skip
+    done = built.data["tasks"]
     if not done:
         return TasksClearedOut(tasks=[], action=None)
-    pids = {t.id: await service.item_public_id(db, t) for t in done}
-    ops = [{"op": "delete_entity_soft", "entity": "tasks", "id": str(t.public_id),
-            "item": str(pids[t.id])} for t in done]  # fmt: skip
-    out = await engine.apply(db, user.id, ops, by=Initiator.USER, check=False, now=now)
-    action = None
-    if out.inverse:
-        titles = ", ".join(service.lower_first(t.title) for t in done[:5])
-        more = f" и ещё {len(done) - 5}" if len(done) > 5 else ""
-        sentence = f"{CLEARED_RU.get(body.list_key, 'Убрал')}: {titles}{more}."
-        action = await record(
-            db, user_id=user.id, kind=ActionKind.DELETE_ITEM, initiated_by=Initiator.USER,
-            summary={"ru": sentence, "kk": None},
-            changes=[_change_row(t, pids[t.id], "trash", f"«{t.title}» — в корзине")
-                     for t in done],
-            inverse=out.inverse, now=now, source_item_ids=[t.item_id for t in done],
-            client_id=body.client_id,
-        )  # fmt: skip
-    await db.flush()
+    out = await _op("tasks.clear_done", db, user.id,
+                    {"list_key": body.list_key, "task_ids": [t.public_id for t in done]},
+                    now=now, client_id=body.client_id)  # fmt: skip
+    action = out.action
     page = await service.list_page(db, user.id, body.list_key)
     pages = out.pages | ({page.id} if page is not None else set())
     return TasksClearedOut(
@@ -354,21 +329,10 @@ async def delete_task(task_id: uuid.UUID, user: GatedUser, db: Db,
                            and at <= task.start_at)  # fmt: skip
     if not whole:
         return await _delete_some(db, user.id, task, item_pid, at, scope, client_id, now)
-    ops = [*await cal.linked_reminder_cancels(db, user.id, task),
-           {"op": "delete_entity_soft", "entity": "tasks", "id": str(task.public_id),
-            "item": str(item_pid)}]  # fmt: skip
-    out = await engine.apply(db, user.id, ops, by=Initiator.USER, check=False, now=now)
-    action = None
-    if out.inverse:
-        sentence = f"Убрал в корзину: {service.lower_first(task.title)}"
-        action = await record(
-            db, user_id=user.id, kind=ActionKind.DELETE_ITEM, initiated_by=Initiator.USER,
-            summary={"ru": sentence, "kk": None},
-            changes=[_change_row(task, item_pid, "trash", f"«{task.title}» — в корзине")],
-            inverse=out.inverse, now=now, source_item_ids=[task.item_id], client_id=client_id,
-        )  # fmt: skip
-    await db.flush()
-    return TaskChangedOut(task=await _task_out(db, task), action=await _action_out(db, action, now))
+    res = await _op("tasks.delete", db, user.id, {"task_id": task.public_id}, now=now,
+                    client_id=client_id)  # fmt: skip
+    return TaskChangedOut(task=await _task_out(db, task),
+                          action=await _action_out(db, res.action, now))
 
 
 async def _delete_some(db: Db, user_id: int, task: Task, item_pid: uuid.UUID, at: datetime,

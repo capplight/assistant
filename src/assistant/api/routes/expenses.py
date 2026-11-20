@@ -392,24 +392,13 @@ async def delete_expense(expense_id: uuid.UUID, user: GatedUser, db: Db,
     if first is not None:
         return ExpenseChangedOut(expense=await _out(db, entry),
                                  action=await _action_out(db, first, now), repeated=True)
-    item_pid = await service.item_public_id(db, entry)
-    out = await engine.apply(db, user.id, [
-        {"op": "delete_entity_soft", "entity": "expenses", "id": str(entry.public_id),
-         "item": str(item_pid)}], by=Initiator.USER, check=False, now=now)  # fmt: skip
-    action = None
-    if out.inverse:
-        cat = await db.get(ExpenseCategory, entry.category_id) if entry.category_id else None
-        title = service.label(entry.note, entry.payee, cat)
-        text_ = f"Убрал в корзину: {calc.format_money(entry.amount, entry.currency)} · {title}"
-        action = await record(
-            db, user_id=user.id, kind=ActionKind.DELETE_ITEM, initiated_by=Initiator.USER,
-            summary={"ru": text_, "kk": None},
-            changes=[_change_row(entry, item_pid, "trash", text_, title)],
-            inverse=out.inverse, now=now, source_item_ids=[entry.item_id], client_id=client_id,
-        )  # fmt: skip
-    await db.flush()
+    from assistant import operations  # the same operation as the assistant line (Ф-95)
+
+    res = await operations.run("expenses.delete", db, user.id,
+                               {"expense_id": entry.public_id}, by=Initiator.USER, now=now,
+                               client_id=client_id)  # fmt: skip
     return ExpenseChangedOut(expense=await _out(db, entry),
-                             action=await _action_out(db, action, now))  # fmt: skip
+                             action=await _action_out(db, res.action, now))  # fmt: skip
 
 
 # --- categories ---

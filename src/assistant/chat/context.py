@@ -77,6 +77,18 @@ def _cut(value: str, tokens: int) -> str:
     return value if len(value) <= limit else value[:max(0, limit - 1)].rstrip() + "…"
 
 
+_MINE = re.compile(r"(?<!\w)(?:мо[йияеё]\w*|в\s+записях|в\s+заметк\w*|сохран\w*|"
+                   r"мен(?:ің|ен)|у\s+меня)", re.IGNORECASE)  # fmt: skip
+
+
+def about_others(phrase: str) -> bool:
+    """§4.4 (chat-full-control.md): a request to the assistant itself («переведи…», «посчитай…»)
+    that says nothing about the person's own records: no records are searched for it."""
+    from assistant.chat.intent import asks_assistant
+
+    return asks_assistant(phrase) and not _MINE.search(phrase)
+
+
 def looks_like_data_question(phrase: str) -> bool:
     """Layer 7 is filled only when the phrase is about the person's data (spec 5.10). Code, no
     model: small talk («спасибо», «привет») gets no search."""
@@ -305,7 +317,7 @@ async def assemble(
     before = {s.ref for s in book.all()}
     found: list[Source] = []
     data_question = looks_like_data_question(turn.text) and turn.input_kind != "share"
-    if looks_like_data_question(turn.text):
+    if looks_like_data_question(turn.text) and not about_others(turn.text):
         found = await run_search(env, turn.text, limit=MAX_FOUND,
                                  boost_page_pk=page.pk if page else None)  # fmt: skip
     # Step 5 (Ф-60, Ф-61): what the assistant remembers about the person, every turn, compact;

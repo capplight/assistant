@@ -494,6 +494,7 @@ _NO_PREF = re.compile(r"^(?:нет|не|неа|не\s+надо|не\s+нужно
 _OK = re.compile(r"^(?:да|ок|окей|ok|ага|угу|давай|хорошо|отлично|поставь|ставь|подходит|норм\w*|"
                  r"годится|супер|можно|верно|вс[её]\s+верно|так\s+и\s+сделай|поставь\s+так|"
                  r"ставь\s+так|так|пойдет|идет|согласен|согласна)(?:\s+так)?$")  # fmt: skip
+_NO = re.compile(r"^(?:нет|не|неа|не\s+так|нет\s+не\s+так|не\s+подходит|не\s+то)$")
 _CANCEL = re.compile(r"^(?:отмена|отмени|не\s+надо|не\s+нужно|не\s+ставь|передумал\w*|стоп)$")
 
 
@@ -519,6 +520,8 @@ def times_reply(text: str) -> str | None:
         return "cancel"
     if mode_of(norm) == "days":
         return "days"
+    if _NO.match(norm):
+        return "no"
     return None
 
 
@@ -581,3 +584,9 @@ def example_point(days: list[dict[str, Any]]) -> str:
             if words:
                 return words[0].lower()
     return "ужин"
+
+
+def times_again(example: str) -> str:
+    """A bare «нет» to «Поставить так?» (Ф-96): the same choice again, never stuck."""
+    return (f"Что поменять? Скажите одной фразой, например: «{example} в 10». Или выберите: "
+            f"поставить так, по дню одним делом или отмена.")

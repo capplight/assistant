@@ -301,3 +301,28 @@ empty and there are no endpoints. The confirm/reject calls come with the first p
  "expires_at": "...", "message_id": null, "action_id": null, "seq": 1, "created_at": "...",
  "decided_at": null}
 ```
+
+## Operations: one registry for the screens and the line (Ф-95, phase 0, 2026-11-21)
+
+`assistant.operations` (plan: `docs/spec/proposals/chat-full-control.md` §3.1). One operation =
+one piece of business logic; a REST route and the assistant line call the same one, so they
+cannot do different things. REST contracts do not change.
+
+| Operation | Called by | What it does |
+|---|---|---|
+| `tasks.delete` | `DELETE /v1/tasks/{id}` (whole task) | the to-do and its record to the trash, its linked reminders cancelled, one `delete_item` |
+| `tasks.set_done` | `POST /v1/tasks/{id}/done` | tick / untick (one occurrence of a repeat), `facet_edit` |
+| `tasks.clear_done` (`bulk`) | `POST /v1/tasks/clear-done` | the done to-dos of a list to the trash |
+| `expenses.delete` | `DELETE /v1/expenses/{id}` | the expense and its record to the trash |
+| `reminders.delete` | `DELETE /v1/reminders/{id}` | cancel, `edit_reminder` with `restore_reminder` |
+| `records.trash` | the line («удали это», `update.trash`) | each record as its own screen deletes it: a to-do's record → as `tasks.delete`, an expense's → as `expenses.delete`, any other → the record |
+| `plans.to_calendar`, `calendar.remove_plan`, `calendar.shift_plan` | the line (plans.md «A plan on the calendar») | a plan on / off / moved on the calendar |
+
+**Trash fix.** Before, «удали это» on a to-do's record in the line put only the record in the
+trash: the to-do row stayed live and its alert kept ringing. Now it is the screen's delete (the
+to-do, its record and its reminder; «Восстановить» brings all back). The action's change row then
+has `task_id` (or `expense_id`).
+
+New optional `payload` keys on actions made by an operation: `op` (its name) and `touched`
+(`tasks`, `calendar`, `reminders`, `expenses`, `budget`, `records`, `plans`) — not in the Action
+JSON yet (phase 0 mobile item: refetch by `touched`).

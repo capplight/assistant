@@ -100,7 +100,7 @@ async def _probe(router: Any, phrase: str, user_id: int) -> str | None:
 
     inputs = TaskInputs(system=INTENT_SYSTEM, instruction="Classify the phrase.",
                         context=[f"Фраза человека: {phrase}"],
-                        prompt_version="intent.v1")  # fmt: skip
+                        prompt_version="intent.v2")  # fmt: skip
     try:
         result = await router.run(LLMTask.INTENT, IntentReply, inputs, user_id=user_id)
     except AIConsentRequired:

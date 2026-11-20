@@ -586,3 +586,16 @@ Response `201` (or `200` on a repeat): `{"id": uuid, "created_at": "..."}`. Stor
 - Show the local FTS result («Нашёл у себя») first; the stream's `sources` are «Нашёл ещё…».
 - A new request replaces the banner: mark the old one `dismissed`.
 - Text in `token`, `banner.text`, `snippet`: plain text. Never render as HTML or markdown links.
+
+
+## An ordinary assistant (Ф-95, chat-full-control.md §4, 2026-11-21)
+
+A request to the assistant itself — «переведи на английский: …», «напиши поздравление маме»,
+«посчитай 1 250 000 × 12 %», «сколько будет 15% от …», «исправь ошибки: …», «сократи текст: …»,
+«объясни …», «как сказать …», «составь письмо …» (and «аударып бер», «есептеп бер», «түсіндір»,
+«жазып бер») — is a **question** by code (`intent.asks_assistant`), whatever its length or digits:
+none of the code's save / spend / to-do / reminder paths run, nothing is saved, the model answers
+(`mode: general`). The status is «Думаю…» (not «Смотрю записи…»), and records are not searched for
+it unless the phrase names the person's own («мои», «в записях», «сохранённые»). Not such a
+request: «запиши …» (a note), «напиши в заметку …», «исправь ошибки в этой заметке» (an edit,
+Ф-73), «переведи 5000 маме». INTENT prompt `intent.v2` adds the same class.

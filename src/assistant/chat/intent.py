@@ -95,6 +95,35 @@ _COMPARE = re.compile(_W + r"(?:сравни|сравнить|чем отлич�
 _WORDS = re.compile(r"\w+")
 
 
+# chat-full-control.md §4 (Ф-95): a request to the assistant itself — write, translate, rewrite,
+# count, explain — is a question answered by the model as an ordinary assistant, never a note.
+_ASSIST = re.compile(
+    r"^(?:пожалуйста[,\s]+|можешь\s+|можете\s+|помоги\s+|а\s+)?(?:"
+    r"(?:переведи(?:те)?|перевести)(?=\s*:|\s+(?:на\s+(?:английск|русск|казахск|турецк|немецк|французск|"
+    r"китайск|арабск|испанск|итальянск|корейск|японск|узбекск|кыргызск)\w*|"
+    r"(?:этот\s+|мне\s+)?(?:текст|фраз|слов|предложени|письм|сообщени|абзац)\w*|с\s+\w+ого))|"
+    r"напиш(?:и|ите)(?!\s+(?:в|на|к)\s+(?:эт\w+\s+|мо\w+\s+)?(?:заметк|запис|страниц|дел))|"
+    r"сочини(?:те)?|перефразируй\w*|перескажи\w*|сократи(?:те)?\s+(?:этот\s+)?(?:текст|:)|"
+    r"исправь(?:те)?\s+(?:ошибк\w*|опечатк\w*|грамматик\w*)(?![^:]*(?:заметк|запис))|"
+    r"проверь(?:те)?\s+(?:текст|ошибк|орфограф|грамматик)\w*|"
+    r"посчитай(?:те)?|подсчитай(?:те)?|вычисли(?:те)?|рассчитай(?:те)?|сколько\s+будет|"
+    r"объясни(?:те)?|растолкуй|как\s+(?:сказать|будет|перевести|написать)|"
+    r"сформулируй\w*|составь\s+(?:текст|письмо|сообщение|поздравлени|тост|резюме|описани)\w*|"
+    r"аудар(?:ып\s+бер|ыңыз)|есепте(?:п\s+бер|ңіз)?|түсіндір(?:ші|іңіз)?|жазып\s+бер\w*"
+    r")", re.IGNORECASE | re.DOTALL)  # fmt: skip
+
+
+def asks_assistant(text: str) -> bool:
+    """«переведи на английский: …», «напиши поздравление маме», «посчитай 1 250 000 × 12 %»,
+    «исправь ошибки: …» — the person asks the assistant to do something with words or numbers
+    (chat-full-control.md §4). «напиши в заметку …», «исправь ошибки в этой заметке» are not."""
+    norm = _norm(text)
+    if not _ASSIST.match(norm):
+        return False
+    head = norm.split(":", 1)[0]
+    return not (_DEICTIC.search(head) and re.search(r"заметк|запис", head))
+
+
 @dataclass(frozen=True)
 class Reading:
     intent: Intent
@@ -110,6 +139,8 @@ def rules_first(text: str, *, input_kind: str = "typed") -> Reading:
         return Reading(Intent.QUESTION, "share")
     verbs = len(_CHANGE.findall(norm))
     deictic = bool(_DEICTIC.search(norm))
+    if asks_assistant(norm):  # §4: «переведи…», «напиши…», «исправь ошибки: …» — answered
+        return Reading(Intent.QUESTION, "rules", deictic)
     if verbs:
         return Reading(Intent.CHANGE, "rules", deictic, verbs)
     if norm.endswith("?") or _QUESTION.search(norm):
@@ -130,7 +161,10 @@ _DIGITS = re.compile(r"\d")
 
 def note_by_code(text: str, base: Reading) -> Reading:
     """No model to ask: a phrase with a number (a phone, an amount) or of 3+ words that is
-    neither a question nor an order is something to keep; a word or two is a search."""
+    neither a question nor an order is something to keep; a word or two is a search. A request
+    to the assistant («переведи…», «посчитай…») is never a note (§4)."""
+    if asks_assistant(text):
+        return Reading(Intent.QUESTION, "rules", base.deictic)
     if len(_DIGITS.findall(text)) >= 5 or len(text.split()) >= 3:
         return Reading(Intent.NOTE, "rules", base.deictic)
     return Reading(Intent.QUESTION, "rules", base.deictic)

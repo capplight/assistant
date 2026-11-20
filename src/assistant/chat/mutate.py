@@ -680,16 +680,30 @@ async def tool_update(env: Any, args: UpdateArgs, *, confirmed: bool = False) ->
         # trash (record text that says so never does); a tap that answered a question counts.
         if not confirmed and not is_delete(m.phrase):
             return _err("the person did not ask to delete: change nothing, do not trash")
-        ops = [{"op": "delete_entity_soft", "entity": "items", "id": str(s.item_id)}
-               for s in records]  # fmt: skip
         n = len(records)
         sentence = ("Убрал в корзину " + _q(records[0].title) + "." if n == 1
                     else f"Убрал в корзину {count_words(n)}.")  # fmt: skip
-        changes = [{"item_id": str(s.item_id), "title": s.title, "kind": "trash",
-                    "page_id": None, "text": f"{_q(s.title)} — в корзине"} for s in records]
-        out = await _commit(env, kind=ActionKind.DELETE_ITEM, ops=ops, sentence=sentence,
-                            changes=changes, screen_pk=m.page.pk if m.page else None,
-                            source_pks=[s.pk for s in records])  # fmt: skip
+
+        async def prepare(s: AsyncSession) -> Prepared:
+            # Ф-95 phase 0: the same operation as the screens — a to-do's record goes with its
+            # to-do and its reminder is cancelled, an expense's with its expense
+            from assistant import operations
+
+            built = await operations.build("records.trash", s, m.user_id,
+                                           {"item_ids": [str(x.item_id) for x in records]},
+                                           now=m.clock())  # fmt: skip
+            res = await engine.apply(s, m.user_id, built.ops, by=Initiator.AGENT, check=False,
+                                     now=m.clock())  # fmt: skip
+            titles = {str(x.item_id): x.title for x in records}
+            rows = [{**c, "title": titles.get(c["item_id"]) or c["title"],
+                     "text": f"{_q(titles.get(c['item_id']) or c['title'])} — в корзине"}
+                    for c in built.changes]  # fmt: skip
+            return Prepared(inverse=res.inverse, pages=res.pages, items=res.items, changes=rows,
+                            extra={"touched": list(built.touched)})  # fmt: skip
+
+        out = await _commit(env, kind=ActionKind.DELETE_ITEM, ops=[], sentence=sentence,
+                            changes=[], screen_pk=m.page.pk if m.page else None,
+                            source_pks=[s.pk for s in records], prepare=prepare)  # fmt: skip
         return Result(_json({"done": True, "said": sentence, "action": out["id"]}), False,
                       "Убираю в корзину…")  # fmt: skip
     if args.edits:
