@@ -22,5 +22,4 @@ export { Timeline, type TimelineItem } from './Timeline';
 // v5 «Листы» (design-system §11)
 export { PlaceScreen, SheetIcon, SheetBackButton, StackPeek, BottomPaperFade, type PlaceScreenProps, type SheetBack } from './PlaceScreen';
 export { PlaceTab, CategorySquare, BigNumber, SectionHead, Row, RowMeta, RowChevron, Inset, Toggle, Bar, ButtonRow, ChipRow } from './Leaf';
-export { DayPlan, planPieces, type PlanItem } from './DayPlan';
 export { CompactConfirm, ResultCard, A4Page } from './Floating';

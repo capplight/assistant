@@ -3,7 +3,7 @@ import { act, fireEvent, renderRouter, screen } from 'expo-router/testing-librar
 import { useAssistant, type ChatMessage } from '@/store/assistant';
 import { useConnectivity } from '@/store/connectivity';
 import { usePages } from '@/store/pages';
-import { APP_DIR, finishOnboarding, resetApp, settle, testRecords } from '@/testing/helpers';
+import { APP_DIR, atLocalTime, finishOnboarding, resetApp, settle, testRecords } from '@/testing/helpers';
 import { BackHandler, StyleSheet } from 'react-native';
 import { render } from '@testing-library/react-native';
 
@@ -158,7 +158,7 @@ describe('B3: plural forms', () => {
       'few',
       'many',
     ]);
-    expect(i18n.t('today.e_not_forget', { count: 6 })).toBe('Не забыть 6 дел.');
+    expect(i18n.t('today6.phrase_morning', { count: 6 })).toBe('Доброе утро.'+String.fromCharCode(10)+'Сегодня 6'+String.fromCharCode(160)+'дел.');
   });
 });
 
@@ -169,45 +169,12 @@ describe('A1: the strip folds in 260 ms and opens in 280 ms', () => {
   });
 });
 
-describe('A8: a day of the week in place', () => {
-  const isoDay = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  it('a tap shows the day here (no «Дела»), the one back arrow brings today back (Ф-91); an empty future day has «Добавить на …»', async () => {
+describe('A8 → Ф-93: no day in place on «Сегодня»; B8 → v6: «План» shows 4 rows and «Ещё N»', () => {
+  afterEach(() => jest.useRealTimers());
+  it('B8: six to-dos without a time — four rows at 390 dp, then «Ещё 2» that opens «Дела» as the list', async () => {
     resetApp();
     finishOnboarding('full');
-    const now = new Date();
-    // A day of this week other than today (the week is Monday … Sunday).
-    const dow = (now.getDay() + 6) % 7;
-    const other = new Date(now.getTime() + (dow < 6 ? 1 : -1) * 86_400_000);
-    const otherIso = isoDay(other);
-    const r = await renderRouter(APP_DIR, { initialUrl: '/' });
-    await settle(() => screen.queryByTestId(`week-${otherIso}`) !== null);
-    await fireEvent.press(screen.getByTestId(`week-${otherIso}`));
-    expect(r.getPathname()).toBe('/');
-    expect(screen.getByTestId(`week-${otherIso}`).props.accessibilityState.selected).toBe(true);
-    expect(screen.getByTestId(`week-${isoDay(now)}`).props.accessibilityState.selected).toBe(false);
-    // Ф-91: no «К сегодня» — one arrow «‹» left of the date; the search stays on the right.
-    expect(screen.getByTestId('today-back').props.accessibilityLabel).toBe('Назад, к сегодняшнему дню');
-    expect(screen.queryByText('К сегодня')).toBeNull();
-    expect(screen.getByTestId('today-search')).toBeTruthy();
-    if (other > now) {
-      expect(screen.getByTestId('today-day-empty')).toBeTruthy();
-      await fireEvent.press(screen.getByTestId('today-day-add'));
-      // The button creates nothing: the line gets «В субботу » and the focus.
-      await settle(() => /^(В|Во) .+ $/u.test(String(screen.getByTestId('assistant-input').props.value ?? '')));
-    } else {
-      expect(screen.getByTestId('today-day-empty-past')).toBeTruthy();
-      expect(screen.queryByTestId('today-day-add')).toBeNull();
-    }
-    expect(screen.getByTestId('sheet-phrase')).toHaveTextContent(/(свободен|свободна|свободно|прош(ёл|ла|ло) тихо)\./u);
-    await fireEvent.press(screen.getByTestId('today-back'));
-    expect(screen.queryByTestId('today-back')).toBeNull();
-    expect(screen.getByTestId('today-search')).toBeTruthy();
-  });
-
-  it('B8: «Не забыть 6» with three rows has «Ещё 3 · Все дела ›»', async () => {
-    resetApp();
-    finishOnboarding('full');
+    atLocalTime(14);
     const at = new Date().toISOString();
     const task = (id: string) => ({
       id,
@@ -228,8 +195,10 @@ describe('A8: a day of the week in place', () => {
     });
     useTasks.setState({ tasks: Object.fromEntries(['a', 'b', 'c', 'd', 'e', 'f'].map((k) => [k, task(k)])) as never });
     await renderRouter(APP_DIR, { initialUrl: '/' });
-    await settle(() => screen.queryByTestId('today-forget-more') !== null);
-    expect(screen.getByTestId('today-forget-more')).toHaveTextContent('Ещё 3 · Все дела');
-    expect(screen.getByTestId('sheet-phrase')).toHaveTextContent(/Не забыть 6 дел\./);
+    await settle(() => screen.queryByTestId('today-plan-more') !== null);
+    expect(screen.getByTestId('today-plan-more')).toHaveTextContent('Ещё 2');
+    expect(screen.getAllByTestId(/^today-row-todo:/)).toHaveLength(4);
+    expect(screen.queryByTestId('today-week')).toBeNull();
+    expect(screen.queryByTestId('today-back')).toBeNull();
   });
 });

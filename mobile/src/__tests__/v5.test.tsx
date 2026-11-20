@@ -6,11 +6,10 @@ import { PlaceScreen, sheetFits, sheetInset } from '@/components/ui/PlaceScreen'
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ButtonRow } from '@/components/ui/Leaf';
-import { planPieces } from '@/components/ui/DayPlan';
 import { ASK_SCROLL_START, askScrollStep, type AskScrollState } from '@/store/chrome';
 import { resetWindow, setWindow } from '@/testing/layoutAudit';
 import { darkColors, layoutMetricsFor, legacyStickerMap, lightColors, PLACE_KEYS, stickerColors, stickerInk, stickerOf, type ColorTokens } from '@/theme';
-import { emptyPhrase, firstSteps, nearestDay, weekOf, withoutLastWord } from '@/today/empty';
+import { firstSteps, withoutLastWord } from '@/today/empty';
 
 /** v5 «Листы» (Ф-79, tokens-v5.ts, design-system §11): adaptive metrics, the strip rules, the day plan, colours. */
 
@@ -80,24 +79,6 @@ describe('the assistant strip folds (Ф-82, askScrollStep)', () => {
     expect(run([10, 30, 60, 1390]).collapsed).toBe(false);
     expect(run([10, 30, 60, 100], { pinned: true }).collapsed).toBe(false);
     expect(run([10, 30, 60, 100], { content: 500 }).collapsed).toBe(false);
-  });
-});
-
-describe('the day plan («Ритм»)', () => {
-  it('blocks ≥ 40, «сейчас» before the next one, free time ahead as a hatched block', () => {
-    const p = planPieces(
-      [
-        { id: 'a', start: 9 * 60, title: 'Таблетка', done: true },
-        { id: 'b', start: 10 * 60 + 30, duration: 30, title: 'Созвон' },
-        { id: 'c', start: 13 * 60, duration: 60, title: 'Обед' },
-      ],
-      9 * 60 + 41,
-    );
-    expect(p.map((x) => x.kind)).toEqual(['item', 'now', 'item', 'free', 'item']);
-    expect(p[0]).toMatchObject({ height: 40, main: false });
-    expect(p[2]).toMatchObject({ main: true, height: 40 });
-    expect(p[3]).toMatchObject({ kind: 'free', minutes: 120, height: 120 });
-    expect(p[4]).toMatchObject({ height: 60 });
   });
 });
 
@@ -189,27 +170,7 @@ describe('device QA 1 (docs/design/qa/v5-device-qa-1.md): layout rules', () => {
   });
 });
 
-describe('Ф-84 empty «Сегодня»: the phrase table and the week', () => {
-  const t = (k: string, o?: Record<string, unknown>) => {
-    const i18n = jest.requireActual('@/i18n').default as { t: (k: string, o?: Record<string, unknown>) => string };
-    return i18n.t(k, o);
-  };
-  const base = { today: '2026-11-17', blank: false, notForget: 0, load: {}, weekday: () => 'пятница' };
-  it('names what is there, two short sentences, no «…»', () => {
-    expect(emptyPhrase({ ...base, blank: true }, t)).toBe('Чистый лист.\nСкажите первое.');
-    expect(emptyPhrase({ ...base, notForget: 2 }, t)).toBe('Свободный день.\nНе забыть 2\u00a0дела.');
-    expect(emptyPhrase({ ...base, load: { '2026-11-18': 3 } }, t)).toBe('Сегодня свободно.\nЗавтра 3\u00a0дела.');
-    expect(emptyPhrase({ ...base, load: { '2026-11-18': 1 } }, t)).toBe('Сегодня свободно.\nЗавтра 1\u00a0дело.');
-    expect(emptyPhrase({ ...base, load: { '2026-11-20': 1 } }, t)).toBe('Свободный день.\nБлижайшее — пятница.');
-    expect(emptyPhrase(base, t)).toBe('Свободный день.\nНеделя пустая.');
-    expect(emptyPhrase({ ...base, notForget: 5 }, t)).toMatch(/5\u00a0дел\.$/);
-  });
-  it('the week is Monday…Sunday; the nearest day looks 7 days ahead', () => {
-    expect(weekOf('2026-11-17')).toEqual(['2026-11-16', '2026-11-17', '2026-11-18', '2026-11-19', '2026-11-20', '2026-11-21', '2026-11-22']);
-    expect(weekOf('2026-11-22')[0]).toBe('2026-11-16');
-    expect(nearestDay('2026-11-17', { '2026-11-25': 1 })).toBeNull();
-    expect(nearestDay('2026-11-17', { '2026-11-24': 1, '2026-11-20': 2 })).toBe('2026-11-20');
-  });
+describe('Ф-84 empty «Сегодня»: the first steps (the phrase is today-v6 §3.1, `today/timeOfDay.ts`)', () => {
   it('«Три первые фразы»: the first 7 days until three records exist; the phrase goes in without its last word', () => {
     expect(firstSteps({ ageDays: 1, note: true, reminder: false, expense: false })).toEqual({ show: true, done: 1 });
     expect(firstSteps({ ageDays: 1, note: true, reminder: true, expense: true }).show).toBe(false);

@@ -10,9 +10,10 @@ import { withoutLastWord } from '@/today/empty';
 import { useView } from '@/store/view';
 
 /**
- * Ф-84 / Ф-85 (`today-day-view.html`, tokens `dayView`): the week on the yellow sheet. The chosen day is the dark
- * pill; today, when another day is chosen, has a 1.5 ring. Dots under the number: the day has something (up to 3).
- * A tap shows the day right here; a sideways swipe on the week goes to the week before / after.
+ * The week strip (Ф-84 / Ф-85, tokens `dayView`). Since «Сегодня» v6 (Ф-93) only the calendar «Дела» draws it (on its
+ * lilac sheet, `CalendarScreen`); «Сегодня» has no week. The chosen day is the dark pill; today, when another day is
+ * chosen, has a 1.5 ring. Dots under the number: the day has something (up to 3). A sideways swipe goes to the week
+ * before / after.
  */
 export type WeekDay = {
   date: string;

@@ -126,8 +126,10 @@ modules/alarms/              native Expo module: Android (Kotlin) AlarmManager +
   (+ DeepInfra). A person whose local grant is v1 gets a small sheet once per launch (word search until «Согласен»).
 - **No shopping list** (Ф-49): feature `shopping` (default off, `GET /v1/features`): «Покупки», «Я в магазине» and
   «Купить: …» are hidden; things to buy are to-dos in «Дела». Code kept.
-- **«Сегодня»** = the briefing: BriefCard (status, headline, ≤3-line summary by part of the day — `today/brief.ts`),
-  2×2 MetricTiles, «План дня» (`Timeline`, the next ring within the hour is the sun card), «Ждёт вас».
+- **«Сегодня» v6** (Ф-92…Ф-94, `docs/design/system/today-v6-acceptance.md`): the yellow sheet = `DateButton` («Другой
+  день» → `DayPickerSheet` → the calendar «День»), the 2-line phrase (`today/timeOfDay.ts`) and the «Дальше» card
+  (`NextUp`, the way into the calendar); the paper = `TodayPlan` by the time of day, `TodayTiles` («Потрачено» /
+  «Купить»), one tip. Pure logic in `today/v6.ts`; tests `__tests__/today-v6.test.tsx`.
 - **«История»** (`(main)/history.tsx`, `chat/history.ts`): «Переписка» + «Что я сделал»; `/chat`, `/did` redirect.
 - **SaveToast**: every save from the line says «Сохранил в «…»: … · Переложить · Отменить»; «Переложить» =
   `ReplaceSheet` (moves the record with the existing move API).

@@ -3,7 +3,7 @@ import { StyleSheet } from 'react-native';
 
 import { usePages } from '@/store/pages';
 import { useTasks } from '@/tasks/store';
-import { APP_DIR, finishOnboarding, resetApp } from '@/testing/helpers';
+import { APP_DIR, atLocalTime, finishOnboarding, resetApp } from '@/testing/helpers';
 import { auditLayout, AUDIT_MATRIX, resetWindow, setWindow } from '@/testing/layoutAudit';
 
 /**
@@ -12,7 +12,10 @@ import { auditLayout, AUDIT_MATRIX, resetWindow, setWindow } from '@/testing/lay
  * bottom column ≤600, 5 tabs (3 at ≥150 %, VISION-2026-11), every target of the capsule ≥48.
  */
 
-afterEach(() => resetWindow());
+afterEach(() => {
+  resetWindow();
+  jest.useRealTimers();
+});
 
 const flat = (id: string) => StyleSheet.flatten(screen.getByTestId(id).props.style);
 
@@ -64,8 +67,8 @@ describe.each([
 });
 
 /**
- * Ф-84 «Пустое „Сегодня“» (today-empty-options.html «Итог»): the summary + the week at 320 / 390 / 430 — a light
- * day (two «Не забыть», a to-do on a later day). The week has 7 days and fits; at 320 only the title stays.
+ * Ф-84 «Пустое „Сегодня“» in v6 (today-v6-acceptance §3.4): no timed things today — «План» of the to-dos without a
+ * time, the nearest day, the two tiles; at 320 / 390 / 430 and large text nothing is cut; at 320 only the title stays.
  */
 describe('empty «Сегодня» (Ф-84)', () => {
   const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -82,21 +85,21 @@ describe('empty «Сегодня» (Ф-84)', () => {
     setWindow({ width, height, fontScale });
     resetApp();
     finishOnboarding('full');
-    const now = new Date();
+    const now = atLocalTime(14);
     const yesterday = iso(new Date(now.getTime() - 86_400_000));
     const later = iso(new Date(now.getTime() + 3 * 86_400_000));
     useTasks.setState({ tasks: { a: task('a', 'Оплатить интернет', yesterday), b: task('b', 'Купить корм коту', null), c: task('c', 'Стоматолог', later) } as never });
     await renderRouter(APP_DIR, { initialUrl: '/' });
     for (let i = 0; i < 5; i++) await act(async () => void (await jest.advanceTimersByTimeAsync(40)));
     expect(auditLayout(screen.toJSON(), { windowWidth: width })).toEqual([]);
-    expect(screen.getAllByTestId(/^week-\d{4}-\d\d-\d\d$/)).toHaveLength(7);
-    expect(screen.getByTestId(`week-${iso(now)}`).props.accessibilityState.selected).toBe(true);
-    // «Не забыть» first (overdue «с вчера», «без срока»), then the nearest day with its «Все дела».
-    expect(screen.getByTestId('today-tasks')).toHaveTextContent(/Не забыть.*Оплатить интернет.*с вчера.*Купить корм коту.*без срока/);
+    expect(screen.queryByTestId('today-week')).toBeNull();
+    // v6: no timed things today — «План» of the to-dos without a time, then the nearest day (read only).
+    expect(screen.getByTestId('today-plan')).toHaveTextContent(/План.*Оплатить интернет.*без времени.*Купить корм коту.*без времени/);
     expect(screen.getByTestId('today-nearest')).toHaveTextContent(/Стоматолог/);
-    expect(screen.queryByTestId('today-plan-head')).toBeNull();
-    expect(screen.queryByTestId('tile-spent')).toBeNull();
+    expect(screen.queryByTestId('today-calendar')).toBeNull();
+    expect(screen.getByTestId('today-tile-spent')).toBeTruthy();
+    expect(screen.getByTestId('today-tile-spent-sum')).toHaveTextContent('0 ₸');
     if (width === 320 || fontScale >= 1.3) expect(screen.queryByTestId('sheet-phrase')).toBeNull();
-    else expect(screen.getByTestId('sheet-phrase')).toHaveTextContent('Свободный день. Не забыть 2 дела.');
+    else expect(screen.getByTestId('sheet-phrase')).toHaveTextContent('Добрый день. Ещё 2 дела сегодня.');
   });
 });

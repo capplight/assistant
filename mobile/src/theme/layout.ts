@@ -178,6 +178,64 @@ export const tabBarV5 = {
 /** The day plan («Ритм»): block height = duration, 1 dp per minute, at least 40. */
 export const plan = { timeColumn: 56, dpPerMinute: 1, minBlock: 40, blockGap: 4, radius: 14, maxFree: 160 } as const;
 
+/**
+ * «Сегодня» v6 (today-v6.md §5, today-v6-acceptance.md §10; Ф-92…Ф-94). Named `todayPlan` / `todayTile` because
+ * `plan` above is the old duration plan of the UI kit. Colours stay role tokens (`paper`, `ink`, `paper2`, …).
+ */
+export const nextUp = {
+  height: 64,
+  /** fontScale ≥ 1.3: the title may take 2 lines, so the card keeps the taller fixed height (never measured). */
+  heightLarge: 68,
+  heightLargeMax: 88,
+  radius: 18,
+  gap: 14,
+  pad: { v: 10, h: 12 },
+  leaf: { w: 42, h: 44, radius: 10, head: 13, num: 19, border: 1.5 },
+  l1: 13,
+  l2: 17,
+  /** The word «Календарь» before «›» from this width. */
+  wordFrom: 400,
+} as const;
+
+export const dateButton = { height: 32, radius: 16, border: 1.5, hitSlop: 6, chevron: 15 } as const;
+
+export const dayPicker = { cell: 44, day: 36, dot: 4, chip: 40 } as const;
+
+export const todayPlan = {
+  /** Minimal row height (68 with large text); the row texts are capped (×1.6), so they fit it. */
+  row: 52,
+  rowLarge: 68,
+  timeColumn: 46,
+  check: 24,
+  bell: 18,
+  maxRows: { compact: 4, regular: 5 },
+  /** Windows from this width show the regular limit. */
+  regularFrom: 400,
+  past: 44,
+  /** «На завтра» / «Сделано» buttons. */
+  button: 34,
+  /** «Прошло» opens / closes, a ticked row leaves (ms, UI thread). */
+  expandMs: 200,
+} as const;
+
+export const todayTile = {
+  radius: 18,
+  minHeight: 106,
+  amount: 24,
+  gap: 10,
+  bar: 6,
+  pad: { v: 13, h: 14 },
+  /** From this system font scale, on windows narrower than `stackBelowWidth`, the two tiles stand one under the other (§8.2). */
+  stackFrom: 1.5,
+  stackBelowWidth: 420,
+} as const;
+
+/** The paper ends this far above the tabs: the strip 48 (56 large) + gap 10 + fade 34 + 12. */
+export const todayListBottom = { regular: 104, large: 112 } as const;
+
+/** Period change on a visible «Сегодня»: the fade, and the quiet time a touch or a scroll asks for first. */
+export const todayMotion = { periodFade: 180, idleBeforeChange: 2000 } as const;
+
 export const radiusV5 = { tag: 4, placeTab: 5, a4: 4, inset: 16, card: 18, sticker: 20, button: 26, buttonSmall: 21, confirm: 26, sheet: 28, notice: 18 } as const;
 
 export const motionV5 = {

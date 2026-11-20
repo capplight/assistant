@@ -17,7 +17,7 @@ import { addTask, isDone, setDone } from '@/tasks/service';
 import { useTasks } from '@/tasks/store';
 import { useToday } from '@/today/service';
 import { FEATURES_BODY, happyServer, type FakeServer, type SseEvent } from '@/testing/fakeServer';
-import { APP_DIR, finishOnboarding, resetApp, settle, testPages } from '@/testing/helpers';
+import { APP_DIR, atLocalTime, finishOnboarding, resetApp, settle, testPages } from '@/testing/helpers';
 
 /**
  * Week 9 (docs/api/today.md, actions.md, reminders.md «From the assistant line», pages.md):
@@ -28,6 +28,9 @@ import { APP_DIR, finishOnboarding, resetApp, settle, testPages } from '@/testin
 const MIN = 60_000;
 const DAY = 24 * 60 * MIN;
 const iso = (ms: number) => new Date(ms).toISOString();
+
+// «Сегодня» tests put the clock on a time of day (`atLocalTime`); the next test starts on the real clock.
+afterEach(() => jest.useRealTimers());
 
 function task(id: string, extra: Partial<TaskOut> = {}): TaskOut {
   return taskOut({
@@ -363,7 +366,8 @@ describe('screens', () => {
     await settle(() => !!useTasks.getState().actions.ar); // «Что я сделал» has it, with «Отменить»
   });
 
-  it('«Сегодня»: a missed alarm is a row with the time in red; its circle is a late `acked` (offline too) and the row goes', async () => {
+  it('«Сегодня» v6: a missed alarm is «Прошло 1 · не отмечено 1»; its [Сделано] is a late `acked` (offline too)', async () => {
+    atLocalTime(14);
     const s = server();
     const outbox = await online(s);
     const due = Date.now() - 60 * MIN;
@@ -372,16 +376,19 @@ describe('screens', () => {
     useAlarms.setState({ reminders: { r1: r }, fires: { [f.key]: f } });
     s.offline = true;
     await renderRouter(APP_DIR, { initialUrl: '/' });
-    await settle(() => screen.queryByTestId(`missed-${f.key}`) !== null);
-    expect(screen.getByTestId(`missed-${f.key}`)).toHaveTextContent(/Позвонить Ерлану/);
-    expect(screen.getByTestId(`missed-${f.key}`).props.accessibilityLabel).toMatch(/Пропущено .* · Позвонить Ерлану/);
-    await fireEvent.press(screen.getByTestId(`missed-done-${f.key}`));
-    await settle(() => screen.queryByTestId(`missed-${f.key}`) === null);
+    await settle(() => screen.queryByTestId('today-past-toggle') !== null);
+    expect(screen.getByTestId('today-past-toggle')).toHaveTextContent('Прошло 1 · не отмечено 1');
+    await fireEvent.press(screen.getByTestId('today-past-toggle'));
+    const key = `reminder:r1:${due}`;
+    expect(screen.getByTestId(`today-row-${key}`)).toHaveTextContent(/Позвонить Ерлану/);
+    await fireEvent.press(screen.getByTestId(`today-past-done-${key}`));
+    await settle(() => screen.queryByTestId(`today-past-done-${key}`) === null);
+    expect(screen.getByTestId('today-past-toggle')).toHaveTextContent(/^Прошло 1$/);
     const row = outbox.all().find((x) => x.kind === 'reminder.events');
     expect((row?.payload as { events: { event: string; fire_id: string }[] }).events[0]).toMatchObject({ event: 'acked', fire_id: 'f1' });
   });
 
-  it('«Сегодня»: shopping in one line; a proposal from /today only with `today.proposals`, [Не сейчас]; «Я сделал за вас» moved to «Что я сделал»', async () => {
+  it('«Сегодня» v6: shopping is the «Купить» tile; a proposal (with `today.proposals`) is a line after the tiles, [Не сейчас]; «Я сделал за вас» is in «Что я сделал»', async () => {
     const s = server();
     await online(s);
     const on = { ...FEATURE_DEFAULTS, shopping: true, today: { ...FEATURE_DEFAULTS.today, proposals: true } };
@@ -402,14 +409,19 @@ describe('screens', () => {
       },
     }));
     const r = await renderRouter(APP_DIR, { initialUrl: '/' });
+    await settle(() => s.callsTo('GET /today').length > 0);
+    await settle(() => false, 10).catch(() => undefined);
+    expect(screen.getByTestId('today-tile-buy-count')).toHaveTextContent('2');
+    expect(screen.getByTestId('today-tile-buy-sub')).toHaveTextContent(/хлеб/);
+    expect(screen.getByTestId('today-tile-buy-sub')).toHaveTextContent(/молоко/);
+    // Review 1 Р3: the proposal is a line in the tip's look after the tiles; [Не сейчас] dismisses it.
     await settle(() => screen.queryByTestId('suggestion-s1') !== null);
-    expect(screen.getByTestId('today-shopping')).toHaveTextContent('Купить: Хлеб и ещё 1');
     expect(screen.getByTestId('suggestion-yes-s1')).toHaveTextContent('Да, добавить');
-    // No service blocks on the first screen (Ф-41, ux-audit P0-3).
-    expect(screen.queryByTestId('did-today-a1')).toBeNull();
     await fireEvent.press(screen.getByTestId('suggestion-no-s1'));
     await settle(() => screen.queryByTestId('suggestion-s1') === null);
     expect(s.callsTo('POST /suggestions/s1/dismiss')).toHaveLength(1);
+    // No service blocks on the first screen (Ф-41, ux-audit P0-3).
+    expect(screen.queryByTestId('did-today-a1')).toBeNull();
     await act(async () => router.push('/did'));
     await settle(() => r.getPathname() === '/history');
     await settle(() => screen.queryByTestId('did-a1') !== null);
@@ -435,7 +447,9 @@ describe('screens', () => {
     await renderRouter(APP_DIR, { initialUrl: '/' });
     await settle(() => screen.queryByTestId('suggestion-t1') !== null);
     expect(screen.queryByTestId('suggestion-s1')).toBeNull();
-    expect(screen.queryByTestId('today-tiles')).toBeNull();
+    // v6 (Ф-94): only the two tiles of «Сегодня»; the page tiles (Ф-32) are not here.
+    expect(screen.queryByTestId('today-tile-srv-x')).toBeNull();
+    expect(screen.queryAllByTestId(/^today-tile-menu-/)).toHaveLength(0);
     // After the first week the tip is gone (tips_days = 7).
     useOnboarding.setState({ openedAt: new Date(Date.now() - 8 * DAY).toISOString() });
     await settle(() => screen.queryByTestId('suggestion-t1') === null);
@@ -506,6 +520,7 @@ describe('final contract (week 9 backend)', () => {
   });
 
   it('a late «Сделано» that went: «Отменить» undoes the action from the events answer', async () => {
+    atLocalTime(14);
     const s = server();
     const outbox = await online(s);
     const due = Date.now() - 60 * MIN;
@@ -530,15 +545,18 @@ describe('final contract (week 9 backend)', () => {
       },
     }));
     await renderRouter(APP_DIR, { initialUrl: '/' });
-    await settle(() => screen.queryByTestId(`missed-done-${f.key}`) !== null);
-    await fireEvent.press(screen.getByTestId(`missed-done-${f.key}`));
+    const key = `reminder:r7:${due}`;
+    await settle(() => screen.queryByTestId('today-past-toggle') !== null);
+    await fireEvent.press(screen.getByTestId('today-past-toggle'));
+    await settle(() => screen.queryByTestId(`today-past-done-${key}`) !== null);
+    await fireEvent.press(screen.getByTestId(`today-past-done-${key}`));
     await act(async () => {
       await sync(outbox);
     });
     await settle(() => s.callsTo('POST /reminders/events').length > 0 && !!useTasks.getState().actions.alate);
     await fireEvent.press(screen.getByTestId('undo-strip-undo'));
     await settle(() => s.callsTo('POST /actions/alate/undo').length === 1);
-    await settle(() => screen.queryByTestId(`missed-${f.key}`) !== null); // missed again
+    await settle(() => screen.queryByTestId(`today-past-done-${key}`) !== null); // missed again
   });
 
   it('«Удалить» a reminder on «Дела»: DELETE answers 200 with an action; «Отменить» undoes it', async () => {

@@ -33,7 +33,7 @@ import i18n from '@/i18n';
 import { usePages } from '@/store/pages';
 import { useTasks } from '@/tasks/store';
 import { useUndo } from '@/store/undo';
-import { APP_DIR, finishOnboarding, resetApp, settle } from '@/testing/helpers';
+import { APP_DIR, atLocalTime, finishOnboarding, resetApp, settle } from '@/testing/helpers';
 import { todPeriod, todPhrase } from '@/today/timeOfDay';
 
 /** Ф-89 / Ф-90 / Ф-91: the time calendar (direction A) and «Сегодня» by the time of day. */
@@ -191,25 +191,23 @@ describe('time of day (Ф-91: morning to 11:00, evening from 18:00, night from 2
     expect(dayPeriod({ now: 6 * 60, quiet: { from: 22 * 60, to: 7 * 60 } })).toBe('night');
     expect(dayPeriod({ now: 7 * 60, quiet: { from: 22 * 60, to: 7 * 60 } })).toBe('morning');
   });
-  it('the phrase is always two lines of templates, and nothing repeats the sheet', () => {
+  it('the phrase is always two lines of templates (today-v6 §3.1), no time in it: the time is in the card', () => {
     const today = [
-      { kind: 'task' as const, title: 'Созвон', start: 570, duration: 60, done: true },
-      { kind: 'task' as const, title: 'Стоматолог', start: 900, duration: 60, done: false },
-      { kind: 'task' as const, title: 'Ужин', start: 1140, duration: 60, done: false },
+      { start: 570, duration: 60 },
+      { start: 900, duration: 60 },
+      { start: 1140, duration: 60 },
     ];
-    const at = (now: number) => {
-      const i = { now, today, tomorrowCount: 4 };
-      return todPhrase(todPeriod(i), i, t);
-    };
-    expect(at(7 * 60 + 40)).toBe('Доброе утро.\n3 дела, первое в 9:30.');
-    expect(at(13 * 60 + 20)).toBe('Свободно до 15:00.\nЕщё 2 дела сегодня.');
-    expect(at(15 * 60 + 10)).toBe('Сейчас: Стоматолог.\nЕщё 1 дело сегодня.');
+    const c = { all: 3, done: 1, ahead: 2, coming: 4, emptyToday: false, nearest: 'завтра' };
+    const at = (now: number) => todPhrase(todPeriod({ now, today }), c, t);
+    expect(at(7 * 60 + 40)).toBe('Доброе утро.\nСегодня 3 дела.');
+    expect(at(13 * 60 + 20)).toBe('Добрый день.\nЕщё 2 дела сегодня.');
     expect(at(20 * 60 + 30)).toBe('День позади.\nСделано 1 из 3.');
-    expect(at(23 * 60 + 30)).toBe('Спокойной ночи.\nЗавтра 4 дела.');
-    for (const n of [7 * 60, 13 * 60, 20 * 60, 23 * 60 + 30]) expect(at(n)!.split('\n')).toHaveLength(2);
-    // Nothing timed: the Ф-84 «Сводка» speaks.
-    expect(todPhrase('day', { now: 780, today: [], tomorrowCount: 0 }, t)).toBeNull();
-    expect(todPhrase('night', { now: 1400, today: [], tomorrowCount: 0 }, t)).toBeNull();
+    expect(at(23 * 60 + 30)).toBe('Спокойной ночи.\nЗавтра 4 дела.');
+    for (const n of [7 * 60, 13 * 60, 20 * 60, 23 * 60 + 30]) expect(at(n).split('\n')).toHaveLength(2);
+    // An empty today: «Свободный день.» and the nearest day, or nothing in 7 days.
+    expect(todPhrase('day', { ...c, emptyToday: true, nearest: 'пятница' }, t)).toBe('Свободный день.\nБлижайшее — пятница.');
+    expect(todPhrase('morning', { ...c, emptyToday: true, nearest: null }, t)).toBe('Свободный день.\nДел пока нет.');
+    expect(todPhrase('night', { ...c, coming: 0, emptyToday: true, nearest: null }, t)).toBe('Свободный день.\nДел пока нет.');
   });
 });
 
@@ -496,6 +494,7 @@ describe('«Дела» as a calendar (A0–A5)', () => {
 });
 
 describe('«Сегодня»: the calendar entry and the list (calendar-time.md §14)', () => {
+  afterEach(() => jest.useRealTimers());
   it('§14.1: an empty day has no «План дня» and no «свободно»; nothing in 7 days — no «Календарь ›»', async () => {
     resetApp();
     finishOnboarding('full');
@@ -507,31 +506,34 @@ describe('«Сегодня»: the calendar entry and the list (calendar-time.md 
     expect(screen.queryByTestId('today-calendar')).toBeNull();
   });
 
-  it('§14.1: an empty today — «Календарь ›» sits at the nearest day and opens «День» on it', async () => {
+  it('v6 §3.4: an empty today — the nearest day reads only (no «Календарь ›»); the card opens «День» on its leaf', async () => {
     resetApp();
     finishOnboarding('full');
+    atLocalTime(14);
     const tomorrow = addDaysIso(isoDate(Date.now()), 1);
     useTasks.getState().set({ tasks: { n1: task({ id: 'n1', title: 'Забрать посылку', due_date: tomorrow }) } });
     calState().set({ view: 'month' });
     const r = await renderRouter(APP_DIR, { initialUrl: '/' });
     await settle(() => screen.queryByTestId('today-nearest') !== null);
-    expect(screen.queryByTestId('today-plan-head')).toBeNull();
-    expect(screen.queryByTestId('today-all-tasks')).toBeNull();
-    await fireEvent.press(screen.getByTestId('today-calendar'));
+    expect(screen.getByTestId('today-nearest')).toHaveTextContent(/Забрать посылку/);
+    expect(screen.queryByTestId('today-calendar')).toBeNull();
+    expect(screen.queryByTestId('today-plan')).toBeNull();
+    await fireEvent.press(screen.getByTestId('today-next'));
     await settle(() => r.getPathname() === `/page/${tasksPage().id}`);
-    expect(calState()).toMatchObject({ view: 'day', date: tomorrow });
+    expect(calState()).toMatchObject({ view: 'day', date: null });
     await settle(() => screen.queryByTestId('cal-screen') !== null);
   });
 
-  it('§14.1: a row of «Не забыть» opens «Дела» as the list, whatever view was last', async () => {
+  it('v6 §4.4: «Все дела ›» opens «Дела» as the list, whatever view was last', async () => {
     resetApp();
     finishOnboarding('full');
+    atLocalTime(14);
     const today = isoDate(Date.now());
     useTasks.getState().set({ tasks: { f1: task({ id: 'f1', title: 'Купить корм', due_date: today }) } });
     calState().set({ view: 'month' });
     const r = await renderRouter(APP_DIR, { initialUrl: '/' });
-    await settle(() => screen.queryByTestId('task-f1') !== null);
-    await fireEvent.press(screen.getByTestId('task-f1'));
+    await settle(() => screen.queryByTestId('today-all-tasks') !== null);
+    await fireEvent.press(screen.getByTestId('today-all-tasks'));
     await settle(() => r.getPathname() === `/page/${tasksPage().id}`);
     expect(calState().view).toBe('list');
     await settle(() => screen.queryByTestId('page-add') !== null);

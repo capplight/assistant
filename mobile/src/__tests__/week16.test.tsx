@@ -10,7 +10,7 @@ import { usePages } from '@/store/pages';
 import { useTasks } from '@/tasks/store';
 import { todayTiles } from '@/today/tiles';
 import { happyServer, pageOut, tokenPair, type FakeServer } from '@/testing/fakeServer';
-import { APP_DIR, fileWipes, finishOnboarding, resetApp, settle, testPages, testRecords } from '@/testing/helpers';
+import { APP_DIR, atLocalTime, fileWipes, finishOnboarding, resetApp, settle, testPages, testRecords } from '@/testing/helpers';
 import { useUndo } from '@/store/undo';
 import { setTodayTile } from '@/today/tileService';
 
@@ -162,20 +162,23 @@ describe('«Сегодня» — the tear-off sheet', () => {
     finishOnboarding();
   });
 
-  it('the date above «Сегодня», «Сегодня свободно…» when nothing', async () => {
+  afterEach(() => jest.useRealTimers());
+
+  it('the date button on the sheet; day 1 with nothing — «Свободный день. Дел пока нет.», «Три первые фразы», no plan (v6)', async () => {
+    atLocalTime(10);
     await renderRouter(APP_DIR, { initialUrl: '/' });
-    expect(screen.getByTestId('today-header')).toHaveTextContent(new RegExp(`${new Date().getDate()}`));
-    // Ф-84 «Сводка» + неделя: day 1 with nothing — «Чистый лист», the week, «Три первые фразы» instead of a plan.
+    expect(screen.getByTestId('today-date')).toHaveTextContent(new RegExp(`${new Date().getDate()}`));
     await settle(() => screen.queryByTestId('today-first') !== null);
-    expect(screen.getByTestId('sheet-phrase')).toHaveTextContent('Чистый лист. Скажите первое.');
-    expect(screen.getAllByTestId(/^week-\d{4}-\d\d-\d\d$/)).toHaveLength(7);
+    expect(screen.getByTestId('sheet-phrase')).toHaveTextContent('Свободный день. Дел пока нет.');
+    expect(screen.queryByTestId('today-week')).toBeNull();
     expect(screen.getByTestId('today-first')).toHaveTextContent(/0 из 3/);
-    expect(screen.queryByTestId('today-plan-head')).toBeNull();
-    expect(screen.queryByTestId('today-next')).toBeNull();
+    expect(screen.queryByTestId('today-plan')).toBeNull();
+    // The card stays (same height): «Дел пока нет · Открыть календарь».
+    expect(screen.getByTestId('today-next')).toHaveTextContent(/Дел пока нет.*Открыть календарь/);
   });
 
-  it('v2: an open to-do of today is a «Без времени» row with its circle (no «Дальше» card)', async () => {
-    const today = new Date();
+  it('v6: an open to-do of today is a «без времени» row of «План» with its circle', async () => {
+    const today = atLocalTime(14);
     const d = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     useTasks.setState({
       tasks: {
@@ -183,8 +186,8 @@ describe('«Сегодня» — the tear-off sheet', () => {
       },
     });
     await renderRouter(APP_DIR, { initialUrl: '/' });
-    expect(screen.getByTestId('task-t1')).toHaveTextContent(/Позвонить маме/);
-    expect(screen.getByTestId('task-check-t1')).toBeTruthy();
+    expect(screen.getByTestId('today-row-todo:t1')).toHaveTextContent(/Позвонить маме.*без времени/);
+    expect(screen.getByTestId('today-check-todo:t1')).toBeTruthy();
     expect(screen.getByTestId('sheet-phrase')).toBeTruthy();
   });
 });

@@ -9,7 +9,7 @@ import { useTasks } from '@/tasks/store';
 import { usePages } from '@/store/pages';
 import { useToday } from '@/today/service';
 import { useSchemePreference } from '@/theme';
-import { APP_DIR, finishOnboarding, resetApp, settle } from '@/testing/helpers';
+import { APP_DIR, atLocalTime, finishOnboarding, resetApp, settle } from '@/testing/helpers';
 
 /** Week 19 (Ф-33, Ф-41, Ф-42, Ф-43): «Ещё» in six rows, one «Настройки», what the beta switches hide. */
 
@@ -115,34 +115,37 @@ describe('«Сегодня» and the beta switches (Ф-42)', () => {
     });
   };
 
-  it('`today.tiles` off: no tiles, no «Я сделал за вас», no «Новое напоминание»; on: the tile shows', async () => {
+  afterEach(() => jest.useRealTimers());
+
+  it('v6 (Ф-94): page tiles never on «Сегодня», with `today.tiles` on or off — only «Потрачено» and «Купить»', async () => {
     withTile();
     await renderRouter(APP_DIR, { initialUrl: '/' });
-    expect(screen.getByTestId('today-empty')).toBeTruthy();
-    expect(screen.queryByTestId('today-tiles')).toBeNull();
+    expect(screen.getByTestId('today-tiles')).toBeTruthy();
+    expect(screen.getByTestId('today-tile-spent')).toBeTruthy();
     expect(screen.queryByTestId('today-did-all')).toBeNull();
     expect(screen.queryByTestId('today-new-reminder')).toBeNull();
     await act(async () => useFeatureStore.getState().set({ ...FEATURE_DEFAULTS, today: { ...FEATURE_DEFAULTS.today, tiles: true } }));
-    await settle(() => screen.queryByTestId('today-tiles') !== null);
-    await fireEvent.press(screen.getAllByTestId(/^today-tile-menu-/)[0]!);
-    expect(screen.getByTestId('tile-pin')).toBeTruthy();
+    await settle(() => false, 5).catch(() => undefined);
+    expect(screen.queryAllByTestId(/^today-tile-menu-/)).toHaveLength(0);
+    expect(screen.queryByTestId('today-tile-srv-notes')).toBeNull();
   });
 
-  it('v4: today’s to-dos are «Дела» rows with circles; «Все дела · N» counts the open ones', async () => {
-    const d = new Date();
+  it('v6: today’s to-dos are «План» rows with circles; a tick sends the row to «Прошло»', async () => {
+    const d = atLocalTime(14);
     const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const iso = new Date().toISOString();
     const task = (id: string, title: string) => ({ id, client_id: id, item_id: `i-${id}`, list_key: 'todo', title, qty: null, where: null, due_date: day, done: false, done_at: null, version: 1, seq: 1, created_at: iso, updated_at: iso, deleted_at: null });
     useTasks.setState({ tasks: { a: task('a', 'Позвонить в банк'), b: task('b', 'Оплатить интернет') } as never });
     await renderRouter(APP_DIR, { initialUrl: '/' });
-    expect(screen.getByTestId('task-a')).toHaveTextContent(/Позвонить в банк/);
-    expect(screen.getByTestId('task-b')).toHaveTextContent(/Оплатить интернет/);
-    // Ф-84 «Сводка»: no plan today → the phrase names what is there, the week is on the sheet (a day opens «Дела»);
-    // «Все дела ›» belongs to the nearest day with things, so an empty week has none.
-    expect(screen.getByTestId('sheet-phrase')).toHaveTextContent('Свободный день. Не забыть 2 дела.');
-    expect(screen.getByTestId(`week-${day}`).props.accessibilityState.selected).toBe(true);
-    expect(screen.queryByTestId('today-all-tasks')).toBeNull();
-    await fireEvent.press(screen.getByTestId('task-check-b'));
-    await settle(() => screen.getByTestId('task-check-b').props.accessibilityState.checked === true);
+    expect(screen.getByTestId('today-row-todo:a')).toHaveTextContent(/Позвонить в банк/);
+    expect(screen.getByTestId('today-row-todo:b')).toHaveTextContent(/Оплатить интернет/);
+    expect(screen.getByTestId('sheet-phrase')).toHaveTextContent('Добрый день. Ещё 2 дела сегодня.');
+    expect(screen.getByTestId('today-all-tasks')).toBeTruthy();
+    expect(day).toMatch(/^\d{4}-/);
+    await fireEvent.press(screen.getByTestId('today-check-todo:b'));
+    await settle(() => screen.queryByTestId('today-past-toggle') !== null);
+    expect(screen.getByTestId('today-past-toggle')).toHaveTextContent(/^Прошло 1$/);
+    expect(screen.queryByTestId('today-row-todo:b')).toBeNull();
+    expect(screen.getByTestId('sheet-phrase')).toHaveTextContent('Добрый день. Ещё 1 дело сегодня.');
   });
 });

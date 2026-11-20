@@ -1,12 +1,9 @@
 import { router } from 'expo-router';
-import { BellRing, ChevronRight, Clock, Ellipsis, EyeOff, Pin, PinOff, Search, ShoppingBasket } from 'lucide-react-native';
-import { useState, type ReactNode } from 'react';
+import { BellRing, ChevronRight, Clock, Search } from 'lucide-react-native';
+import { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { setTodayTile } from '@/today/tileService';
-import { usePages } from '@/store/pages';
-import type { Tile } from '@/today/tiles';
 import { useTheme } from '@/theme';
 
 import { AppText } from './AppText';
@@ -14,9 +11,8 @@ import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { CheckCircle } from './ui/Check';
 import { Header } from './ui/Header';
-import { Icon, PageIcon } from './ui/Icon';
-import { hitSlopFor, pressedStyle } from './ui/motion';
-import { ActionList, Sheet } from './ui/Sheet';
+import { Icon } from './ui/Icon';
+import { pressedStyle } from './ui/motion';
 
 /**
  * «Сегодня» header (design-system §4 mock): the weekday and date as the `footnote` meta, «Сегодня» as the
@@ -173,32 +169,6 @@ export function TodayRow({
   );
 }
 
-/** «Купить: молоко и ещё 3» — the shopping list in one line; opens «Покупки» when it is a page. */
-export function ShoppingLine({ titles, onPress, hint }: { titles: string[]; onPress?: () => void; hint?: string }) {
-  const theme = useTheme();
-  const { t } = useTranslation();
-  const [first, ...rest] = titles;
-  const text = rest.length > 0 ? t('today.buy_more', { first, n: rest.length }) : t('today.buy_one', { first });
-  const inner = (
-    <View style={[styles.row, { minHeight: theme.size.rowHeight, gap: theme.space[3], paddingLeft: theme.space[3], paddingRight: theme.space[3] }]}>
-      <Icon icon={ShoppingBasket} size="sm" color="iconSecondary" />
-      <AppText style={styles.flex}>{text}</AppText>
-      {onPress ? <Icon icon={ChevronRight} size="sm" color="iconSecondary" /> : null}
-    </View>
-  );
-  if (!onPress)
-    return (
-      <View testID="today-shopping" accessible accessibilityLabel={text}>
-        {inner}
-      </View>
-    );
-  return (
-    <Pressable testID="today-shopping" accessibilityRole="button" accessibilityLabel={text} accessibilityHint={hint} onPress={onPress} style={({ pressed }) => pressedStyle(pressed)}>
-      {inner}
-    </Pressable>
-  );
-}
-
 /** The section label above a card («На сегодня · 3 из 4»): `sectionLabel`, no caps. */
 export function SectionLabel({ title, value, link }: { title: string; value?: string; link?: { label: string; onPress: () => void; testID?: string } }) {
   const theme = useTheme();
@@ -230,99 +200,9 @@ export function DayCard({ children, testID }: { children: ReactNode; testID?: st
   );
 }
 
-/**
- * «На страницах»: ≤2 tiles (only with the `today.tiles` switch, Ф-42), one column at ≥150%; each opens its page;
- * «⋯» (a quiet icon) pins or hides it in a kit sheet.
- */
-export function PageTiles({ tiles }: { tiles: Tile[] }) {
-  const theme = useTheme();
-  const { t } = useTranslation();
-  const pages = usePages((s) => s.pages);
-  const [menu, setMenu] = useState<Tile | null>(null);
-  if (tiles.length === 0) return null;
-  const pageOf = (id: string) => pages.find((p) => p.id === id);
-  const nameOf = (tile: Tile) => {
-    const p = pageOf(tile.pageId);
-    if (p?.title) return p.title;
-    const key = p?.templateKey ?? tile.templateKey;
-    return t(key === 'custom' ? 'tpl.custom_default' : `tpl.${key}`);
-  };
-  const menuPage = menu ? pageOf(menu.pageId) : undefined;
-  return (
-    <View testID="today-tiles">
-      <SectionLabel title={t('today.on_pages')} />
-      <View style={{ flexDirection: theme.largeFont ? 'column' : 'row', gap: theme.space[2] }}>
-        {tiles.map((tile) => {
-          const p = pageOf(tile.pageId);
-          const name = nameOf(tile);
-          return (
-            <Card key={tile.pageId} padded={false} style={theme.largeFont ? undefined : styles.flex}>
-              <Pressable
-                testID={`today-tile-${tile.pageId}`}
-                accessibilityRole="button"
-                accessibilityLabel={`${name}. ${tile.text}`}
-                accessibilityHint={t('pages.open')}
-                onPress={() => router.navigate({ pathname: '/page/[id]', params: { id: tile.pageId } })}
-                style={({ pressed }) => [{ padding: theme.space[3], paddingRight: theme.size.minTouch, gap: theme.space[1] }, pressedStyle(pressed)]}
-              >
-                <View style={[styles.row, { gap: theme.space[2] }]}>
-                  {p ? <PageIcon name={p.icon} color={theme.colors.brand} size={20} /> : null}
-                  <AppText variant="callout" color="ink2" style={styles.flex}>
-                    {name}
-                  </AppText>
-                </View>
-                <AppText variant="headline">{tile.text}</AppText>
-              </Pressable>
-              <Pressable
-                testID={`today-tile-menu-${tile.pageId}`}
-                accessibilityRole="button"
-                accessibilityLabel={t('today.tile_menu_a11y', { page: name })}
-                onPress={() => setMenu(tile)}
-                hitSlop={hitSlopFor(theme.size.minTouch)}
-                style={[styles.tileMenu, { width: theme.size.minTouch, height: theme.size.minTouch }]}
-              >
-                <Icon icon={Ellipsis} size="sm" color="iconSecondary" />
-              </Pressable>
-            </Card>
-          );
-        })}
-      </View>
-      <Sheet testID="tile-sheet" visible={menu !== null} onClose={() => setMenu(null)} title={menu ? nameOf(menu) : undefined}>
-        {menu ? (
-          <ActionList
-            actions={[
-              {
-                key: 'pin',
-                testID: 'tile-pin',
-                icon: menu.pinned ? PinOff : Pin,
-                label: menu.pinned ? t('today.tile_unpin') : t('today.tile_pin'),
-                onPress: () => {
-                  setMenu(null);
-                  if (menuPage) void setTodayTile(menuPage, menu.pinned ? 'auto' : 'pinned');
-                },
-              },
-              {
-                key: 'hide',
-                testID: 'tile-hide',
-                icon: EyeOff,
-                label: t('today.tile_hide'),
-                onPress: () => {
-                  setMenu(null);
-                  if (menuPage) void setTodayTile(menuPage, 'hidden');
-                },
-              },
-            ]}
-          />
-        ) : null}
-      </Sheet>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
   flex: { flex: 1 },
   struck: { textDecorationLine: 'line-through' },
   clip: { overflow: 'hidden' },
-  tileMenu: { position: 'absolute', top: 0, right: 0, alignItems: 'center', justifyContent: 'center' },
 });

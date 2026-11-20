@@ -18,9 +18,9 @@ type CircleProps = {
 };
 
 /** v5 check (`.ck`): 26 (32 at large text), a 2 `ink` ring; done = `ink` fill + `paper` tick; waiting = `ink3` ring. */
-export function CheckMark({ checked, waiting = false }: { checked: boolean; waiting?: boolean }) {
+export function CheckMark({ checked, waiting = false, size }: { checked: boolean; waiting?: boolean; size?: number }) {
   const theme = useTheme();
-  const s = theme.m.checkbox;
+  const s = size ?? theme.m.checkbox;
   return (
     <View
       accessibilityElementsHidden

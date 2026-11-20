@@ -145,3 +145,15 @@ export async function settle(cond: () => boolean, maxSteps = 500): Promise<void>
   }
   if (!cond()) throw new Error('settle: condition not met');
 }
+
+/**
+ * «Сегодня» depends on the time of day (morning / day / evening / night): a test that needs one period puts the
+ * phone's clock on today's date at `h:m` (fake timers; `renderRouter` keeps this time). Pair with `jest.useRealTimers()`.
+ */
+export function atLocalTime(h: number, m = 0, dayShift = 0): Date {
+  const d = new Date();
+  const at = new Date(d.getFullYear(), d.getMonth(), d.getDate() + dayShift, h, m, 0, 0);
+  jest.useFakeTimers();
+  jest.setSystemTime(at);
+  return at;
+}
