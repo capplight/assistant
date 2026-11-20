@@ -19,6 +19,13 @@ export function durText(t: T, minutes: number): string {
   return r === 0 ? t('cal.dur_h', { h }) : t('cal.dur_hm', { h, m: r });
 }
 
+/** «за 10 мин» · «за час» · «за день» · «нет» of a to-do's alert (minutes before the start, null = none). */
+export function remindText(t: T, offset: number | null | undefined): string {
+  if (offset === null || offset === undefined) return t('cal.remind_none');
+  if (offset === 0 || offset === 10 || offset === 30 || offset === 60 || offset === 1440) return t(`cal.remind_${offset}`);
+  return t('cal.remind_before', { time: durText(t, offset) });
+}
+
 /** «Пт, 20 ноября» / «пт, 20 нояб.» of a date on the person's language. */
 export function dateText(lang: string, date: string, style: 'long' | 'short' = 'long'): string {
   try {

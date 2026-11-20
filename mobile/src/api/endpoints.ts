@@ -1122,7 +1122,9 @@ export function taskOut(v: unknown): TaskOut | null {
 }
 
 /** calendar.md: the time fields of a task (absent on an older server: an untimed to-do). */
-function taskTimeOut(o: Record<string, unknown>): Pick<TaskOut, 'start_at' | 'duration_min' | 'tz' | 'rrule' | 'all_day' | 'source' | 'local'> {
+function taskTimeOut(
+  o: Record<string, unknown>,
+): Pick<TaskOut, 'start_at' | 'duration_min' | 'tz' | 'rrule' | 'all_day' | 'source' | 'local' | 'reminder_offset_min'> {
   const startAt = str(o.start_at);
   const local = obj(o.local);
   const date = local && str(local.date);
@@ -1134,6 +1136,7 @@ function taskTimeOut(o: Record<string, unknown>): Pick<TaskOut, 'start_at' | 'du
     all_day: typeof o.all_day === 'boolean' ? o.all_day : !startAt && !!str(o.due_date),
     source: o.source === 'assistant' ? 'assistant' : o.source === 'user' ? 'user' : null,
     local: local && date ? { date, start: str(local.start), end: str(local.end) } : null,
+    ...('reminder_offset_min' in o ? { reminder_offset_min: numOrNull(o.reminder_offset_min) } : {}),
   };
 }
 
@@ -1191,7 +1194,8 @@ export function calendarEntryOut(v: unknown): CalendarEntryOut | null {
     source: o.source === 'assistant' ? 'assistant' : o.source === 'user' ? 'user' : null,
     item_id: str(o.item_id),
     page_id: str(o.page_id),
-    reminder: rem && str(rem.id) ? { id: str(rem.id)!, offsets: nums(rem.offsets) } : null,
+    reminder: rem && str(rem.id) ? { id: str(rem.id)!, offsets: nums(rem.offsets), ...('offset_min' in rem ? { offset_min: numOrNull(rem.offset_min) } : {}) } : null,
+    ...('reminder_offset_min' in o ? { reminder_offset_min: numOrNull(o.reminder_offset_min) } : {}),
     plan: plan && str(plan.id) ? { id: str(plan.id)!, title: str(plan.title) ?? '' } : null,
     version: num(o.version, 1),
   };

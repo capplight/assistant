@@ -218,7 +218,14 @@ export function findTask(key: string): TaskOut | undefined {
  * row, as typed. The phone does not split «хлеб и молоко» into two: that reading is the
  * assistant's (or code's, if Ф-1 is taken on the server, `TASKS_RULES_FIRST`).
  */
-export type TaskTime = { start_at: string; duration_min: number | null; tz: string; rrule: string | null };
+export type TaskTime = {
+  start_at: string;
+  duration_min: number | null;
+  tz: string;
+  rrule: string | null;
+  /** calendar.md: «Напомнить» of the add sheet, minutes before the start (null / absent = no alert). */
+  reminder_offset_min?: number | null;
+};
 
 export async function addTask(i: {
   list: TaskListKey;
@@ -250,7 +257,15 @@ export async function addTask(i: {
     updated_at: at,
     deleted_at: null,
     ...(i.time
-      ? { start_at: i.time.start_at, duration_min: i.time.duration_min, tz: i.time.tz, rrule: i.time.rrule, all_day: false, source: 'user' as const }
+      ? {
+          start_at: i.time.start_at,
+          duration_min: i.time.duration_min,
+          tz: i.time.tz,
+          rrule: i.time.rrule,
+          all_day: false,
+          source: 'user' as const,
+          reminder_offset_min: i.time.reminder_offset_min ?? null,
+        }
       : {}),
   };
   const s = tasksState();
@@ -264,6 +279,7 @@ export async function addTask(i: {
         title,
         ...(i.dueDate && !i.time ? { due_date: i.dueDate } : {}),
         ...(i.time ? { start_at: i.time.start_at, duration_min: i.time.duration_min, tz: i.time.tz, rrule: i.time.rrule } : {}),
+        ...(i.time && typeof i.time.reminder_offset_min === 'number' ? { reminder_offset_min: i.time.reminder_offset_min } : {}),
       },
     };
     rowId = (await (await getOutbox()).enqueue('task.create', payload)).id;

@@ -17,6 +17,9 @@ export type TimeEdit = { startMs: number; duration: number | null; clientId: str
 /** One occurrence done or skipped by hand not answered yet, by entry key. */
 export type OccEdit = { done?: boolean; skipped?: boolean; clientId: string };
 
+/** «Напомнить» changed by hand not answered yet, by task key: minutes before the start, null = no alert. */
+export type RemindEdit = { offset: number | null; clientId: string };
+
 /** The assistant made / moved a timed to-do: the calendar goes to its day and rings the block for 1.5 s (§5). */
 export type CalFocus = { taskId: string; date: string; startMin: number | null; until: number; seq: number };
 
@@ -30,6 +33,7 @@ type State = {
   occEdits: Record<string, OccEdit>;
   /** «Это и следующие» deleted by hand, not answered yet: task id → the first occurrence that goes (ms). */
   seriesEnds: Record<string, { from: number; clientId: string }>;
+  remindEdits: Record<string, RemindEdit>;
   focus: CalFocus | null;
   loaded: boolean;
   set: (p: Partial<Omit<State, 'set' | 'reset'>>) => void;
@@ -44,6 +48,7 @@ const initial = {
   timeEdits: {},
   occEdits: {},
   seriesEnds: {},
+  remindEdits: {},
   focus: null,
   loaded: false,
 };
@@ -59,7 +64,7 @@ export const useCalendar = create<State>()(
       name: 'calendar',
       storage: persistStorage,
       version: 1,
-      partialize: ({ view, timeEdits, occEdits, seriesEnds }) => ({ view, timeEdits, occEdits, seriesEnds }),
+      partialize: ({ view, timeEdits, occEdits, seriesEnds, remindEdits }) => ({ view, timeEdits, occEdits, seriesEnds, remindEdits }),
     },
   ),
 );

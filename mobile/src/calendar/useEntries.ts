@@ -17,7 +17,7 @@ export function useCalendarEntries(from: string, to: string): CalEntry[] {
   const edits = useTasks((s) => s.edits);
   const alarms = useAlarms(useShallow((s) => ({ reminders: s.reminders, fires: s.fires, local: s.local })));
   const cal = useCalendar(
-    useShallow((s) => ({ occurrences: s.occurrences, timeEdits: s.timeEdits, occEdits: s.occEdits, seriesEnds: s.seriesEnds, server: s.server })),
+    useShallow((s) => ({ occurrences: s.occurrences, timeEdits: s.timeEdits, occEdits: s.occEdits, seriesEnds: s.seriesEnds, remindEdits: s.remindEdits, server: s.server })),
   );
   useEffect(() => {
     void ensureCalendarLoaded();

@@ -1,9 +1,8 @@
-import { router } from 'expo-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { CalEntry } from '@/calendar/entries';
-import { deleteEntry, moveEntry, setEntryDone, setRepeat } from '@/calendar/service';
+import { deleteEntry, moveEntry, setEntryDone, setReminderOffset, setRepeat } from '@/calendar/service';
 import { changeTask } from '@/tasks/edit';
 
 import { EntrySheet, ScopeSheet } from './Sheets';
@@ -48,10 +47,7 @@ export function EntryCard({ entry, onClose }: { entry: CalEntry; onClose: () => 
         onClose();
         void deleteEntry(entry);
       }}
-      onReminder={() => {
-        onClose();
-        if (entry.remind) router.push({ pathname: '/reminder-new', params: { text: entry.title, editId: entry.remind.id } });
-      }}
+      onRemind={(offset) => void setReminderOffset(entry, offset)}
     />
   );
 }

@@ -5,6 +5,7 @@ import { Pressable, TextInput, View } from 'react-native';
 
 import type { CalEntry } from '@/calendar/entries';
 import { repeatKind, ruleFor } from '@/calendar/rrule';
+import { REMIND_OFFSETS } from '@/calendar/service';
 import { hhmm } from '@/calendar/time';
 import { ChangedMark } from '@/components/ChangedMark';
 import { useTheme } from '@/theme';
@@ -16,7 +17,7 @@ import { pressedStyle } from '../ui/motion';
 import { Sheet } from '../ui/Sheet';
 import { TimeWheel } from '../ui/TimeWheel';
 import { EntryRows } from './MonthView';
-import { dateText, durText } from './parts';
+import { dateText, durText, remindText } from './parts';
 
 const DURATIONS = [15, 30, 60, 120] as const;
 const durKey = (d: number) => `cal.dur_${d}`;
@@ -24,6 +25,40 @@ type RepeatKind = 'none' | 'daily' | 'weekly' | 'monthly';
 const REPEATS: RepeatKind[] = ['none', 'daily', 'weekly', 'monthly'];
 
 export type AddDraft = { date: string; start: number; duration: number };
+
+/** The mock's A4 shows «за 10 мин»: a timed to-do added by hand rings 10 min before unless the person picks another. */
+export const DEFAULT_REMIND = 10;
+const remindId = (o: number | null) => (o === null ? 'none' : String(o));
+
+/**
+ * «за 10 мин · за 30 мин · за час · за день · нет» (calendar.md «Reminder of a to-do»): the existing v5 chips, the
+ * picked one `selected`. `series`: a repeat — the choice is the whole series' (one occurrence has no alert of its own).
+ */
+function RemindChips({ value, onPick, testID, series }: { value: number | null; onPick: (o: number | null) => void; testID: string; series?: boolean }) {
+  const { t } = useTranslation();
+  return (
+    <View style={{ gap: 6, paddingBottom: 8 }}>
+      <View testID={testID} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        {REMIND_OFFSETS.map((o) => (
+          <Chip
+            key={remindId(o)}
+            testID={`${testID}-${remindId(o)}`}
+            label={remindText(t, o)}
+            variant={value === o ? 'selected' : 'tonal'}
+            selected={value === o}
+            onPress={() => onPick(o)}
+            style={{ minHeight: 34, paddingHorizontal: 12 }}
+          />
+        ))}
+      </View>
+      {series ? (
+        <AppText testID={`${testID}-series`} variant="footnote" color="ink2">
+          {t('cal.remind_series')}
+        </AppText>
+      ) : null}
+    </View>
+  );
+}
 
 /**
  * A4 «Добавить в пустое время»: the title, «Пт, 20 нояб · 15:00», the length (15 мин · 30 мин · 1 ч · 2 ч),
@@ -38,7 +73,7 @@ export function AddSheet({
   draft: AddDraft;
   onChange: (d: AddDraft) => void;
   onClose: () => void;
-  onAdd: (a: { title: string; date: string; start: number | null; duration: number | null; rrule: string | null }) => void;
+  onAdd: (a: { title: string; date: string; start: number | null; duration: number | null; rrule: string | null; reminderOffset: number | null }) => void;
 }) {
   const theme = useTheme();
   const { t, i18n } = useTranslation();
@@ -47,6 +82,8 @@ export function AddSheet({
   const [more, setMore] = useState(false);
   const [repeat, setRepeat] = useState<RepeatKind>('none');
   const [untimed, setUntimed] = useState(false);
+  const [remind, setRemind] = useState<number | null>(DEFAULT_REMIND);
+  const [editRemind, setEditRemind] = useState(false);
   const ok = title.trim().length > 0;
   const add = () => {
     if (!ok) return;
@@ -56,6 +93,7 @@ export function AddSheet({
       start: untimed ? null : draft.start,
       duration: untimed ? null : draft.duration,
       rrule: untimed ? null : ruleFor(repeat),
+      reminderOffset: untimed ? null : remind,
     });
   };
   return (
@@ -75,7 +113,7 @@ export function AddSheet({
           style={{ flex: 1, fontFamily: theme.type.headline.fontFamily, fontSize: 20, lineHeight: 25, color: c.ink, paddingVertical: 8 }}
         />
       </View>
-      <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
         <Pressable
           testID="cal-add-when"
           accessibilityRole="button"
@@ -87,7 +125,34 @@ export function AddSheet({
             {untimed ? `${dateText(i18n.language, draft.date, 'short')} · ${t('cal.no_time')}` : `${dateText(i18n.language, draft.date, 'short')} · ${hhmm(draft.start)}`}
           </AppText>
         </Pressable>
+        {untimed ? null : (
+          <Pressable
+            testID="cal-add-remind"
+            accessibilityRole="button"
+            accessibilityLabel={t('cal.remind_a11y', { value: remindText(t, remind) })}
+            accessibilityState={{ expanded: editRemind }}
+            onPress={() => setEditRemind((v) => !v)}
+            style={({ pressed }) => [timeChip(c.paper2), pressedStyle(pressed)]}
+          >
+            <Bell size={18} color={c.ink} strokeWidth={theme.icon.strokeWidth} />
+            <AppText style={{ fontFamily: theme.type.headline.fontFamily, fontSize: 15, lineHeight: 18, color: c.ink, fontVariant: ['tabular-nums'] }}>
+              {remindText(t, remind)}
+            </AppText>
+          </Pressable>
+        )}
       </View>
+      {editRemind && !untimed ? (
+        <View style={{ paddingTop: 6 }}>
+          <RemindChips
+            testID="cal-add-remind-chips"
+            value={remind}
+            onPick={(o) => {
+              setRemind(o);
+              setEditRemind(false);
+            }}
+          />
+        </View>
+      ) : null}
       {untimed ? null : (
         <View style={{ flexDirection: 'row', gap: 8, paddingTop: 6, paddingBottom: 10 }}>
           {DURATIONS.map((d) => (
@@ -158,7 +223,7 @@ export function EntrySheet({
   onRepeat,
   onDone,
   onDelete,
-  onReminder,
+  onRemind,
 }: {
   entry: CalEntry;
   onClose: () => void;
@@ -167,7 +232,8 @@ export function EntrySheet({
   onRepeat: (rrule: string | null) => void;
   onDone: () => void;
   onDelete: () => void;
-  onReminder: () => void;
+  /** «Напомнить» picked: minutes before the start, null = none (the whole series for a repeat). */
+  onRemind: (offset: number | null) => void;
 }) {
   const theme = useTheme();
   const { t, i18n } = useTranslation();
@@ -179,8 +245,11 @@ export function EntrySheet({
   const [dur, setDur] = useState<number | null>(entry.duration ?? 60);
   const kind = repeatKind(entry.rrule);
   const range = entry.start !== null ? (entry.duration ? `${hhmm(entry.start)}–${hhmm(entry.start + entry.duration)} · ${durText(t, entry.duration)}` : hhmm(entry.start)) : t('cal.all_day_short');
-  const offsets = entry.remind?.offsets ?? [];
-  const remind = offsets.length > 0 ? t('cal.remind_before', { time: durText(t, Math.max(...offsets)) }) : t('cal.remind_none');
+  const [editRemind, setEditRemind] = useState(false);
+  const [offset, setOffset] = useState<number | null>(entry.offset ?? null);
+  // A to-do without a time has no alert (calendar.md: ignored on an all-day one).
+  const canRemind = entry.kind === 'task' && entry.start !== null;
+  const remind = canRemind ? remindText(t, offset) : t('cal.remind_none');
   const commitTitle = () => {
     const v = title.trim();
     if (v && v !== entry.title) onRename(v);
@@ -270,7 +339,27 @@ export function EntrySheet({
           ))}
         </View>
       ) : null}
-      {row({ testID: 'cal-card-remind', icon: Bell, label: t('cal.remind'), value: remind, onPress: entry.remind ? onReminder : undefined })}
+      {row({
+        testID: 'cal-card-remind',
+        icon: Bell,
+        label: t('cal.remind'),
+        value: remind,
+        a11y: canRemind ? t('cal.remind_a11y', { value: remind }) : undefined,
+        onPress: canRemind ? () => setEditRemind((v) => !v) : undefined,
+      })}
+      {editRemind && canRemind ? (
+        <RemindChips
+          testID="cal-card-remind-chips"
+          value={offset}
+          series={!!entry.rrule}
+          onPick={(o) => {
+            setEditRemind(false);
+            if (o === offset) return;
+            setOffset(o);
+            onRemind(o);
+          }}
+        />
+      ) : null}
       <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
         <View style={{ flex: 1 }}>
           <Button

@@ -11,7 +11,7 @@ import { tasksState } from '@/tasks/store';
 import { newId } from '@/utils/id';
 
 import type { CalEntry } from './entries';
-import { taskEntryKey } from './entries';
+import { remindEditOf, taskEntryKey } from './entries';
 import { calState, type CalFocus } from './store';
 import { addDaysIso, atMinutes, hhmm, isoDate, isoWithOffset, minutesOf, phoneTz } from './time';
 
@@ -26,7 +26,7 @@ export type CalPatchPayload = {
   key: string;
   entryKey: string;
   clientId: string;
-  body: Pick<TaskPatchIn, 'start_at' | 'duration_min' | 'rrule' | 'occurrence_at' | 'scope' | 'tz'>;
+  body: Pick<TaskPatchIn, 'start_at' | 'duration_min' | 'rrule' | 'occurrence_at' | 'scope' | 'tz' | 'reminder_offset_min'>;
   before: { startMs: number | null; duration: number | null };
   at: string;
   actionId?: string | null;
@@ -115,7 +115,15 @@ export function settleTimeEdits(tasks: TaskOut[]): void {
   const s = calState();
   let changed = false;
   const timeEdits = { ...s.timeEdits };
+  const remindEdits = { ...s.remindEdits };
   for (const t of tasks) {
+    // «Напомнить» by hand: the server's task has that alert now.
+    const r = remindEditOf(remindEdits, t);
+    if (r && t.reminder_offset_min !== undefined && t.reminder_offset_min === r.offset) {
+      delete remindEdits[t.id];
+      if (t.client_id) delete remindEdits[`local:${t.client_id}`];
+      changed = true;
+    }
     const key = taskEntryKey(t.id, null);
     const e = timeEdits[key];
     if (!e || !t.start_at) continue;
@@ -124,7 +132,7 @@ export function settleTimeEdits(tasks: TaskOut[]): void {
       changed = true;
     }
   }
-  if (changed) s.set({ timeEdits });
+  if (changed) s.set({ timeEdits, remindEdits });
 }
 
 /** GET /v1/calendar of a range (≤ 61 days): plan steps and a check of what the phone counts; kept for offline. */
@@ -161,6 +169,17 @@ function dropTimeEdit(entryKey: string, clientId?: string): void {
   s.set({ timeEdits });
 }
 
+/** By the key the change was made on (a local key, or the server id) and by the server id it has now. */
+function dropRemindEdit(key: string, clientId?: string): void {
+  const s = calState();
+  const keys = [key, taskSink.serverId(key)].filter((k): k is string => !!k && !!s.remindEdits[k]);
+  const mine = keys.filter((k) => !clientId || s.remindEdits[k]!.clientId === clientId);
+  if (mine.length === 0) return;
+  const remindEdits = { ...s.remindEdits };
+  for (const k of mine) delete remindEdits[k];
+  s.set({ remindEdits });
+}
+
 function dropOccEdit(entryKey: string, clientId?: string): void {
   const s = calState();
   const e = s.occEdits[entryKey];
@@ -192,6 +211,7 @@ async function sendPatch(e: OutboxEntry): Promise<void> {
   if (!id) {
     if (await waitingCreate(p.key)) throw new Error('task_not_synced');
     dropTimeEdit(p.entryKey, p.clientId);
+    dropRemindEdit(p.key, p.clientId);
     return; // lives on this phone only
   }
   const call = (version: number) => getApi().patchTask(id, { version, client_id: p.clientId, ...p.body });
@@ -209,8 +229,12 @@ async function sendPatch(e: OutboxEntry): Promise<void> {
     written(out);
     // A `following` change ends the series and starts a new task: this key is gone, so is its edit.
     dropTimeEdit(p.entryKey, p.clientId);
+    dropRemindEdit(p.key, p.clientId);
   } catch (err) {
-    if (!isRetryable(err)) dropTimeEdit(p.entryKey, p.clientId);
+    if (!isRetryable(err)) {
+      dropTimeEdit(p.entryKey, p.clientId);
+      dropRemindEdit(p.key, p.clientId);
+    }
     throw err;
   }
 }
@@ -297,6 +321,8 @@ export async function addTimed(i: {
   start: number | null;
   duration: number | null;
   rrule?: string | null;
+  /** «Напомнить»: minutes before the start, null = no alert (only with a time). */
+  reminderOffset?: number | null;
 }): Promise<TaskOut | null> {
   if (i.start === null) {
     return addTask({ list: 'todo', title: i.title, dueDate: i.date, stripText: i18n.t('cal.added_day', { day: dayWords(i.date), title: i.title.trim() }) });
@@ -306,7 +332,7 @@ export async function addTimed(i: {
     list: 'todo',
     title: i.title,
     dueDate: i.date,
-    time: { start_at: isoWithOffset(at), duration_min: i.duration, tz: phoneTz(), rrule: i.rrule ?? null },
+    time: { start_at: isoWithOffset(at), duration_min: i.duration, tz: phoneTz(), rrule: i.rrule ?? null, reminder_offset_min: i.reminderOffset ?? null },
     stripText: i18n.t('cal.added', { day: dayWords(i.date), time: rangeText(i.start, i.duration), title: i.title.trim() }),
   });
 }
@@ -553,4 +579,37 @@ export async function setRepeat(e: CalEntry, rrule: string | null): Promise<stri
   const series: CalEntry = { ...e, key: taskEntryKey(t.id, null), occurrenceAt: null, startMs, start: minutesOf(startMs), date: isoDate(startMs), rrule: t.rrule ?? null };
   tasksState().set({ tasks: { ...tasksState().tasks, [t.id]: { ...t, rrule } } });
   return moveEntry(series, { date: series.date, start: series.start!, duration: t.duration_min ?? e.duration }, 'all', { rrule, strip: false });
+}
+
+/** «Напомнить» of the add sheet and the card (calendar.md «Reminder of a to-do»): 10 · 30 · 60 · 1440 min, null = none. */
+export const REMIND_OFFSETS = [10, 30, 60, 1440, null] as const;
+
+/**
+ * The card's «Напомнить»: the task's one alert, `offset` minutes before its start (null = none). The whole task — for an
+ * occurrence of a repeat the series' (one occurrence cannot have its own: the server answers 422), so never with
+ * `occurrence_at` / `scope`. Shown at once (offline too), one `calendar.patch` row; its answer or /sync settles it.
+ * A to-do without a time has no alert. Returns the outbox row id (null: nothing changed or before consent).
+ */
+export async function setReminderOffset(e: CalEntry, offset: number | null): Promise<string | null> {
+  if (e.kind !== 'task') return null;
+  const t = findTask(e.id);
+  if (!t || !t.start_at) return null;
+  const edit = remindEditOf(calState().remindEdits, t);
+  const now = edit ? edit.offset : t.reminder_offset_min !== undefined ? t.reminder_offset_min : (e.offset ?? null);
+  if (now === offset) return null;
+  const clientId = newId();
+  const s = calState();
+  s.set({ remindEdits: { ...s.remindEdits, [t.id]: { offset, clientId } } });
+  if (!canQueue()) return null; // the phone only: nothing to send to
+  const payload: CalPatchPayload = {
+    key: t.id,
+    entryKey: taskEntryKey(t.id, null),
+    clientId,
+    body: { reminder_offset_min: offset },
+    before: { startMs: null, duration: null },
+    at: nowIso(),
+  };
+  const rowId = (await (await getOutbox()).enqueue('calendar.patch', payload)).id;
+  kick();
+  return rowId;
 }

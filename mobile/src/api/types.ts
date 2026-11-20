@@ -1107,6 +1107,11 @@ export type TaskOut = {
   rrule?: string | null;
   all_day?: boolean;
   source?: 'assistant' | 'user' | null;
+  /**
+   * calendar.md «Reminder of a to-do»: minutes before `start_at` of its one linked alert, null = no alert;
+   * absent from an older server (undefined).
+   */
+  reminder_offset_min?: number | null;
   /** The person's clock: `{date, start: "9:00", end}` or null. */
   local?: TaskLocal | null;
 };
@@ -1150,7 +1155,8 @@ export type CalendarEntryOut = {
   source: 'assistant' | 'user' | null;
   item_id: string | null;
   page_id: string | null;
-  reminder: { id: string; offsets: number[] } | null;
+  reminder: { id: string; offsets: number[]; offset_min?: number | null } | null;
+  reminder_offset_min?: number | null;
   plan: { id: string; title: string } | null;
   version: number;
 };
@@ -1170,6 +1176,8 @@ export type TaskCreateIn = {
   duration_min?: number | null;
   tz?: string | null;
   rrule?: string | null;
+  /** calendar.md: minutes before `start_at` (10, 30, 60, 1440 in the UI), null = no alert. */
+  reminder_offset_min?: number | null;
 };
 
 /**
@@ -1191,6 +1199,8 @@ export type TaskPatchIn = {
   duration_min?: number | null;
   tz?: string | null;
   rrule?: string | null;
+  /** calendar.md: the whole task's alert (never with `occurrence_at` / `scope: "this"`: 422). */
+  reminder_offset_min?: number | null;
   /** The entry's `occurrence_at` of a repeating task, with `scope`. */
   occurrence_at?: string;
   scope?: TaskScope;

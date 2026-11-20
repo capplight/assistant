@@ -1,7 +1,7 @@
 import type { CalendarEntryOut, FireOut, ReminderOut, TaskOccurrenceOut, TaskOut } from '@/api/types';
 
 import { occurrences } from './rrule';
-import type { OccEdit, TimeEdit } from './store';
+import type { OccEdit, RemindEdit, TimeEdit } from './store';
 import { atMinutes, dayStart, isoDate, minutesOf, addDaysIso } from './time';
 
 /**
@@ -37,6 +37,11 @@ export type CalEntry = {
   version: number;
   /** The record's linked reminder (the card's «Напомнить»). */
   remind: { id: string; offsets: number[] } | null;
+  /**
+   * calendar.md «Reminder of a to-do»: the task's alert in minutes before the start as the person sees it (a change
+   * by hand wins), null = none. The whole series' for an occurrence (one occurrence has no alert of its own).
+   */
+  offset?: number | null;
 };
 
 export type EntrySources = {
@@ -52,8 +57,23 @@ export type EntrySources = {
   timeEdits: Record<string, TimeEdit>;
   occEdits: Record<string, OccEdit>;
   seriesEnds: Record<string, { from: number }>;
+  /** «Напомнить» by hand on its way, by task key (server id, or `local:<client_id>` until it came). */
+  remindEdits?: Record<string, RemindEdit>;
   server: Record<string, CalendarEntryOut>;
 };
+
+/** The edit of «Напомнить» of a task: by its key, or by the local key it had before the server answered. */
+export function remindEditOf(edits: Record<string, RemindEdit> | undefined, t: Pick<TaskOut, 'id' | 'client_id'>): RemindEdit | undefined {
+  if (!edits) return undefined;
+  return edits[t.id] ?? (t.client_id ? edits[`local:${t.client_id}`] : undefined);
+}
+
+/** The alert of a timed task in minutes before its start, null = none (an older copy: its linked reminder). */
+export function offsetOf(t: TaskOut, edit: RemindEdit | undefined, linked: ReminderOut | undefined): number | null {
+  if (edit) return edit.offset;
+  if (t.reminder_offset_min !== undefined) return t.reminder_offset_min;
+  return linked && linked.offsets.length > 0 ? Math.max(...linked.offsets) : null;
+}
 
 export const taskEntryKey = (taskId: string, occMs: number | null) => `task:${taskId}:${occMs ?? ''}`;
 
@@ -81,6 +101,7 @@ export function buildEntries(src: EntrySources, from: string, to: string): CalEn
   const doneOfTask = new Map<string, boolean>();
 
   for (const t of tasks) {
+    const linked = t.item_id ? remByItem.get(t.item_id) : undefined;
     const base = {
       kind: 'task' as const,
       id: t.id,
@@ -91,10 +112,8 @@ export function buildEntries(src: EntrySources, from: string, to: string): CalEn
       changedBy: t.assistant_action_id ?? null,
       plan: null,
       version: t.version,
-      remind: (() => {
-        const r = t.item_id ? remByItem.get(t.item_id) : undefined;
-        return r && t.start_at ? { id: r.id, offsets: r.offsets } : null;
-      })(),
+      remind: linked && t.start_at ? { id: linked.id, offsets: linked.offsets } : null,
+      offset: offsetOf(t, remindEditOf(src.remindEdits, t), linked),
     };
     const startMs = t.start_at ? Date.parse(t.start_at) : NaN;
     if (Number.isFinite(startMs)) {
