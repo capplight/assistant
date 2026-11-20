@@ -2,7 +2,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { Copy, Search, Share2 } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, View } from 'react-native';
+import { BackHandler, Pressable, View } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 
 import { dayOffset, dayText, timeText } from '@/alarms/format';
@@ -14,7 +14,16 @@ import { AppText } from '@/components/AppText';
 import { PendingAnswerCard } from '@/components/PendingAnswerCard';
 import { useMinuteClock, useMissed } from '@/components/ReminderLists';
 import { PageTiles, ShoppingLine } from '@/components/TodaySheet';
-import { BackToToday, DayFade, DayRows, EmptyDay, PlaceRows } from '@/components/today/DayView';
+import { BackDate, DayFade, DayRows, EmptyDay, PlaceRows } from '@/components/today/DayView';
+import { TimeOfDayBlock } from '@/components/today/TimeOfDay';
+import { EntryCard } from '@/components/calendar/EntryCard';
+import type { CalEntry } from '@/calendar/entries';
+import { moveEntry, setEntryDone } from '@/calendar/service';
+import { calState } from '@/calendar/store';
+import { minutesOf as minuteOfDay } from '@/calendar/time';
+import { useCalendarEntries } from '@/calendar/useEntries';
+import { changeTask } from '@/tasks/edit';
+import { todPeriod, todPhrase } from '@/today/timeOfDay';
 import { FirstPhrases, RecentSaved, WeekStrip, weekStripHeight } from '@/components/today/EmptyToday';
 import { useChrome } from '@/store/chrome';
 import { useView } from '@/store/view';
@@ -110,7 +119,7 @@ export default function TodayScreen() {
 
   // To-dos for today: not done with a day ≤ today (overdue first); ticked today stay, crossed out.
   const todos = liveTasks(tasks, 'todo')
-    .filter((x) => !!x.due_date && x.due_date <= today)
+    .filter((x) => !!x.due_date && x.due_date <= today && !x.start_at)
     .filter((x) => !isDone(x, ticks) || doneAt(x, ticks) >= dayStart)
     .sort((a, b) => (a.due_date ?? '').localeCompare(b.due_date ?? ''))
     .slice(0, 20);
@@ -118,10 +127,34 @@ export default function TodayScreen() {
   const tomorrowRings = upcoming({ ...alarmSrc, now }, dayStart + 2 * DAY - now).filter(
     (r) => r.fireAt >= dayStart + DAY,
   );
-  const tomorrowTodos = liveTasks(tasks, 'todo').filter((x) => x.due_date === addDays(today, 1) && !isDone(x, ticks));
+  const tomorrowTodos = liveTasks(tasks, 'todo').filter((x) => x.due_date === addDays(today, 1) && !isDone(x, ticks) && !x.start_at);
+  // Ф-89: timed to-dos (and reminders) of today and tomorrow, as the calendar counts them.
+  const tomorrow = addDays(today, 1);
+  const calEntries = useCalendarEntries(today, tomorrow);
+  const timedToday = calEntries.filter((e) => e.date === today && e.start !== null);
+  const timedTasksToday = timedToday.filter((e) => e.kind === 'task');
+  const tomorrowEntries = calEntries.filter((e) => e.date === tomorrow);
+  const [card, setCard] = useState<string | null>(null);
+  const cardEntry = card ? (calEntries.find((e) => e.key === card) ?? null) : null;
+  const openEntry = (e: CalEntry) => {
+    if (e.kind === 'reminder') return router.push({ pathname: '/reminder-new', params: { text: e.title, editId: e.id } });
+    setCard(e.key);
+  };
+  const toggleEntry = (e: CalEntry) => void setEntryDone(e, !e.done);
+  const toTomorrow = (e: CalEntry) => {
+    if (e.start !== null) void moveEntry(e, { date: tomorrow, start: e.start, duration: e.duration });
+    else void changeTask(e.id, { due_date: tomorrow }, t('todayTime.moved_tomorrow', { title: e.title }));
+  };
+  // calendar-time.md §2 «Календарь ›»: the calendar «День» on the chosen date (the tab stays «Сегодня»).
+  const openCalendar = (d: string) => {
+    const p = pages.find((x) => x.templateKey === 'tasks');
+    if (!p) return;
+    calState().set({ view: 'day', date: d === today ? null : d });
+    router.navigate({ pathname: '/page/[id]', params: { id: p.id } });
+  };
 
-  const total = todos.length + rings.length + missed.length;
-  const done = todos.filter((x) => isDone(x, ticks)).length;
+  const total = todos.length + rings.length + missed.length + timedTasksToday.length;
+  const done = todos.filter((x) => isDone(x, ticks)).length + timedTasksToday.filter((e) => e.done).length;
 
   // Money: this month, against the budget when one is set (Ф-55: «осталось в бюджете» only with a budget).
   const live = liveEntries(expenses.entries, expenses.edits);
@@ -265,6 +298,15 @@ export default function TodayScreen() {
       start: minutesOf(r.fireAt),
       title: r.title,
     })),
+    ...timedTasksToday.map((e) => ({
+      id: e.key,
+      testID: `plan-${e.key}`,
+      start: e.start!,
+      duration: e.duration ?? undefined,
+      title: e.title,
+      done: e.done,
+      onPress: () => openEntry(e),
+    })),
   ];
   const soon = plan.find((p) => p.state === 'now');
   const planEmpty = planItems.length === 0;
@@ -299,8 +341,12 @@ export default function TodayScreen() {
   const firstStepsRaw = firstSteps({ ageDays: ageDays0, note: hasRecord, reminder: hasReminder, expense: hasExpense });
   const steps = recordsLoading ? { ...firstStepsRaw, show: false } : firstStepsRaw;
   const blank = ageDays0 < 7 && records !== null && !hasRecord && !hasReminder && !hasExpense;
-  const phrase =
-    emptyDay && missed.length === 0
+  // calendar-time.md §9: «Сегодня» by the time of day — the 2-line phrase of the period (when it has something to say).
+  const period = todPeriod({ now: minuteOfDay(now), today: timedToday, tomorrowCount: tomorrowEntries.length });
+  const todText = missed.length === 0 ? todPhrase(period, { now: minuteOfDay(now), today: timedToday, tomorrowCount: tomorrowEntries.length }, t) : null;
+  const phrase = todText
+    ? todText
+    : emptyDay && missed.length === 0
       ? emptyPhrase({ today, blank, notForget: forgetOpen, load, weekday: (d) => weekdayOf(d, 'long') }, t)
       : counts
         ? `${head}\n${counts}.`
@@ -347,6 +393,16 @@ export default function TodayScreen() {
     setChosen(null);
     setWeekShift(0);
   };
+  // Ф-91: the system back does what the arrow does — from another day back to today.
+  useEffect(() => {
+    if (!day) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      backToToday();
+      return true;
+    });
+    return () => sub.remove();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-armed per shown day
+  }, [day]);
   const wd = day ? new Date(`${day}T00:00:00`).getDay() : 0;
   const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
   let dayMeta = '';
@@ -577,34 +633,32 @@ export default function TodayScreen() {
       place="today"
       peek={['assistant', 'notes']}
       title={t('today.today')}
-      meta={day ? dayMeta : dateLine}
+      meta={day ? undefined : dateLine}
+      metaNode={day ? <BackDate label={dayMeta} onPress={backToToday} /> : undefined}
       stripMeta={stripDate}
       phrase={dayPhrase ?? phrase}
       sheetExtra={<WeekStrip days={week} onDay={openDay} onWeek={stepWeek} />}
       sheetExtraHeight={weekStripHeight(theme.m)}
       askRoom
-      accessory={day ? <BackToToday onPress={backToToday} /> : undefined}
-      actions={
-        day
-          ? []
-          : [
-              {
-                key: 'search',
-                icon: Search,
-                label: t('today.search'),
-                onPress: () => router.navigate('/search'),
-                testID: 'today-search',
-              },
-            ]
-      }
+      // today-day-view.html: the search stays on the right on another day too.
+      actions={[
+        {
+          key: 'search',
+          icon: Search,
+          label: t('today.search'),
+          onPress: () => router.navigate('/search'),
+          testID: 'today-search',
+        },
+      ]}
     >
       <PendingAnswerCard />
+      {cardEntry ? <EntryCard entry={cardEntry} onClose={() => setCard(null)} /> : null}
       {day ? (
         <DayFade dayKey={day} dir={dir}>
           {dayContent}
         </DayFade>
       ) : (
-        <DayFade dayKey={today} dir={dir}>
+        <DayFade dayKey={`${today}:${period}`} dir={dir}>
           {missedRows.length > 0 ? (
             <View testID="today-missed" style={{ marginBottom: theme.space[3] }}>
               <SectionHead first title={t('today.missed_title')} right={String(missedRows.length)} />
@@ -674,6 +728,15 @@ export default function TodayScreen() {
             // Ф-84 «Сводка»: missed → «Не забыть» → (first days) «Три первые фразы» → the nearest day → «Недавно
             // сохранили». A section with nothing to show is not there (no empty blocks).
             <View testID="today-list">
+              {/* A6: «План дня · Календарь ›» is always there; an empty day says «свободно» (the Ф-84 «Сводка» follows). */}
+              {tasksPage ? (
+                <View testID="today-plan-free">
+                  <SectionHead first={missedRows.length === 0} title={t('today.plan')} link={t('todayTime.calendar')} onLink={() => openCalendar(today)} linkTestID="today-calendar" />
+                  <Row first onPress={() => openCalendar(today)} accessibilityLabel={`${t('today.plan')}: ${t('todayTime.plan_free')}`}>
+                    <AppText style={{ flex: 1, color: theme.colors.ink2 }}>{t('todayTime.plan_free')}</AppText>
+                  </Row>
+                </View>
+              ) : null}
               {notForget}
               {steps.show ? (
                 <FirstPhrases
@@ -739,12 +802,26 @@ export default function TodayScreen() {
             </View>
           ) : (
             <View testID="today-list">
+              {period !== 'morning' ? (
+                <TimeOfDayBlock
+                  period={period}
+                  now={nowMin}
+                  today={calEntries.filter((e) => e.date === today)}
+                  tomorrow={tomorrowEntries}
+                  tomorrowName={weekdayOf(tomorrow, 'long')}
+                  onCalendar={(next) => openCalendar(next ? tomorrow : today)}
+                  onOpen={openEntry}
+                  onToggle={toggleEntry}
+                  onTomorrow={toTomorrow}
+                />
+              ) : (
+                <>
               <SectionHead
                 first={missedRows.length === 0}
                 title={t('today.plan')}
-                link={tasksPage ? t('today.all_tasks_short') : undefined}
-                onLink={() => openPage('tasks')}
-                linkTestID="today-all-tasks"
+                link={tasksPage ? t('todayTime.calendar') : undefined}
+                onLink={() => openCalendar(today)}
+                linkTestID="today-calendar"
                 testID="today-plan-head"
               />
               <DayPlan testID="today-plan" items={planItems} now={nowMin} />
@@ -772,6 +849,8 @@ export default function TodayScreen() {
                   />
                 </ButtonRow>
               ) : null}
+                </>
+              )}
               {notForget}
             </View>
           )}
@@ -832,7 +911,7 @@ export default function TodayScreen() {
             </View>
           ) : null}
 
-          {!emptyDay && tomorrowRows.length > 0 ? (
+          {!emptyDay && period === 'morning' && tomorrowRows.length > 0 ? (
             <View testID="today-tomorrow">
               <SectionHead
                 title={t('today.tomorrow')}

@@ -943,6 +943,8 @@ export type ReminderOut = {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  /** calendar.md: 5…1440, or null = a point (the capsule). */
+  duration_min?: number | null;
 };
 
 export type FireState = 'planned' | 'fired' | 'acked' | 'snoozed' | 'missed' | 'cancelled';
@@ -1095,7 +1097,65 @@ export type TaskOut = {
   /** Ф-73: made or changed by the assistant within 24 h (by that action); null otherwise. */
   assistant_changed_at?: string | null;
   assistant_action_id?: string | null;
+  // --- Ф-89 calendar (docs/api/calendar.md): a to-do with a time ---
+  /** UTC start of a timed to-do; null = all-day on `due_date` (or no day). */
+  start_at?: string | null;
+  /** 5…1440, or null = a point in time. */
+  duration_min?: number | null;
+  tz?: string | null;
+  /** `FREQ=DAILY|WEEKLY|MONTHLY;INTERVAL;BYDAY;BYMONTHDAY;UNTIL`, counted from `start_at`. */
+  rrule?: string | null;
+  all_day?: boolean;
+  source?: 'assistant' | 'user' | null;
+  /** The person's clock: `{date, start: "9:00", end}` or null. */
+  local?: TaskLocal | null;
 };
+
+export type TaskLocal = { date: string; start: string | null; end: string | null };
+
+/** calendar.md «task_occurrences»: one occurrence of a repeating task that differs from the series. */
+export type TaskOccurrenceOut = {
+  id: string;
+  task_id: string;
+  /** The original start of the occurrence (UTC). */
+  occurrence_at: string;
+  start_at: string | null;
+  duration_min: number | null;
+  done_at: string | null;
+  skipped: boolean;
+  version: number;
+  seq: number;
+  updated_at: string;
+};
+
+export type CalendarEntryKind = 'task' | 'reminder' | 'plan_step';
+
+/** GET /v1/calendar `entries[]` (calendar.md): repeats expanded, local `date` / `start` / `end`. */
+export type CalendarEntryOut = {
+  key: string;
+  kind: CalendarEntryKind;
+  id: string;
+  occurrence_at: string | null;
+  title: string;
+  date: string;
+  all_day: boolean;
+  start_at: string | null;
+  end_at: string | null;
+  start: string | null;
+  end: string | null;
+  duration_min: number | null;
+  rrule: string | null;
+  moved: boolean;
+  done: boolean;
+  source: 'assistant' | 'user' | null;
+  item_id: string | null;
+  page_id: string | null;
+  reminder: { id: string; offsets: number[] } | null;
+  plan: { id: string; title: string } | null;
+  version: number;
+};
+
+export type CalendarOut = { tz: string; from: string; to: string; now: string | null; entries: CalendarEntryOut[] };
 
 /** POST /tasks (offline through the outbox: the same `client_id` → the same task). */
 export type TaskCreateIn = {
@@ -1105,6 +1165,11 @@ export type TaskCreateIn = {
   qty?: string | null;
   where?: string | null;
   due_date?: string | null;
+  /** calendar.md: a timed to-do (`start_at` with an offset; `due_date` follows it on the server). */
+  start_at?: string | null;
+  duration_min?: number | null;
+  tz?: string | null;
+  rrule?: string | null;
 };
 
 /**
@@ -1121,17 +1186,36 @@ export type TaskPatchIn = {
   where?: string | null;
   due_date?: string | null;
   list_key?: TaskListKey;
+  /** calendar.md: a time change goes alone (no title / qty / list_key in the same body). */
+  start_at?: string | null;
+  duration_min?: number | null;
+  tz?: string | null;
+  rrule?: string | null;
+  /** The entry's `occurrence_at` of a repeating task, with `scope`. */
+  occurrence_at?: string;
+  scope?: TaskScope;
 };
+
+/** calendar.md: `this` (one occurrence) · `following` (this and the next) · `all` (the series). */
+export type TaskScope = 'this' | 'following' | 'all';
 
 /** Week 11а `POST /tasks/clear-done` (today.md): the bought lines the person saw, one action. */
 export type TasksClearDoneIn = { client_id: string; list_key: TaskListKey; task_ids: string[] };
 export type TasksClearDoneOut = { tasks: TaskOut[]; action: ActionOut | null; page_patches: PagePatchOut[]; repeated: boolean };
 
 /** POST /tasks/{id}/done: one tap = one call. `done: false` = «Вернуть». */
-export type TaskDoneIn = { client_id: string; done: boolean };
+export type TaskDoneIn = { client_id: string; done: boolean; occurrence_at?: string };
 
 /** POST, PATCH, DELETE /tasks…, /done: the task as it is now and its action (null: nothing changed). */
-export type TaskWriteOut = { task: TaskOut | null; action: ActionOut | null; page_patches: PagePatchOut[]; repeated: boolean };
+export type TaskWriteOut = {
+  task: TaskOut | null;
+  action: ActionOut | null;
+  page_patches: PagePatchOut[];
+  repeated: boolean;
+  /** calendar.md: the occurrence a `this` change wrote, and the ended series of a `following` one. */
+  occurrence?: TaskOccurrenceOut | null;
+  previous_task?: TaskOut | null;
+};
 
 /** What [Да] of a suggestion does on the phone (today.md «Suggestions»). */
 export type SuggestionDo = { type: string; phrase: string | null; page_id: string | null };

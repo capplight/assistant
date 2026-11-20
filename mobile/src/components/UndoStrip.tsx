@@ -105,7 +105,9 @@ export function UndoStrip() {
           : null
       : strip.kind === 'deleted'
         ? t('notice.restore')
-        : t('common.undo');
+        : strip.kind === 'custom' && strip.undoLabel
+          ? strip.undoLabel
+          : t('common.undo');
 
   const undo = () => {
     hide(strip.id);

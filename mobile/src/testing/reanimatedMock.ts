@@ -24,7 +24,17 @@ module.exports = {
   __esModule: true,
   default: AnimatedNS,
   ...AnimatedNS,
-  useSharedValue: <T>(v: T) => React.useState(() => ({ value: v, get: () => v }))[0],
+  useSharedValue: <T>(v: T) =>
+    React.useState(() => {
+      const sv = {
+        value: v,
+        get: () => sv.value,
+        set: (x: T | ((prev: T) => T)) => {
+          sv.value = typeof x === 'function' ? (x as (prev: T) => T)(sv.value) : x;
+        },
+      };
+      return sv;
+    })[0],
   useAnimatedStyle: (fn: () => object) => fn(),
   useDerivedValue: <T>(fn: () => T) => ({ value: fn() }),
   useAnimatedReaction: () => undefined,
@@ -37,6 +47,12 @@ module.exports = {
     return v;
   },
   cancelAnimation: () => undefined,
+  // What Gesture Handler asks of Reanimated (Ф-89 calendar gestures); no native events fire under Jest.
+  useEvent: () => () => undefined,
+  useHandler: () => ({ doDependenciesDiffer: false, context: {} }),
+  useComposedEventHandler: () => () => undefined,
+  isSharedValue: (v: unknown) => !!v && typeof v === 'object' && 'value' in (v as object) && typeof (v as { get?: unknown }).get === 'function',
+  setGestureState: () => undefined,
   runOnJS: <T>(fn: T) => fn,
   Easing: { bezier: ease, linear: (t: number) => t, out: ease, in: ease, inOut: ease },
   ReduceMotion: { System: 'system', Always: 'always', Never: 'never' },

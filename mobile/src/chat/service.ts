@@ -1,3 +1,4 @@
+import { focusFromAssistant } from '@/calendar/service';
 import { router } from 'expo-router';
 
 import { looksLikeReminder } from '@/alarms/format';
@@ -249,7 +250,11 @@ function apply(answerId: string, e: ChatEvent): void {
       return;
     case 'action': {
       // Week 9: tasks it made show on «Покупки» / «Дела» at once, before /sync brings their records.
-      if (e.tasks && e.tasks.length > 0) taskSink.applyServer(e.tasks);
+      if (e.tasks && e.tasks.length > 0) {
+        taskSink.applyServer(e.tasks);
+        // Ф-89 §5: a timed to-do made or moved by the line — the calendar goes to its day and rings the block 1.5 s.
+        if (!e.undone && e.tasks.some((x) => !!x.start_at)) focusFromAssistant(e.tasks);
+      }
       // Week 12: «потратил 5000 на бензин» — the month total is counted by code from these at once.
       if (e.expenses && e.expenses.length > 0) applyExpenses(e.expenses);
       rememberActions(e.undone ? [e.action, e.undone] : [e.action]);

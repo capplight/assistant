@@ -95,7 +95,13 @@ export type OutboxKind =
   | 'kp.revert'
   | 'kp.sent'
   /** F-15 drafts: «Изменить» (PATCH), «Не надо» (DELETE), «Отправили?» (pending result). */
-  | 'kp.draft';
+  | 'kp.draft'
+  /** Ф-89 calendar (calendar.md): a block moved / resized / its repeat changed (PATCH /tasks/{id} with the time alone). */
+  | 'calendar.patch'
+  /** One occurrence of a repeating to-do done (POST /tasks/{id}/done with `occurrence_at`). */
+  | 'calendar.done'
+  /** A block deleted: the task, or one occurrence / this and the next ones (DELETE /tasks/{id}?occurrence_at&scope). */
+  | 'calendar.delete';
 
 export type OutboxStatus = 'pending' | 'sent' | 'failed';
 
@@ -236,6 +242,28 @@ export const OUTBOX_MIGRATIONS: readonly string[] = [
   `ALTER TABLE records ADD COLUMN tag TEXT;`,
   // v12 (step 8): the inline edit of the assistant (items.md `assistant_edit`, Ф-73)
   `ALTER TABLE records ADD COLUMN assistant_edit TEXT;`,
+  // v13 (Ф-89 calendar, calendar.md «Sync»): occurrences of repeating to-dos that differ from the series, and the
+  // phone's copy of GET /v1/calendar (plan steps; ±60 days kept so the grid opens without a connection)
+  `CREATE TABLE IF NOT EXISTS task_occurrences (
+     id TEXT PRIMARY KEY NOT NULL,
+     task_id TEXT NOT NULL,
+     occurrence_at TEXT NOT NULL,
+     start_at TEXT,
+     duration_min INTEGER,
+     done_at TEXT,
+     skipped INTEGER NOT NULL DEFAULT 0,
+     version INTEGER NOT NULL DEFAULT 1,
+     seq INTEGER NOT NULL DEFAULT 0,
+     updated_at TEXT NOT NULL
+   );
+   CREATE INDEX IF NOT EXISTS task_occurrences_task ON task_occurrences (task_id);
+   CREATE TABLE IF NOT EXISTS calendar_entries (
+     key TEXT PRIMARY KEY NOT NULL,
+     date TEXT NOT NULL,
+     json TEXT NOT NULL,
+     fetched_at INTEGER NOT NULL
+   );
+   CREATE INDEX IF NOT EXISTS calendar_entries_date ON calendar_entries (date);`,
 ];
 
 type Row = {

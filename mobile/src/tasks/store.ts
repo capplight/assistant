@@ -16,7 +16,7 @@ import { persistStorage } from '@/store/storage';
 export type Tick = { done: boolean; at: string; clientId?: string };
 
 /** Week 11а: a change of «Сколько» / «Когда» by hand not confirmed yet (it wins over /sync meanwhile). */
-export type TaskEdit = { qty?: string | null; due_date?: string | null; clientId: string };
+export type TaskEdit = { qty?: string | null; due_date?: string | null; title?: string; clientId: string };
 
 type State = {
   /** By server id, or `local:<client_id>` until POST /tasks answers. */

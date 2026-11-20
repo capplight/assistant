@@ -208,7 +208,7 @@ function kick(): void {
   if (canQueue() && !syncBlocked()) kickSync();
 }
 
-function findTask(key: string): TaskOut | undefined {
+export function findTask(key: string): TaskOut | undefined {
   const s = tasksState();
   return s.tasks[taskSink.serverId(key) ?? key] ?? s.tasks[key];
 }
@@ -218,7 +218,17 @@ function findTask(key: string): TaskOut | undefined {
  * row, as typed. The phone does not split «хлеб и молоко» into two: that reading is the
  * assistant's (or code's, if Ф-1 is taken on the server, `TASKS_RULES_FIRST`).
  */
-export async function addTask(i: { list: TaskListKey; title: string }): Promise<TaskOut | null> {
+export type TaskTime = { start_at: string; duration_min: number | null; tz: string; rrule: string | null };
+
+export async function addTask(i: {
+  list: TaskListKey;
+  title: string;
+  /** Ф-89: a to-do of a day («весь день») or with a time (calendar.md POST /tasks). */
+  dueDate?: string | null;
+  time?: TaskTime | null;
+  /** The strip's words instead of «Добавил в Дела: …» («Записал в Дела: пт, 15:00 — …»). */
+  stripText?: string;
+}): Promise<TaskOut | null> {
   const title = i.title.trim().slice(0, 200);
   if (!title) return null;
   const clientId = newId();
@@ -231,7 +241,7 @@ export async function addTask(i: { list: TaskListKey; title: string }): Promise<
     title,
     qty: null,
     where: null,
-    due_date: null,
+    due_date: i.dueDate ?? null,
     done: false,
     done_at: null,
     version: 0,
@@ -239,17 +249,30 @@ export async function addTask(i: { list: TaskListKey; title: string }): Promise<
     created_at: at,
     updated_at: at,
     deleted_at: null,
+    ...(i.time
+      ? { start_at: i.time.start_at, duration_min: i.time.duration_min, tz: i.time.tz, rrule: i.time.rrule, all_day: false, source: 'user' as const }
+      : {}),
   };
   const s = tasksState();
   s.set({ tasks: { ...s.tasks, [task.id]: task } });
   let rowId: string | null = null;
   if (canQueue()) {
-    const payload: TaskCreatePayload = { body: { client_id: clientId, list_key: i.list, title } };
+    const payload: TaskCreatePayload = {
+      body: {
+        client_id: clientId,
+        list_key: i.list,
+        title,
+        ...(i.dueDate && !i.time ? { due_date: i.dueDate } : {}),
+        ...(i.time ? { start_at: i.time.start_at, duration_min: i.time.duration_min, tz: i.time.tz, rrule: i.time.rrule } : {}),
+      },
+    };
     rowId = (await (await getOutbox()).enqueue('task.create', payload)).id;
     kick();
   }
   const page = pageForList(i.list);
-  const text = page
+  const text = i.stripText
+    ? i.stripText
+    : page
     ? i18n.t(page.templateKey === 'shopping' ? 'tasks.added_shop' : 'tasks.added_todo', { title })
     : i18n.t('tasks.added', { title });
   useUndo.getState().showCustom(text, () => void takeBackAdded(task.id, rowId), page?.id ?? null);
@@ -257,7 +280,7 @@ export async function addTask(i: { list: TaskListKey; title: string }): Promise<
 }
 
 /** «Отменить» of a row added here. */
-async function takeBackAdded(key: string, rowId: string | null): Promise<void> {
+export async function takeBackAdded(key: string, rowId: string | null): Promise<void> {
   const t = findTask(key);
   if (!t) return;
   const s = tasksState();

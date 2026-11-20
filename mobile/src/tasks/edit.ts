@@ -18,7 +18,7 @@ import { tasksState, type TaskEdit } from './store';
  * old value shown at once; an older answer without an action → the old value goes as a change of its own.
  */
 
-export type TaskChange = Pick<TaskPatchIn, 'qty' | 'due_date'>;
+export type TaskChange = Pick<TaskPatchIn, 'qty' | 'due_date' | 'title'>;
 export type TaskPatchPayload = { key: string; clientId: string; body: TaskChange; before: TaskChange; at: string; actionId?: string | null };
 
 const nowIso = () => new Date().toISOString();
@@ -27,7 +27,12 @@ const nowIso = () => new Date().toISOString();
 export function shownTask(t: TaskOut, edits: Record<string, TaskEdit>): TaskOut {
   const e = edits[t.id];
   if (!e) return t;
-  return { ...t, ...('qty' in e ? { qty: e.qty ?? null } : {}), ...('due_date' in e ? { due_date: e.due_date ?? null } : {}) };
+  return {
+    ...t,
+    ...('qty' in e ? { qty: e.qty ?? null } : {}),
+    ...('due_date' in e ? { due_date: e.due_date ?? null } : {}),
+    ...(e.title ? { title: e.title } : {}),
+  };
 }
 
 /** «Сколько» as a count for «− +»: empty = 1, «3» / «3 шт» = 3; anything else (``1 кг``) has no buttons. */
@@ -62,6 +67,7 @@ export async function changeTask(key: string, change: TaskChange, stripText: str
   const before: TaskChange = {};
   if ('qty' in change) before.qty = now.qty;
   if ('due_date' in change) before.due_date = now.due_date;
+  if ('title' in change) before.title = now.title;
   if (Object.keys(change).every((k) => (before as Record<string, unknown>)[k] === (change as Record<string, unknown>)[k])) return null;
   const clientId = newId();
   setEdit(t.id, { ...tasksState().edits[t.id], ...change, clientId });
@@ -109,7 +115,7 @@ export function settleMatchingEdits(tasks: TaskOut[]): void {
   for (const x of tasks) {
     const e = tasksState().edits[x.id];
     if (!e) continue;
-    const same = (['qty', 'due_date'] as const).every((k) => !(k in e) || (e[k] ?? null) === (x[k] ?? null));
+    const same = (['qty', 'due_date', 'title'] as const).every((k) => !(k in e) || (e[k] ?? null) === (x[k] ?? null));
     if (same) setEdit(x.id, null);
   }
 }

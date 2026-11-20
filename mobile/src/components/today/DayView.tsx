@@ -7,45 +7,37 @@ import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/ui/Button';
 import { PlaceTab, Row, RowMeta, SectionHead } from '@/components/ui/Leaf';
-import { plan as planGeometry, stickerColors, useTheme, type PlaceKey } from '@/theme';
+import { onPlace, plan as planGeometry, stickerColors, useTheme, type PlaceKey } from '@/theme';
 
 /**
  * QA v5-device-2 A8 (Ф-85, `today-day-view.html`, tokens `dayView`): a day of the week shown in place on «Сегодня» —
- * the sheet and the week stay, the paper shows that day. «К сегодня» stands where the search icon was.
+ * the sheet and the week stay, the paper shows that day; one back arrow left of the date returns to today.
  */
 
-/** «‹ К сегодня» — a 36 capsule on the paper colour, in the sheet's top row. */
-export function BackToToday({ onPress }: { onPress: () => void }) {
+/**
+ * Ф-91 (today-day-view.html, tokens `dayView.back`): while another day is shown, the ONE back arrow «‹» (40, chevron-left)
+ * sits left of the date; it and the system back go to today. No «К сегодня», no path. The search stays on the right.
+ */
+export function BackDate({ label, onPress }: { label: string; onPress: () => void }) {
   const theme = useTheme();
   const { t } = useTranslation();
+  const c = onPlace(theme.colors, 'today');
   return (
-    <Pressable
-      testID="today-back"
-      accessibilityRole="button"
-      accessibilityLabel={t('today.dv_back_a11y')}
-      onPress={onPress}
-      hitSlop={6}
-      style={({ pressed }) => ({
-        minHeight: 36,
-        borderRadius: 18,
-        paddingLeft: 8,
-        paddingRight: 14,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 2,
-        backgroundColor: theme.colors.paper,
-        opacity: pressed ? 0.8 : 1,
-      })}
-    >
-      <ChevronLeft size={18} color={theme.colors.ink} strokeWidth={2.2} />
-      <AppText
-        numberOfLines={1}
-        nativeID="v5-one-line"
-        style={{ fontFamily: theme.type.headline.fontFamily, fontSize: 15, lineHeight: 18, color: theme.colors.ink }}
+    <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 40 }}>
+      <Pressable
+        testID="today-back"
+        accessibilityRole="button"
+        accessibilityLabel={t('cal.back_today_a11y')}
+        onPress={onPress}
+        hitSlop={4}
+        style={({ pressed }) => ({ width: 48, height: 48, margin: -4, marginLeft: -14, alignItems: 'center', justifyContent: 'center', borderRadius: 24, opacity: pressed ? 0.6 : 1 })}
       >
-        {t('today.dv_back')}
+        <ChevronLeft size={22} color={c.ink} strokeWidth={theme.icon.strokeWidth} />
+      </Pressable>
+      <AppText testID="today-back-date" variant="sheetMeta" numberOfLines={1} style={{ color: c.ink2, flexShrink: 1, marginLeft: 6 }}>
+        {label}
       </AppText>
-    </Pressable>
+    </View>
   );
 }
 

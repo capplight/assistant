@@ -33,6 +33,9 @@ import type { SheetAction as StripAction, SheetBack } from '../ui/PlaceScreen';
 import { AppText } from '../AppText';
 import { ActionList, Button, Header, Icon, Sheet, type SheetAction } from '../ui';
 import { BudgetSheet } from '../BudgetSheet';
+import { VIEW_SWITCH_HEIGHT, ViewSwitch } from '../calendar/parts';
+import { calState, useCalendar } from '@/calendar/store';
+import { multiDayColumns } from '@/calendar/geometry';
 import { PageNameSheet } from '../PageNameSheet';
 import { Screen } from '../Screen';
 import { FindField, SearchMore } from '../SearchResults';
@@ -146,6 +149,8 @@ export function PageFrame({ page }: { page: Page }) {
   const { from } = useLocalSearchParams<{ from?: string }>();
   const fromMore = from === 'more';
   const shopping = useView((st) => st.shopMode === page.id);
+  const isTasks = page.templateKey === 'tasks';
+  const calView = useCalendar((st) => st.view);
 
   // The marker goes after 600 ms (Reduce Motion: the same, it is a colour, not a move).
   useEffect(() => {
@@ -340,7 +345,10 @@ export function PageFrame({ page }: { page: Page }) {
       }
       titleTestID="page-title"
       actions={headerActions}
-    />
+    >
+      {/* Ф-90: «Дела» — one switch «Список · День · 3 дня · Месяц» on the sheet (the list keeps its «+»). */}
+      {isTasks ? <ViewSwitch value={calView} week={multiDayColumns(theme.m.width) === 7} onChange={(v) => calState().set({ view: v, date: null })} /> : null}
+    </Header>
   );
   const top = (
     <View style={{ gap: theme.space[2] }}>
@@ -427,7 +435,7 @@ export function PageFrame({ page }: { page: Page }) {
         sub={slot?.sub}
         metaNode={slot?.metaNode}
         sheetExtra={slot?.sheetExtra}
-        sheetExtraHeight={slot?.sheetExtraHeight}
+        sheetExtraHeight={slot?.sheetExtraHeight ?? (isTasks && !shopping ? VIEW_SWITCH_HEIGHT : undefined)}
         hideTitle={slot?.hideTitle}
         {...(slot?.strip
           ? {

@@ -1,7 +1,9 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
+import { useCalendar } from '@/calendar/store';
 import { AppText } from '@/components/AppText';
+import { CalendarScreen } from '@/components/calendar/CalendarScreen';
 import { PageFrame } from '@/components/page/PageFrame';
 import { Screen } from '@/components/Screen';
 import { usePages } from '@/store/pages';
@@ -20,6 +22,8 @@ export default function PageScreen() {
   const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const page = usePages((s) => s.pages.find((p) => p.id === id));
+  // Ф-89 / Ф-90: «Дела» has four views; Day · 3 days · Month are the calendar (the list is the page tool).
+  const calView = useCalendar((s) => s.view);
   if (!page) {
     return (
       <Screen testID="page-missing" edges={['top']}>
@@ -27,5 +31,6 @@ export default function PageScreen() {
       </Screen>
     );
   }
+  if (page.templateKey === 'tasks' && calView !== 'list') return <CalendarScreen page={page} />;
   return <PageFrame page={page} />;
 }

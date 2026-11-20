@@ -39,21 +39,29 @@ export function WeekStrip({
   days,
   onDay,
   onWeek,
+  place = 'today',
+  range,
+  testID = 'today-week',
 }: {
   days: WeekDay[];
   onDay: (date: string) => void;
   onWeek?: (step: -1 | 1) => void;
+  /** Ф-89: the same week on the lilac sheet of «Дела» (the calendar). */
+  place?: PlaceKey;
+  /** «3 дня»: the shown days are one dark band (calendar-time.html `.rng`). */
+  range?: { from: string; to: string } | null;
+  testID?: string;
 }) {
   const theme = useTheme();
   const { t } = useTranslation();
-  const c = onPlace(theme.colors, 'today');
-  const bg = theme.colors.place.today;
+  const c = onPlace(theme.colors, place);
+  const bg = theme.colors.place[place];
   const small = theme.m.size === 'small';
   const anyChosen = days.some((d) => d.selected);
   const startX = useRef<number | null>(null);
   return (
     <View
-      testID="today-week"
+      testID={testID}
       nativeID="v5-week"
       accessibilityLabel={t('today.week')}
       accessibilityActions={
@@ -73,11 +81,20 @@ export function WeekStrip({
         const dx = e.nativeEvent.pageX - from;
         if (Math.abs(dx) > 48) onWeek(dx < 0 ? 1 : -1);
       }}
-      style={{ flexDirection: 'row', gap: 2, marginTop: small ? 10 : 14, marginHorizontal: small ? -4 : -6 }}
+      style={{ flexDirection: 'row', gap: range ? 0 : 2, marginTop: small ? 10 : 14, marginHorizontal: small ? -4 : -6 }}
     >
       {days.map((d) => {
-        const on = anyChosen ? !!d.selected : d.today;
-        const ring = anyChosen && d.today && !d.selected;
+        const inRange = !!range && d.date >= range.from && d.date <= range.to;
+        const on = range ? inRange : anyChosen ? !!d.selected : d.today;
+        const radius = !inRange
+          ? null
+          : {
+              borderTopLeftRadius: d.date === range!.from ? 18 : 0,
+              borderBottomLeftRadius: d.date === range!.from ? 18 : 0,
+              borderTopRightRadius: d.date === range!.to ? 18 : 0,
+              borderBottomRightRadius: d.date === range!.to ? 18 : 0,
+            };
+        const ring = (range ? !inRange : anyChosen && !d.selected) && d.today;
         const dots = Math.min(3, d.count);
         const label =
           d.count > 0
@@ -103,7 +120,7 @@ export function WeekStrip({
                 borderRadius: 18,
               },
               on
-                ? { backgroundColor: c.ink }
+                ? [{ backgroundColor: c.ink }, radius]
                 : ring
                   ? // QA v5-device-3 D11: the ring takes its 1.5 from the padding, so the number stays level with the others.
                     { borderWidth: 1.5, borderColor: c.ink, paddingVertical: 7 - 1.5 }

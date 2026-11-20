@@ -26,6 +26,7 @@ import { applySyncExtras } from '@/today/service';
 import { dedupSink } from '@/dedup/service';
 import { expensesSink } from '@/expenses/sink';
 import { kpSink } from '@/kp/service';
+import { calendarSink, settleTimeEdits } from '@/calendar/service';
 
 /**
  * Composition root: one API client, one sync engine, one capture service per app process.
@@ -179,7 +180,15 @@ export function getSyncEngine(): Promise<SyncEngine> {
         onAccountConsentRejected: () =>
           useOnboarding.getState().requireAccountConsent({ userId: '', switched: false }),
         reminders: reminderSink,
-        tasks: { ...taskSink, ...taskPatchSink },
+        tasks: {
+          ...taskSink,
+          ...taskPatchSink,
+          applyServer: (list) => {
+            taskPatchSink.applyServer(list);
+            settleTimeEdits(list);
+          },
+        },
+        calendar: calendarSink,
         actions: (acts) => {
           rememberActions(acts);
           noticeParsedLater(acts);

@@ -16,6 +16,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -74,6 +75,8 @@ export default function RootLayout() {
 
   const nav = theme.scheme === 'dark' ? DarkTheme : DefaultTheme;
   return (
+    // Ф-89: the calendar's drag / swipes are Gesture Handler gestures (recognised on the UI thread).
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <ShareIntentRoot>
       {/* QA v5-device-3 J3: one keyboard mechanism for the app — the footer rides with the keyboard on the UI thread. */}
       <KeyboardProvider>
@@ -101,6 +104,7 @@ export default function RootLayout() {
       </SafeAreaProvider>
       </KeyboardProvider>
     </ShareIntentRoot>
+    </GestureHandlerRootView>
   );
 }
 

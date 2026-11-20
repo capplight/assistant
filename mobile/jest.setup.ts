@@ -44,8 +44,14 @@ jest.mock('expo-splash-screen', () => ({ preventAutoHideAsync: jest.fn(async () 
 
 jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(async () => undefined),
+  selectionAsync: jest.fn(async () => undefined),
+  notificationAsync: jest.fn(async () => undefined),
   ImpactFeedbackStyle: { Light: 'light', Medium: 'medium', Heavy: 'heavy' },
+  NotificationFeedbackType: { Success: 'success', Warning: 'warning', Error: 'error' },
 }));
+
+// Ф-89: the calendar's drag and swipes (Gesture Handler on the UI thread) have no native side under Jest.
+require('react-native-gesture-handler/jestSetup');
 
 jest.mock('expo-localization', () => ({ getLocales: () => [{ languageCode: 'ru' }] }));
 

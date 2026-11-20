@@ -172,7 +172,7 @@ describe('A1: the strip folds in 260 ms and opens in 280 ms', () => {
 describe('A8: a day of the week in place', () => {
   const isoDay = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  it('a tap shows the day here (no «Дела»), «К сегодня» brings today back; an empty future day has «Добавить на …»', async () => {
+  it('a tap shows the day here (no «Дела»), the one back arrow brings today back (Ф-91); an empty future day has «Добавить на …»', async () => {
     resetApp();
     finishOnboarding('full');
     const now = new Date();
@@ -186,8 +186,10 @@ describe('A8: a day of the week in place', () => {
     expect(r.getPathname()).toBe('/');
     expect(screen.getByTestId(`week-${otherIso}`).props.accessibilityState.selected).toBe(true);
     expect(screen.getByTestId(`week-${isoDay(now)}`).props.accessibilityState.selected).toBe(false);
-    expect(screen.getByTestId('today-back')).toHaveTextContent('К сегодня');
-    expect(screen.queryByTestId('today-search')).toBeNull();
+    // Ф-91: no «К сегодня» — one arrow «‹» left of the date; the search stays on the right.
+    expect(screen.getByTestId('today-back').props.accessibilityLabel).toBe('Назад, к сегодняшнему дню');
+    expect(screen.queryByText('К сегодня')).toBeNull();
+    expect(screen.getByTestId('today-search')).toBeTruthy();
     if (other > now) {
       expect(screen.getByTestId('today-day-empty')).toBeTruthy();
       await fireEvent.press(screen.getByTestId('today-day-add'));

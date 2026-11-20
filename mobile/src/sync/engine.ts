@@ -17,6 +17,7 @@ import {
   remindersOf,
   suggestionsOf,
   tasksOf,
+  taskOccurrencesOf,
   type Api,
 } from '@/api/endpoints';
 import { ApiError, isOfflineError, isRetryable, SignInRequiredError } from '@/api/errors';
@@ -42,6 +43,7 @@ import type {
   HabitOut,
   SuggestionOut,
   TaskOut,
+  TaskOccurrenceOut,
   TaskWriteOut,
   FeedbackIn,
   ItemCreateIn,
@@ -276,6 +278,12 @@ export type SyncDeps = {
     apply(x: { entries: ExpenseOut[]; categories: ExpenseCategoryOut[]; pending?: PendingActionOut[] }): void;
     tombstone?(id: string): void;
   };
+  /** Ф-89 calendar (calendar.md): changes of blocks by hand (`calendar.*`), /sync `task_occurrences` and their tombstones. */
+  calendar?: {
+    send(e: OutboxEntry): Promise<void>;
+    occurrences(list: TaskOccurrenceOut[]): void;
+    tombstone?(id: string): void;
+  };
   /** Week 14: КП — profile, «Мой прайс», tap-edits, status (`kp.*`), /sync `documents` / `price_list_items` (src/kp/service.ts). */
   kp?: {
     send(e: OutboxEntry): Promise<void>;
@@ -312,6 +320,9 @@ const IN_TAP_ORDER = new Set<string>([
   'page.item_place',
   'task.patch',
   'task.clear_done',
+  'calendar.patch',
+  'calendar.done',
+  'calendar.delete',
   'expense.create',
   'expense.patch',
   'expense.delete',
@@ -496,6 +507,12 @@ export class SyncEngine {
         this.d.tasks?.applyServer(ts);
         applied += ts.length;
       }
+      // Ф-89 (calendar.md «Sync»): occurrences of repeating to-dos that differ from the series.
+      const occ = taskOccurrencesOf((out as { task_occurrences?: unknown }).task_occurrences);
+      if (occ.length > 0) {
+        this.d.calendar?.occurrences(occ);
+        applied += occ.length;
+      }
       const extra = {
         suggestions: Array.isArray(out.suggestions) ? suggestionsOf(out.suggestions) : [],
         habits: Array.isArray(out.habits) ? habitsOf(out.habits) : [],
@@ -561,6 +578,7 @@ export class SyncEngine {
         else if (t.entity === 'screen_item') await this.d.pages.removeLink(t.id);
         else if (t.entity === 'expense_entry' || t.entity === 'expense') this.d.expenses?.tombstone?.(t.id);
         else if (KP_TOMBSTONES.has(t.entity)) this.d.kp?.tombstone?.(t.entity, t.id);
+        else if (t.entity === 'task_occurrence') this.d.calendar?.tombstone?.(t.id);
         applied++;
       }
       if (typeof out.next_since === 'number' && out.next_since >= since) {
@@ -666,6 +684,12 @@ export class SyncEngine {
       case 'kp.draft': {
         const kp = this.d.kp;
         return kp ? (e) => kp.send(e) : null;
+      }
+      case 'calendar.patch':
+      case 'calendar.done':
+      case 'calendar.delete': {
+        const calendar = this.d.calendar;
+        return calendar ? (e) => calendar.send(e) : null;
       }
       case 'page.view':
       case 'page.item_fields': {

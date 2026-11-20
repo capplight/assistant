@@ -4,6 +4,10 @@ import { ApiError } from './errors';
 import { readSse, StreamDroppedError, type SseMessage } from './sse';
 import type {
   ActionChangeOut,
+  CalendarEntryOut,
+  CalendarOut,
+  TaskOccurrenceOut,
+  TaskScope,
   DeletionIn,
   DeletionOut,
   DeletionStateOut,
@@ -999,6 +1003,7 @@ export function reminderOut(v: unknown): ReminderOut | null {
     created_at: str(o.created_at) ?? now,
     updated_at: str(o.updated_at) ?? now,
     deleted_at: str(o.deleted_at),
+    duration_min: numOrNull(o.duration_min),
   };
 }
 
@@ -1112,6 +1117,96 @@ export function taskOut(v: unknown): TaskOut | null {
     updated_at: str(o.updated_at) ?? now,
     deleted_at: str(o.deleted_at),
     ...markOut(o),
+    ...taskTimeOut(o),
+  };
+}
+
+/** calendar.md: the time fields of a task (absent on an older server: an untimed to-do). */
+function taskTimeOut(o: Record<string, unknown>): Pick<TaskOut, 'start_at' | 'duration_min' | 'tz' | 'rrule' | 'all_day' | 'source' | 'local'> {
+  const startAt = str(o.start_at);
+  const local = obj(o.local);
+  const date = local && str(local.date);
+  return {
+    start_at: startAt,
+    duration_min: numOrNull(o.duration_min),
+    tz: str(o.tz),
+    rrule: str(o.rrule),
+    all_day: typeof o.all_day === 'boolean' ? o.all_day : !startAt && !!str(o.due_date),
+    source: o.source === 'assistant' ? 'assistant' : o.source === 'user' ? 'user' : null,
+    local: local && date ? { date, start: str(local.start), end: str(local.end) } : null,
+  };
+}
+
+export function taskOccurrenceOut(v: unknown): TaskOccurrenceOut | null {
+  const o = obj(v);
+  const id = o && str(o.id);
+  const taskId = o && str(o.task_id);
+  const at = o && str(o.occurrence_at);
+  if (!o || !id || !taskId || !at) return null;
+  return {
+    id,
+    task_id: taskId,
+    occurrence_at: at,
+    start_at: str(o.start_at),
+    duration_min: numOrNull(o.duration_min),
+    done_at: str(o.done_at),
+    skipped: o.skipped === true,
+    version: num(o.version, 1),
+    seq: num(o.seq),
+    updated_at: str(o.updated_at) ?? new Date().toISOString(),
+  };
+}
+
+export const taskOccurrencesOf = (v: unknown): TaskOccurrenceOut[] =>
+  arr(v)
+    .map(taskOccurrenceOut)
+    .filter((x): x is TaskOccurrenceOut => x !== null);
+
+export function calendarEntryOut(v: unknown): CalendarEntryOut | null {
+  const o = obj(v);
+  const key = o && str(o.key);
+  const id = o && str(o.id);
+  const date = o && str(o.date);
+  if (!o || !key || !id || !date) return null;
+  const kind = o.kind === 'reminder' || o.kind === 'plan_step' ? o.kind : 'task';
+  const rem = obj(o.reminder);
+  const plan = obj(o.plan);
+  const start = str(o.start);
+  return {
+    key,
+    kind,
+    id,
+    occurrence_at: str(o.occurrence_at),
+    title: str(o.title) ?? '',
+    date,
+    all_day: typeof o.all_day === 'boolean' ? o.all_day : !start,
+    start_at: str(o.start_at),
+    end_at: str(o.end_at),
+    start,
+    end: str(o.end),
+    duration_min: numOrNull(o.duration_min),
+    rrule: str(o.rrule),
+    moved: o.moved === true,
+    done: o.done === true,
+    source: o.source === 'assistant' ? 'assistant' : o.source === 'user' ? 'user' : null,
+    item_id: str(o.item_id),
+    page_id: str(o.page_id),
+    reminder: rem && str(rem.id) ? { id: str(rem.id)!, offsets: nums(rem.offsets) } : null,
+    plan: plan && str(plan.id) ? { id: str(plan.id)!, title: str(plan.title) ?? '' } : null,
+    version: num(o.version, 1),
+  };
+}
+
+export function calendarOut(v: unknown): CalendarOut {
+  const o = obj(v) ?? {};
+  return {
+    tz: str(o.tz) ?? 'Asia/Almaty',
+    from: str(o.from) ?? '',
+    to: str(o.to) ?? '',
+    now: str(o.now),
+    entries: arr(o.entries)
+      .map(calendarEntryOut)
+      .filter((x): x is CalendarEntryOut => x !== null),
   };
 }
 
@@ -1163,6 +1258,8 @@ function taskWrite(v: unknown): TaskWriteOut {
       .map(pagePatchOut)
       .filter((x): x is PagePatchOut => x !== null),
     repeated: o.repeated === true,
+    occurrence: taskOccurrenceOut(o.occurrence),
+    previous_task: taskOut(o.previous_task),
   };
 }
 
@@ -2914,14 +3011,26 @@ export class Api {
     };
   }
 
-  /** The task and its record go to the trash. */
-  async deleteTask(id: string, clientId: string): Promise<TaskWriteOut> {
+  /**
+   * The task and its record go to the trash. calendar.md: with `occurrence_at` and `scope` only this occurrence
+   * (`this`) or this and the next ones (`following`).
+   */
+  async deleteTask(id: string, clientId: string, o: { occurrence_at?: string; scope?: TaskScope } = {}): Promise<TaskWriteOut> {
     return taskWrite(
       await this.client.request<unknown>('DELETE', `/tasks/${encodeURIComponent(id)}`, {
-        query: { client_id: clientId },
+        query: {
+          client_id: clientId,
+          ...(o.occurrence_at ? { occurrence_at: o.occurrence_at } : {}),
+          ...(o.scope ? { scope: o.scope } : {}),
+        },
         idempotencyKey: clientId,
       }),
     );
+  }
+
+  /** calendar.md `GET /v1/calendar`: local dates, both inclusive, ≤ 61 days; repeats expanded by the server. */
+  async calendar(from: string, to: string): Promise<CalendarOut> {
+    return calendarOut(await this.client.request<unknown>('GET', '/calendar', { query: { from, to } }));
   }
 
   async acceptSuggestion(id: string, clientId: string): Promise<SuggestionAcceptOut> {

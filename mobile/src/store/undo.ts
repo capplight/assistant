@@ -32,7 +32,7 @@ export type UndoStripState =
   /** Ф-69: an action the server made in the background («Разобрал: перенёс в «Расходы»»), from /v1/sync. */
   | { id: number; kind: 'server'; action: ActionOut }
   /** Week 9: a change of the phone's own (a box ticked, a row added, a rule taken off) with its undo. */
-  | { id: number; kind: 'custom'; text: string; onUndo: () => void; openPageId: string | null };
+  | { id: number; kind: 'custom'; text: string; onUndo: () => void; openPageId: string | null; undoLabel?: string };
 
 /** The top notice (Ф-67, Ф-75): 3 s, the server's `notice.ms` when it sends one; a screen reader keeps it 30 s. */
 export const NOTICE_MS = 3_000;
@@ -45,7 +45,8 @@ type UndoState = {
   showDeleted: (recordId: string, what?: string) => void;
   showAction: (messageId: string) => void;
   showManual: (text: ManualStripText, outboxIds: string[], openPageId?: string | null) => void;
-  showCustom: (text: string, onUndo: () => void, openPageId?: string | null) => void;
+  /** `undoLabel`: «Вернуть» of a moved block, «Восстановить» of a deleted one (default «Отменить»). */
+  showCustom: (text: string, onUndo: () => void, openPageId?: string | null, undoLabel?: string) => void;
   showSaved: (recordId: string, pageId: string | null, what: string) => void;
   showServer: (action: ActionOut) => void;
   /** The strip of this outbox row, if still shown, gets the server's line; false when it is gone. */
@@ -60,7 +61,8 @@ export const useUndo = create<UndoState>()((set, get) => ({
   showAction: (messageId) => set({ strip: { id: ++seq, kind: 'action', messageId } }),
   showManual: (text, outboxIds, openPageId = null) =>
     set({ strip: { id: ++seq, kind: 'manual', text, outboxIds, openPageId } }),
-  showCustom: (text, onUndo, openPageId = null) => set({ strip: { id: ++seq, kind: 'custom', text, onUndo, openPageId } }),
+  showCustom: (text, onUndo, openPageId = null, undoLabel) =>
+    set({ strip: { id: ++seq, kind: 'custom', text, onUndo, openPageId, ...(undoLabel ? { undoLabel } : {}) } }),
   showSaved: (recordId, pageId, what) => set({ strip: { id: ++seq, kind: 'saved', recordId, pageId, what } }),
   showServer: (action) => set({ strip: { id: ++seq, kind: 'server', action } }),
   noteLearned: (outboxId, extra) => {
