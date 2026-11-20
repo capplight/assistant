@@ -234,6 +234,13 @@ def _task_spec(d: dict[str, Any]) -> "tasks_parse.TaskSpec":
         duration_min=d.get("duration_min"), tz=d.get("tz"), rrule=d.get("rrule"))  # fmt: skip
 
 
+def _range_of(out: Any) -> str:
+    """«10–14 декабря» of a plan calendar outcome (assistant.plans.calendar)."""
+    from assistant.plans.calendar import range_text
+
+    return range_text(out.first, out.last) if out.first and out.last else ""
+
+
 def _jsonable(value: Any) -> Any:
     if isinstance(value, dict):
         return {k: _jsonable(v) for k, v in value.items()}
@@ -655,6 +662,13 @@ class ChatService:
             if turn.input_kind != "share" and plan_line.to_tasks_phrase(turn.text):
                 await self._plan_to_tasks(run, turn)  # «сделай делами» (step 8)
                 return
+            if turn.input_kind != "share" \
+                    and (cal := plan_line.calendar_phrase(turn.text)) is not None \
+                    and await self._plan_calendar(run, turn, cal, background):  # fmt: skip
+                return  # «добавь план в календарь», «убери поездку из календаря» (plans.md)
+            if turn.input_kind != "share" and await self._plan_calendar_date(run, turn,
+                                                                             background):
+                return  # «с 10 декабря» right after «С какого дня поставить …?»
             if turn.input_kind != "share" and turn.selected_pk is not None \
                     and await self._plan_selected(turn):  # fmt: skip
                 # step 8: on an open plan («Попросите поменять план…») a phrase is about the plan
@@ -1190,6 +1204,188 @@ class ChatService:
                                     "error": conv is None or not conv.actions,
                                     "by": "code"}])  # fmt: skip
 
+    async def _plan_calendar(self, run: ReplyRun, turn: TurnInput, cal: "plan_line.CalendarAsk",
+                             background: bool) -> bool:  # fmt: skip
+        """A plan on the calendar by phrase (plans.md «A plan on the calendar»): code finds the
+        plan, reads the date / shift from the person's words and does the writes
+        (assistant.plans.calendar). False: the phrase is about no plan (the caller goes on)."""
+        async with self.sessionmaker() as s:
+            item = await plan_line.calendar_plan(s, turn.user_id, turn.text, cal, turn.selected_pk)
+            pk = item.id if item is not None else None
+            await s.commit()
+        if pk is None and not cal.plan_word:
+            return False  # «добавь встречу в календарь завтра в 15» is a to-do, not a plan
+        book = await book_for(self.sessionmaker, turn.user_id, turn.page_pk)
+        m = self._mutation(run, turn, book, True, False)
+        if pk is None:
+            m.note = plan_line.TEXT_NO_CAL_PLAN
+        else:
+            _, today = await self._local_today(turn.user_id)
+            start = days = to = None
+            if cal.op == "add":
+                start = plan_line.said_start(turn.text, today)
+            elif cal.op == "shift":
+                days, to = plan_line.shift_of(turn.text, today)
+            await self._plan_calendar_do(run, turn, m, pk, cal.op, start=start, days=days, to=to,
+                                         background=background)  # fmt: skip
+        await self._finish_change(run, turn, m, Decimal(0),
+                                  [{"name": "plan_calendar", "arguments": {"op": cal.op},
+                                    "error": m.action_out is None, "by": "code"}])  # fmt: skip
+        return True
+
+    async def _plan_calendar_date(self, run: ReplyRun, turn: TurnInput, background: bool) -> bool:
+        """«с 10 декабря» typed as the answer to the open «С какого дня поставить …?» (the same
+        as tapping a date option). False: no such question open, or no date in the phrase."""
+        text_ = " ".join(turn.text.split())
+        if len(text_) > 60:
+            return False
+        _, today = await self._local_today(turn.user_id)
+        start = plan_line.said_start(text_, today)
+        if start is None:
+            return False
+        async with self.sessionmaker() as s:
+            rows = (await s.execute(
+                select(ConversationMessage.id, ConversationMessage.role,
+                       ConversationMessage.proposal)
+                .where(ConversationMessage.conversation_id == turn.conversation_id,
+                       ConversationMessage.id < turn.message_id,
+                       ConversationMessage.deleted_at.is_(None),
+                       ConversationMessage.role.in_(("user", "assistant")))
+                .order_by(ConversationMessage.id.desc()).limit(2))).all()  # fmt: skip
+            prev = next((r for r in rows if r.role == "assistant"), None)
+            prop = prev.proposal if prev is not None else None
+            ok = bool(prop) and prop.get("state") == "open" \
+                and (prop.get("plan") or {}).get("tool") == "plan_calendar" \
+                and datetime.fromisoformat(prop["expires_at"]) > self.clock()  # fmt: skip
+            if ok:
+                res = await s.execute(text("""
+                    UPDATE conversation_messages
+                    SET proposal = jsonb_set(proposal, '{state}', '"answered"'), updated_at = now()
+                    WHERE id = :id AND proposal->>'state' = 'open'
+                """), {"id": prev.id})  # type: ignore[union-attr]  # fmt: skip
+                ok = bool(res.rowcount)  # type: ignore[attr-defined]
+            await s.commit()
+        if not ok:
+            return False
+        pk = await self._plan_pk(turn.user_id, prop["plan"].get("plan_id"))  # type: ignore[index]
+        book = await book_for(self.sessionmaker, turn.user_id, turn.page_pk)
+        m = self._mutation(run, turn, book, True, False)
+        if pk is None:
+            m.note = plan_line.TEXT_NO_CAL_PLAN
+        else:
+            await self._plan_calendar_do(run, turn, m, pk, "add", start=start,
+                                         background=background)  # fmt: skip
+        await self._finish_change(run, turn, m, Decimal(0),
+                                  [{"name": "plan_calendar", "arguments": {"op": "add"},
+                                    "error": m.action_out is None, "by": "code"}])  # fmt: skip
+        return True
+
+    async def _plan_pk(self, user_id: int, public_id: str | None) -> int | None:
+        from assistant.plans.calendar import plan_by_id
+
+        if not public_id:
+            return None
+        async with self.sessionmaker() as s:
+            item = await plan_by_id(s, user_id, public_id)
+            pk = item.id if item is not None and item.deleted_at is None else None
+            await s.commit()
+        return pk
+
+    async def _plan_calendar_do(self, run: ReplyRun, turn: TurnInput, m: MutationState,
+                                plan_pk: int, op: str, *, start: Any = None,
+                                days: int | None = None, to: Any = None,
+                                background: bool = False) -> None:  # fmt: skip
+        """Do one calendar change of a plan and say exactly what was done (Ф-88): the action(s)
+        and their sentence, or a short note / one question when nothing was written."""
+        from assistant.actions import actions_dicts
+        from assistant.actions.patch import page_patches
+        from assistant.db.models import Item
+        from assistant.plans import PlanError
+        from assistant.plans import calendar as plan_cal
+
+        tz, today = await self._local_today(turn.user_id)
+        now = self.clock()
+        run.emit("tool_activity", {"tool": "plan_calendar", "text": plan_line.CAL_ACTIVITY,
+                                   "page_id": None})  # fmt: skip
+        outs: list[dict[str, Any]] = []
+        patches: list[dict[str, Any]] = []
+        task_rows: list[dict[str, Any]] = []
+        out = None
+        title, plan_id, n_days = "План", None, 0
+        async with self.sessionmaker() as s:
+            item = await s.get(Item, plan_pk)
+            try:
+                if item is None or item.deleted_at is not None or item.user_id != turn.user_id:
+                    raise PlanError("not_a_plan")
+                title, plan_id = item.title or "План", str(item.public_id)
+                n_days = len(((item.source_meta or {}).get("plan") or {}).get("days") or [])
+                if op == "add":
+                    out = await plan_cal.add(s, turn.user_id, item, start=start,
+                                             by=Initiator.AGENT, now=now, tz=tz,
+                                             message_pk=run.reply_pk,
+                                             group_id=str(run.reply_id))  # fmt: skip
+                elif op == "remove":
+                    out = await plan_cal.remove(s, turn.user_id, item, by=Initiator.AGENT,
+                                                now=now, message_pk=run.reply_pk)  # fmt: skip
+                else:
+                    out = await plan_cal.shift(s, turn.user_id, item, days=days, to_start=to,
+                                               by=Initiator.AGENT, now=now, tz=tz,
+                                               message_pk=run.reply_pk)  # fmt: skip
+            except PlanError:
+                out = None
+            if out is not None and out.actions:
+                await s.flush()
+                outs = await actions_dicts(s, out.actions, now)
+                patches = await page_patches(s, turn.user_id, out.pages, out.items)
+                task_rows = _jsonable(await tasks_service.tasks_dicts(s, out.tasks))
+                await s.execute(text("UPDATE conversation_messages SET action_ids = :ids, "
+                                     "updated_at = now() WHERE id = :r"),
+                                {"ids": [a.id for a in out.actions], "r": run.reply_pk})
+            await s.commit()
+        if out is None:
+            m.note = plan_line.TEXT_NO_CAL_PLAN
+            return
+        if out.actions:
+            for a in out.actions:
+                m.took(a.id, str(a.public_id))
+            m.action_out = outs[0]
+            m.sentences.append(out.sentence)
+            for one in outs:
+                m.emit("action", {"reply_id": None, "action": one,
+                                  "changed_item_ids": one["changed_item_ids"],
+                                  "page_id": None, "tasks": task_rows})  # fmt: skip
+            for patch in patches:
+                m.emit("page_patch", patch)
+            return
+        if out.status in ("need_date", "past") and op == "add":
+            if background:  # a question waits for the person; nothing is made behind their back
+                m.note = TEXT_NOT_DONE[turn.lang]
+                return
+            head = (f"Даты плана «{title}» уже прошли ({_range_of(out)})."
+                    if out.status == "past" and out.first else f"В плане «{title}» нет дат.")
+            many = f" ({n_days} {plan_cal.days_word(n_days)})" if n_days > 1 else ""
+            question = f"{head} С какого дня поставить его в календарь{many}?"
+            opts = plan_line.date_options(today)
+            options = [{"id": f"d{i + 1}", "kind": "date", "item_id": None, "label": label}
+                       for i, (label, _) in enumerate(opts)]  # fmt: skip
+            options.append({"id": "cancel", "label": "Отмена", "kind": "cancel", "item_id": None})
+            m.note = question
+            m.proposal = {
+                "kind": "choice", "question": question, "count": None, "item_ids": [],
+                "options": options, "default": None,
+                "expires_at": (now + timedelta(hours=24)).isoformat(), "state": "open",
+                "plan": {"tool": "plan_calendar", "plan_id": plan_id,
+                         "starts": {f"d{i + 1}": d.isoformat() for i, (_, d) in enumerate(opts)}},
+            }  # fmt: skip
+            return
+        if out.status == "past":  # a shift into the past
+            m.note = f"Так «{title}» окажется в прошлом ({_range_of(out)}) — ничего не менял."
+            return
+        if out.status == "empty":
+            m.note = f"В плане «{title}» нет дней или шагов для календаря."
+            return
+        m.note = out.sentence or TEXT_NOT_CHANGED[turn.lang]
+
     async def _list_of_page(self, turn: TurnInput) -> str | None:
         """`todo` / `shopping` when the line is on «Дела» / «Покупки»."""
         if turn.page_pk is None:
@@ -1533,6 +1729,18 @@ class ChatService:
             else:
                 given = tasks_parse.Reading(ListKey.TODO, [_task_spec(spec)], "rules")
                 await self._save_tasks(run, turn, turn.text, None, m=m, given=given)
+        elif prop["plan"].get("tool") == "plan_calendar":  # «С завтра, 21 ноября» tapped
+            start = (prop["plan"].get("starts") or {}).get(option)
+            pk = await self._plan_pk(turn.user_id, prop["plan"].get("plan_id"))
+            if start is None:
+                m.note = TEXT_CANCELLED[lang]
+            elif pk is None:
+                m.note = plan_line.TEXT_NO_CAL_PLAN
+            else:
+                from datetime import date as date_
+
+                await self._plan_calendar_do(run, turn, m, pk, "add",
+                                             start=date_.fromisoformat(start))  # fmt: skip
         elif prop["plan"].get("tool") == "reminder_time":  # Ф-89: «Сегодня в 19:00» tapped
             draft = (prop["plan"].get("drafts") or {}).get(option)
             if draft is None:

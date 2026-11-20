@@ -175,7 +175,6 @@ def build(reply: PlanReply, *, kind: Kind, sources: list[SourceRef], phrase: str
     plan: dict[str, Any] = {"v": PLAN_VERSION, "kind": kind,
                             "title": _clean(reply.title, PLAN_TITLE_CHARS) or "План",
                             "start_date": None, "end_date": None, "days": [], "steps": []}
-    lines: list[str] = []
     points = own = 0
     if kind == "trip":
         want = days if days and 0 < days <= MAX_DAYS else None
@@ -203,14 +202,6 @@ def build(reply: PlanReply, *, kind: Kind, sources: list[SourceRef], phrase: str
         if start and plan["days"]:
             plan["start_date"] = start.isoformat()
             plan["end_date"] = (start + timedelta(days=len(plan["days"]) - 1)).isoformat()
-        for d in plan["days"]:
-            head = day_text(date.fromisoformat(d["date"])) if d["date"] else f"День {d['n']}"
-            lines.append(f"{head} · {d['title']}")
-            for j, p in enumerate(d["points"], 1):
-                tail = f" — {p['note']}" if p["note"] else ""
-                mine = " (мой совет)" if p["own"] else ""
-                lines.append(f"{j}. {p['title']}{tail}{mine}")
-            lines.append("")
     else:
         all_facts = {s.ref: s.facts for s in sources}
         kept: dict[int, str] = {}  # the model's step number -> our id
@@ -246,17 +237,6 @@ def build(reply: PlanReply, *, kind: Kind, sources: list[SourceRef], phrase: str
                                   "after": after, "remind_at": remind_at, "source_id": sid,
                                   "own": sid is None, "task_id": None,
                                   "reminder_id": None})  # fmt: skip
-        n_of = {s["id"]: s["n"] for s in plan["steps"]}
-        for s in plan["steps"]:
-            bits = []
-            if s["due_date"]:
-                d = date.fromisoformat(s["due_date"])
-                bits.append(f"до {d.day} {_MONTHS_GEN[d.month - 1]}")
-            if s["after"]:
-                bits.append("после шага " + ", ".join(str(n_of[a]) for a in s["after"]))
-            if s["note"]:
-                bits.append(s["note"])
-            lines.append(f"{s['n']}. {s['title']}" + (" — " + "; ".join(bits) if bits else ""))
     if previous:  # an edit keeps what code wrote on the steps (their tasks)
         old = {s.get("title", "").lower(): s for s in previous.get("steps") or []}
         for s in plan["steps"]:
@@ -269,13 +249,42 @@ def build(reply: PlanReply, *, kind: Kind, sources: list[SourceRef], phrase: str
     plan["counts"] = {"points": points, "from_records": points - own, "own": own,
                       "sources": len(used)}  # fmt: skip
     plan["made_at"] = (now or datetime.now()).isoformat()
-    head = plan["title"]
-    if kind == "trip" and plan["days"]:
+    return Built(plan, text_of(plan), removed)
+
+
+def text_of(plan: dict[str, Any]) -> str:
+    """The plan's readable text (the record's `text`: search, export, the note editor). Written
+    again when the plan's dates change (put on the calendar, moved: plans/calendar.py)."""
+    lines: list[str] = []
+    if plan.get("kind") == "trip":
+        for d in plan.get("days") or []:
+            head = day_text(date.fromisoformat(d["date"])) if d["date"] else f"День {d['n']}"
+            lines.append(f"{head} · {d['title']}")
+            for j, p in enumerate(d["points"], 1):
+                tail = f" — {p['note']}" if p["note"] else ""
+                mine = " (мой совет)" if p["own"] else ""
+                lines.append(f"{j}. {p['title']}{tail}{mine}")
+            lines.append("")
+    else:
+        steps = plan.get("steps") or []
+        n_of = {s["id"]: s["n"] for s in steps}
+        for s in steps:
+            bits = []
+            if s["due_date"]:
+                d = date.fromisoformat(s["due_date"])
+                bits.append(f"до {d.day} {_MONTHS_GEN[d.month - 1]}")
+            if s["after"]:
+                bits.append("после шага " + ", ".join(str(n_of[a]) for a in s["after"]
+                                                      if a in n_of))
+            if s["note"]:
+                bits.append(s["note"])
+            lines.append(f"{s['n']}. {s['title']}" + (" — " + "; ".join(bits) if bits else ""))
+    head = plan.get("title") or "План"
+    if plan.get("kind") == "trip" and plan.get("days"):
         head += f" · {len(plan['days'])} {_days_word(len(plan['days']))}"
-    elif plan["steps"]:
+    elif plan.get("steps"):
         head += f" · {len(plan['steps'])} {_plural(len(plan['steps']), _STEPS)}"
-    text = "\n".join([head, "", *lines]).strip()
-    return Built(plan, text, removed)
+    return "\n".join([head, "", *lines]).strip()
 
 
 _DAYS = ("день", "дня", "дней")

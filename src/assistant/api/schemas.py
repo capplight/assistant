@@ -1983,6 +1983,7 @@ class PlanDayOut(BaseModel):
     date: str | None
     title: str
     points: list[PlanPointOut]
+    task_ids: list[uuid.UUID] = []  # to-dos made when the plan was put on the calendar
 
 
 class PlanStepTaskOut(BaseModel):
@@ -2015,6 +2016,12 @@ class PlanSourceOut(BaseModel):
     occurred_at: str | None
 
 
+class PlanCalendarOut(BaseModel):
+    tasks: int  # live to-dos of the plan (also «Сделать делами» ones)
+    from_: str | None = Field(None, alias="from", serialization_alias="from")
+    to: str | None
+
+
 class PlanOut(BaseModel):
     id: uuid.UUID
     kind: Literal["trip", "actions"] | None
@@ -2030,6 +2037,7 @@ class PlanOut(BaseModel):
     pages: list[dict[str, Any]]
     can_make_tasks: bool
     check_note: str | None
+    calendar: "PlanCalendarOut | None" = None  # the plan's live to-dos, null: not on the calendar
     ai_generated: bool
     seq: int
     created_at: str | None

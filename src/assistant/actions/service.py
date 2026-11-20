@@ -257,6 +257,10 @@ def notice(a: Action, where: list[dict[str, Any]], *, undoable: bool,
     label = "Отменить"
     if a.undo_of_action_id is not None:
         text_, label = "Вернул как было", "Вернуть"
+    elif (a.payload or {}).get("plan_calendar"):  # a plan on / off the calendar (plans.md)
+        text_ = _short(str((a.payload or {}).get("notice_ru") or summary)) or "Готово"
+        if kinds == {"trash"}:
+            label, first, page_id = "Восстановить", None, None
     elif kinds == {"trash"}:
         n = len(rows)
         text_ = (f"Удалил «{_short(str(first.get('title') or ''), 50)}»" if n == 1  # type: ignore[union-attr]

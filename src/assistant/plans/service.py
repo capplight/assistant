@@ -258,6 +258,13 @@ async def plan_dict(session: AsyncSession, item: Item) -> dict[str, Any]:
                                     "due_date": t.due_date.isoformat() if t.due_date else None}
                       if live and t is not None else None})  # fmt: skip
     pages = await pages_of(session, item.id)
+    on_cal = list(await session.scalars(
+        select(Task.due_date).join(Item, Item.id == Task.item_id)
+        .where(Task.user_id == item.user_id, Task.source_item_id == item.id,
+               Task.deleted_at.is_(None), Item.deleted_at.is_(None))))  # fmt: skip
+    dated = [d for d in on_cal if d is not None]
+    calendar = ({"tasks": len(on_cal), "from": min(dated).isoformat() if dated else None,
+                 "to": max(dated).isoformat() if dated else None} if on_cal else None)
     return {
         "id": str(item.public_id), "kind": plan.get("kind"), "title": item.title,
         "start_date": plan.get("start_date"), "end_date": plan.get("end_date"),
@@ -269,6 +276,7 @@ async def plan_dict(session: AsyncSession, item: Item) -> dict[str, Any]:
         and any(x["task"] is None for x in steps),
         "check_note": "составил по вашим записям — проверьте"
         if (plan.get("counts") or {}).get("sources") else None,
+        "calendar": calendar,
         "ai_generated": True, "seq": item.seq, "created_at": _iso(item.created_at),
         "updated_at": _iso(item.updated_at), "deleted_at": _iso(item.deleted_at),
     }  # fmt: skip

@@ -17,6 +17,7 @@
 import json
 import logging
 import re
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any, Literal
 from zoneinfo import ZoneInfo
@@ -314,3 +315,168 @@ async def latest_action_plan(session: Any, user_id: int, selected_pk: int | None
         if (plans.plan_of(item) or {}).get("kind") == "actions":
             return item
     return None
+
+
+# --- a plan on the calendar (2026-11-20, plans.md «A plan on the calendar») ---
+# «добавь план в календарь», «поставь поездку в календарь с 10 декабря», «убери поездку из
+# календаря», «перенеси поездку на неделю позже». Code reads the person's own words; the plan is
+# the selected one, the one whose title the phrase names, else the newest (`calendar_plan`);
+# every write is assistant.plans.calendar.
+
+CAL_ACTIVITY = "Ставлю в календарь…"
+_CAL_IN = re.compile(r"(?<!\w)(?:в|на)\s+календар(?:ь|ик)(?!\w)")  # «в календаре?» is a question
+_CAL_OUT = re.compile(r"(?<!\w)из\s+календар\w*")
+_CAL_OUT_VERB = re.compile(r"(?<!\w)(?:убер|убра|удал|сотр|вычеркн|сним|сня|очист|выкин|убир)\w*")
+_SHIFT_VERB = re.compile(r"^(?:пожалуйста[,\s]+)?(?:перенес|перенос|сдвин|подвин|передвин|отлож|"
+                         r"перестав)\w*")  # fmt: skip
+_PLAN_WORD = re.compile(r"(?<!\w)(?:план\w*|поездк\w*|путешеств\w*|отпуск\w*|маршрут\w*|"
+                        r"тур(?!\w)|программ\w*|жоспар\w*)")  # fmt: skip
+_DEICTIC = re.compile(r"(?<!\w)(?:его|ее|это|эту|этот|их)(?!\w)")
+_MONTHS = ("январ", "феврал", "март", "апрел", "ма", "июн", "июл", "август", "сентябр", "октябр",
+           "ноябр", "декабр")  # fmt: skip
+_DAY_MONTH = re.compile(r"(?<![\w.:])(\d{1,2})(?:-?(?:го|е|ое))?\s+(январ|феврал|марта?|апрел|"
+                        r"мая|июн|июл|август|сентябр|октябр|ноябр|декабр)\w*")  # fmt: skip
+_DOTTED = re.compile(r"(?<![\w.:])(\d{1,2})\.(\d{1,2})(?:\.(\d{2}|\d{4}))?(?![\w.:])")
+_FROM_WEEKDAY = re.compile(r"(?<!\w)(?:с|со)\s+(понедельник|вторник|сред|четверг|пятниц|суббот|"
+                           r"воскресень)\w*")  # fmt: skip
+_NEXT_WEEK = re.compile(r"(?<!\w)(?:со?|на)\s+следующ\w+\s+недел\w*")
+_SHIFT_BY = re.compile(r"(?<!\w)на\s+(?:(\d{1,2}|один|одну|два|две|три|четыре|пять|шесть|семь|"
+                       r"пару)\s+)?(день|дня|дней|сутки|неделю|недели|недель)"
+                       r"(?:\s+(позже|раньше|вперед|назад|попозже|пораньше))?")  # fmt: skip
+_COUNT = {"один": 1, "одну": 1, "два": 2, "две": 2, "пару": 2, "три": 3, "четыре": 4, "пять": 5,
+          "шесть": 6, "семь": 7}  # fmt: skip
+_WD = ("понедельник", "вторник", "сред", "четверг", "пятниц", "суббот", "воскресень")
+
+
+@dataclass
+class CalendarAsk:
+    op: Literal["add", "remove", "shift"]
+    plan_word: bool  # «план», «поездку», «отпуск» said
+    deictic: bool  # «его», «это»: the selected / newest plan
+
+
+def calendar_phrase(text: str) -> CalendarAsk | None:
+    """The person asks to put a plan on the calendar, take it off, or move it. A plan must still
+    be found (`calendar_plan`); a phrase about something else falls through."""
+    norm = _norm(text).strip(" .!?")
+    if not norm or len(norm) > 200:
+        return None
+    plan_word = bool(_PLAN_WORD.search(norm))
+    deictic = bool(_DEICTIC.search(norm))
+    if _CAL_OUT.search(norm) and _CAL_OUT_VERB.search(norm):
+        return CalendarAsk("remove", plan_word, deictic)
+    if _CAL_IN.search(norm) and not _CAL_OUT.search(norm):
+        return CalendarAsk("add", plan_word, deictic)
+    if _SHIFT_VERB.match(norm) and (_SHIFT_BY.search(norm) or _NEXT_WEEK.search(norm)
+                                    or _DAY_MONTH.search(norm) or _DOTTED.search(norm)):
+        return CalendarAsk("shift", plan_word, deictic)
+    return None
+
+
+def _year_of(day: int, month: int, today: date) -> date | None:
+    """The next such date: this year unless it is already behind, else next year."""
+    try:
+        d = date(today.year, month, day)
+    except ValueError:
+        return None
+    if d >= today - timedelta(days=1):
+        return d
+    try:
+        return date(today.year + 1, month, day)
+    except ValueError:
+        return None
+
+
+def said_start(text: str, today: date) -> date | None:
+    """The first day the phrase names: «с 10 декабря», «10.12», «с понедельника», «со следующей
+    недели», «завтра», «в пятницу» (timewords). The next such date from today."""
+    norm = _norm(text)
+    m = _DAY_MONTH.search(norm)
+    if m:
+        month = next(i for i, stem in enumerate(_MONTHS, 1) if m.group(2).startswith(stem))
+        return _year_of(int(m.group(1)), month, today)
+    m = _DOTTED.search(norm)
+    if m and 1 <= int(m.group(2)) <= 12:
+        if m.group(3):
+            year = int(m.group(3)) + (2000 if len(m.group(3)) == 2 else 0)
+            try:
+                return date(year, int(m.group(2)), int(m.group(1)))
+            except ValueError:
+                return None
+        return _year_of(int(m.group(1)), int(m.group(2)), today)
+    m = _FROM_WEEKDAY.search(norm)
+    if m:
+        wd = next(i for i, stem in enumerate(_WD) if m.group(1).startswith(stem))
+        return today + timedelta(days=(wd - today.weekday()) % 7 or 7)
+    if _NEXT_WEEK.search(norm):
+        return today + timedelta(days=7 - today.weekday())
+    from assistant import timewords
+
+    return timewords.day_of(text, today)
+
+
+def shift_of(text: str, today: date) -> tuple[int | None, date | None]:
+    """«на неделю позже» → (7, None), «на 2 дня раньше» → (-2, None), «на 17 декабря» → (None,
+    that date), «на следующую неделю» → (7, None)."""
+    norm = _norm(text)
+    m = _SHIFT_BY.search(norm)
+    if m:
+        n = int(m.group(1)) if (m.group(1) or "").isdigit() else _COUNT.get(m.group(1) or "", 1)
+        n *= 7 if m.group(2).startswith("недел") else 1
+        back = (m.group(3) or "") in ("раньше", "назад", "пораньше")
+        return (-n if back else n), None
+    if _NEXT_WEEK.search(norm):
+        return 7, None
+    return None, said_start(text, today)
+
+
+def _stems(title: str) -> list[str]:
+    words = [w for w in re.findall(r"\w+", _norm(title)) if len(w) >= 4]
+    return [w[:max(4, len(w) - 2)] for w in words]
+
+
+def names_plan(text: str, title: str) -> bool:
+    """The phrase names the plan by its title («поездку в Стамбул» → «Стамбул»): its first long
+    words, by their stems."""
+    stems = _stems(title)
+    words = re.findall(r"\w+", _norm(text))
+    return bool(stems) and all(any(w.startswith(s) for w in words) for s in stems[:2])
+
+
+async def calendar_plan(session: Any, user_id: int, text: str, ask: CalendarAsk,
+                        selected_pk: int | None) -> Item | None:  # fmt: skip
+    """Which plan the phrase means: the selected plan; else a live plan whose title it names
+    (newest first); else, when it says «план» / «поездку» / «его», the newest live plan."""
+    if selected_pk is not None:
+        item = await session.get(Item, selected_pk)
+        if item is not None and item.user_id == user_id and item.deleted_at is None \
+                and plans.plan_of(item) is not None:  # fmt: skip
+            return item
+    rows = list(await session.scalars(
+        select(Item).where(Item.user_id == user_id, Item.kind == RecordKind.PLAN,
+                           Item.deleted_at.is_(None)).order_by(Item.id.desc()).limit(30)))
+    rows = [r for r in rows if plans.plan_of(r) is not None]
+    for item in rows:
+        if names_plan(text, item.title or ""):
+            return item
+    if rows and (ask.plan_word or ask.deictic):
+        return rows[0]
+    return None
+
+
+def date_options(today: date) -> list[tuple[str, date]]:
+    """Choices for «С какого дня?»: tomorrow, the nearest Saturday, next Monday."""
+    from assistant.plans.calendar import range_text
+
+    out: list[tuple[str, date]] = []
+    tomorrow = today + timedelta(days=1)
+    sat = today + timedelta(days=(5 - today.weekday()) % 7 or 7)
+    mon = today + timedelta(days=7 - today.weekday())
+    for label, d in (("С завтра", tomorrow), ("С субботы", sat), ("С понедельника", mon)):
+        if all(d != x for _, x in out):
+            out.append((f"{label}, {range_text(d, d)}", d))
+    return out
+
+
+TEXT_NO_CAL_PLAN = ("Не нашёл плана для календаря. Сначала составьте его, например: «составь "
+                    "план поездки в Стамбул на 4 дня».")

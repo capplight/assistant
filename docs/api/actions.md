@@ -143,6 +143,15 @@ One phrase may now make several actions («купил хлеб за 400 и мо�
 - In «История» each action stays a row with its own «Отменить».
 - At most 8 actions per phrase (`MAX_ACTIONS_PER_PHRASE`); the rest is said, not done.
 
+**A plan on the calendar (2026-11-20, `plans.md`).** «добавь план в календарь» on a trip plan is
+**one** action `save_item` with every to-do it made and the plan's new dates (one «Отменить»);
+«убери … из календаря» one `delete_item` (notice button «Восстановить»), «перенеси поездку на …»
+one `facet_edit`. Their `payload.plan_calendar` is `add` / `remove` / `shift` (+ `plan_id`), and
+`notice.text_ru` is short («Добавил в календарь: 6 дел», «Убрал из календаря: 6 дел», «Перенёс
+«Стамбул» на 17–21 декабря»); the full sentence is `summary.ru`. On an action plan «добавь в
+календарь» is the «Сделать делами» group below. A proposal option may have `kind: "date"`
+(«С завтра, 21 ноября»): send it back as any `choice`.
+
 **Tap groups (step 8, 2026-11-19).** «Сделать делами» on a plan (`plans.md`) makes one action
 per step in one group without a chat answer: the group id is a new uuid kept in each action's
 `payload.group_id`. For such actions `group` is set **whatever the size** (also 1), its notice

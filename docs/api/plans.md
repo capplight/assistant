@@ -187,6 +187,75 @@ By phrase: «сделай делами», «сделай это делами», 
 for the selected plan or the newest action plan of the last 7 days (code only, no model). The
 group is the answer then (`done.group`, `group.id` = the answer's id, same notice text).
 
+## A plan on the calendar (2026-11-20)
+
+Founder: «сделал с помощником план поездки в Стамбул по дням → попросил добавить в календарь — не
+может». By phrase in the line, **code only** (no model step, like «сделай делами»); every write is
+`assistant.plans.calendar` (`add` / `remove` / `shift`, session-level functions: the same calls
+serve a screen button or the future operation registry, `docs/spec/proposals/chat-full-control.md`
+`plans.to_calendar`, `calendar.remove_plan`, `calendar.shift_plan`).
+
+| Phrase (examples) | What code does |
+|---|---|
+| «добавь план в календарь», «поставь поездку в календарь», «перенеси план по дням в календарь», «внеси Стамбул в календарь с 10 декабря», «можешь добавить план в календарь?» | `add` |
+| «убери план из календаря», «удали поездку из календаря» | `remove` |
+| «перенеси поездку на неделю позже», «сдвинь план на 2 дня раньше», «перенеси поездку на следующую неделю», «перенеси поездку на 17 декабря» | `shift` |
+
+**Which plan.** The selected plan (open plan screen); else a live plan whose title the phrase
+names («Стамбул» in «внеси Стамбул в календарь»), newest first; else, when the phrase says «план»,
+«поездку», «путешествие», «отпуск», «маршрут» or «его / это», the newest live plan. A calendar
+phrase that names no plan («добавь встречу в календарь завтра в 15») is not taken here: it goes on
+to the timed to-do path (`calendar.md`). «В календаре» (a question about it) is never a change.
+
+**`add`, trip plan.** Every day becomes an **all-day to-do** of its date, titled «{plan}: {day
+title}» («Стамбул: Балат и Фенер»); a point that says its own time in its title or note («Ужин в
+19:00», note «утром») is also a **timed to-do** with that time (`timewords`, Ф-91: утром 9:00,
+в обед 13:00, днём 14:00, после работы 18:30, вечером 19:00), `duration_min` from
+`timewords.default_duration` (60 by default), in the person's `tz`. Never guessed: «до 10 утра»,
+«до 23:00», «после 15» are limits (no time); a bare «в 7» (7:00 or 19:00?) stays untimed.
+- Dates: the date the phrase says (`с 10 декабря`, `10.12`, `с понедельника`, `со следующей
+  недели`, `завтра`), else the plan's `start_date`. Neither → **one question**, nothing written:
+  `needs_choice` «В плане «Стамбул» нет дат. С какого дня поставить его в календарь (5 дней)?»,
+  options `kind: "date"` («С завтра, 21 ноября», «С субботы, 22 ноября», «С понедельника, 23
+  ноября») + `cancel`; `plan.tool: "plan_calendar"`. The tap (`choice.option` `d1`…) — or a typed
+  answer with a date («с 10 декабря») while the question is open — puts the plan on the calendar.
+  Dates that have all passed → the same question, head «Даты плана «Стамбул» уже прошли (10–14
+  ноября).».
+- **One action** (`save_item`), one «Отменить»: every to-do of the plan + the plan's new dates
+  (`set_item_content`: `start_date`, `end_date`, `days[].date`, `days[].task_ids`, `tz`, and the
+  text with the dates). `payload.plan_calendar: "add"`, `payload.plan_id`. Notice «Добавил в
+  календарь: 6 дел». Answer (Ф-88, only what was made): «Добавил в календарь «Стамбул»: 5 дней,
+  10–14 декабря. Со временем — 1 дело.»
+- Each to-do: `list_key: todo`, `source_item_id` = the plan (the calendar entry's `plan` is
+  `{id, title}`, tap → the plan), `created_by: "assistant"` (`source: "assistant"`), no reminder.
+- Already there (every day has a live to-do): nothing new, «План «Стамбул» уже в календаре: 10–14
+  декабря.». A different start said then: «… Чтобы перенести, скажите: «перенеси поездку на 17
+  декабря».» (no doubles). Days added to the plan later (or whose to-do was deleted): only those
+  are added («ещё 1 день … Остальные дни уже были в календаре.»).
+
+**`add`, action plan.** The same as «Сделать делами» (a group under the answer, one «Отменить
+всё»); the answer says honestly what landed where: «Сделал 4 дела из плана «Ремонт кухни»: 3 с
+датой — в календаре, 21–26 ноября; 1 без даты — только в «Делах». Напомню о 2 шагах.»
+
+**`remove`.** Exactly the plan's live to-dos (`tasks.source_item_id` = the plan; for an action
+plan these are its step to-dos) go to the trash with their linked reminders cancelled, **one
+action** `delete_item` («Восстановить» brings them all back). Other to-dos are never touched; the
+plan record stays. «Убрал из календаря «Стамбул»: 6 дел, 10–14 декабря. Сам план остался в
+«Заметках».» Nothing on the calendar: «Плана «Стамбул» в календаре нет.»
+
+**`shift`.** The plan's live to-dos move by N days (a timed one keeps its clock time; linked
+single reminders move along), the plan's dates (and an action plan's step `due_date` /
+`remind_at`) with them, **one action** `facet_edit`; undo puts every date back (a to-do the person
+moved since keeps theirs: `partial`). «на неделю позже» +7, «на 2 дня раньше» −2, «на следующую
+неделю» +7, «на 17 декабря» = the first day becomes that date; «на неделю» without a direction is
+later. Into the past → «Так «Стамбул» окажется в прошлом (…) — ничего не менял.»
+
+**Plan** (`GET /v1/plans/{id}`) adds `calendar: {"tasks": 6, "from": "2026-12-10", "to":
+"2026-12-14"} | null` (the plan's live to-dos) and `days[].task_ids`.
+
+Events: `tool_activity {tool: "plan_calendar", text: "Ставлю в календарь…"}` → `action` (one, or
+the group's) → `done`; or `needs_choice` for the date; or a text answer.
+
 ## Tap groups (for `actions.md`)
 
 A group made by one tap has no chat answer: its id is kept in each action's `payload.group_id`.

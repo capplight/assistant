@@ -186,3 +186,12 @@ next one.
 Default times of vague words: `reminders.md` «Time in words» (+ designer's §10.1: рано утром
 7:00, до обеда 11:00, перед сном / поздно вечером 22:00, на выходных = the nearest Saturday, all
 day; «через N минут» is rounded up to 5 minutes).
+
+## A plan on the calendar (2026-11-20)
+
+«добавь план в календарь», «убери поездку из календаря», «перенеси поездку на неделю позже»:
+`plans.md` «A plan on the calendar». A trip plan's days become all-day to-dos of their dates
+(«Стамбул: Балат и Фенер»), a point with its own time a timed to-do; every one has
+`source_item_id` = the plan, so its entry has `plan: {id, title}` and `source: "assistant"`. One
+action per phrase («Отменить» takes them all), removal trashes exactly the plan's to-dos. Unknown
+dates are asked once (`needs_choice`, options `kind: "date"`).
