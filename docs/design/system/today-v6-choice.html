@@ -121,7 +121,8 @@ table.t th{background:var(--pg-tab);font-weight:700;border-top:0}
 .wk i{width:4px;height:4px;border-radius:50%;background:var(--onSheet)}.wk i.no{opacity:0}
 
 /* светлый лист */
-.paper{flex:1;min-height:0;position:relative;z-index:2;margin-top:-28px;background:var(--paper);border-radius:28px 28px 0 0;overflow-y:auto;scrollbar-width:none;padding:4px var(--gut) 140px}
+.paper{flex:1;min-height:0;position:relative;z-index:2;margin-top:-28px;background:var(--paper);border-radius:28px 28px 0 0;overflow-y:auto;scrollbar-width:none;padding:4px var(--gut) 104px}
+/* низ ленты: строка помощника 48 + зазор 10 + растушёвка 34 + 12 = 104 над вкладками — последняя плитка выезжает целиком */
 .paper::-webkit-scrollbar{display:none}
 .sec{display:flex;align-items:baseline;gap:10px;padding:18px 0 4px;font:700 17px/20px Onest}
 .sec:first-child{padding-top:14px}
@@ -150,6 +151,7 @@ table.t th{background:var(--pg-tab);font-weight:700;border-top:0}
 .tile{background:var(--paper2);border-radius:18px;padding:13px 14px;min-height:106px;display:flex;flex-direction:column;gap:3px;cursor:pointer;min-width:0}
 .tile.wide{grid-column:span 2;min-height:0;flex-direction:row;align-items:center;gap:12px}
 .tile .lab{display:flex;align-items:center;gap:6px;font:600 13px/16px Onest;color:var(--ink2)}
+.tile .big.zero{color:var(--ink3)}
 .tile .big{font:800 24px/28px Onest;letter-spacing:-.4px;font-variant-numeric:tabular-nums;margin-top:4px}
 .tile .sub{font:400 13px/17px Onest;color:var(--ink3);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .ptab{width:12px;height:16px;border-radius:4px;flex:none}
@@ -265,7 +267,7 @@ const P={
  morning:{now:500,done:[],ph:['Доброе утро.','8 дел, первое в 9:00.'],spent:null,shop:['Хлеб','Молоко','Яйца','Лекарства маме','Корм коту'],tip:true},
  day:{now:850,done:['a','c'],ph:['Свободно до 15:00.','Ещё 5 дел сегодня.'],spent:{sum:'4 350',parts:[['k-cafe',1200],['k-trans',3150]],sub:'кофе, такси'},shop:['Хлеб','Молоко','Яйца','Лекарства маме','Корм коту']},
  evening:{now:1275,done:['a','b','c','d','e','f','u2'],ph:['День позади.','Сделано 7 из 8.'],spent:{sum:'6 850',parts:[['k-cafe',1200],['k-trans',3150],['k-food',2500]],sub:'кофе, такси, продукты'},shop:['Лекарства маме','Корм коту']},
- night:{now:1420,done:['a','b','c','d','e','f','u2'],ph:['Спокойной ночи.','Завтра 3 дела.'],spent:null,shop:[],night:true}
+ night:{now:1420,done:['a','b','c','d','e','f','u2'],ph:['Спокойной ночи.','Завтра 3 дела.'],spent:{sum:'6 850',parts:[['k-cafe',1200],['k-trans',3150],['k-food',2500]],sub:'кофе, такси, продукты'},shop:[],night:true}
 };
 
 /* ---------------- иконки ---------------- */
@@ -374,7 +376,7 @@ function v3paper(ph){
     h+=`<div class="sec">Завтра, суббота</div>`;
     TOMORROW.forEach((x,i)=>h+=prow(x,'fut',{first:i===0}));
     h+=`<div class="cap">${ic('alarm','xs')}Будильник на 8:00 стоит</div>`;
-    return h;
+    return h+tilesHTML(st);
   }
   const timed=ITEMS.map(x=>({x,s:stateOf(x,now,D)}));
   const unt=UNTIMED.map(x=>({x,s:D.has(x.id)?'done':'open'}));
@@ -403,14 +405,18 @@ function v3paper(ph){
     const hidden=ahead.length+restU.length-rows;
     if(hidden>0)h+=`<div class="pmore" data-act="list"><span class="f1">Ещё ${hidden}</span>${ic('right','xs')}</div>`;
   }
-  const tiles=[];
-  if(st.spent)tiles.push(`<div class="tile" data-act="toast" data-msg="Открою «Расходы»"><div class="lab"><span class="ptab" style="background:var(--exp)"></span>Потрачено</div><div class="big">${st.spent.sum}<span style="font-size:.6em;margin-left:2px">₸</span></div><div class="sub">${st.spent.sub}</div><div class="cbar">${st.spent.parts.map(([c,v])=>`<i style="flex:${v};background:var(--${c})"></i>`).join('')}</div></div>`);
-  if(st.shop.length)tiles.push(`<div class="tile ${tiles.length||st.spent?'':'wide'}" data-act="toast" data-msg="Открою «Покупки»">${st.spent?`<div class="lab">${ic('bag','xs')}Купить</div><div class="big">${st.shop.length}</div><div class="sub">${st.shop.join(', ').toLowerCase()}</div>`:`<span style="width:38px;height:38px;border-radius:12px;background:var(--paper);display:grid;place-items:center">${ic('bag','s')}</span><div class="f1"><div style="font:700 16px/20px Onest">Купить ${st.shop.length}</div><div class="sub" style="-webkit-line-clamp:1">${st.shop.join(', ').toLowerCase()}</div></div>${ic('right','xs')}`}</div>`);
-  if(tiles.length)h+=`<div class="tiles">${tiles.join('')}</div>`;
+  h+=tilesHTML(st);
   if(st.tip&&!ph.extra.tipOff)h+=`<div class="tip"><span class="dot"></span><span class="f1">Сфотографируйте чек — сам запишу трату и разложу по категориям. <u data-act="tipoff">Не сейчас</u></span></div>`;
   return h;
 }
 const PERIOD_OF=ph=>ph.period;
+/* Плитки (Ф-93): всегда две рядом, в каждом состоянии одинаковые; пустая плитка остаётся плиткой. */
+function tilesHTML(st){
+  const sp=st.spent, sh=st.shop;
+  const spent=`<div class="tile" data-act="toast" data-msg="Открою «Расходы»"><div class="lab"><span class="ptab" style="background:var(--exp)"></span>Потрачено</div><div class="big ${sp?'':'zero'}">${sp?sp.sum:'0'}<span style="font-size:.6em;margin-left:2px">₸</span></div><div class="sub">${sp?sp.sub:'сегодня трат не было'}</div><div class="cbar">${sp?sp.parts.map(([c,v])=>`<i style="flex:${v};background:var(--${c})"></i>`).join(''):'<i style="flex:1;background:var(--line)"></i>'}</div></div>`;
+  const buy=`<div class="tile" data-act="toast" data-msg="Открою «Покупки»"><div class="lab">${ic('bag','xs')}Купить</div><div class="big ${sh.length?'':'zero'}">${sh.length?sh.length:'Пусто'}</div><div class="sub">${sh.length?sh.join(', ').toLowerCase():'скажите «купить хлеб»'}</div></div>`;
+  return `<div class="tiles">${spent}${buy}</div>`;
+}
 function v3(ph){const a=altOf(ph);return chrome(`<div class="sheet">${shTop(undefined,true)}${phrase((PH[a]||{})[ph.period]||ph.st.ph)}${headEl(ph)}</div><div class="paper">${v3paper(ph)}</div>`,ph)}
 
 /* ---------------- ВАРИАНТ 0 · как сейчас ---------------- */
@@ -533,10 +539,10 @@ function build(){
   Object.keys(W).forEach(render);
 }
 const CAPS={
- morning:'Наверху первое дело и сколько до него осталось. «План» — все дела дня по порядку. Трат ещё нет, поэтому одна широкая плитка «Купить 5». Подсказка — только в первые 7 дней.',
+ morning:'Наверху первое дело и сколько до него осталось. «План» — все дела дня по порядку. Трат ещё нет: плитка «Потрачено 0 ₸» остаётся на месте, серым. Подсказка — только в первые 7 дней.',
  day:'Наверху следующее дело. «Прошло» свёрнуто в одну строку, касание раскрывает её с [Сделано]. Две плитки.',
  evening:'«Осталось с сегодня» с кнопкой [На завтра], затем завтрашний план. Плитка «Потрачено сегодня» — итог дня.',
- night:'Наверху первое дело завтра, касание открывает календарь на субботе. Только план на завтра и будильник, плиток нет — ночью экран спокойный.'
+ night:'Наверху первое дело завтра, касание открывает календарь на субботе. План на завтра, будильник и те же две плитки; список покупок пуст — плитка «Купить · Пусто».'
 };
 
 /* ---------------- действия ---------------- */
