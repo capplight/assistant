@@ -253,3 +253,128 @@ async def test_the_line_makes_a_timed_todo_and_asks_an_unclear_hour(env9):  # no
         assert task["title"] == "Стоматолог" and task["local"]["start"] == "9:00"
         assert task["local"]["date"] == local_day(2).isoformat() and task["duration_min"] == 60
         assert "ChatReply" not in script.calls  # all by code
+
+
+# --- the to-do's alert: `reminder_offset_min` (calendar.md «Reminder of a to-do»)
+
+
+async def reminders_of(c, h) -> list[dict]:  # type: ignore[no-untyped-def]
+    return [r for r in (await c.get("/v1/reminders", headers=h)).json()["reminders"]
+            if r["deleted_at"] is None]
+
+
+async def task_now(c, h, tid: str) -> dict:  # type: ignore[no-untyped-def]
+    rows = (await c.get("/v1/tasks", params={"include_done": True}, headers=h)).json()["tasks"]
+    return next(t for t in rows if t["id"] == tid)
+
+
+async def test_a_timed_todo_carries_its_alert_offset_with_undo(env9):  # noqa: F811
+    app = env9.make_app(router9(env9.maker, Script9()))
+    async with client(app) as c:
+        h = await signed_in(c)
+        made = await make(c, h, "Врач", start_at=at(1, 15), duration_min=30,
+                          reminder_offset_min=10)  # fmt: skip
+        task = made["task"]
+        assert task["reminder_offset_min"] == 10
+        [rem] = await reminders_of(c, h)
+        assert rem["item_id"] == task["item_id"] and rem["rrule"] is None
+        assert datetime.fromisoformat(rem["due_at"]) == at(1, 14, 50)
+        [e] = await cal(c, h, 1, 1)  # the alert is the to-do's, not its own entry
+        assert e["kind"] == "task" and e["reminder_offset_min"] == 10
+        assert e["reminder"]["id"] == rem["id"] and e["reminder"]["offset_min"] == 10
+
+        # 30 min before; then «нет»; undo brings 30 back
+        r = await c.patch(f"/v1/tasks/{task['id']}", json={"version": task["version"],
+                                                          "reminder_offset_min": 30}, headers=h)
+        assert r.status_code == 200, r.text
+        assert r.json()["task"]["reminder_offset_min"] == 30
+        [rem] = await reminders_of(c, h)
+        assert datetime.fromisoformat(rem["due_at"]) == at(1, 14, 30)
+        cur = await task_now(c, h, task["id"])
+        off = await c.patch(f"/v1/tasks/{task['id']}", json={"version": cur["version"],
+                                                            "reminder_offset_min": None},
+                            headers=h)  # fmt: skip
+        assert off.json()["task"]["reminder_offset_min"] is None and await reminders_of(c, h) == []
+        await undo(c, h, off.json()["action"])
+        [rem] = await reminders_of(c, h)
+        assert datetime.fromisoformat(rem["due_at"]) == at(1, 14, 30)
+        # the move takes the alert along (same offset)
+        cur = await task_now(c, h, task["id"])
+        r = await c.patch(f"/v1/tasks/{task['id']}", json={"version": cur["version"],
+                                                          "start_at": at(1, 17).isoformat()},
+                          headers=h)  # fmt: skip
+        assert r.json()["task"]["reminder_offset_min"] == 30
+        [rem] = await reminders_of(c, h)
+        assert datetime.fromisoformat(rem["due_at"]) == at(1, 16, 30)
+        # «Отменить» of a creation takes the alert away too
+        other = await make(c, h, "Стрижка", start_at=at(2, 11), reminder_offset_min=60)
+        assert len(await reminders_of(c, h)) == 2
+        await undo(c, h, other["action"])
+        assert [x["id"] for x in await reminders_of(c, h)] == [rem["id"]]
+        # an alert that would ring in the past is not made
+        soon = datetime.now(UTC) + timedelta(minutes=5)
+        late = await make(c, h, "Сейчас", start_at=soon, reminder_offset_min=60)
+        assert late["task"]["reminder_offset_min"] is None
+
+
+async def test_a_repeating_todo_alert_follows_the_series(env9):  # noqa: F811
+    app = env9.make_app(router9(env9.maker, Script9()))
+    async with client(app) as c:
+        h = await signed_in(c)
+        run = (await make(c, h, "Пробежка", start_at=at(1, 7), duration_min=30,
+                          rrule="FREQ=DAILY", reminder_offset_min=15))["task"]  # fmt: skip
+        [rem] = await reminders_of(c, h)
+        assert rem["rrule"] == "FREQ=DAILY"
+        assert datetime.fromisoformat(rem["due_at"]) == at(1, 6, 45)
+        # the whole series to 8:00: the alert to 7:45
+        r = await c.patch(f"/v1/tasks/{run['id']}", json={"version": run["version"],
+                                                         "start_at": at(1, 8).isoformat()},
+                          headers=h)  # fmt: skip
+        assert r.status_code == 200, r.text
+        [rem] = await reminders_of(c, h)
+        assert datetime.fromisoformat(rem["due_at"]) == at(1, 7, 45)
+        # an occurrence's own alert is not supported (documented): 422
+        entries = await cal(c, h, 1, 3)
+        cur = await task_now(c, h, run["id"])
+        bad = await c.patch(f"/v1/tasks/{run['id']}", json={
+            "version": cur["version"], "occurrence_at": entries[1]["occurrence_at"],
+            "reminder_offset_min": 5}, headers=h)  # fmt: skip
+        assert bad.status_code == 422
+        # «это и следующие»: the old alert ends, the new series has its own
+        r = await c.patch(f"/v1/tasks/{run['id']}", json={
+            "version": cur["version"], "scope": "following",
+            "occurrence_at": entries[2]["occurrence_at"], "start_at": at(3, 9).isoformat()},
+            headers=h)  # fmt: skip
+        assert r.status_code == 200, r.text
+        assert r.json()["task"]["reminder_offset_min"] == 15
+        alerts = sorted(await reminders_of(c, h), key=lambda x: x["due_at"])
+        assert alerts[0]["rrule"].startswith("FREQ=DAILY;UNTIL=")
+        assert datetime.fromisoformat(alerts[1]["due_at"]) == at(3, 8, 45)
+        await undo(c, h, r.json()["action"])
+        [rem] = await reminders_of(c, h)
+        assert rem["rrule"] == "FREQ=DAILY"
+
+
+@pytest.mark.parametrize("spelling", ["z", "offset"])
+async def test_occurrence_at_takes_z_and_offset(env9, spelling):  # noqa: F811
+    app = env9.make_app(router9(env9.maker, Script9()))
+    async with client(app) as c:
+        h = await signed_in(c)
+        run = (await make(c, h, "Зарядка", start_at=at(1, 7), rrule="FREQ=DAILY"))["task"]
+        first, second = (await cal(c, h, 1, 2))[:2]
+
+        def spell(value: str) -> str:
+            utc = datetime.fromisoformat(value).astimezone(UTC)
+            return (utc.strftime("%Y-%m-%dT%H:%M:%SZ") if spelling == "z"
+                    else utc.isoformat())  # fmt: skip
+
+        assert spell(first["occurrence_at"]).endswith("Z" if spelling == "z" else "+00:00")
+        r = await c.post(f"/v1/tasks/{run['id']}/done", json={
+            "client_id": str(uuid.uuid4()), "occurrence_at": spell(first["occurrence_at"])},
+            headers=h)  # fmt: skip
+        assert r.status_code == 200, r.text
+        r = await c.delete(f"/v1/tasks/{run['id']}", params={
+            "occurrence_at": spell(second["occurrence_at"]), "scope": "this"}, headers=h)
+        assert r.status_code == 200, r.text
+        entries = await cal(c, h, 1, 2)
+        assert [(e["date"], e["done"]) for e in entries] == [(local_day(1).isoformat(), True)]

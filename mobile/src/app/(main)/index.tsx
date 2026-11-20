@@ -145,6 +145,11 @@ export default function TodayScreen() {
     if (e.start !== null) void moveEntry(e, { date: tomorrow, start: e.start, duration: e.duration });
     else void changeTask(e.id, { due_date: tomorrow }, t('todayTime.moved_tomorrow', { title: e.title }));
   };
+  // §14.1: «Все дела ›» and the rows of «Не забыть» always open «Дела» as the list (never the last calendar view).
+  const openTaskList = () => {
+    calState().set({ view: 'list', date: null });
+    openPage('tasks');
+  };
   // calendar-time.md §2 «Календарь ›»: the calendar «День» on the chosen date (the tab stays «Сегодня»).
   const openCalendar = (d: string) => {
     const p = pages.find((x) => x.templateKey === 'tasks');
@@ -588,7 +593,7 @@ export default function TodayScreen() {
                 first={i === 0}
                 testID={`task-${x.id}`}
                 accessibilityRole="button"
-                onPress={() => openPage('tasks')}
+                onPress={openTaskList}
                 accessibilityLabel={x.title}
               >
                 {/* QA A5: the circle sits at the column edge (its 48 target overhangs). */}
@@ -612,7 +617,7 @@ export default function TodayScreen() {
           {forgetMore > 0 && tasksPage ? (
             <Row
               testID="today-forget-more"
-              onPress={() => openPage('tasks')}
+              onPress={openTaskList}
               accessibilityLabel={`${t('today.more_n', { count: forgetMore })}, ${t('today.all_tasks_short')}`}
             >
               <AppText style={{ flex: 1, fontFamily: theme.type.bodyStrong.fontFamily }} numberOfLines={1}>
@@ -728,15 +733,6 @@ export default function TodayScreen() {
             // Ф-84 «Сводка»: missed → «Не забыть» → (first days) «Три первые фразы» → the nearest day → «Недавно
             // сохранили». A section with nothing to show is not there (no empty blocks).
             <View testID="today-list">
-              {/* A6: «План дня · Календарь ›» is always there; an empty day says «свободно» (the Ф-84 «Сводка» follows). */}
-              {tasksPage ? (
-                <View testID="today-plan-free">
-                  <SectionHead first={missedRows.length === 0} title={t('today.plan')} link={t('todayTime.calendar')} onLink={() => openCalendar(today)} linkTestID="today-calendar" />
-                  <Row first onPress={() => openCalendar(today)} accessibilityLabel={`${t('today.plan')}: ${t('todayTime.plan_free')}`}>
-                    <AppText style={{ flex: 1, color: theme.colors.ink2 }}>{t('todayTime.plan_free')}</AppText>
-                  </Row>
-                </View>
-              ) : null}
               {notForget}
               {steps.show ? (
                 <FirstPhrases
@@ -753,9 +749,10 @@ export default function TodayScreen() {
                   <SectionHead
                     first={missedRows.length === 0 && forgetRows.length === 0 && !steps.show}
                     title={nearTitle}
-                    link={tasksPage ? t('today.all_tasks_short') : undefined}
-                    onLink={() => openDay(nearDay)}
-                    linkTestID="today-all-tasks"
+                    // calendar-time.md §14.1: an empty today — «Календарь ›» opens «День» on the nearest day with things.
+                    link={tasksPage ? t('todayTime.calendar') : undefined}
+                    onLink={() => openCalendar(nearDay)}
+                    linkTestID="today-calendar"
                   />
                   {nearRows.map((r, i) => (
                     <Row key={r.key} first={i === 0}>
@@ -916,7 +913,7 @@ export default function TodayScreen() {
               <SectionHead
                 title={t('today.tomorrow')}
                 link={tasksPage ? t('today.all_tasks_short') : undefined}
-                onLink={() => openPage('tasks')}
+                onLink={openTaskList}
               />
               {tomorrowRows.map((r, i) => (
                 <Row key={r.key} first={i === 0}>

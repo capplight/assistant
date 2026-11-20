@@ -354,8 +354,11 @@ async def tasks_dicts(session: AsyncSession, rows: Sequence[Task]) -> list[dict[
                 select(Item.id, Item.public_id, Item.assistant_changed_at,
                        Item.assistant_action_id).where(Item.id.in_(ids))):  # fmt: skip
             pids[pk], marks[pk] = pid, mark_fields(at, aid)
-    return [{**task_dict(t, pids.get(t.item_id)), **marks.get(t.item_id, mark_fields(None, None))}
-            for t in rows]  # fmt: skip
+    from assistant.tasks.calendar import offsets_of
+
+    offsets = await offsets_of(session, rows[0].user_id, list(rows)) if rows else {}
+    return [{**task_dict(t, pids.get(t.item_id)), **marks.get(t.item_id, mark_fields(None, None)),
+             "reminder_offset_min": offsets.get(t.id)} for t in rows]  # fmt: skip
 
 
 def local_of(t: Task) -> dict[str, Any] | None:

@@ -5,8 +5,9 @@
   row is made on first use). Its reverse sets the old values back; a row that did not exist goes
   back to «no own values» (`remove: true` deletes it). `expect` = what this op left: a later
   change by the person makes the undo skip it.
-- `set_reminder_time` {id, due_at, duration_min?, expect?}: a reminder linked to a moved task
-  moves with it (fires planned again); the reverse is `restore_reminder`.
+- `set_reminder_time` {id, due_at, duration_min?, rrule?, expect?}: a reminder linked to a
+  moved task moves with it (fires planned again; `rrule` follows a repeating task); the reverse
+  is `restore_reminder`.
 """
 
 import uuid
@@ -103,15 +104,16 @@ async def _set_reminder_time(session: AsyncSession, user_id: int, op: dict, out:
         return
     due = datetime.fromisoformat(op["due_at"])
     duration = op.get("duration_min", r.duration_min)
-    if due == r.due_at and duration == r.duration_min:
+    rrule = op.get("rrule", r.rrule) if "rrule" in op else r.rrule
+    if due == r.due_at and duration == r.duration_min and rrule == r.rrule:
         return
     back = reminder_state(r)
     from assistant.reminders import service as reminders  # reminders -> chat -> actions
 
-    if not r.rrule and due <= now:
+    if not rrule and due <= now:
         out.skipped += 1  # a one-off cannot ring in the past
         return
-    r.due_at, r.duration_min = due, duration
+    r.due_at, r.duration_min, r.rrule = due, duration, rrule
     r.version += 1
     r.snooze_until = None
     await session.flush()

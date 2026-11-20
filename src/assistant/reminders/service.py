@@ -9,6 +9,7 @@ stored: matching future fires keep their id, the rest of the future ones become 
 (the phone drops them), new ones are added. Repeating reminders are expanded HORIZON ahead.
 """
 
+import re
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -47,7 +48,7 @@ SNOOZE_MAX = timedelta(hours=48)  # ... to at + 48 h («завтра» from any 
 REPEAT_MINUTES = (5, 10, 15)
 TEST_IN = timedelta(minutes=1)
 EVENT_FUTURE_SLACK = timedelta(minutes=5)
-_RRULE_KEYS = {"FREQ", "BYDAY", "BYMONTHDAY", "INTERVAL"}
+_RRULE_KEYS = {"FREQ", "BYDAY", "BYMONTHDAY", "INTERVAL", "UNTIL"}
 _DAYS = {"MO", "TU", "WE", "TH", "FR", "SA", "SU"}
 
 LIVE_FIRE_STATES = (FireState.PLANNED, FireState.FIRED, FireState.SNOOZED)
@@ -104,7 +105,9 @@ def check_rrule(rule: str | None) -> str | None:
         or not 1 <= int(parts["BYMONTHDAY"]) <= 31
     ):
         raise ReminderError("validation_error")
-    order = ["FREQ", "INTERVAL", "BYDAY", "BYMONTHDAY"]
+    if "UNTIL" in parts and not re.fullmatch(r"\d{8}T\d{6}Z", parts["UNTIL"]):
+        raise ReminderError("validation_error")  # 0035: the alert of an ended series
+    order = ["FREQ", "INTERVAL", "BYDAY", "BYMONTHDAY", "UNTIL"]
     return ";".join(f"{k}={parts[k]}" for k in order if k in parts)
 
 
@@ -125,12 +128,18 @@ def occurrences(r: Reminder, start: datetime, end: datetime) -> list[datetime]:
         return [r.due_at] if start <= r.due_at < end else []
     zone = ZoneInfo(r.tz)
     dtstart = r.due_at.astimezone(zone).replace(tzinfo=None)
-    rule = rrulestr(r.rrule, dtstart=dtstart)
+    parts = r.rrule.split(";")
+    until_text = next((p[6:] for p in parts if p.startswith("UNTIL=")), None)
+    until = (datetime.strptime(until_text, "%Y%m%dT%H%M%SZ").replace(tzinfo=UTC)
+             if until_text else None)  # fmt: skip
+    rule = rrulestr(";".join(p for p in parts if not p.startswith("UNTIL=")), dtstart=dtstart)
     lo = max(start.astimezone(zone).replace(tzinfo=None), dtstart) - timedelta(seconds=1)
     hi = end.astimezone(zone).replace(tzinfo=None)
     out: list[datetime] = []
     for local in rule.between(lo, hi, inc=True):
         moment = local.replace(tzinfo=zone).astimezone(UTC)
+        if until is not None and moment > until:
+            break  # 0035: the series ended («это и следующие»)
         if start <= moment < end:
             out.append(moment)
         if len(out) >= MAX_OCCURRENCES:

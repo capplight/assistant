@@ -5,7 +5,7 @@ assistant.actions. The line (`/v1/chat/messages`) adds tasks through the same `t
 """
 
 import uuid
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Response
@@ -144,10 +144,17 @@ async def create_task(body: TaskIn, user: GatedUser, db: Db,
                                   client_id=body.client_id, dedupe=body.start_at is None)
     except (service.TaskError, ValueError) as exc:
         raise ApiError(422, "validation_error") from exc
+    inverse = list(added.inverse)
+    made = added.tasks[0]
+    if body.reminder_offset_min is not None and made.start_at is not None:
+        _, undo_alert = await cal.alert_ops(db, user.id, made, start=made.start_at,
+                                            rrule=made.rrule, offset=body.reminder_offset_min,
+                                            now=now)  # fmt: skip
+        inverse = [*undo_alert, *inverse]
     action = await record(
         db, user_id=user.id, kind=ActionKind.SAVE_ITEM, initiated_by=Initiator.USER,
         summary={"ru": added.sentence, "kk": None}, changes=added.changes,
-        inverse=added.inverse, now=now, screen_id=added.page.id if added.page else None,
+        inverse=inverse, now=now, screen_id=added.page.id if added.page else None,
         source_item_ids=added.item_pks, client_id=body.client_id,
     )  # fmt: skip
     await db.flush()
@@ -179,7 +186,8 @@ async def patch_task(task_id: uuid.UUID, body: TaskPatchIn, user: GatedUser,
     if task.version != body.version:
         raise ApiError(409, "conflict", details={"version": task.version})
     sent = body.model_fields_set - {"version", "client_id"}
-    if sent & {"start_at", "duration_min", "tz", "rrule", "occurrence_at", "scope"}:
+    if sent & {"start_at", "duration_min", "tz", "rrule", "occurrence_at", "scope",
+               "reminder_offset_min"}:
         return await _patch_time(db, user.id, task, body, sent, now)
     values: dict[str, Any] = {}
     try:
@@ -371,6 +379,7 @@ async def _delete_some(db: Db, user_id: int, task: Task, item_pid: uuid.UUID, at
         ops: list[dict[str, Any]] = [{"op": "set_task", "id": str(task.public_id),
                                       "item": str(item_pid),
                                       "values": {"rrule": cal.with_until(task.rrule or "", at)}}]
+        ops += await _alert_ends(db, user_id, task, at, now)
         sentence = f"Больше не повторяю: {service.lower_first(task.title)}"
     else:
         ops = [{"op": "set_occurrence", "task": str(task.public_id), "item": str(item_pid),
@@ -404,7 +413,11 @@ async def _patch_time(db: Db, user_id: int, task: Task, body: TaskPatchIn, sent:
         rule = cal.check_rrule(body.rrule) if "rrule" in sent else task.rrule
     except (service.TaskError, ValueError) as exc:
         raise ApiError(422, "validation_error") from exc
-    other = sent - {"start_at", "duration_min", "tz", "rrule", "occurrence_at", "scope"}
+    other = sent - {"start_at", "duration_min", "tz", "rrule", "occurrence_at", "scope",
+                    "reminder_offset_min"}
+    alert = await cal.linked_reminder(db, user_id, task)
+    offset = (body.reminder_offset_min if "reminder_offset_min" in sent
+              else cal.offset_of(task.start_at, alert))  # fmt: skip
     if other:
         raise ApiError(422, "validation_error")  # a time change goes alone
     ops: list[dict[str, Any]] = []
@@ -418,7 +431,8 @@ async def _patch_time(db: Db, user_id: int, task: Task, body: TaskPatchIn, sent:
         scope, at = "all", None  # from the first one on = the whole series
     if scope == "this":
         assert at is not None
-        if "rrule" in sent or "tz" in sent or ("start_at" in sent and new_start is None):
+        if "rrule" in sent or "tz" in sent or "reminder_offset_min" in sent or (
+                "start_at" in sent and new_start is None):  # fmt: skip
             raise ApiError(422, "validation_error")  # one occurrence: only its time
         values: dict[str, Any] = {}
         if "start_at" in sent:
@@ -446,6 +460,12 @@ async def _patch_time(db: Db, user_id: int, task: Task, body: TaskPatchIn, sent:
             raise ApiError(422, "validation_error") from exc
         new_task, previous = added.tasks[0], task
         extra_inverse = list(added.inverse)
+        if alert is not None:  # the old series' alert ends with it
+            ops += await _alert_ends(db, user_id, task, at, now)
+        if offset is not None:
+            _, undo_alert = await cal.alert_ops(db, user_id, new_task, start=new_task.start_at,
+                                                rrule=new_task.rrule, offset=offset, now=now)
+            extra_inverse = [*undo_alert, *extra_inverse]
         sentence = cal.moved_sentence(task, at, new_task.start_at)
     else:
         start = new_start if "start_at" in sent else task.start_at
@@ -463,7 +483,15 @@ async def _patch_time(db: Db, user_id: int, task: Task, body: TaskPatchIn, sent:
             values["due_date"] = probe.due_date.isoformat()
         ops.append({"op": "set_task", "id": str(task.public_id), "item": str(item_pid),
                     "values": values})  # fmt: skip
-        if not task.rrule and not rule and old_start is not None and probe.start_at is not None:
+        if "reminder_offset_min" in sent or (alert is not None and (task.rrule or rule)
+                                             and offset is not None):  # fmt: skip
+            # the alert: set / changed / removed, or it follows a repeating task
+            alert_ops, undo_alert = await cal.alert_ops(
+                db, user_id, task, start=probe.start_at, rrule=probe.rrule, offset=offset,
+                now=now)  # fmt: skip
+            ops += alert_ops
+            extra_inverse = [*undo_alert, *extra_inverse]
+        elif old_start is not None and probe.start_at is not None:
             ops += await cal.reminder_shift_ops(db, user_id, task, probe.start_at - old_start,
                                                 now)  # fmt: skip
         sentence = (cal.moved_sentence(task, old_start, probe.start_at)
@@ -485,6 +513,18 @@ async def _patch_time(db: Db, user_id: int, task: Task, body: TaskPatchIn, sent:
                           action=await _action_out(db, action, now),
                           occurrence=occ,  # type: ignore[arg-type]
                           previous_task=await _task_out(db, previous) if previous else None)
+
+
+async def _alert_ends(db: Db, user_id: int, task: Task, at: datetime,
+                      now: datetime) -> list[dict[str, Any]]:  # fmt: skip
+    """The repeating alert of a series ended before `at` ends with it."""
+    alert = await cal.linked_reminder(db, user_id, task)
+    if alert is None or not alert.rrule:
+        return []
+    offset = cal.offset_of(task.start_at, alert) or 0
+    return [{"op": "set_reminder_time", "id": str(alert.public_id),
+             "due_at": alert.due_at.isoformat(),
+             "rrule": cal.with_until(alert.rrule, at - timedelta(minutes=offset))}]
 
 
 def _without_until(rule: str | None) -> str | None:

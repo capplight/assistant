@@ -35,7 +35,7 @@ record (page = view on the shared memory), found by search and goes to the trash
 | `list_key` | `todo` («Дела») or `shopping` («Покупки»). |
 | `title` | 1–200 chars. On «Покупки» = ★Что, on «Дела» = ★Что. |
 | `qty`, `where` | «Сколько», «Где купить»: free text ≤60, or null. Shopping only (ignored on `todo`). |
-| `start_at`, `duration_min`, `tz`, `rrule`, `all_day`, `source`, `local` | 0035, the calendar: a to-do with a time, its length, repeat; see `calendar.md`. |
+| `start_at`, `duration_min`, `tz`, `rrule`, `all_day`, `source`, `local`, `reminder_offset_min` | 0035, the calendar: a to-do with a time, its length, repeat, and its alert (minutes before the start; `POST` / `PATCH` take it too); see `calendar.md`. |
 | `due_date` | «Когда» for a to-do (no time: a time makes it a reminder). Null = no day. Set by code from the phrase's own day words (Ф-89): «сегодня / завтра / послезавтра», «в пятницу», «в следующий вторник» (the Tuesday of next week), «через неделю», «через 3 дня», Kazakh «бүгін / ертең / бүрсігүні», «келесі сейсенбі»; also on the model path (the model's `day` is used only when code finds no day words). |
 | `done` / `done_at` | ★Куплено / ★Сделано. |
 | `deleted_at` | Set when the task went to the trash (its record too). Hide it. «Отменить» brings both back. |

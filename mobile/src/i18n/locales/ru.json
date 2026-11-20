@@ -2471,7 +2471,6 @@
     "to_tomorrow": "На завтра",
     "was_at": "было в {{time}}",
     "calendar": "Календарь",
-    "plan_free": "свободно",
     "moved_tomorrow": "Перенёс на завтра: «{{title}}»"
   }
 }

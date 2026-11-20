@@ -165,8 +165,9 @@ describe('«Помощник» — the centre tab', () => {
     expect(screen.getByTestId('more-tasks')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('more-tasks'));
     await settle(() => r.getPathname() === `/page/${page('tasks').id}`);
-    // QA B «Дела» 6: opened from «Ещё» → «‹ Ещё» back to «Ещё».
-    expect(screen.getByTestId('page-back')).toHaveTextContent(/Ещё/);
+    // QA B «Дела» 6: opened from «Ещё» → back returns to «Ещё». Calendar §14 (2026-11-20): the
+    // list view's back is an arrow only («‹», same spot as the calendar), no label.
+    expect(screen.getByTestId('page-back')).not.toHaveTextContent(/Ещё|Сегодня/);
     await fireEvent.press(screen.getByTestId('page-back'));
     expect(r.getPathname()).toBe('/more');
   });

@@ -36,7 +36,8 @@ import { pressedStyle, useReducedMotion } from './motion';
  * Phrase: only where given and not `titleOnly` (≤ 340 dp or font ≥ 1.3), ≤ 2 lines.
  */
 export type SheetAction = { key: string; icon: LucideIcon; label: string; onPress: () => void; testID?: string };
-export type SheetBack = { label: string; onPress: () => void; testID?: string };
+/** `iconOnly`: the one arrow «‹» without words (Ф-91, calendar-time.md §14.2); `label` goes to screen readers. */
+export type SheetBack = { label: string; onPress: () => void; testID?: string; iconOnly?: boolean };
 
 export type PlaceScreenProps = {
   place: PlaceKey;
@@ -248,6 +249,25 @@ export function SheetBackButton({
 }) {
   const theme = useTheme();
   const big = place === 'assistant';
+  if (back.iconOnly) {
+    // The same arrow, size and place as the calendar views (`CalSheetTop`): switching views never moves it.
+    return (
+      <Pressable
+        testID={back.testID ?? 'header-back'}
+        accessibilityRole="button"
+        accessibilityLabel={back.label}
+        onPress={back.onPress}
+        hitSlop={4}
+        style={({ pressed }) => [
+          styles.icon,
+          { width: 48, height: 48, margin: -4, marginLeft: strip ? -4 : -14, borderRadius: 24 },
+          pressedStyle(pressed),
+        ]}
+      >
+        <ChevronLeft size={22} color={color} strokeWidth={theme.icon.strokeWidth} />
+      </Pressable>
+    );
+  }
   return (
     <Pressable
       testID={back.testID ?? 'header-back'}
@@ -406,7 +426,8 @@ export function PlaceScreen({
   const extraKnown = !sheetExtra || sheetExtraHeight !== undefined;
   const estimate = expandedSheetHeight({
     m,
-    back: !!back,
+    // The arrow-only back lays out 40 high, like the top row itself.
+    back: !!back && !back.iconOnly,
     meta: !!(meta || metaNode),
     phraseLines: showPhrase ? phraseLines(phrase) : 0,
     title: !showPhrase && !hideTitle,

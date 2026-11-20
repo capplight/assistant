@@ -11,7 +11,8 @@ import { pressedStyle } from './motion';
 
 export type HeaderAction = { key: string; icon: LucideIcon; label: string; onPress: () => void; testID?: string };
 
-type BackProps = { onPress: () => void; label?: string; testID?: string };
+/** `iconOnly` (calendar-time.md §14.2): only the arrow «‹» (48 target, chevron 22, −14 left); the label is for screen readers. */
+type BackProps = { onPress: () => void; label?: string; testID?: string; iconOnly?: boolean };
 
 /** «‹ Назад»: brand, 15, chevron 20 — only on stack screens. One component instead of the four variants. */
 export function BackButton({ onPress, label, testID = 'header-back' }: BackProps) {

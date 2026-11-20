@@ -99,7 +99,7 @@ two PATCHes).
 
 | field | meaning |
 |---|---|
-| `occurrence_at` | the entry's `occurrence_at`: change only that one (default scope `this`) |
+| `occurrence_at` | the entry's `occurrence_at`: change only that one (default scope `this`). Any ISO form with an offset: `…Z` and `…+00:00` are the same moment (also in the `DELETE` query, URL-encode `+` as `%2B`) |
 | `scope` | `this` (only this occurrence) · `following` (this and the next ones) · `all` (the series; default without `occurrence_at`). «Все» for past ones is not offered in the UI. |
 
 - `this`: writes the occurrence's own `start_at` / `duration_min`; `title` / `rrule` cannot be
@@ -113,6 +113,32 @@ two PATCHes).
   null, "repeated": false}`. `start` / `end` are «H:MM» (no leading zero: «9:00», «15:00»). `409 conflict {version}` on a stale `version` (reload the task).
   The action (`facet_edit`, summary «Перенёс: встреча — 15:00 → 16:00» / «Изменил: …») has the
   inverse: `POST /v1/actions/{id}/undo` puts the time back (the notice «Вернуть»).
+
+## Reminder of a to-do: `reminder_offset_min` (added 2026-11-20, after the first contract)
+
+«Напомнить: за 10 мин / за 30 мин / за час / нет» of the add sheet and the task card.
+
+- `POST /v1/tasks` and `PATCH /v1/tasks/{id}` take `reminder_offset_min`: minutes before
+  `start_at`, 0…1440 (0 = at the start; the UI offers 10, 30, 60, 1440), or `null` = no alert.
+  Only for a to-do with `start_at`; on an all-day one it is ignored.
+- The server keeps **one linked reminder** for it (`reminders.item_id` = the task's `item_id`,
+  `due_at = start_at − offset`, `rrule` = the task's repeat, notification level, `created_via:
+  "manual_form"`). It is made / moved / cancelled **in the same action** as the task change, so
+  «Отменить» / «Вернуть» covers both. Do not create it with `POST /v1/reminders` yourself.
+- PATCH with only `reminder_offset_min` (and `version`) changes just the alert. Sent with
+  `start_at` / `duration_min` it is one action. Moving the to-do without it keeps the offset (the
+  alert moves along); making it all-day (`start_at: null`) leaves an existing alert alone.
+- A new alert that would ring in the past (a one-off starting in 5 min with «за час») is not
+  made: the response has `reminder_offset_min: null`.
+- `Task` (in every payload and sync) and the calendar entry carry `reminder_offset_min` (int or
+  null); the entry's `reminder` object has `offset_min` too.
+- Repeating to-dos: the alert repeats with the series; moving the whole series moves it; «это и
+  следующие» ends the old alert with the old series (`UNTIL`) and gives the new series the same
+  offset; deleting the series cancels it. **Limitation:** one occurrence cannot have its own
+  alert — `reminder_offset_min` with `occurrence_at` / `scope: "this"` → `422`, and an occurrence
+  moved or skipped on its own still rings at the series' time.
+- `POST /v1/reminders` already accepted `item_id` (a record's public id); a repeating reminder's
+  `rrule` may now end with `UNTIL=YYYYMMDDTHHMMSSZ` (the alert of an ended series).
 
 ## Done: `POST /v1/tasks/{id}/done`
 
@@ -136,7 +162,7 @@ is done (its row's `done_at`); without it on a repeating task → `422 validatio
 ## Sync (`GET /v1/sync`)
 
 - `tasks[]`: + `start_at`, `duration_min`, `tz`, `rrule`, `all_day`, `source`, `local`
-  (`{"date", "start", "end"}` or null).
+  (`{"date", "start", "end"}` or null), `reminder_offset_min`.
 - `task_occurrences[]` (new): `{"id", "task_id", "occurrence_at", "start_at", "duration_min",
   "done_at", "skipped", "version", "seq", "updated_at"}`. Hard deletes → tombstone
   `entity: "task_occurrence"`.

@@ -2470,7 +2470,6 @@
     "to_tomorrow": "Ертеңге",
     "was_at": "{{time}} болған",
     "calendar": "Күнтізбе",
-    "plan_free": "бос",
     "moved_tomorrow": "Ертеңге ауыстырдым: «{{title}}»",
     "day_left_few": "Бүгін тағы {{count}} іс.",
     "day_left_many": "Бүгін тағы {{count}} іс.",

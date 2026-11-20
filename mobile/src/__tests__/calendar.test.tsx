@@ -495,17 +495,59 @@ describe('«Дела» as a calendar (A0–A5)', () => {
   });
 });
 
-describe('«Сегодня»: «Календарь ›» opens «День»', () => {
-  it('the link at «План дня» goes to the calendar on today', async () => {
+describe('«Сегодня»: the calendar entry and the list (calendar-time.md §14)', () => {
+  it('§14.1: an empty day has no «План дня» and no «свободно»; nothing in 7 days — no «Календарь ›»', async () => {
+    resetApp();
+    finishOnboarding('full');
+    await renderRouter(APP_DIR, { initialUrl: '/' });
+    await settle(() => screen.queryByTestId('today-list') !== null);
+    expect(screen.queryByTestId('today-plan-head')).toBeNull();
+    expect(screen.queryByTestId('today-plan-free')).toBeNull();
+    expect(screen.queryByText('свободно')).toBeNull();
+    expect(screen.queryByTestId('today-calendar')).toBeNull();
+  });
+
+  it('§14.1: an empty today — «Календарь ›» sits at the nearest day and opens «День» on it', async () => {
+    resetApp();
+    finishOnboarding('full');
+    const tomorrow = addDaysIso(isoDate(Date.now()), 1);
+    useTasks.getState().set({ tasks: { n1: task({ id: 'n1', title: 'Забрать посылку', due_date: tomorrow }) } });
+    calState().set({ view: 'month' });
+    const r = await renderRouter(APP_DIR, { initialUrl: '/' });
+    await settle(() => screen.queryByTestId('today-nearest') !== null);
+    expect(screen.queryByTestId('today-plan-head')).toBeNull();
+    expect(screen.queryByTestId('today-all-tasks')).toBeNull();
+    await fireEvent.press(screen.getByTestId('today-calendar'));
+    await settle(() => r.getPathname() === `/page/${tasksPage().id}`);
+    expect(calState()).toMatchObject({ view: 'day', date: tomorrow });
+    await settle(() => screen.queryByTestId('cal-screen') !== null);
+  });
+
+  it('§14.1: a row of «Не забыть» opens «Дела» as the list, whatever view was last', async () => {
+    resetApp();
+    finishOnboarding('full');
+    const today = isoDate(Date.now());
+    useTasks.getState().set({ tasks: { f1: task({ id: 'f1', title: 'Купить корм', due_date: today }) } });
+    calState().set({ view: 'month' });
+    const r = await renderRouter(APP_DIR, { initialUrl: '/' });
+    await settle(() => screen.queryByTestId('task-f1') !== null);
+    await fireEvent.press(screen.getByTestId('task-f1'));
+    await settle(() => r.getPathname() === `/page/${tasksPage().id}`);
+    expect(calState().view).toBe('list');
+    await settle(() => screen.queryByTestId('page-add') !== null);
+  });
+
+  it('§14.2: the list view of «Дела» has the one arrow «‹» without words, back to «Сегодня»', async () => {
     resetApp();
     finishOnboarding('full');
     calState().set({ view: 'list' });
-    const r = await renderRouter(APP_DIR, { initialUrl: '/' });
-    await settle(() => screen.queryByTestId('today-calendar') !== null);
-    await fireEvent.press(screen.getByTestId('today-calendar'));
-    await settle(() => r.getPathname() === `/page/${tasksPage().id}`);
-    expect(calState().view).toBe('day');
-    await settle(() => screen.queryByTestId('cal-screen') !== null);
+    const r = await renderRouter(APP_DIR, { initialUrl: `/page/${tasksPage().id}` });
+    await settle(() => screen.queryByTestId('page-back') !== null);
+    const back = screen.getByTestId('page-back');
+    expect(back.props.accessibilityLabel).toBe('Назад, Сегодня');
+    expect(back).not.toHaveTextContent(/Сегодня/);
+    await fireEvent.press(back);
+    await settle(() => r.getPathname() === '/');
   });
 });
 

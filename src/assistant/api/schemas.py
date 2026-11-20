@@ -1383,6 +1383,7 @@ class TaskOut(BaseModel):
     all_day: bool = False
     source: str = "user"
     local: dict[str, Any] | None = None
+    reminder_offset_min: int | None = None  # the alert: minutes before the start, null = none
 
 
 class TaskOccurrenceOut(BaseModel):
@@ -1414,6 +1415,7 @@ class TaskIn(BaseModel):
     duration_min: int | None = Field(default=None, ge=5, le=1440)
     tz: str | None = Field(default=None, max_length=64)
     rrule: str | None = Field(default=None, max_length=200)
+    reminder_offset_min: int | None = Field(default=None, ge=0, le=1440)  # the alert
 
 
 class TaskPatchIn(BaseModel):
@@ -1432,6 +1434,7 @@ class TaskPatchIn(BaseModel):
     rrule: str | None = Field(default=None, max_length=200)
     occurrence_at: AwareDatetime | None = None
     scope: Literal["this", "following", "all"] | None = None
+    reminder_offset_min: int | None = Field(default=None, ge=0, le=1440)  # null = no alert
 
 
 class TaskDoneIn(BaseModel):

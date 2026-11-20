@@ -317,12 +317,16 @@ export function PageFrame({ page }: { page: Page }) {
     <Header
       testID="page-header"
       title={title(page)}
-      // «Дела» are not a tab any more (VISION-2026-11): «‹ Сегодня» leads back to where they come from.
+      // «Дела» are not a tab (VISION-2026-11); calendar-time.md §14.2: the list view has the same one arrow «‹» as the
+      // calendar views (no words), back to where they came from.
       back={
         page.templateKey === 'tasks'
-          ? fromMore
-            ? { onPress: () => router.navigate('/more'), label: t('more.title'), testID: 'page-back' }
-            : { onPress: () => router.navigate('/'), label: t('today.today'), testID: 'page-back' }
+          ? {
+              iconOnly: true,
+              onPress: () => router.navigate(fromMore ? '/more' : '/'),
+              label: t('cal.back_a11y', { place: fromMore ? t('more.title') : t('today.today') }),
+              testID: 'page-back',
+            }
           : undefined
       }
       meta={

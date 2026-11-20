@@ -175,9 +175,12 @@ async def entries(session: AsyncSession, user_id: int, win: Window,
     for t in tasks:
         tz = t.tz or DEFAULT_TZ
         rem = links.get(t.item_id)
+        offset = offset_of(t.start_at, rem)
         base = {"id": t.public_id, "rrule": t.rrule, "source": t.created_by or "user",
+                "reminder_offset_min": offset,
                 "item_id": items.get(t.item_id), "page_id": page_id,
-                "reminder": ({"id": rem.public_id, "offsets": list(rem.offsets or [])}
+                "reminder": ({"id": rem.public_id, "offsets": list(rem.offsets or []),
+                              "offset_min": offset}
                              if rem is not None else None),
                 "plan": ({"id": plans[t.source_item_id][0], "title": plans[t.source_item_id][1]}
                          if t.source_item_id in plans else None),
@@ -231,7 +234,7 @@ async def entries(session: AsyncSession, user_id: int, win: Window,
                 "reminder", f"reminder:{r.public_id}:{at.isoformat()}", title=r.title or "",
                 start=at, duration=r.duration_min, tz=tz, day=None,
                 occurrence_at=at if r.rrule else None, id=r.public_id, rrule=r.rrule,
-                moved=False, done=(r.id, at) in acked, source="user",
+                moved=False, done=(r.id, at) in acked, source="user", reminder_offset_min=None,
                 item_id=rem_items.get(r.item_id) if r.item_id else None, page_id=None,
                 reminder=None, plan=None, version=r.version))  # fmt: skip
     out.extend(await _plan_steps(session, user_id, win))
@@ -270,6 +273,7 @@ async def _plan_steps(session: AsyncSession, user_id: int, win: Window) -> list[
                 "plan_step", f"plan_step:{pid}:{st.get('id')}", title=st.get("title") or "",
                 start=start, duration=duration, tz=tz, day=None, id=st.get("id"),
                 occurrence_at=None, rrule=None, moved=False, done=False, source="assistant",
+                reminder_offset_min=None,
                 item_id=pid, page_id=None, reminder=None,
                 plan={"id": pid, "title": title}, version=None))  # fmt: skip
     return out
@@ -334,6 +338,78 @@ async def linked_reminder_cancels(session: AsyncSession, user_id: int,
                                Reminder.kind.in_(APP_KINDS), Reminder.deleted_at.is_(None)))]
 
 
-__all__ = ["CalendarError", "Change", "MAX_DAYS", "Window", "check_occurrence", "check_rrule",
+# --- the to-do's alert: one linked reminder, `reminder_offset_min` before the start ---
+
+
+async def linked_reminder(session: AsyncSession, user_id: int, task: Task) -> Reminder | None:
+    """The live reminder on the task's record (its alert), newest first."""
+    return await session.scalar(
+        select(Reminder).where(Reminder.user_id == user_id, Reminder.item_id == task.item_id,
+                               Reminder.kind.in_(APP_KINDS), Reminder.deleted_at.is_(None))
+        .order_by(Reminder.id.desc()).limit(1))  # fmt: skip
+
+
+def offset_of(start_at: datetime | None, r: Reminder | None) -> int | None:
+    """Minutes the alert rings before the start (0…1440), or None."""
+    if start_at is None or r is None:
+        return None
+    minutes = round((start_at - r.due_at).total_seconds() / 60)
+    return minutes if 0 <= minutes <= 1440 else None
+
+
+def _alert_rrule(rule: str | None, offset: int) -> str | None:
+    """The task's repeat for its alert: an UNTIL moves by the offset with the occurrences."""
+    if not rule or "UNTIL=" not in rule:
+        return rule
+    parts = [p for p in rule.split(";") if not p.startswith("UNTIL=")]
+    until = datetime.strptime(rule.split("UNTIL=")[1][:16], "%Y%m%dT%H%M%SZ").replace(tzinfo=UTC)
+    return ";".join([*parts, f"UNTIL={(until - timedelta(minutes=offset)):%Y%m%dT%H%M%SZ}"])
+
+
+async def alert_ops(session: AsyncSession, user_id: int, task: Task, *,
+                    start: datetime | None, rrule: str | None, offset: int | None,
+                    now: datetime) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """(engine ops, undo of a reminder made here) so the alert is `offset` minutes before
+    `start` with the task's repeat; `offset` None (or no start: all day) = no alert. A new
+    alert of a one-off that would ring in the past is not made."""
+    r = await linked_reminder(session, user_id, task)
+    if offset is None or start is None:
+        return ([{"op": "cancel_reminder", "id": str(r.public_id)}] if r is not None else []), []
+    due = start - timedelta(minutes=offset)
+    rule = _alert_rrule(rrule, offset)
+    if r is not None:
+        return [{"op": "set_reminder_time", "id": str(r.public_id), "due_at": due.isoformat(),
+                 "rrule": rule}], []  # fmt: skip
+    if not rule and due <= now:
+        return [], []
+    from assistant.reminders import service as reminders
+
+    try:
+        made, _, _ = await reminders.create(session, user_id, reminders.ReminderInput(
+            title=task.title[:200], due_at=due, tz=task.tz or DEFAULT_TZ, rrule=rule,
+            item_id=task.item_id, created_via="manual_form", parse_source="user_edit"), now)
+    except reminders.ReminderError:
+        return [], []
+    return [], [{"op": "cancel_reminder", "id": str(made.public_id), "expect": made.version}]
+
+
+async def offsets_of(session: AsyncSession, user_id: int,
+                     tasks: list[Task]) -> dict[int, int | None]:  # fmt: skip
+    """task.id → its alert offset (payloads, /v1/calendar)."""
+    timed = {t.item_id: t for t in tasks if t.start_at is not None}
+    if not timed:
+        return {}
+    out: dict[int, int | None] = {}
+    for r in await session.scalars(select(Reminder).where(
+            Reminder.user_id == user_id, Reminder.item_id.in_(set(timed)),
+            Reminder.kind.in_(APP_KINDS), Reminder.deleted_at.is_(None))
+            .order_by(Reminder.id)):  # fmt: skip
+        t = timed[r.item_id]  # type: ignore[index]
+        out[t.id] = offset_of(t.start_at, r)
+    return out
+
+
+__all__ = ["CalendarError", "Change", "MAX_DAYS", "Window", "alert_ops", "check_occurrence",
+           "check_rrule", "linked_reminder", "offset_of", "offsets_of",
            "entries", "expand", "linked_reminder_cancels", "moved_sentence",
            "reminder_shift_ops", "with_until"]  # fmt: skip
