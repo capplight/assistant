@@ -22,7 +22,7 @@ const ROW_TEXT_CAP = 1.6;
  * today-v6-acceptance.md §3.4 — «План» (option A: the nearest one is an ordinary row, it is already in the card).
  * Morning and day: «План · Все дела ›», «Прошло {n} · не отмечено {m} ›» (opens in place, 200 ms on the UI thread, with
  * [Сделано]), the timed things ahead, then the to-dos without a time; 4 rows under 400 dp, 5 from 400, then «Ещё N ›».
- * Evening: «Осталось с сегодня» (≤ 2, [На завтра]) and «Завтра, {день}» (≤ 3, read only). Night: «Завтра, {день}» and
+ * Evening: «Осталось с сегодня» (missed reminders first with [Сделано], to-dos with [На завтра]; ≤ 2, then «Ещё N ›») and «Завтра, {день}» (≤ 3, read only). Night: «Завтра, {день}» and
  * «Будильник на 8:00 стоит» when one is set. Rows are 52 (68 with large text), fixed.
  */
 export function TodayPlan(p: {
@@ -64,6 +64,7 @@ export function TodayPlan(p: {
   }
   if (p.period === 'evening' || p.period === 'night') {
     const left = p.period === 'evening' ? p.left.slice(0, 2) : [];
+    const leftMore = p.period === 'evening' ? Math.max(0, p.left.length - 2) : 0;
     const coming = p.coming.slice(0, 3);
     const alarm = p.period === 'night' ? p.alarm : null;
     if (left.length === 0 && coming.length === 0 && !alarm) return null;
@@ -79,9 +80,17 @@ export function TodayPlan(p: {
                 first={i === 0}
                 onOpen={p.onOpen}
                 onToggle={p.onToggle}
-                right={<SmallButton testID={`today-to-tomorrow-${r.key}`} label={t('today6.to_tomorrow')} outline onPress={() => p.onTomorrow(r)} />}
+                right={
+                  // Review 2 Р2а: a missed reminder is answered here ([Сделано]); it is not moved to tomorrow.
+                  r.kind === 'reminder' ? (
+                    <SmallButton testID={`today-left-done-${r.key}`} label={t('today6.done')} onPress={() => p.onMarkDone(r)} />
+                  ) : (
+                    <SmallButton testID={`today-to-tomorrow-${r.key}`} label={t('today6.to_tomorrow')} outline onPress={() => p.onTomorrow(r)} />
+                  )
+                }
               />
             ))}
+            {leftMore > 0 ? <MoreRow testID="today-left-more" n={leftMore} onPress={p.onAll} /> : null}
           </View>
         ) : null}
         {coming.length > 0 ? <ComingRows first={left.length === 0} title={p.comingTitle} rows={coming} /> : null}
@@ -131,24 +140,33 @@ function DayPlanBlock(p: Parameters<typeof TodayPlan>[0] & { after?: ReactNode }
         );
       })}
       {hidden > 0 ? (
-        <Pressable
-          testID="today-plan-more"
-          accessibilityRole="button"
-          accessibilityLabel={t('today6.more', { n: hidden })}
-          onPress={p.onAll}
-          style={({ pressed }) => [
-            { minHeight: todayPlan.past, flexDirection: 'row', alignItems: 'center', gap: 2, borderTopWidth: 1, borderTopColor: theme.colors.line },
-            pressedStyle(pressed),
-          ]}
-        >
-          <AppText numberOfLines={1} maxFontSizeMultiplier={ROW_TEXT_CAP} style={{ fontFamily: theme.type.sheetMeta.fontFamily, fontSize: 15, lineHeight: 18, color: theme.colors.ink }}>
-            {t('today6.more', { n: hidden })}
-          </AppText>
-          <ChevronRight size={15} color={theme.colors.ink} strokeWidth={theme.icon.strokeWidth} />
-        </Pressable>
+        <MoreRow testID="today-plan-more" n={hidden} onPress={p.onAll} />
       ) : null}
       {p.after}
     </View>
+  );
+}
+
+/** «Ещё N ›»: one 44 row that opens «Дела» as the list. */
+function MoreRow({ testID, n, onPress }: { testID: string; n: number; onPress: () => void }) {
+  const theme = useTheme();
+  const { t } = useTranslation();
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={t('today6.more', { n })}
+      onPress={onPress}
+      style={({ pressed }) => [
+        { minHeight: todayPlan.past, flexDirection: 'row', alignItems: 'center', gap: 2, borderTopWidth: 1, borderTopColor: theme.colors.line },
+        pressedStyle(pressed),
+      ]}
+    >
+      <AppText numberOfLines={1} maxFontSizeMultiplier={ROW_TEXT_CAP} style={{ fontFamily: theme.type.sheetMeta.fontFamily, fontSize: 15, lineHeight: 18, color: theme.colors.ink }}>
+        {t('today6.more', { n })}
+      </AppText>
+      <ChevronRight size={15} color={theme.colors.ink} strokeWidth={theme.icon.strokeWidth} />
+    </Pressable>
   );
 }
 

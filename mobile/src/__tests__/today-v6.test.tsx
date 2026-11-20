@@ -649,3 +649,40 @@ describe('today-v6 review 1 (docs/design/qa/today-v6-review-1.md)', () => {
     yes.mockRestore();
   });
 });
+
+describe('today-v6 review 2 (docs/design/qa/today-v6-review-2.md)', () => {
+  it('24. Р2а evening: missed reminders (today 11:00, yesterday 22:00) first in «Осталось с сегодня» with [Сделано]; «Ещё 1 ›»', async () => {
+    resetApp();
+    finishOnboarding('full');
+    atLocalTime(20);
+    const ring = (id: string, at: number) => {
+      const iso = new Date(at).toISOString();
+      return {
+        r: reminderOut({ id, title: `Напоминание ${id}`, due_at: iso, kind: 'normal', status: 'scheduled', level: 'notification', version: 1 })!,
+        f: fireOut({ id: `f${id}`, reminder_id: id, key: `${id}:k:0:0`, occurrence_at: iso, fire_at: iso, offset_min: 0, snooze_n: 0, state: 'missed' })!,
+      };
+    };
+    const todayAt = atMinutes(todayIso(), 11 * 60);
+    const yAt = atMinutes(addDaysIso(todayIso(), -1), 22 * 60);
+    const a = ring('ra', todayAt);
+    const b = ring('rb', yAt);
+    useAlarms.setState({ reminders: { ra: a.r, rb: b.r }, fires: { [a.f.key]: a.f, [b.f.key]: b.f } });
+    put(task({ id: 'u1', title: 'Оплатить интернет', due_date: todayIso() }));
+    const spy = jest.spyOn(missedService, 'markMissedDone').mockResolvedValue(undefined);
+    calState().set({ view: 'day' });
+    const r = await renderRouter(APP_DIR, { initialUrl: '/' });
+    await settle(() => screen.queryByTestId('today-left') !== null);
+    expect(screen.getAllByTestId(/^today-left-done-/)).toHaveLength(2);
+    expect(screen.queryAllByTestId(/^today-to-tomorrow-/)).toHaveLength(0);
+    // Yesterday's first (by time), with «вчера»; today's says «напоминание».
+    expect(screen.getByTestId(`today-row-reminder:rb:${yAt}`)).toHaveTextContent(/22:00.*Напоминание rb.*вчера/);
+    expect(screen.getByTestId(`today-row-reminder:ra:${todayAt}`)).toHaveTextContent(/11:00.*Напоминание ra.*напоминание/);
+    expect(screen.getByTestId('today-left-more')).toHaveTextContent('Ещё 1');
+    await fireEvent.press(screen.getByTestId(`today-left-done-reminder:ra:${todayAt}`));
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ key: a.f.key, reminderId: 'ra' }), expect.any(Function));
+    await fireEvent.press(screen.getByTestId('today-left-more'));
+    await settle(() => r.getPathname() === `/page/${tasksPage().id}`);
+    expect(calState().view).toBe('list');
+    spy.mockRestore();
+  });
+});

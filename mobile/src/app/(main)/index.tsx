@@ -152,7 +152,8 @@ export default function TodayScreen() {
   const parts = dayPlanParts({ nowMin, today, entries, untimed, missed: missedByOcc, earlier, yesterday: t('today6.yesterday') });
   // Review 1 Р1: the evening / the night before midnight with timed things still ahead today keeps «План» as in the day.
   const late = lateWithAhead(period, nowMin, parts.ahead.length);
-  const left = leftToday({ nowMin, today, entries, untimed });
+  // Review 2 Р2а: «Осталось с сегодня» also holds the missed reminders not answered (today's and the last 24 h).
+  const left = leftToday({ nowMin, today, entries, untimed, missed: missed.filter((r) => r.at >= now - DAY), yesterday: t('today6.yesterday') });
   const coming = comingDay(today, nowMin, period);
   const comingRows = dayRows(entries, coming).filter((e) => coming !== today || e.allDay || (e.start ?? 0) > nowMin);
   const weekdayOf = (iso: string, style: 'long' | 'short') => {

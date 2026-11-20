@@ -253,15 +253,29 @@ function missedEntry(r: MissedRing): CalEntry {
   };
 }
 
-/** §3.4 evening «Осталось с сегодня»: open to-dos without a time of today (or overdue) and past timed to-dos not ticked. */
-export function leftToday(i: { nowMin: number; today: string; entries: readonly CalEntry[]; untimed: readonly UntimedTodo[] }): PlanRow[] {
-  const todos = untimedOrder(i.untimed)
-    .filter((x) => !x.done && x.due_date !== null && x.due_date <= i.today)
-    .map((x) => todoRow(x, i.today));
+/**
+ * §3.4 evening «Осталось с сегодня» + review 2 Р2а: first the missed reminders not answered (today's and the last 24 h,
+ * by time; yesterday's say «вчера»), then past timed to-dos not ticked, then open to-dos without a time of today (or
+ * overdue).
+ */
+export function leftToday(i: {
+  nowMin: number;
+  today: string;
+  entries: readonly CalEntry[];
+  untimed: readonly UntimedTodo[];
+  missed?: readonly MissedRing[];
+  yesterday?: string;
+}): PlanRow[] {
+  const rings = [...(i.missed ?? [])]
+    .sort((a, b) => a.at - b.at)
+    .map((r): PlanRow => ({ ...rowOf(missedEntry(r), r.key), ...(isoDate(r.at) < i.today ? { meta: i.yesterday } : {}) }));
   const timed = timedOf(i.entries, i.today)
     .filter((e) => e.kind === 'task' && !e.done && endOf(e) <= i.nowMin)
     .map((e) => rowOf(e));
-  return [...todos, ...timed];
+  const todos = untimedOrder(i.untimed)
+    .filter((x) => !x.done && x.due_date !== null && x.due_date <= i.today)
+    .map((x) => todoRow(x, i.today));
+  return [...rings, ...timed, ...todos];
 }
 
 // ---------------- the phrase (§3.1) ----------------
