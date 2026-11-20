@@ -3,6 +3,7 @@ import type { ActionOut } from '@/api/types';
 import { getOutbox } from '@/db';
 import { getApi, getSyncEngine, kickSync } from '@/services';
 import type { ActionUndoPayload } from '@/sync/engine';
+import { refreshTouched } from '@/sync/touched';
 import { newId } from '@/utils/id';
 
 import { dropTick, rememberActions, setDone, showTick, taskSink, tickUndo, type TaskUpdatePayload } from './service';
@@ -25,6 +26,7 @@ export async function undoServerAction(actionId: string): Promise<{ result: Undo
   try {
     const out = await getApi().undoAction(actionId, { client_id: clientId });
     rememberActions([...(out.action ? [out.action] : []), ...(out.undo ? [out.undo] : [])]);
+    refreshTouched([out.undo, out.action]);
     kickSync();
     return { result: out.partial ? 'partial' : 'done', message: out.message_ru, undo: out.undo };
   } catch (e) {

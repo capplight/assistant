@@ -6,11 +6,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { ActionNoticeOut } from '@/api/types';
 import { actionText, undoAction } from '@/chat/service';
-import { getRecords } from '@/db';
+import { openNoticeTarget } from '@/chat/noticeTarget';
 import { undoManual } from '@/pages/manual';
 import { usePageLabels } from '@/pages/usePageLabels';
 import { formatShortDate } from '@/records/format';
-import { getRecordActions, kickSync } from '@/services';
+import { getRecordActions } from '@/services';
 import { useAssistant } from '@/store/assistant';
 import { useConnectivity } from '@/store/connectivity';
 import { useToast } from '@/store/toast';
@@ -124,18 +124,11 @@ export function UndoStrip() {
   // A tap on the text opens what changed: the server's `target`, else the page it went to.
   const open = async () => {
     if (strip.kind === 'deleted') return;
-    const target = notice?.target;
-    if (target?.kind === 'document' && target.id) {
-      hide(strip.id);
-      return router.navigate({ pathname: '/kp/[id]', params: { id: target.id } });
-    }
-    if (target?.kind === 'item' && target.id) {
-      const rec = await (await getRecords()).findByServerId(target.id);
-      if (rec) {
-        hide(strip.id);
-        return router.navigate({ pathname: '/record/[id]', params: { id: rec.id } });
-      }
-      kickSync();
+    if (notice?.target) {
+      // The calendar day, «Расходы», the КП, the record (actions.md `notice.target`); an unknown kind stays here.
+      const went = await openNoticeTarget(notice.target);
+      if (went === 'handled') return hide(strip.id);
+      if (went === 'none') return void (strip.kind === 'action' && (action?.changes.length ?? 0) > 0 && setChangesOpen(true));
     }
     if (strip.kind === 'saved' || strip.kind === 'merged') {
       hide(strip.id);

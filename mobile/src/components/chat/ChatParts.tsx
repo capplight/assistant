@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { actionText, answerProposal, retry, undoAction } from '@/chat/service';
+import { openNoticeTarget } from '@/chat/noticeTarget';
 import { getRecords, type LocalRecord } from '@/db';
 import { usePageLabels } from '@/pages/usePageLabels';
 import { kickSync } from '@/services';
@@ -276,6 +277,9 @@ async function recordOf(serverId: string | null): Promise<LocalRecord | null> {
  * the colour of its place («Дела · завтра, 10:00» over «Позвонить в ЦОН»; a tap opens it), then «Переложить» (an
  * ordinary link) · «Отменить» / «Отменить всё» (terracotta: the assistant's action). Undone: struck, «отменено».
  */
+/** Targets a result card in the chat opens instead of the record card. */
+const GO_TO_TARGET = new Set(['calendar', 'budget', 'task']);
+
 export function ActionResultCard({ m, action }: { m: ChatMessage; action: ChatAction }) {
   const theme = useTheme();
   const { t, i18n } = useTranslation();
@@ -317,6 +321,9 @@ export function ActionResultCard({ m, action }: { m: ChatMessage; action: ChatAc
   const firstPage = pageByServer(action.savedTo?.[0]?.pageServerId ?? action.pageServerId);
   const done = !action.undone;
   const open = async (itemId: string | null) => {
+    // «Перенёс встречу на 16:00», «Бюджет 300 000 ₸»: the card opens the calendar day / «Расходы» (`notice.target`).
+    const target = !many ? action.notice?.target : null;
+    if (target && GO_TO_TARGET.has(target.kind) && (await openNoticeTarget(target)) === 'handled') return;
     const rec = await recordOf(itemId);
     if (rec) router.navigate({ pathname: '/record/[id]', params: { id: rec.id } });
     else showToast(t('save.replace_later'), 3000);

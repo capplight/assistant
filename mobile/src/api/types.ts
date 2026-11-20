@@ -755,7 +755,15 @@ export type ActionOut = {
   group?: ActionGroupOut | null;
   /** plans.md: a `make_plan` action carries its card. */
   plan?: import('@/plans/types').PlanCardOut | null;
+  /**
+   * Ф-95 (actions.md «touched», additive): what the action changed, in the server's order. The phone refetches by it
+   * what does not come through /v1/sync (calendar, budget, today). Absent from an older server: the old behaviour.
+   */
+  touched?: TouchedKey[];
 };
+
+/** actions.md «touched»: the stores an action changed. */
+export type TouchedKey = 'records' | 'pages' | 'tasks' | 'calendar' | 'reminders' | 'expenses' | 'budget' | 'plans' | 'today';
 
 /** actions.md «Groups»: show `notice` once («Сделал 3 дела · Отменить всё»). `id` = the answer's message id. */
 export type ActionGroupOut = { id: string; size: number; index: number; action_ids: string[]; notice: ActionNoticeOut | null };
@@ -819,7 +827,7 @@ export type PagePatchOut = {
   custom_fields?: CustomFieldOut[];
 };
 
-export type ProposalOptionKind = 'item' | 'pick' | 'yes' | 'no' | 'keep_mine' | 'cancel';
+export type ProposalOptionKind = 'item' | 'pick' | 'yes' | 'no' | 'keep_mine' | 'cancel' | 'time' | 'mode' | 'date';
 
 /**
  * A question back (`needs_choice` kind `choice`, `confirm` kind `count`, `confirm_manual` kind

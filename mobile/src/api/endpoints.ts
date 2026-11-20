@@ -51,6 +51,7 @@ import type {
   ActionGroupUndoOut,
   ActionNoticeOut,
   ActionOut,
+  TouchedKey,
   BriefOut,
   HistoryEntryOut,
   BudgetOut,
@@ -371,8 +372,12 @@ export function actionOut(v: unknown): ActionOut | null {
     parsed_later: o.parsed_later === true,
     group: groupOut(o.group),
     plan: planCardOut(o.plan),
+    ...(Array.isArray(o.touched) ? { touched: strs(o.touched).filter((k): k is TouchedKey => TOUCHED_KEYS.has(k)) } : {}),
   };
 }
+
+/** actions.md «touched» keys; an unknown one is left out. */
+const TOUCHED_KEYS = new Set<string>(['records', 'pages', 'tasks', 'calendar', 'reminders', 'expenses', 'budget', 'plans', 'today']);
 
 // --- plans.md («Составь план») ---
 
@@ -782,7 +787,8 @@ export function manualOut(v: unknown): ManualOut {
   };
 }
 
-const OPTION_KINDS = new Set(['item', 'pick', 'yes', 'no', 'keep_mine', 'cancel']);
+/** chat.md Proposal: `time` (Ф-89), `mode` (Ф-96), `date` (plans.md) are buttons like any tap. */
+const OPTION_KINDS = new Set(['item', 'pick', 'yes', 'no', 'keep_mine', 'cancel', 'time', 'mode', 'date']);
 /** Words a server may use for the «Да» of a deletion: shown and sent like `yes`. */
 const YES_WORDS = new Set(['delete', 'trash', 'confirm', 'remove']);
 const DELETE_KINDS = new Set(['delete', 'trash', 'confirm_delete', 'delete_items']);

@@ -47,6 +47,7 @@ import type { ActionUndoPayload } from '@/sync/engine';
 import { applyAssistantView, lookBefore, restoreLook, type SavedLook } from '@/pages/viewService';
 import { addTask, listForPage, rememberActions, taskSink } from '@/tasks/service';
 import { applyServer as applyExpenses } from '@/expenses/service';
+import { refreshTouched } from '@/sync/touched';
 import { newId } from '@/utils/id';
 
 /**
@@ -243,6 +244,7 @@ function apply(answerId: string, e: ChatEvent): void {
         ...(s.action ? { action: fromAction(s.action) } : {}),
         ...(s.proposal ? { proposal: fromProposal(s.proposal) } : {}),
       });
+      if (s.action) refreshTouched([s.action]);
       return;
     }
     case 'reminder_draft':
@@ -258,6 +260,8 @@ function apply(answerId: string, e: ChatEvent): void {
       // Week 12: «потратил 5000 на бензин» — the month total is counted by code from these at once.
       if (e.expenses && e.expenses.length > 0) applyExpenses(e.expenses);
       rememberActions(e.undone ? [e.action, e.undone] : [e.action]);
+      // Ф-95: the calendar, the budget and «Сегодня» are asked again by `touched` (the rest comes with /sync).
+      refreshTouched([e.action, e.undone]);
       // Undo by phrase (Ф-67): the action it undid is «отменено» wherever it shows in the conversation.
       const undone = e.undone;
       if (undone) {
@@ -875,6 +879,9 @@ async function runUndo(messageId: string, a: ChatAction, itemIds: string[] | nul
       }));
     }
     if (out.partial && out.message_ru) useToast.getState().show(out.message_ru);
+    // The undo touched the same screens as the action: they come back by themselves too.
+    if (out.action || out.undo) rememberActions([out.action, out.undo].filter((x): x is ActionOut => !!x));
+    refreshTouched([out.undo, out.action]);
     kickSync();
   } catch (e) {
     if (e instanceof NetworkError || e instanceof SignInRequiredError) {
@@ -940,7 +947,9 @@ async function undoGroup(messageId: string, a: ChatAction): Promise<void> {
     for (const patch of out.page_patches) await applyPatch(patch);
     const failed = new Set(out.failed.map((f) => f.id));
     if (failed.size > 0) mark(failed, false);
-    rememberActions(out.undone.flatMap((u) => [u.action, u.undo].filter((x): x is ActionOut => !!x)));
+    const back = out.undone.flatMap((u) => [u.action, u.undo].filter((x): x is ActionOut => !!x));
+    rememberActions(back);
+    refreshTouched(back);
     if (out.message_ru) useToast.getState().show(out.message_ru, 5000);
     kickSync();
   } catch (e) {

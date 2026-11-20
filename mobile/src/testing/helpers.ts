@@ -1,4 +1,5 @@
 import { resetCalendarForTests } from '@/calendar/service';
+import { resetTouchedForTests } from '@/sync/touched';
 import { useBudget } from '@/store/budget';
 import { useNotesLook } from '@/store/notesLook';
 import { useReminderCard } from '@/store/reminderCard';
@@ -78,6 +79,7 @@ export function resetApp(o: { fetch?: FetchLike; push?: FakePush; alarms?: FakeA
   useAlarms.getState().reset();
   useTasks.getState().reset();
   resetCalendarForTests();
+  resetTouchedForTests();
   useExpenses.getState().reset();
   useKp.getState().reset();
   setSharePortForTests(null);

@@ -93,7 +93,7 @@ export type ChatAction = {
 export type ChatProposal = {
   kind: 'choice' | 'count' | 'manual' | 'delete';
   question: string;
-  options: { id: string; label: string; kind: 'item' | 'pick' | 'yes' | 'no' | 'keep_mine' | 'cancel'; itemId: string | null }[];
+  options: { id: string; label: string; kind: import('@/api/types').ProposalOptionKind; itemId: string | null }[];
   /** The option in focus first. */
   defaultId: string | null;
   /** The option tapped, or `expired` / `answered` from the server. */

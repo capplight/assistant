@@ -77,6 +77,7 @@ export function ensureCalendarLoaded(): Promise<void> {
 /** Test hook. */
 export function resetCalendarForTests(): void {
   loading = null;
+  cachedRange = null;
   calState().reset();
 }
 
@@ -135,9 +136,13 @@ export function settleTimeEdits(tasks: TaskOut[]): void {
   if (changed) s.set({ timeEdits, remindEdits });
 }
 
+/** The last range the calendar asked for: what a change from the line refetches (actions.md «touched»). */
+let cachedRange: { from: string; to: string } | null = null;
+
 /** GET /v1/calendar of a range (≤ 61 days): plan steps and a check of what the phone counts; kept for offline. */
 export async function refreshRange(from: string, to: string): Promise<void> {
   if (!canQueue() || syncBlocked()) return;
+  cachedRange = { from, to };
   try {
     const out = await getApi().calendar(from, to);
     const s = calState();
@@ -149,6 +154,14 @@ export async function refreshRange(from: string, to: string): Promise<void> {
   } catch {
     // offline or an older server: the phone's own copy is shown
   }
+}
+
+/**
+ * `touched: calendar` (Ф-95): the range on screen again. The old entries stay until the answer replaces them in one
+ * set, so nothing goes empty in between (QA-3). Nothing asked yet: nothing to refetch (the screen asks when opened).
+ */
+export function refreshCachedRange(): Promise<void> {
+  return cachedRange ? refreshRange(cachedRange.from, cachedRange.to) : Promise.resolve();
 }
 
 // --- the sync engine's side ---

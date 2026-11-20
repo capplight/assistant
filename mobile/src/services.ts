@@ -19,6 +19,7 @@ import { useSession } from '@/store/session';
 import { useToast } from '@/store/toast';
 import { useUndo } from '@/store/undo';
 import { SyncEngine, type DeviceInfo } from '@/sync/engine';
+import { freshActions, refreshTouched } from '@/sync/touched';
 import { noticeParsedLater, rememberActions, taskSink } from '@/tasks/service';
 import { taskPatchSink } from '@/tasks/edit';
 import i18n from '@/i18n';
@@ -190,6 +191,9 @@ export function getSyncEngine(): Promise<SyncEngine> {
         },
         calendar: calendarSink,
         actions: (acts) => {
+          // Ф-95: what is new here (another phone, a background parse, an undo sent from the outbox) refetches what
+          // it touched; the chat's own actions are known already and are not asked twice.
+          refreshTouched(freshActions(acts));
           rememberActions(acts);
           noticeParsedLater(acts);
         },
