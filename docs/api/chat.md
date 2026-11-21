@@ -657,3 +657,50 @@ step). `lookup(domain, words, date_from, date_to)` reads more objects.
 `tool_activity.tool` may be `tasks`, `calendar`, `reminders`, `expenses`, `lookup`, `op` (code),
 `reminder`. The proposal of an operation has `plan.tool: "op"` (a tap / «Да» runs the stored
 operations). Cost guard: actions.md / ops `change_turn_cost` alert (Ф-95 (6), costs.md).
+
+## The line runs the rest of the screens (Ф-97, chat-full-control.md phases 2–3, 2026-11-21)
+
+Same scheme as phase 1: code reads the frequent phrases, the model gets small domain tools built
+from the registry, every change is one action with «Отменить», the reply says only what happened.
+
+**Code first, no model** (`ops_line.read_more`; kk patterns are basics, pending native review):
+
+| Phrase | Does |
+|---|---|
+| «убери купленное», «удали сделанные дела», «сатып алынғандарды өшір» | `tasks.clear_done` (bulk: «Да» first above 10 or with «все»); nothing done: «Купленного нет — ничего не убирал.» With «Покупки» off (Ф-49) «купленное» = the done «Купить …» to-dos |
+| «верни из корзины заметку про шины», «восстанови удалённое дело купить шины» | `trash.restore` (a to-do's record with its to-do, an expense's with its expense, a КП with its document); exactly one in the trash must fit, else the model asks. A plain «верни запись про хлеб» stays an undo by phrase |
+| «восстанови страницу Ремонт» | `pages.restore` |
+| «удали страницу Ремонт», «удали эту страницу» | `pages.delete` — reversible (records stay, «Отменить» / `/restore`), so no «Да» (Ф-66); «Сегодня» never |
+| «бюджет 300 000 в месяц», «поставь бюджет 250 тыс», «айлық бюджет 300 000» / «убери бюджет» | `expenses.set_budget` / `expenses.clear_budget`, with «Отменить» (the screen's own budget stays a setting without one) |
+| «тихие часы с 23 до 7», «не беспокой меня с 10 до 7» (→ 22:00–07:00), «тыныш уақыт 23-тен 7-ге дейін» | `settings.quiet_hours` |
+| «зови меня Али», «мені Али деп ата» / «не называй меня по имени» | `settings.name` (`display_name`, as `PATCH /v1/me`) |
+| «почисти повторы», «удали дубли» | the «Повторы» cleanup plan (`dedup.plan_cleanup`), `confirm` «Убрать N повторов? Оставлю по одной записи.», then `duplicates.cleanup` (one `cleanup_batch`); none: «Повторов не нашёл» |
+| «молоко и хлеб купил», «купил молоко, хлеб и сыр» | each named thing must be exactly one open to-do / purchase; all ticked in one action |
+| «молоко не 2, а 3» | `tasks.update` qty (with «Покупки» off: the title «Купить молоко, 2» → «…, 3»); only if it said 2 (or nothing), else it may be a spend fix |
+| «цену светильников 4 500», «убери доставку» on an open КП (`selected_item_id`) | the КП screen's phrase edit: KP_EDIT reads it, `kp.edit.check_ops` checks every number against the phrase, `kp.edit` writes one version, `edit_kp` with «Отменить». Sending stays on the screen (Ф-95 (4)) |
+
+**New model tools.** `tasks` gets `update` (title, `qty`, `where`, `list_key`) and `clear_done`
+(`list_key`); new `pages` (`delete_page` by `p` ref; `restore_page`, `restore` by `x` refs of the
+trash) and `settings` (`budget`, `clear_budget`, `quiet_hours`, `name`, `rule_off` by `h` refs of
+the learned rules). `lookup` reads `trash` (`x` refs) and `rules` (`h` refs) too. Offered only when
+the phrase's words pick them (`страниц`, `корзин`, `верни`, `бюджет`, `тихие часы`, `правил`, …)
+or by `need_tools`. Guards: a page goes only with a delete word, the trash only with «верни /
+восстанови», a rule only with «убери / отключи / больше не клади»; a budget, quiet hours, a
+quantity, a shop and a name only as the person said them (code reads them from the phrase where it
+can). Never from the line: delete forever, account, consents, logout, the phone number, sending a
+КП without «Да», imports, page views (Ф-39).
+
+**Offline edits are not overwritten.** Each call on a to-do / expense / reminder carries the
+`version` the line saw; if the phone changed it meanwhile (an outbox edit, or before a «Да»), nothing
+is done and the answer says «Это только что изменили на телефоне — ничего не менял…».
+
+**Background (Ф-97 (1)).** A reminder phrase finished in the background (after a restart) with a
+clear time is set at once with «Отменить» (banner + push), like a to-do; an unclear time is not set
+(alone: `not_done`, retry; inside a longer phrase: «Напоминание «…» не поставил: время непонятно»).
+
+**«Когда я свободен завтра?»** Code reads the named days' calendar and adds «Свободно чт 13.11
+(посчитано кодом…): 8:00–10:00, 11:00–22:00» (8:00–22:00, windows ≥ 30 min; an entry without a
+length counts an hour; the past part of today is not free); its times are facts the number check
+accepts.
+
+`tool_activity.tool` may also be `pages`, `settings`, `kp_edit`.

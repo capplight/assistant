@@ -45,3 +45,25 @@ def read(text: str) -> KpPhrase | None:
         return None  # «напиши документ» without a source: not a КП order
     rest = re.sub(r"^[\s,.:;—-]+", "", rest).strip()
     return KpPhrase(request=rest, from_this=this is not None, phrase=t)
+
+
+# Ф-97: an edit of the open КП («цену светильников 4 500», «убери доставку», «скидка 5% на всё»).
+# Sending is never an edit (Ф-95 (4): only the screen sends, after «Да»); deleting the whole КП
+# is the record's own delete.
+_EDIT = re.compile(r"цен[ауые]|стоимост|скидк|колич|доставк|монтаж|итог|ндс|срок|гаранти|"
+                   r"оплат|позици|строк|пункт|добав|убер|убрать|замени|поменяй|измени|исправ|"
+                   r"поправ|сделай\s+(?:цену|скидку)|\d|баға|жеңілдік", re.I)  # fmt: skip
+_NOT_EDIT = re.compile(r"отправ|пошли|скинь|перешли|удали\s+(?:это|кп|документ|всё|все)\b|"
+                       r"^удали$|^\s*(?:что|какая|какой|сколько|почему|когда)\b|\?\s*$|жібер|"
+                       # another kind of phrase said while a КП is open: not an edit of it
+                       r"напомн|запиш|заметк|потрат|перенеси|встреч|завтра|сегодня|ескерт|"
+                       r"(?:^|\s)купил|(?:^|\s)купи(?:ть)?\s",
+                       re.I)  # fmt: skip
+
+
+def edits(text: str) -> bool:
+    """A phrase that asks to change the open КП (code's first look; KP_EDIT reads it, code checks
+    every number against the phrase)."""
+    t = " ".join((text or "").split())
+    return bool(t) and len(t) <= 500 and read(t) is None and not _NOT_EDIT.search(t) \
+        and bool(_EDIT.search(t))  # fmt: skip

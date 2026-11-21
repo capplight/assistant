@@ -73,7 +73,7 @@ class Obj:
     The model names it only by this ref; code turns the ref back into the row."""
 
     ref: str
-    kind: str  # task | event | reminder | expense
+    kind: str  # task | event | reminder | expense | trashed (a record / page in the trash) | habit
     id: uuid.UUID
     title: str
     line: str  # what the model saw
@@ -87,7 +87,8 @@ class Obj:
     data: dict[str, Any] = field(default_factory=dict)
 
 
-OBJ_PREFIX = {"task": "t", "event": "c", "reminder": "r", "expense": "e"}
+OBJ_PREFIX = {"task": "t", "event": "c", "reminder": "r", "expense": "e", "trashed": "x",
+              "habit": "h"}  # fmt: skip
 
 
 class SourceBook:

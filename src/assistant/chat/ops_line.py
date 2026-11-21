@@ -37,7 +37,7 @@ from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ValidationError
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from assistant import operations, timewords
@@ -51,7 +51,7 @@ log = logging.getLogger(__name__)
 ASK_ABOVE = 10  # Ф-95 (3): more objects than this → «Да» first
 MAX_REFS = 50
 PREFETCH = 8
-DOMAINS = ("tasks", "calendar", "reminders", "expenses")
+DOMAINS = ("tasks", "calendar", "reminders", "expenses", "pages", "settings")
 
 
 def _norm(value: str) -> str:
@@ -107,7 +107,14 @@ _D_CAL = re.compile(r"встреч|календар|событи|созвон|п
 _D_TASKS = re.compile(r"\bдел[аоу]?\b|задач|покупк|купи|куплен|купил|сделал|сделан|отмет|"
                       r"вычеркн|список|позвонил|оплатил|забрал|выполн", re.I)  # fmt: skip
 _D_SPEND = re.compile(r"трат|потрат|расход|₸|тенге|\bтг\b|сумм|категор|чек|оплатил|заплатил|"
-                      r"не\s+\d[\d\s]*,?\s*а\s+\d|бюджет", re.I)  # fmt: skip
+                      r"не\s+\d[\d\s]*,?\s*а\s+\d|бюджет|шығын", re.I)  # fmt: skip
+# Ф-97: pages and the trash; the person's own settings (budget, quiet hours, name, rules).
+# Kazakh stems (бет = page, себет = basket/trash, қайтар = give back) are basics, for native review.
+_D_PAGES = re.compile(r"страниц|вкладк|корзин|удал[её]нн|восстанов|(?:^|\s)верн(?:и|уть)\b|"
+                      r"(?:^|\s)бет(?:ті|ке|те|тен|ін|тер)|себет|қайтар", re.I)  # fmt: skip
+_D_SETTINGS = re.compile(r"бюджет|тихие\s+час|тихий\s+режим|не\s+беспоко|зови\s+меня|"
+                         r"называй\s+меня|обращайся|правил|не\s+клади|не\s+складывай|"
+                         r"настройк|мазалама|тыныш", re.I)  # fmt: skip
 
 
 def domains_for(phrase: str) -> list[str]:
@@ -122,6 +129,10 @@ def domains_for(phrase: str) -> list[str]:
         got.add("tasks")
     if _D_SPEND.search(t):
         got.add("expenses")
+    if _D_PAGES.search(t):
+        got.add("pages")
+    if _D_SETTINGS.search(t):
+        got.add("settings")
     if not got:
         got = {"tasks", "calendar"}  # the most frequent; the rest by need_tools
     return [d for d in DOMAINS if d in got]
@@ -183,6 +194,27 @@ def says_fix(phrase: str) -> bool:
 
 def says_all(phrase: str) -> bool:
     return bool(_ALL.search(_norm(phrase)))
+
+
+# Ф-97: words that guard the new operations (the person's own phrase must say it)
+_CLEAR_WORDS = re.compile(r"(?:убер|удал|очист|почист|сотр|убрать)\w*.*(?:купленн|сделанн|"
+                          r"выполненн|отмеченн|вычеркнут)|сатып\s+алынған\w*", re.I)  # fmt: skip
+_RESTORE_WORDS = re.compile(r"(?:^|\s)(?:верн\w*|восстанов\w*|қайтар\w*)", re.I)
+_OFF_WORDS = re.compile(r"(?:^|\s)(?:удал\w*|убер\w*|убрать|отключ\w*|выключ\w*|больше\s+не|"
+                        r"не\s+клади|не\s+складывай|не\s+надо|сними|отмени\w*|өшір\w*)", re.I)
+_LIST_WORDS = re.compile(r"покуп|дела|\bдел\b|список|сатып", re.I)
+
+
+def says_clear(phrase: str) -> bool:
+    return bool(_CLEAR_WORDS.search(_norm(phrase)))
+
+
+def says_restore(phrase: str) -> bool:
+    return bool(_RESTORE_WORDS.search(_norm(phrase)))
+
+
+def says_off(phrase: str) -> bool:
+    return bool(_OFF_WORDS.search(_norm(phrase)))
 
 
 # --- time words → a moment (code; the model only passes the words) ---
@@ -372,7 +404,8 @@ async def load_calendar(session: AsyncSession, user_id: int, book: SourceBook, s
             out.append(book.add_obj("task", e["id"], title,
                                     f"{title} — дело на {_dm(day)}"
                                     + (" (сделано)" if e.get("done") else ""),
-                                    day=day, done=bool(e.get("done")), list_key="todo"))
+                                    day=day, done=bool(e.get("done")), list_key="todo",
+                                    data={"version": e.get("version")}))
             continue
         if e["kind"] not in ("task", "reminder") or e.get("id") is None:
             continue
@@ -386,7 +419,8 @@ async def load_calendar(session: AsyncSession, user_id: int, book: SourceBook, s
         kind = "reminder" if e["kind"] == "reminder" else "event"
         out.append(book.add_obj(kind, e["id"], title, line, occurrence_at=e.get("occurrence_at"),
                                 start=start_at, duration_min=e.get("duration_min"),
-                                repeat=bool(e.get("rrule")), done=bool(e.get("done"))))
+                                repeat=bool(e.get("rrule")), done=bool(e.get("done")),
+                                data={"version": e.get("version")}))
     return out
 
 
@@ -424,7 +458,8 @@ async def load_tasks(session: AsyncSession, user_id: int, book: SourceBook, phra
                                 f"{t.title}{extra} — {where}{when}{mark}", start=t.start_at,
                                 duration_min=t.duration_min, repeat=bool(t.rrule),
                                 done=t.done_at is not None, list_key=t.list_key,
-                                day=t.due_date))  # fmt: skip
+                                day=t.due_date,
+                                data={"version": t.version, "qty": t.qty}))  # fmt: skip
     return out
 
 
@@ -473,7 +508,67 @@ async def load_expenses(session: AsyncSession, user_id: int, book: SourceBook, p
         out.append(book.add_obj("expense", e.public_id, title,
                                 f"{_money(e.amount, e.currency)} · {title} — "
                                 f"{cat.title if cat else 'без категории'}, {_dm(e.spent_on)}",
-                                day=e.spent_on, data={"amount": str(e.amount)}))  # fmt: skip
+                                day=e.spent_on, data={"amount": str(e.amount),
+                                                      "version": e.version}))  # fmt: skip
+    return out
+
+
+async def load_trash(session: AsyncSession, user_id: int, book: SourceBook, phrase: str, *,
+                     now: datetime, limit: int = PREFETCH) -> list[Obj]:  # fmt: skip
+    """Records and pages in the trash (still within their days), those named first, as `x`."""
+    from assistant.chat.sources import title_of
+    from assistant.db.models import Item
+    from assistant.db.models_pages import Screen
+
+    items = list(await session.scalars(select(Item).where(
+        Item.user_id == user_id, Item.deleted_at.is_not(None),
+        (Item.purge_after.is_(None)) | (Item.purge_after > now))
+        .order_by(Item.deleted_at.desc()).limit(300)))  # fmt: skip
+    pages = list(await session.scalars(select(Screen).where(
+        Screen.user_id == user_id, Screen.deleted_at.is_not(None))
+        .order_by(Screen.deleted_at.desc()).limit(50)))  # fmt: skip
+    rows: list[tuple[str, uuid.UUID, str, datetime]] = [
+        ("item", i.public_id, title_of(i.title, i.text) or "Запись", i.deleted_at) for i in items
+        if i.deleted_at is not None]
+    rows += [("page", p.public_id, p.title, p.deleted_at) for p in pages
+             if p.deleted_at is not None]
+    rows.sort(key=lambda r: r[3], reverse=True)
+    words = [w for w in words_of(phrase) if not w.startswith(("удал", "корзин", "восстан",
+                                                               "верн", "запис", "заметк",
+                                                               "страниц"))]
+    want = " ".join(words)
+    named = [r for r in rows if want and matches(want, r[2])]
+    out = []
+    for what, pid, title, at in (named or ([] if want else rows))[:limit]:
+        local = at.astimezone(book.tz)
+        label = "страница" if what == "page" else "запись"
+        out.append(book.add_obj("trashed", pid, title,
+                                f"{title} — {label} в корзине с {_dm(local.date())}",
+                                data={"what": what}))  # fmt: skip
+    return out
+
+
+async def load_habits(session: AsyncSession, user_id: int, book: SourceBook, *,
+                      limit: int = 20) -> list[Obj]:  # fmt: skip
+    """The learned placement rules in use («Что я для вас настроил»), as `h`."""
+    from assistant.db.models_habits import HabitKind, HabitStatus, UserHabit
+    from assistant.db.models_pages import Screen
+    from assistant.pages import habits
+
+    rules = list(await session.scalars(select(UserHabit).where(
+        UserHabit.user_id == user_id, UserHabit.kind == HabitKind.PLACEMENT_RULE,
+        UserHabit.status == HabitStatus.ACTIVE).order_by(UserHabit.id.desc()).limit(limit)))
+    ids = [uuid.UUID(h.value["page_id"]) for h in rules if (h.value or {}).get("page_id")]
+    pages = {p.public_id: p for p in await session.scalars(select(Screen).where(
+        Screen.user_id == user_id, Screen.public_id.in_(ids or [uuid.uuid4()]),
+        Screen.deleted_at.is_(None)))}  # fmt: skip
+    out = []
+    for h in rules:
+        page = pages.get(uuid.UUID(h.value["page_id"])) if (h.value or {}).get("page_id") else None
+        if page is None:
+            continue
+        text_ = habits.describe(h.value.get("envelope_type"), page.title)
+        out.append(book.add_obj("habit", h.public_id, text_, f"{text_} — правило"))
     return out
 
 
@@ -495,7 +590,14 @@ async def load(session: AsyncSession, user_id: int, book: SourceBook, domain: st
         return await load_reminders(session, user_id, book, phrase)
     if domain == "expenses":
         return await load_expenses(session, user_id, book, phrase)
+    if domain == "pages" and _TRASH_WORDS.search(_norm(phrase)):
+        return await load_trash(session, user_id, book, phrase, now=now)
+    if domain == "settings" and re.search(r"правил|не\s+клад|не\s+складыва", _norm(phrase)):
+        return await load_habits(session, user_id, book)
     return []
+
+
+_TRASH_WORDS = re.compile(r"корзин|удал[её]нн|восстанов|(?:^|\s)верн|қайтар|себет", re.I)
 
 
 _WEEK = re.compile(r"на\s+(?:этой\s+)?неделе|эт(?:у|ой)\s+недел|на\s+выходных", re.I)
@@ -524,10 +626,55 @@ def phrase_days(phrase: str, now_local: datetime) -> tuple[date, date] | None:
 
 # --- the context of a turn (prefetch + catalogue) ---
 
-CATALOGUE = ("Ещё умею менять: дела и покупки (отметить, перенести), календарь (перенести, "
-             "удалить, сдвинуть), напоминания (поставить, перенести, отменить), траты (исправить "
-             "сумму, категорию, день). Нужен инструмент, которого нет, — вызови need_tools.")
-OBJECTS_LABEL = "Дела, события, напоминания и траты (ссылки t, c, r, e)"
+CATALOGUE = ("Ещё умею менять: дела и покупки (отметить, перенести, количество, магазин, убрать "
+             "купленное), календарь (перенести, удалить, сдвинуть), напоминания (поставить, "
+             "перенести, отменить), траты (исправить сумму, категорию, день), страницы (убрать, "
+             "вернуть) и корзину (вернуть запись), настройки (бюджет, тихие часы, имя, правила). "
+             "Нужен инструмент, которого нет, — вызови need_tools. Удалить навсегда, аккаунт, "
+             "согласия, выход и отправку КП — только на экране.")
+OBJECTS_LABEL = "Дела, события, напоминания, траты, корзина, правила (ссылки t, c, r, e, x, h)"
+FREE_FROM, FREE_TO, FREE_MIN = time(8, 0), time(22, 0), 30
+_FREE = re.compile(r"свобод|окн[оа]|не\s+занят|бос\s+уақыт|бос\s+бол", re.I)
+
+
+def free_windows(objs: list[Obj], day: date, tz: ZoneInfo, now_local: datetime) -> list[
+        tuple[datetime, datetime]]:  # fmt: skip
+    """Free windows of a day (8:00–22:00, at least 30 min) between its calendar entries; a past
+    part of today is not free. An entry without a length counts an hour; a reminder is a moment."""
+    lo = datetime.combine(day, FREE_FROM)
+    hi = datetime.combine(day, FREE_TO)
+    if day == now_local.date():
+        lo = max(lo, now_local.replace(second=0, microsecond=0))
+    if day < now_local.date() or lo >= hi:
+        return []
+    busy: list[tuple[datetime, datetime]] = []
+    for o in objs:
+        if o.kind != "event" or o.start is None or o.done:
+            continue
+        a = o.start.astimezone(tz).replace(tzinfo=None)
+        if a.date() != day:
+            continue
+        busy.append((a, a + timedelta(minutes=o.duration_min or 60)))
+    busy.sort()
+    out: list[tuple[datetime, datetime]] = []
+    cur = lo
+    for a, b in busy:
+        if a > cur and (min(a, hi) - cur) >= timedelta(minutes=FREE_MIN):
+            out.append((cur, min(a, hi)))
+        cur = max(cur, b)
+        if cur >= hi:
+            break
+    if hi - cur >= timedelta(minutes=FREE_MIN):
+        out.append((cur, hi))
+    return out
+
+
+def free_line(windows: list[tuple[datetime, datetime]], day: date) -> str:
+    if not windows:
+        return f"Свободных окон {_dm(day)} с 8:00 до 22:00 нет (посчитано кодом)."
+    spans = ", ".join(f"{_hm(a)}–{_hm(b)}" for a, b in windows)
+    return (f"Свободно {_dm(day)} (посчитано кодом по календарю, с 8:00 до 22:00): {spans}. "
+            "Отвечай этими окнами, время копируй точно.")
 AGENDA_LINE = ("Календарь человека на названные дни — в блоке данных «{0}»: отвечай по нему, "
                "время и даты копируй точно; пусто — так и скажи.")
 
@@ -584,6 +731,19 @@ async def prepare(sessionmaker: Any, turn: Any, ctx: Any, env: Any, *, change: b
                                   + (f" ({_dm(days[0])}" + (f"–{_dm(days[1])}" if days[1] !=
                                                             days[0] else "") + ")"
                                      if days else "") + ".")  # fmt: skip
+    if not change and "calendar" in domains and _FREE.search(_norm(phrase)):
+        now_local = now.astimezone(book.tz).replace(tzinfo=None)
+        days = phrase_days(phrase, now_local) or (now_local.date(), now_local.date())
+        async with sessionmaker() as s:  # the whole days, not only the entries the words name
+            busy = await load_calendar(s, turn.user_id, book, days[0], days[1], now)
+            await s.commit()
+        d = days[0]
+        while d <= days[1] and d <= days[0] + timedelta(days=6):
+            line = free_line(free_windows(busy, d, book.tz, now_local), d)
+            ctx.inputs.context.insert(at, line)
+            ctx.extra.update(facts_of(line))
+            env.computed.update(facts_of(line))
+            d += timedelta(days=1)
     for o in objs:  # numbers / times / dates of what code showed may be said back
         ctx.extra.update(facts_of(o.line))
         env.computed.update(facts_of(o.line))
@@ -594,10 +754,13 @@ async def prepare(sessionmaker: Any, turn: Any, ctx: Any, env: Any, *, change: b
 
 
 class TasksArgs(BaseModel):
-    op: Literal["done", "undone", "move", "rename", "delete"]
+    op: Literal["done", "undone", "move", "rename", "update", "delete", "clear_done"]
     refs: list[str]
     when: str | None
     title: str | None
+    qty: str | None = None
+    where: str | None = None
+    list_key: Literal["todo", "shopping"] | None = None
 
 
 class CalendarArgs(BaseModel):
@@ -623,36 +786,60 @@ class ExpensesArgs(BaseModel):
     note: str | None
 
 
+class PagesArgs(BaseModel):
+    op: Literal["delete_page", "restore_page", "restore"]
+    refs: list[str]
+
+
+class SettingsArgs(BaseModel):
+    op: Literal["budget", "clear_budget", "quiet_hours", "name", "rule_off"]
+    refs: list[str]
+    amount: str | None
+    quiet_from: str | None
+    quiet_to: str | None
+    name: str | None
+
+
 class LookupArgs(BaseModel):
-    domain: Literal["tasks", "calendar", "reminders", "expenses"]
+    domain: Literal["tasks", "calendar", "reminders", "expenses", "trash", "rules"]
     words: str | None
     date_from: str | None
     date_to: str | None
 
 
 class NeedToolsArgs(BaseModel):
-    domain: Literal["tasks", "calendar", "reminders", "expenses"]
+    domain: Literal["tasks", "calendar", "reminders", "expenses", "pages", "settings"]
 
 
 # op of a domain tool → the registered operation(s) it runs (the descriptions come from there)
 LINE_OPS: dict[str, dict[str, tuple[str, ...]]] = {
     "tasks": {"done": ("tasks.set_done",), "undone": ("tasks.set_done",),
               "move": ("tasks.reschedule", "tasks.update"), "rename": ("tasks.update",),
-              "delete": ("tasks.delete",)},
+              "update": ("tasks.update",), "delete": ("tasks.delete",),
+              "clear_done": ("tasks.clear_done",)},
     "calendar": {"move": ("tasks.reschedule",), "set_duration": ("tasks.reschedule",),
                  "delete": ("tasks.delete", "tasks.remove_occurrence"),
                  "shift": ("calendar.shift_many",)},
     "reminders": {"create": ("reminders.create",), "move": ("reminders.update",),
                   "rename": ("reminders.update",), "cancel": ("reminders.delete",)},
     "expenses": {"fix": ("expenses.update",), "delete": ("expenses.delete",)},
+    "pages": {"delete_page": ("pages.delete",), "restore_page": ("pages.restore",),
+              "restore": ("trash.restore",)},
+    "settings": {"budget": ("expenses.set_budget",), "clear_budget": ("expenses.clear_budget",),
+                 "quiet_hours": ("settings.quiet_hours",), "name": ("settings.name",),
+                 "rule_off": ("habits.turn_off",)},
 }  # fmt: skip
-ARGS = {"tasks": TasksArgs, "calendar": CalendarArgs, "reminders": RemindersArgs,
-        "expenses": ExpensesArgs}  # fmt: skip
+ARGS: dict[str, type[BaseModel]] = {
+    "tasks": TasksArgs, "calendar": CalendarArgs, "reminders": RemindersArgs,
+    "expenses": ExpensesArgs, "pages": PagesArgs, "settings": SettingsArgs}  # fmt: skip
 HEAD = {
     "tasks": "Change the person's to-dos and purchases («Дела», «Покупки»). refs: t/c refs "
-             "you were shown (one or more). when: the person's own time words for move "
-             "(«на пятницу», «на завтра в 9»), else null; code computes the day. title: the new "
-             "title for rename, else null.",
+             "you were shown (one or more; [] for clear_done). when: the person's own time words "
+             "for move («на пятницу», «на завтра в 9»), else null; code computes the day. title: "
+             "the new title (rename, update), else null. qty: the new quantity as the person "
+             "said it («3», «2 кг») for update, else null. where: the shop for update, else "
+             "null. list_key: «shopping» or «todo» — update moves it to that list; clear_done "
+             "clears that list's done ones; else null.",
     "calendar": "Change calendar entries (to-dos with a time). refs: c refs you were shown. "
                 "when: the person's time words for move («на 16:00», «на пятницу», «на час "
                 "позже»), else null — never compute times yourself. minutes: the length for "
@@ -665,6 +852,14 @@ HEAD = {
                 "new amount exactly as the person said it, else null. category: the category "
                 "name the person said, else null. day: the person's day words («вчера», "
                 "«3 декабря») or YYYY-MM-DD, else null. note: a new description, else null.",
+    "pages": "Pages and the trash. refs: p refs of pages (delete_page) or x refs of the trash "
+             "(restore_page, restore: lookup domain trash shows them). Deleting forever is never "
+             "here: say it is done on the trash screen.",
+    "settings": "The person's own settings. refs: h refs of rules (rule_off: lookup domain rules "
+                "shows them), else []. amount: the month's budget exactly as the person said "
+                "it (budget), else null. quiet_from / quiet_to: «HH:MM» the person said "
+                "(quiet_hours), else null. name: how to address the person (name; null clears), "
+                "else null. Account, consents, logout, the phone number: only on their screens.",
 }  # fmt: skip
 
 
@@ -688,18 +883,18 @@ def _spec(domain: str) -> ToolSpec:
 LOOKUP = ToolSpec(
     name="lookup",
     description=(
-        "Read the person's to-dos, calendar, reminders or expenses (not records). domain: what "
-        "to read. words: words of the title to look for, else null. date_from / date_to: "
-        "YYYY-MM-DD bounds (calendar, expenses), else null. Returns lines with refs (t, c, r, e) "
-        "you can pass to the change tools."
+        "Read the person's to-dos, calendar, reminders, expenses, the trash or the learned rules "
+        "(not records). domain: what to read. words: words of the title to look for, else "
+        "null. date_from / date_to: YYYY-MM-DD bounds (calendar, expenses), else null. Returns "
+        "lines with refs (t, c, r, e, x, h) you can pass to the change tools."
     ),
     parameters=strict_json_schema(LookupArgs),
 )
 NEED_TOOLS = ToolSpec(
     name="need_tools",
     description=("Ask for the change tool of one more domain (tasks, calendar, reminders, "
-                 "expenses) when the person asks to change something none of your tools can. "
-                 "It is there on the next step."),
+                 "expenses, pages, settings) when the person asks to change something none of "
+                 "your tools can. It is there on the next step."),
     parameters=strict_json_schema(NeedToolsArgs),
 )
 DOMAIN_SPECS: dict[str, ToolSpec] = {}
@@ -747,7 +942,8 @@ def _err(message: str, activity: str = "Делаю…") -> Outcome:
 
 
 ACTIVITY = {"tasks": "Отмечаю…", "calendar": "Переношу…", "reminders": "Ставлю напоминание…",
-            "expenses": "Исправляю трату…", "lookup": "Смотрю…", "need_tools": "Смотрю…"}
+            "expenses": "Исправляю трату…", "pages": "Делаю…", "settings": "Меняю настройку…",
+            "lookup": "Смотрю…", "need_tools": "Смотрю…"}
 
 
 async def execute(env: Any, name: str, raw: dict[str, Any]) -> Outcome:
@@ -802,6 +998,10 @@ async def _lookup(env: Any, a: LookupArgs) -> Outcome:
             objs = await load_tasks(s, env.user_id, book, words, limit=20)
         elif a.domain == "reminders":
             objs = await load_reminders(s, env.user_id, book, words, limit=20)
+        elif a.domain == "trash":
+            objs = await load_trash(s, env.user_id, book, words, now=now, limit=20)
+        elif a.domain == "rules":
+            objs = await load_habits(s, env.user_id, book)
         else:
             objs = await load_expenses(s, env.user_id, book, words, limit=12)
         await s.commit()
@@ -833,6 +1033,7 @@ class Planned:
     choices: list[tuple[str, list[tuple[str, dict[str, Any]]]]] = field(default_factory=list)
     count: int = 0  # objects it changes (the «Да» rule)
     error: str | None = None
+    note: str | None = None  # nothing to do, said honestly («Купленного нет — ничего не менял»)
 
 
 def _local(env: Any) -> datetime:
@@ -903,6 +1104,17 @@ def plan_call(env: Any, domain: str, a: Any) -> Planned:  # noqa: C901 - one rul
         p.calls = [("reminders.create", {**base, "due_at": _aware(env, w.moment)})]
         p.count = 1
         return p
+    if domain == "settings":
+        return plan_settings(env, a)
+    if domain == "pages":
+        return plan_pages(env, a)
+    if domain == "tasks" and a.op == "clear_done":
+        if not says_clear(phrase):
+            p.error = "the person did not ask to clear the done ones: do not"
+            return p
+        p.calls = [("tasks.clear_done", {"list_key": a.list_key or "shopping"})]
+        p.count = 1  # the real count is read before «Да» (run_tool)
+        return p
     kinds = {"tasks": ("task", "event"), "calendar": ("event", "task"),
              "reminders": ("reminder",), "expenses": ("expense",)}[domain]
     objs, bad = _objs(env, a.refs, kinds)
@@ -940,6 +1152,33 @@ def plan_call(env: Any, domain: str, a: Any) -> Planned:  # noqa: C901 - one rul
                 p.calls.append(("reminders.update", {"reminder_id": o.id, "title": a.title}))
             else:
                 p.calls.append(("tasks.update", {"task_id": o.id, "title": a.title}))
+        return p
+    if domain == "tasks" and a.op == "update":
+        fields: dict[str, Any] = {}
+        if a.title:
+            if not _numbers_said(m, a.title):
+                p.error = "the title has numbers the person did not say"
+                return p
+            fields["title"] = a.title.strip()[:200]
+        if a.qty:
+            if not facts_of(a.qty).numbers or not _numbers_said(m, a.qty):
+                p.error = "qty: only a quantity the person said"
+                return p
+            fields["qty"] = a.qty.strip()[:40]
+        if a.where:
+            if not matches(a.where, phrase):
+                p.error = "where: only a shop the person named"
+                return p
+            fields["where"] = a.where.strip()[:80]
+        if a.list_key:
+            if not _LIST_WORDS.search(_norm(phrase)):
+                p.error = "the person did not ask to move it to another list"
+                return p
+            fields["list_key"] = a.list_key
+        if not fields:
+            p.error = "nothing to change: give title, qty, where or list_key"
+            return p
+        p.calls = [("tasks.update", {"task_id": o.id, **fields}) for o in objs]
         return p
     if a.op == "delete":
         for o in objs:
@@ -1093,11 +1332,55 @@ def _jsonable(calls: list[tuple[str, dict[str, Any]]]) -> list[list[Any]]:
     return [[n, json.loads(_json(a))] for n, a in calls]
 
 
+CONFLICT = "conflict: it was just changed on the phone, nothing done: say so"
+
+
+async def _version_now(s: AsyncSession, user_id: int, args: dict[str, Any]) -> int | None:
+    from assistant.db.models import Reminder
+    from assistant.db.models_expenses import ExpenseEntry
+    from assistant.db.models_tasks import Task
+
+    for key, model in (("task_id", Task), ("expense_id", ExpenseEntry),
+                       ("reminder_id", Reminder)):  # fmt: skip
+        if args.get(key):
+            return await s.scalar(select(model.version).where(
+                model.user_id == user_id, model.public_id == uuid.UUID(str(args[key]))))
+    return None
+
+
+def with_versions(env: Any, calls: list[tuple[str, dict[str, Any]]]) -> list[
+        tuple[str, dict[str, Any]]]:  # fmt: skip
+    """Offline-edit protection (as `version` on REST, chat-full-control.md §3.4): each call on
+    one to-do / expense / reminder carries the version the line saw (`_v`); a change the phone
+    made since (an outbox edit that came in meanwhile, or before a «Да») makes it refuse."""
+    by_id: dict[str, int] = {}
+    for o in getattr(env.book, "objects", {}).values():
+        v = o.data.get("version") if o.data else None
+        if v is not None and o.occurrence_at is None:
+            by_id.setdefault(str(o.id), int(v))
+    out = []
+    for name, args in calls:
+        rid = args.get("task_id") or args.get("expense_id") or args.get("reminder_id")
+        fresh = "_v" not in args and args.get("occurrence_at") is None
+        if rid is not None and str(rid) in by_id and fresh:
+            args = {**args, "_v": by_id[str(rid)]}
+        elif args.get("entries") and "_vs" not in args:  # several entries (shift_many)
+            seen = {str(e["task_id"]): by_id[str(e["task_id"])] for e in args["entries"]
+                    if e.get("occurrence_at") is None and str(e["task_id"]) in by_id}
+            if seen:
+                args = {**args, "_vs": seen}
+        out.append((name, args))
+    return out
+
+
 async def run_planned(env: Any, calls: list[tuple[str, dict[str, Any]]], *,
-                      many: str | None = None) -> tuple[list[str], str | None]:  # fmt: skip
+                      many: str | None = None,
+                      kw: dict[str, Any] | None = None,
+                      ) -> tuple[list[str], str | None]:  # fmt: skip
     """Run the operations, each one short transaction committed before its `action` event
     (as `mutate._commit`): one action per call, or one action for all of them (`many`, a
-    build operation). Returns (sentences, error)."""
+    build operation). Returns (sentences, error). A call whose object changed since the line
+    saw it (`_v`, `with_versions`) is not run: error `CONFLICT`."""
     from assistant.actions import actions_dicts, record
     from assistant.actions.patch import page_patches
     from assistant.db.models_actions import Initiator
@@ -1117,6 +1400,16 @@ async def run_planned(env: Any, calls: list[tuple[str, dict[str, Any]]], *,
                 resolved = []
                 for name, args in group:
                     args = dict(args)
+                    seen = args.pop("_v", None)
+                    many_seen = args.pop("_vs", None) or {}
+                    changed = seen is not None and await _version_now(s, m.user_id, args) != seen
+                    for tid, v in many_seen.items():
+                        changed = changed or await _version_now(s, m.user_id,
+                                                                {"task_id": tid}) != v
+                    if changed:
+                        await s.rollback()
+                        m.conflict = True
+                        return said, CONFLICT
                     if name == "expenses.update" and "category" in args:
                         cid = await _category_id(s, m.user_id, args.pop("category"))
                         if cid is None:
@@ -1149,7 +1442,8 @@ async def run_planned(env: Any, calls: list[tuple[str, dict[str, Any]]], *,
                 else:
                     name, args = resolved[0]
                     res = await operations.run(name, s, m.user_id, args, by=Initiator.AGENT,
-                                               now=now, message_pk=m.reply_pk)  # fmt: skip
+                                               now=now, message_pk=m.reply_pk,
+                                               **(kw or {}))  # fmt: skip
                     sentence, actions = res.sentence, [a for a in res.actions if a is not None]
                     res_pages, res_items = res.pages, res.items
             except operations.OpError as exc:
@@ -1222,7 +1516,37 @@ def count_question(p: Planned) -> str:
         return f"Убрать {n} {plural(n, ('запись', 'записи', 'записей'))} в корзину?"
     if name == "tasks.set_done":
         return f"Отметить {n} {things}?"
+    if name == "tasks.clear_done":
+        what = "купленное" if p.calls[0][1].get("list_key") == "shopping" else "сделанное"
+        return f"Убрать {what} ({n}) в корзину?"
+    if name == "trash.restore":
+        return f"Вернуть из корзины {n} {plural(n, ('запись', 'записи', 'записей'))}?"
+    if name == "duplicates.cleanup":
+        reps = plural(n, ("повтор", "повтора", "повторов"))
+        return f"Убрать {n} {reps}? Оставлю по одной записи."
     return f"Изменить {n} {plural(n, ('запись', 'записи', 'записей'))}?"
+
+
+TEXT_CONFLICT = ("Это только что изменили на телефоне — ничего не менял. Посмотрите и скажите "
+                 "ещё раз.")
+
+
+async def count_done(env: Any, list_key: str) -> int:
+    from assistant.db.models import Item
+    from assistant.db.models_tasks import Task
+
+    async with env.sessionmaker() as s:
+        n = await s.scalar(select(func.count()).select_from(Task)
+                           .join(Item, Item.id == Task.item_id)
+                           .where(Task.user_id == env.user_id, Task.list_key == list_key,
+                                  Task.done_at.is_not(None), Task.deleted_at.is_(None),
+                                  Item.deleted_at.is_(None)))  # fmt: skip
+        await s.commit()
+    return int(n or 0)
+
+
+NOTHING_DONE = {"shopping": "Купленного нет — ничего не убирал.",
+                "todo": "Сделанных дел нет — ничего не убирал."}  # fmt: skip
 
 
 async def run_tool(env: Any, domain: str, a: Any) -> Outcome:
@@ -1231,6 +1555,14 @@ async def run_tool(env: Any, domain: str, a: Any) -> Outcome:
     p = plan_call(env, domain, a)
     if p.error:
         return _err(p.error, activity)
+    if p.calls and p.calls[0][0] == "tasks.clear_done":
+        p.count = await count_done(env, p.calls[0][1]["list_key"])
+        if not p.count:
+            p.note = NOTHING_DONE.get(p.calls[0][1]["list_key"], NOTHING_DONE["todo"])
+    if p.note:  # nothing to do: said honestly, no change
+        return Outcome(_json({"done": [p.note]}), False, activity)
+    p.calls = with_versions(env, p.calls)
+    p.choices = [(label, with_versions(env, calls)) for label, calls in p.choices]
     if p.ask:
         if not p.choices:
             return _err("the time is unclear: ask the person when", activity)
@@ -1255,7 +1587,7 @@ async def run_choice(env: Any, plan: dict[str, Any], option: str) -> bool:
     calls = [(str(n), dict(a)) for n, a in raw]
     said, error = await run_planned(env, calls, many=plan.get("many"))
     if error and not any(said):
-        env.mut.note = "Не получилось — ничего не изменил."
+        env.mut.note = TEXT_CONFLICT if env.mut.conflict else "Не получилось — ничего не изменил."
     return True
 
 
@@ -1298,6 +1630,7 @@ class CodeAsk:
     verb: str = ""
     reminder: bool = False  # «перенеси напоминание про таблетку на 8»
     all_of_day: bool = False  # «сдвинь всё завтра на час»
+    value: str = ""  # Ф-97: the amount / «HH:MM-HH:MM» / name / list / new quantity code read
 
 
 def read_code(phrase: str) -> CodeAsk | None:
@@ -1305,6 +1638,8 @@ def read_code(phrase: str) -> CodeAsk | None:
     t = _norm(phrase)
     if not t or "?" in t or len(t) > 160:
         return None
+    if (got := read_more(phrase)) is not None:  # Ф-97: budget, quiet hours, trash, pages, …
+        return got
     if (m := _CANCEL_REM.match(t)) is not None:
         return CodeAsk("cancel", m.group("what").strip()) if m.group("what").strip() else None
     if (m := _UNTICK.match(t)) is not None:
@@ -1381,6 +1716,8 @@ def pick(objs: list[Obj], what: str, verb: str = "") -> list[Obj]:
 async def code_objects(session: AsyncSession, user_id: int, book: SourceBook, ask: CodeAsk,
                        now: datetime) -> list[Obj]:  # fmt: skip
     """The candidates of a code phrase, from the same rows the screens read."""
+    if ask.kind in MORE_KINDS:
+        return await more_objects(session, user_id, book, ask, now)
     if ask.kind == "cancel" or (ask.kind == "move" and ask.reminder):
         return await load_reminders(session, user_id, book, ask.what, limit=300)
     if ask.kind == "move":
@@ -1422,6 +1759,8 @@ def one_per_series(hits: list[Obj], now: datetime, grace_h: int = 0) -> list[Obj
 
 def plan_code(env: Any, ask: CodeAsk, objs: list[Obj]) -> Planned | None:
     """None: code does not take it (no unique object): the usual way (the model)."""
+    if ask.kind in MORE_KINDS:
+        return plan_more(env, ask, objs)
     now_local = _local(env)
     if ask.kind == "move" and ask.all_of_day:
         r = timewords.read(_NA_DAY.sub(lambda m: " в " + m.group(1), _norm(ask.when)), now_local)
@@ -1437,6 +1776,8 @@ def plan_code(env: Any, ask: CodeAsk, objs: list[Obj]) -> Planned | None:
             "entries": [{"task_id": o.id, "occurrence_at": o.occurrence_at} for o in todo],
             "minutes": mins})], count=len(todo))  # fmt: skip
         return p
+    if ask.kind in ("done", "undone") and len(parts := split_items(ask.what)) > 1:
+        return plan_several(env, ask, objs, parts)
     hits = one_per_series(pick(objs, ask.what, ask.verb), _aware(env, now_local),
                           12 if ask.kind in ("done", "undone") else 0)
     if not hits:
@@ -1480,7 +1821,375 @@ def purchase_of(phrase: str) -> str | None:
     return m.group("what").strip() if m else None
 
 
+# --- Ф-97 (chat-full-control.md phases 2–3): more phrases code reads, and their tools ---
+# Kazakh patterns here are basics (marked «kk»): for a native speaker's review.
+
+_PLEASE = r"^(?:пожалуйста[,\s]+)?"
+_CLEAR_RX = re.compile(_PLEASE + r"(?:убери|удали|очисти|почисти|сотри|убрать)(?:те)?\s+"
+                       r"(?:все\s+|всё\s+)?(?P<w>купленн\w*|сделанн\w*|выполненн\w*|отмеченн\w*|"
+                       r"вычеркнут\w*)(?:\s+(?:дела|покупки|из\s+покупок|из\s+дел|из\s+списка))?"
+                       r"[.!]*$|^(?P<kk>сатып\s+алынған|орындалған)\w*\s+(?:бәрін\s+)?өшір\w*[.!]*$",
+                       re.I)  # fmt: skip  (kk)
+_RESTORE_RX = re.compile(_PLEASE + r"(?:верни|восстанови|вернуть|восстановить)(?:те)?\s+"
+                         r"(?:из\s+корзины\s+)?(?P<rest>.+?)(?:\s+из\s+корзины|\s+обратно)?[.!]*$|"
+                         r"^(?P<kk>.+?)\s+(?:себеттен\s+)?қайтар\w*[.!]*$", re.I)  # fmt: skip
+_RESTORE_DROP = re.compile(r"(?:^|\s)(?:удал[её]нн\w*|запис\w*|заметк\w*|мо[юиё]|мой|моя|про|о|"
+                           r"об|из|корзин\w*|обратно|жазба\w*)(?=$|\s)", re.I)  # fmt: skip
+_DEL_PAGE_RX = re.compile(_PLEASE + r"(?:удали|убери|закрой)(?:те)?\s+(?P<this>эту\s+)?"
+                          r"(?:страниц[уы]|вкладк[уи])\s*(?P<what>.*?)[.!]*$|"
+                          r"^(?P<kk>.+?)\s+бет(?:ін|ті)\s+өшір\w*[.!]*$", re.I)  # fmt: skip
+_BUDGET_CLEAR_RX = re.compile(_PLEASE + r"(?:убери|удали|сними|отключи|отмени|сбрось)(?:те)?\s+"
+                              r"(?:мой\s+)?бюджет\w*(?:\s+на\s+месяц)?[.!]*$|"
+                              r"^бюджетті\s+өшір\w*[.!]*$", re.I)  # fmt: skip
+_BUDGET_RX = re.compile(_PLEASE + r"(?:(?:поставь|установи|сделай|задай|измени|поменяй)(?:те)?\s+)?"
+                        r"(?:мой\s+|айлық\s+)?бюджет\w*\s+(?:на\s+месяц\s+|в\s+месяц\s+)?"
+                        r"(?:на\s+|в\s+)?(?P<n>\d[\d\s]*(?:[.,]\d+)?)\s*(?P<k>тыс\w*|к|млн|"
+                        r"миллион\w*|мың)?\.?\s*(?:₸|тенге|тг|теңге)?(?:\s+(?:в|на)\s+месяц)?"
+                        r"[.!]*$", re.I)  # fmt: skip
+_QUIET_RX = re.compile(_PLEASE + r"(?:(?:поставь|установи|сделай|включи)(?:те)?\s+)?"
+                       r"(?:тихие\s+часы|тихий\s+режим|не\s+беспокой(?:те)?(?:\s+меня)?)\s+"
+                       r"с\s+(?P<a>\d{1,2})(?::(?P<am>\d{2}))?\s+до\s+(?P<b>\d{1,2})"
+                       r"(?::(?P<bm>\d{2}))?(?:\s+(?:утра|часов|ночи))?[.!]*$|"
+                       r"^(?:тыныш\s+(?:уақыт|сағат\w*)|мазалама\w*)\s+(?P<ka>\d{1,2})"
+                       r"(?::(?P<kam>\d{2}))?\s*-?\s*(?:ден|тен|нан|тан|дан)?\s+(?P<kb>\d{1,2})"
+                       r"(?::(?P<kbm>\d{2}))?\s*-?\s*(?:ге|ке|қа|ға)?\s+дейін[.!]*$",
+                       re.I)  # fmt: skip
+_NAME_RX = re.compile(r"^(?:пожалуйста[,\s]+)?(?:(?:зови|называй)(?:те)?\s+меня|"
+                      r"обращайся\s+ко\s+мне|обращайтесь\s+ко\s+мне)\s+(?:как\s+)?"
+                      r"(?P<name>[^\d,.!?]{2,40}?)[.!]*$|^мені\s+(?P<kk>[^\d,.!?]{2,40}?)\s+деп\s+"
+                      r"(?:ата|атаңыз|шақыр\w*)[.!]*$", re.I)  # fmt: skip
+_NAME_CLEAR_RX = re.compile(r"^(?:не\s+(?:называй|зови)(?:те)?\s+меня\s+по\s+имени|"
+                            r"обращайся\s+без\s+имени)[.!]*$", re.I)  # fmt: skip
+_CLEANUP_RX = re.compile(_PLEASE + r"(?:почисти|удали|убери|объедини|найди\s+и\s+(?:удали|"
+                         r"объедини))(?:те)?\s+(?:все\s+|мои\s+)?(?:повтор\w*|дубл\w*|"
+                         r"дубликат\w*|одинаков\w+\s+запис\w*)[.!]*$|"
+                         r"^қайталан\w*\s+(?:жазбаларды\s+)?(?:өшір|тазала|біріктір)\w*[.!]*$",
+                         re.I)  # fmt: skip
+_QTY_RX = re.compile(r"^(?:нет,?\s+)?(?P<what>[^\d]+?)\s+не\s+(?P<a>\d{1,3})\s*,?\s*а\s+"
+                     r"(?P<b>\d{1,3})(?:\s*(?:шт\w*|штук\w*))?[.!]*$|^(?:нет,?\s+)?не\s+"
+                     r"(?P<a2>\d{1,3})\s*,?\s*а\s+(?P<b2>\d{1,3})\s+(?P<what2>[^\d]+?)[.!]*$",
+                     re.I)  # fmt: skip
+_ITEMS_SPLIT = re.compile(r"\s*(?:,|\s+и\s+|\s+да\s+|\s+және\s+)\s*", re.I)
+
+# «зови меня на ужин», «зови меня когда…»: not a name
+_NOT_NAMES = frozenset({"на", "в", "во", "к", "ко", "с", "со", "когда", "если", "как", "по", "за",
+                        "завтра", "сегодня", "потом", "позже", "сюда", "туда", "домой", "гулять",
+                        "есть", "обедать", "ужинать", "вечером", "утром"})  # fmt: skip
+MORE_KINDS = frozenset({"clear", "restore", "delete_page", "budget", "clear_budget", "quiet",
+                        "name", "cleanup", "qty"})  # fmt: skip
+
+
+def _quiet_hours(a: int, am: int, b: int, bm: int) -> tuple[str, str] | None:
+    """«с 10 до 7» → 22:00–07:00 (an evening start said as a small hour), «с 23 до 7» as said."""
+    if a > 23 or b > 23 or am > 59 or bm > 59:
+        return None
+    if a == 12 and b < 12:
+        a = 0
+    elif a < 12 and b <= 12 and a > b:
+        a += 12
+    if (a, am) == (b, bm):
+        return None
+    return f"{a:02d}:{am:02d}", f"{b:02d}:{bm:02d}"
+
+
+def _shopping_on() -> bool:
+    from assistant.config import get_settings
+
+    return bool(get_settings().feature_shopping)
+
+
+def budget_amount(n: str, k: str | None) -> Decimal | None:
+    try:
+        v = Decimal("".join(n.replace(",", ".").split()))
+    except ArithmeticError:
+        return None
+    k = (k or "").lower()
+    if k.startswith(("тыс", "мың")) or k == "к":
+        v *= 1000
+    elif k.startswith(("млн", "миллион")):
+        v *= 1_000_000
+    return v if v > 0 else None
+
+
+def restores_from_trash(phrase: str) -> bool:
+    """«верни из корзины …», «восстанови …», «верни удалённую …»: the trash, before «отмени»
+    (a plain «верни запись про хлеб» stays an undo of the action, undo_line.py)."""
+    t = _norm(phrase)
+    return bool(_RESTORE_RX.match(t)) and bool(re.search(
+        r"корзин|удал[её]нн|восстанов|себет|(?:^|\s)верни\s+страниц", t))
+
+
+def read_more(phrase: str) -> CodeAsk | None:
+    """Ф-97: «убери купленное», «верни заметку про шины», «удали страницу Ремонт», «бюджет
+    300 000 в месяц», «убери бюджет», «тихие часы с 23 до 7», «зови меня Али», «почисти
+    повторы», «молоко не 2, а 3»."""
+    raw = " ".join(phrase.split())
+    t = _norm(phrase)
+    if (m := _CLEAR_RX.match(t)) is not None:
+        w = m.group("w") or m.group("kk") or ""
+        return CodeAsk("clear", "", value="shopping" if w.startswith(("купл", "сатып"))
+                       else "todo")  # fmt: skip
+    if _CLEANUP_RX.match(t):
+        return CodeAsk("cleanup", "")
+    if _BUDGET_CLEAR_RX.match(t):
+        return CodeAsk("clear_budget", "")
+    if (m := _BUDGET_RX.match(t)) is not None:
+        v = budget_amount(m.group("n"), m.group("k"))
+        return CodeAsk("budget", "", value=f"{v:.2f}") if v is not None else None
+    if (m := _QUIET_RX.match(t)) is not None:
+        g = m.groupdict()
+        a, b = g.get("a") or g.get("ka"), g.get("b") or g.get("kb")
+        got = _quiet_hours(int(a), int(g.get("am") or g.get("kam") or 0), int(b),
+                           int(g.get("bm") or g.get("kbm") or 0)) if a and b else None
+        return CodeAsk("quiet", "", value="-".join(got)) if got else None
+    if _NAME_CLEAR_RX.match(t):
+        return CodeAsk("name", "", value="")
+    if (m := _NAME_RX.match(raw)) is not None:
+        name = (m.group("name") or m.group("kk") or "").strip(" «»\"'")
+        first = _norm(name).split()[0] if name.strip() else ""
+        if name and len(name.split()) <= 3 and first not in _NOT_NAMES:
+            return CodeAsk("name", "", value=name[:1].upper() + name[1:])
+        return None
+    if (m := _DEL_PAGE_RX.match(t)) is not None:
+        what = (m.group("what") or m.group("kk") or "").strip(" «»\"'")
+        if what or m.group("this"):
+            return CodeAsk("delete_page", what)
+        return None
+    if (m := _RESTORE_RX.match(t)) is not None:
+        rest = (m.group("rest") or m.group("kk") or "").strip(" «»\"'")
+        page = bool(re.match(r"страниц\w*|вкладк\w*", rest))
+        rest = re.sub(r"^(?:страниц\w*|вкладк\w*)\s*", "", rest)
+        what = " ".join(_RESTORE_DROP.sub(" ", rest).split())
+        if not what or len(what) > 80:
+            return None
+        return CodeAsk("restore", what, value="page" if page else "")
+    if (m := _QTY_RX.match(t)) is not None:
+        what = (m.group("what") or m.group("what2") or "").strip()
+        a, b = m.group("a") or m.group("a2"), m.group("b") or m.group("b2")
+        if what and a != b:
+            return CodeAsk("qty", what, when=a, value=b)
+    return None
+
+
+async def more_objects(session: AsyncSession, user_id: int, book: SourceBook, ask: CodeAsk,
+                       now: datetime) -> list[Obj]:  # fmt: skip
+    from assistant.db.models_pages import Screen, ScreenKind
+
+    if ask.kind == "clear":
+        if ask.value == "shopping" and not _shopping_on():  # Ф-49: purchases are «Купить …»
+            done = await load_tasks(session, user_id, book, "", done=True, list_key="todo",
+                                    limit=500)  # fmt: skip
+            return [o for o in done if _norm(o.title).startswith("купить")]
+        return await load_tasks(session, user_id, book, "", done=True, list_key=ask.value,
+                                limit=500)  # fmt: skip
+    if ask.kind == "restore":
+        got = await load_trash(session, user_id, book, ask.what, now=now, limit=300)
+        want = "page" if ask.value == "page" else None
+        return [o for o in got if want is None or o.data.get("what") == want]
+    if ask.kind == "delete_page":
+        pages = list(await session.scalars(select(Screen).where(
+            Screen.user_id == user_id, Screen.deleted_at.is_(None),
+            Screen.kind != ScreenKind.SYSTEM_TODAY)))  # fmt: skip
+        if not ask.what:
+            cur = book.current
+            pages = [p for p in pages if cur is not None and p.public_id == cur.id]
+        else:
+            exact = [p for p in pages if _norm(p.title) == _norm(ask.what)]
+            pages = exact or [p for p in pages if matches(ask.what, p.title)]
+        return [Obj("", "page", p.public_id, p.title, p.title) for p in pages]
+    if ask.kind == "qty":
+        return await load_tasks(session, user_id, book, ask.what, done=False, limit=300)
+    return []
+
+
+def plan_more(env: Any, ask: CodeAsk, objs: list[Obj]) -> Planned | None:
+    p = Planned(count=1)
+    if ask.kind == "clear":
+        p.calls = [("tasks.clear_done", {"list_key": ask.value})]
+        if any(o.list_key != ask.value for o in objs):  # Ф-49: the bought «Купить …» to-dos
+            p.calls = [("tasks.clear_done", {"list_key": "todo",
+                                             "task_ids": [o.id for o in objs]})]
+        p.count = len(objs)
+        if not objs:
+            p.note = NOTHING_DONE.get(ask.value, NOTHING_DONE["todo"])
+        return p
+    if ask.kind == "budget":
+        p.calls = [("expenses.set_budget", {"amount": ask.value})]
+        return p
+    if ask.kind == "clear_budget":
+        p.calls = [("expenses.clear_budget", {})]
+        return p
+    if ask.kind == "quiet":
+        a, b = ask.value.split("-")
+        p.calls = [("settings.quiet_hours", {"quiet_from": a, "quiet_to": b})]
+        return p
+    if ask.kind == "name":
+        p.calls = [("settings.name", {"name": ask.value or None})]
+        return p
+    if ask.kind == "delete_page":
+        if ask.what:
+            exact = [o for o in objs if _norm(o.title) == _norm(ask.what)]
+            objs = exact or [o for o in objs if matches(ask.what, o.title)]
+        if len(objs) != 1:
+            return None
+        p.calls = [("pages.delete", {"page_id": objs[0].id})]
+        return p
+    if ask.kind == "restore":
+        hits = [o for o in objs if matches(ask.what, o.title)]
+        if len(hits) != 1:
+            return None  # none or several: the model (it asks «Какую?»)
+        o = hits[0]
+        p.calls = [("pages.restore", {"page_id": o.id}) if o.data.get("what") == "page"
+                   else ("trash.restore", {"item_ids": [o.id]})]
+        return p
+    if ask.kind == "qty":
+        said = re.compile(rf"(?<![\d.,]){re.escape(ask.when)}(?![\d.,])")
+        hits = [o for o in pick(objs, ask.what)
+                if o.list_key == "shopping" or o.data.get("qty") or said.search(o.title)]
+        if len({o.id for o in hits}) != 1:
+            return None
+        o = hits[0]
+        old = re.sub(r"\D", "", str(o.data.get("qty") or ""))
+        if old and old != ask.when:
+            return None  # «не 2, а 3» but it says 5: not this one (maybe an expense fix)
+        if not old and o.list_key != "shopping":  # Ф-49: «Купить молоко, 2» — the title says it
+            if len(said.findall(o.title)) != 1:
+                return None
+            p.calls = [("tasks.update", {"task_id": o.id,
+                                         "title": said.sub(ask.value, o.title)})]
+            return p
+        p.calls = [("tasks.update", {"task_id": o.id, "qty": ask.value})]
+        return p
+    return None
+
+
+def split_items(what: str) -> list[str]:
+    """«молоко и хлеб», «молоко, хлеб и сыр» → the things named (one is no split)."""
+    parts = [x.strip() for x in _ITEMS_SPLIT.split(what) if x.strip()]
+    return parts if 1 < len(parts) <= 10 else [what]
+
+
+def plan_several(env: Any, ask: CodeAsk, objs: list[Obj], parts: list[str]) -> Planned | None:
+    """«молоко и хлеб купил»: each thing named is exactly one open purchase / to-do (else the
+    model); all are ticked in one action with «Отменить» (Ф-95 (3): «Да» only above 10)."""
+    now = _aware(env, _local(env))
+    calls: list[tuple[str, dict[str, Any]]] = []
+    seen: set[Any] = set()
+    for part in parts:
+        hits = one_per_series(pick(objs, part, ask.verb), now, 12)
+        ids = {(o.id, o.occurrence_at) for o in hits}
+        if len(ids) != 1 or ids & seen:
+            return None
+        o = hits[0]
+        if o.repeat and o.occurrence_at is None:
+            return None
+        seen |= ids
+        calls.append(("tasks.set_done", {"task_id": o.id, "done": ask.kind == "done",
+                                         "occurrence_at": o.occurrence_at}))
+    return Planned(calls=calls, many="tasks.set_done", count=len(calls))
+
+
+def plan_pages(env: Any, a: Any) -> Planned:
+    """The `pages` tool: a page removed (its records stay), a page or records back from the
+    trash. Words guard both: «удали / убери» for a page, «верни / восстанови» for the trash."""
+    p = Planned()
+    phrase = env.mut.phrase
+    if not a.refs:
+        p.error = "give refs (p for a page, x from lookup domain trash)"
+        return p
+    if a.op == "delete_page":
+        if not says_delete(phrase):
+            p.error = "the person did not ask to remove a page: do not"
+            return p
+        pages = [env.book.page(r) for r in a.refs]
+        if any(pg is None for pg in pages):
+            p.error = "unknown page refs: use only p refs you were shown"
+            return p
+        p.calls = [("pages.delete", {"page_id": pg.id}) for pg in pages]  # type: ignore[union-attr]
+        p.count = len(p.calls)
+        return p
+    if not says_restore(phrase):
+        p.error = "the person did not ask to bring anything back: do not"
+        return p
+    objs, bad = _objs(env, a.refs, ("trashed",))
+    if bad:
+        p.error = f"unknown refs {bad}: use only x refs from lookup domain trash"
+        return p
+    pages = [o for o in objs if o.data.get("what") == "page"]
+    items = [o for o in objs if o.data.get("what") != "page"]
+    if a.op == "restore_page" and items:
+        p.error = "restore_page takes page x refs; records: op restore"
+        return p
+    p.calls = [("pages.restore", {"page_id": o.id}) for o in pages]
+    if items:
+        p.calls.append(("trash.restore", {"item_ids": [o.id for o in items]}))
+    p.count = len(objs)
+    return p
+
+
+def plan_settings(env: Any, a: Any) -> Planned:
+    """The `settings` tool: budget, quiet hours, name, a rule off. Code reads the values from
+    the person's own words where it can; a value the person did not say is refused."""
+    p = Planned(count=1)
+    phrase = env.mut.phrase
+    said = facts_of(phrase)
+    if a.op == "budget":
+        own = read_more(phrase)
+        amount = budget_amount(a.amount or "", None) if a.amount else None
+        if own is not None and own.kind == "budget":
+            amount = Decimal(own.value)
+        elif amount is None or amount.normalize() not in {n.normalize() for n in said.numbers}:
+            p.error = "the budget must be an amount the person said"
+            return p
+        p.calls = [("expenses.set_budget", {"amount": f"{amount:.2f}"})]
+        return p
+    if a.op == "clear_budget":
+        if not says_off(phrase):
+            p.error = "the person did not ask to remove the budget: do not"
+            return p
+        p.calls = [("expenses.clear_budget", {})]
+        return p
+    if a.op == "quiet_hours":
+        own = read_more(phrase)
+        if own is not None and own.kind == "quiet":
+            qf, qt = own.value.split("-")
+        else:
+            qf, qt = (a.quiet_from or "").strip(), (a.quiet_to or "").strip()
+            hours = {h for h, _ in said.times} | {int(n) for n in said.numbers
+                                                  if n == n.to_integral_value() and 0 <= n < 24}
+            try:
+                fh, th = int(qf.split(":")[0]), int(qt.split(":")[0])
+            except ValueError:
+                p.error = "quiet_from / quiet_to: HH:MM"
+                return p
+            if not ({fh, fh % 12, fh - 12} & hours and {th, th % 12} & hours):
+                p.error = "quiet hours must be the times the person said"
+                return p
+        p.calls = [("settings.quiet_hours", {"quiet_from": qf, "quiet_to": qt})]
+        return p
+    if a.op == "name":
+        name = (a.name or "").strip()
+        if name and _norm(name) not in _norm(phrase):
+            p.error = "the name must be the one the person said"
+            return p
+        p.calls = [("settings.name", {"name": name or None})]
+        return p
+    if a.op == "rule_off":
+        if not says_off(phrase):
+            p.error = "the person did not ask to turn a rule off: do not"
+            return p
+        objs, bad = _objs(env, a.refs, ("habit",))
+        if bad or not objs:
+            p.error = "give h refs from lookup domain rules"
+            return p
+        p.calls = [("habits.turn_off", {"habit_id": o.id}) for o in objs]
+        p.count = len(objs)
+        return p
+    p.error = "this op is not available here"
+    return p
+
+
 __all__ = ["CodeAsk", "LineState", "Planned", "When", "code_objects", "domains_for", "execute",
-           "needs_yes", "pick", "plan_code", "prepare", "purchase_of", "read_code",
-           "read_domains_for", "read_when", "run_choice", "run_planned", "tools_of",
-           "time"]  # fmt: skip
+           "free_windows", "needs_yes", "pick", "plan_code", "prepare", "purchase_of",
+           "read_code", "read_domains_for", "read_more", "read_when", "run_choice",
+           "run_planned", "tools_of", "time", "with_versions"]  # fmt: skip

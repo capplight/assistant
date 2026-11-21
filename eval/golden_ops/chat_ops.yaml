@@ -269,3 +269,117 @@
 - {id: asst-mx-001, lang: mixed, phrase: "жазып бер поздравление ұстазға", expect: {route: assistant}}
 - {id: asst-ru-015, lang: ru, phrase: "напиши в заметку купить батарейки", expect: {route: not_assistant}}
 - {id: asst-ru-016, lang: ru, phrase: "переведи 5000 маме", expect: {route: not_assistant}}
+
+# --- Ф-97 (phases 2–3): more phrases code reads ---
+# objects: kind `trashed` (a record / page in the trash; `what: page` for a page), `page` (a live
+# page). route `reads`: what code reads (planned with the DB, e.g. the cleanup plan); `free`: the
+# free windows of `day` (8:00–22:00, ≥30 min) code computes; `note`: nothing to do, said honestly.
+- {id: f97-ru-001, lang: ru, phrase: "убери купленное",
+   objects: [{kind: task, title: Хлеб, list: shopping, done: true}, {kind: task, title: Молоко, list: shopping, done: true}],
+   expect: {route: code, op: tasks.clear_done, args: {list_key: shopping}, count: 2}}
+- {id: f97-ru-002, lang: ru, phrase: "убери все купленные",
+   objects: [{kind: task, title: Хлеб, list: shopping, done: true}, {kind: task, title: Сыр, list: shopping, done: true}],
+   expect: {route: code, op: tasks.clear_done, confirm: true, count: 2}}  # «все» → «Да» (Ф-95 (3))
+- {id: f97-ru-003, lang: ru, phrase: "удали сделанные дела",
+   objects: [{kind: task, title: Позвонить маме, done: true}],
+   expect: {route: code, op: tasks.clear_done, args: {list_key: todo}, count: 1}}
+- {id: f97-ru-004, lang: ru, phrase: "убери купленное", objects: [],
+   expect: {route: code, note: "Купленного нет"}}
+- {id: f97-ru-005, lang: ru, phrase: "верни из корзины заметку про шины",
+   objects: [{kind: trashed, title: Зимние шины на складе}, {kind: trashed, title: Рецепт плова}],
+   expect: {route: code, op: trash.restore, target: Зимние шины на складе}}
+- {id: f97-ru-006, lang: ru, phrase: "восстанови страницу Ремонт",
+   objects: [{kind: trashed, title: Ремонт, what: page}],
+   expect: {route: code, op: pages.restore, target: Ремонт}}
+- {id: f97-ru-007, lang: ru, phrase: "восстанови удалённую заметку про отпуск",
+   objects: [{kind: trashed, title: Отпуск в Турции}, {kind: trashed, title: Отпуск на даче}],
+   expect: {route: none}}  # two fit: the model asks «Какую?»
+- {id: f97-ru-008, lang: ru, phrase: "удали страницу Ремонт",
+   objects: [{kind: page, title: Ремонт}, {kind: page, title: Расходы}],
+   expect: {route: code, op: pages.delete, target: Ремонт}}  # reversible: no «Да» (Ф-66)
+- {id: f97-ru-009, lang: ru, phrase: "убери страницу Поездки",
+   objects: [{kind: page, title: Ремонт}],
+   expect: {route: none}}
+- {id: f97-ru-010, lang: ru, phrase: "бюджет 300 000 в месяц", objects: [],
+   expect: {route: code, op: expenses.set_budget, args: {amount: "300000.00"}}}
+- {id: f97-ru-011, lang: ru, phrase: "поставь бюджет на месяц 250 тыс", objects: [],
+   expect: {route: code, op: expenses.set_budget, args: {amount: "250000.00"}}}
+- {id: f97-ru-012, lang: ru, phrase: "убери бюджет", objects: [],
+   expect: {route: code, op: expenses.clear_budget}}
+- {id: f97-ru-013, lang: ru, phrase: "тихие часы с 23 до 7", objects: [],
+   expect: {route: code, op: settings.quiet_hours, args: {quiet_from: "23:00", quiet_to: "07:00"}}}
+- {id: f97-ru-014, lang: ru, phrase: "не беспокой меня с 10 до 7", objects: [],
+   expect: {route: code, op: settings.quiet_hours, args: {quiet_from: "22:00", quiet_to: "07:00"}}}
+- {id: f97-ru-015, lang: ru, phrase: "зови меня Али", objects: [],
+   expect: {route: code, op: settings.name, args: {name: Али}}}
+- {id: f97-ru-016, lang: ru, phrase: "зови меня на ужин", objects: [],
+   expect: {route: none}}  # not a name
+- {id: f97-ru-017, lang: ru, phrase: "почисти повторы", expect: {route: reads, kind: cleanup}}
+- {id: f97-ru-018, lang: ru, phrase: "молоко не 2, а 3",
+   objects: [{kind: task, title: Молоко, list: shopping, qty: "2"}],
+   expect: {route: code, op: tasks.update, target: Молоко, args: {qty: "3"}}}
+- {id: f97-ru-019, lang: ru, phrase: "молоко не 2, а 3",
+   objects: [{kind: task, title: Молоко, list: shopping, qty: "5"}],
+   expect: {route: none}}  # it says 5: not this one
+- {id: f97-ru-020, lang: ru, phrase: "молоко и хлеб купил",
+   objects: [{kind: task, title: Молоко, list: shopping}, {kind: task, title: Хлеб, list: shopping}, {kind: task, title: Сыр, list: shopping}],
+   expect: {route: code, op: tasks.set_done, count: 2, many: true}}
+- {id: f97-ru-021, lang: ru, phrase: "купил молоко, хлеб и сыр",
+   objects: [{kind: task, title: Молоко, list: shopping}, {kind: task, title: Хлеб, list: shopping}, {kind: task, title: Сыр, list: shopping}],
+   expect: {route: code, op: tasks.set_done, count: 3, many: true}}
+- {id: f97-ru-022, lang: ru, phrase: "молоко и хлеб купил",
+   objects: [{kind: task, title: Молоко, list: shopping}],
+   expect: {route: none}}  # «хлеб» is not on the list: the model
+- {id: f97-ru-023, lang: ru, phrase: "когда я свободен завтра?",
+   objects: [{kind: event, title: Созвон, at: "2026-11-13 10:00", duration: 60}, {kind: event, title: Обед, at: "2026-11-13 13:00", duration: 90}],
+   expect: {route: free, day: "2026-11-13", windows: ["08:00-10:00", "11:00-13:00", "14:30-22:00"]}}
+- {id: f97-ru-024, lang: ru, phrase: "когда я свободен сегодня?",
+   objects: [{kind: event, title: Врач, at: "2026-11-12 11:00", duration: 30}],
+   expect: {route: free, day: "2026-11-12", windows: ["10:00-11:00", "11:30-22:00"]}}  # 10:00 now
+- {id: f97-kk-001, lang: kk, phrase: "сатып алынғандарды өшір",
+   objects: [{kind: task, title: Нан, list: shopping, done: true}],
+   expect: {route: code, op: tasks.clear_done, args: {list_key: shopping}}}
+- {id: f97-kk-002, lang: kk, phrase: "мені Али деп ата", objects: [],
+   expect: {route: code, op: settings.name, args: {name: Али}}}
+- {id: f97-kk-003, lang: kk, phrase: "айлық бюджет 300 000", objects: [],
+   expect: {route: code, op: expenses.set_budget, args: {amount: "300000.00"}}}
+- {id: f97-kk-004, lang: kk, phrase: "тыныш уақыт 23-тен 7-ге дейін", objects: [],
+   expect: {route: code, op: settings.quiet_hours, args: {quiet_from: "23:00", quiet_to: "07:00"}}}
+
+# --- Ф-97 model path: the new domain tools (cassettes), checked by code ---
+- {id: f97-ru-040, lang: ru, phrase: "поменяй количество молока на 3",
+   objects: [{kind: task, title: Молоко, list: shopping}],
+   call: {tool: tasks, args: {op: update, refs: [t1], when: null, title: null, qty: "3", where: null, list_key: null}},
+   expect: {route: model, op: tasks.update, args: {qty: "3"}}}
+- {id: f97-ru-041, lang: ru, phrase: "поменяй магазин для молока на Магнум",
+   objects: [{kind: task, title: Молоко, list: shopping}],
+   call: {tool: tasks, args: {op: update, refs: [t1], when: null, title: null, qty: null, where: Магнум, list_key: null}},
+   expect: {route: model, op: tasks.update, args: {where: Магнум}}}
+- {id: f97-ru-042, lang: ru, phrase: "перенеси шины из покупок в дела",
+   objects: [{kind: task, title: Шины, list: shopping}],
+   call: {tool: tasks, args: {op: update, refs: [t1], when: null, title: null, qty: null, where: null, list_key: todo}},
+   expect: {route: model, op: tasks.update, args: {list_key: todo}}}
+- {id: f97-ru-043, lang: ru, phrase: "удали страницу с ремонтом",
+   objects: [],
+   call: {tool: pages, args: {op: delete_page, refs: [p9]}},
+   expect: {route: refused}}  # a page ref nobody showed
+- {id: f97-ru-044, lang: ru, phrase: "поставь бюджет на этот месяц триста тысяч",
+   objects: [],
+   call: {tool: settings, args: {op: budget, refs: [], amount: "300000", quiet_from: null, quiet_to: null, name: null}},
+   expect: {route: refused}}  # the amount is not in the person's digits: code asks
+- {id: f97-ru-045, lang: ru, phrase: "поставь тихие часы с 22:30 до 6:30, пожалуйста",
+   objects: [],
+   call: {tool: settings, args: {op: quiet_hours, refs: [], amount: null, quiet_from: "22:30", quiet_to: "06:30", name: null}},
+   expect: {route: model, op: settings.quiet_hours, args: {quiet_from: "22:30", quiet_to: "06:30"}}}
+- {id: f97-ru-046, lang: ru, phrase: "поставь тихие часы с 22:30 до 6:30, пожалуйста",
+   objects: [],
+   call: {tool: settings, args: {op: quiet_hours, refs: [], amount: null, quiet_from: "00:00", quiet_to: "23:00", name: null}},
+   expect: {route: refused}}
+- {id: f97-ru-047, lang: ru, phrase: "убери всё купленное из покупок",
+   objects: [],
+   call: {tool: tasks, args: {op: clear_done, refs: [], when: null, title: null, qty: null, where: null, list_key: shopping}},
+   expect: {route: model, op: tasks.clear_done, confirm: true}}
+- {id: f97-ru-048, lang: ru, phrase: "перенеси встречу на пятницу",
+   objects: [],
+   call: {tool: tasks, args: {op: clear_done, refs: [], when: null, title: null, qty: null, where: null, list_key: shopping}},
+   expect: {route: refused}}  # no «убери купленное» in the person's words

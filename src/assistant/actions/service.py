@@ -284,9 +284,23 @@ def notice(a: Action, where: list[dict[str, Any]], *, undoable: bool,
         text_ = "Обновил трату"
     else:
         text_ = _short(summary) or "Готово"
-    return {"text_ru": text_, "text_kk": None, "target": _target(first, page_id),
+    target = _target(first, page_id)
+    op = (a.payload or {}).get("op")
+    if op in BUDGET_OPS:  # Ф-97: opens «Расходы» (the id is not used)
+        target = {"kind": "budget", "id": None, "page_id": None}
+    elif label != "Восстановить" and first is not None and first.get("task_id") and (
+            op in CALENDAR_OPS or (a.payload or {}).get("plan_calendar")):  # fmt: skip
+        # Ф-97: a moved / shifted calendar entry opens its calendar day (the phone reads the
+        # to-do's day; a date «YYYY-MM-DD» is the other id shape it takes)
+        target = {"kind": "calendar", "id": str(first["task_id"]), "page_id": None}
+    return {"text_ru": text_, "text_kk": None, "target": target,
             "undo_label_ru": label if undoable else None, "undo_label_kk": None,
             "ms": NOTICE_MS}  # fmt: skip
+
+
+CALENDAR_OPS = frozenset({"tasks.reschedule", "tasks.remove_occurrence", "calendar.shift_many",
+                          "calendar.shift_plan", "plans.to_calendar"})  # fmt: skip
+BUDGET_OPS = frozenset({"expenses.set_budget", "expenses.clear_budget"})
 
 
 _RU_DEEDS = ("дело", "дела", "дел")
@@ -424,7 +438,7 @@ async def undo_group(session: AsyncSession, user_id: int, group_id: uuid.UUID, *
 
 
 TOUCHED_ORDER = ("records", "pages", "tasks", "calendar", "reminders", "expenses", "budget",
-                 "plans", "today")  # fmt: skip
+                 "plans", "today", "settings")  # fmt: skip
 
 
 def touched_of(a: Action) -> list[str]:

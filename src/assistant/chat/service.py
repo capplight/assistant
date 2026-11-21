@@ -663,7 +663,17 @@ class ChatService:
                 turn = await self._choice(run, turn, choice)  # type: ignore[assignment]
                 if turn is None:
                     return
-            if turn.input_kind != "share" and (undo := undo_phrase(turn.text)) is not None:
+            if not assist and turn.input_kind != "share" \
+                    and ops_line.restores_from_trash(turn.text) \
+                    and (ask := ops_line.read_code(turn.text)) is not None \
+                    and await self._ops_by_code(run, turn, ask, background):  # fmt: skip
+                return  # Ф-97: «верни из корзины заметку про шины», «восстанови страницу Ремонт»
+            # the trash named but not one record fits: the model (lookup trash, «Какую?»), not
+            # an undo of whatever action the words happen to match
+            trash = (not assist and turn.input_kind != "share"
+                     and ops_line.restores_from_trash(turn.text))
+            if turn.input_kind != "share" and not trash \
+                    and (undo := undo_phrase(turn.text)) is not None:  # fmt: skip
                 await self._undo_by_phrase(run, turn, undo)  # «верни как было» (Ф-73)
                 return
             if turn.input_kind != "share" and (ask := memory.memory_phrase(turn.text)):
@@ -684,6 +694,10 @@ class ChatService:
                     and await self._plan_selected(turn):  # fmt: skip
                 # step 8: on an open plan («Попросите поменять план…») a phrase is about the plan
                 turn = dataclasses.replace(turn, plan_open=True)
+            if not assist and turn.input_kind != "share" and turn.selected_pk is not None \
+                    and not turn.plan_open and kp_line.edits(turn.text) \
+                    and await self._kp_edit(run, turn):  # fmt: skip
+                return  # Ф-97: «цену светильников 4 500» on an open КП (`kp.edit`)
             if not assist and turn.input_kind != "share" and not turn.plan_open \
                     and (ask := ops_line.read_code(turn.text)) is not None \
                     and await self._ops_by_code(run, turn, ask, background):  # fmt: skip
@@ -713,10 +727,9 @@ class ChatService:
                         return
             if prior is None and not assist and turn.input_kind != "share" \
                     and is_reminder_phrase(turn.text):  # fmt: skip
-                if background:  # nothing is set up later behind the person's back
-                    await self._fail(run, "not_done", text=TEXT_NOT_DONE[lang], retry=True)
-                else:
-                    await self._reminder_draft(run, turn)
+                # Ф-97 (1): finished in the background (after a restart) a clear time is set at
+                # once with «Отменить», like a to-do; an unclear one still waits for the person
+                await self._reminder_draft(run, turn, background=background)
                 return
             if prior is None and turn.input_kind != "share" \
                     and (order := kp_line.read(turn.text)) is not None:  # fmt: skip
@@ -730,6 +743,8 @@ class ChatService:
                     and await self._timed_task(run, turn, background):  # fmt: skip
                 return  # «добавь встречу завтра в 15:00 на час» → a block in «Дела» (0035)
             reading = rules_first(turn.text, input_kind=turn.input_kind)
+            if trash and reading.intent != Intent.CHANGE:  # Ф-97: «восстанови …» is a change
+                reading = Reading(Intent.CHANGE, "rules", reading.deictic, 1)
             follow: str | None = None
             if prior is None and turn.input_kind != "share" and follow_up_phrase(turn.text):
                 follow = await self._pending_change(turn)  # «ну и где?» after «Создаю…» (Ф-88)
@@ -942,8 +957,9 @@ class ChatService:
         all under this answer (one «Отменить всё»). Only when *every* part is one code reads;
         else the parts code reads are done here and the rest goes to the model (`(False, m,
         rest)`, the same group); no part code reads: `(False, None, None)`, the usual way.
-        A reminder part gets its S13 draft (`reminder_draft`), nothing is set without «Сохранить»;
-        in the background (nobody sees a draft) such a phrase is not split.
+        A reminder part with a clear time is set at once with «Отменить» (Ф-95 (1)), also in the
+        background (Ф-97 (1)); an unclear one gets its S13 draft, or in the background is said
+        back («не поставил: время непонятно»), nothing set behind the person's back.
         `given` (Ф-88): parts and kinds the strong model cut a mixed phrase into (`_model_parts`,
         every word checked); code still reads each part and decides what it is, the model's kind
         only names a part code would leave to the chat model."""
@@ -972,8 +988,8 @@ class ChatService:
                 kinds.append("note")
             else:
                 kinds.append("model")
-        if (background and "reminder" in kinds) or all(k == "model" for k in kinds) \
-                or ("model" in kinds and "reminder" in kinds):  # fmt: skip
+        # Ф-97 (1): in the background a reminder part with a clear time is set too
+        if all(k == "model" for k in kinds) or ("model" in kinds and "reminder" in kinds):
             return False, None, None
         rest = ", ".join(p for p, k in zip(parts, kinds, strict=True) if k == "model") or None
         book = await book_for(self.sessionmaker, turn.user_id, turn.page_pk)
@@ -985,7 +1001,7 @@ class ChatService:
             if kind == "model":
                 continue
             if kind == "reminder":
-                await self._reminder_draft(run, turn, text_=part, m=m)
+                await self._reminder_draft(run, turn, text_=part, m=m, background=background)
             elif kind == "expense":
                 ok = await self._save_expense(run, turn, text_=part, m=m)
             elif kind == "tasks":
@@ -1622,6 +1638,60 @@ class ChatService:
                                         "by": draft.source}])  # fmt: skip
         return True
 
+    async def _kp_edit(self, run: ReplyRun, turn: TurnInput) -> bool:
+        """Ф-97: «цену светильников 4 500» on an open КП — the same KP_EDIT reading and code checks
+        as «Попросить изменить» on the КП screen, applied by the `kp.edit` operation: one new
+        version, one action with «Отменить». False: the selected record is not a ready КП."""
+        from assistant.ai import AIError
+        from assistant.db.models_kp import Document
+        from assistant.kp import edit as kp_edit
+        from assistant.kp import service as kp_service
+
+        if self.router is None:
+            return False
+        async with self.sessionmaker() as s:
+            doc = await s.scalar(select(Document).where(
+                Document.user_id == turn.user_id, Document.item_id == turn.selected_pk,
+                Document.deleted_at.is_(None)))  # fmt: skip
+            if doc is None or not doc.current_version_n:
+                await s.commit()
+                return False
+            data = dict((await kp_service.version(s, doc)).data)
+            doc_id, base = doc.public_id, doc.current_version_n
+            await s.commit()  # no transaction open across the model call
+        book = await book_for(self.sessionmaker, turn.user_id, turn.page_pk)
+        m = self._mutation(run, turn, book, True, False)
+        phrase = " ".join(turn.text.split())
+        run.emit("tool_activity", {"tool": "kp_edit", "text": "Меняю КП…", "page_id": None})
+        cost = Decimal(0)
+        try:
+            reply, spent = await kp_edit.read_phrase(self.router, turn.user_id, data, phrase)
+            cost = Decimal(str(spent or 0))
+        except AIConsentRequired:
+            raise
+        except AIError:
+            reply = None
+        if reply is None:
+            m.note = TEXT_NOT_DONE[turn.lang]
+        elif not reply.understood or not reply.ops:
+            m.note = kp_edit.TEXT_NOT_UNDERSTOOD
+        else:
+            checked = kp_edit.check_ops(reply, data, phrase)
+            if checked.refused or not checked.ops:
+                m.note = checked.message or kp_edit.TEXT_REFUSED
+            else:
+                env = self._line_env(turn, m, book)
+                _, error = await ops_line.run_planned(env, [("kp.edit", {
+                    "document_id": doc_id, "ops": checked.ops, "base_version": base,
+                    "request_text": phrase})], kw={"settings": self.s})  # fmt: skip
+                if m.action_out is None:
+                    changed = bool(error) and ("conflict" in error or "just changed" in error)
+                    m.note = ops_line.TEXT_CONFLICT if changed else TEXT_NOT_DONE[turn.lang]
+        await self._finish_change(run, turn, m, cost,
+                                  [{"name": "kp_edit", "arguments": {},
+                                    "error": m.action_out is None, "by": "model"}])  # fmt: skip
+        return True
+
     async def _start_kp(self, run: ReplyRun, turn: TurnInput, order: kp_line.KpPhrase) -> None:
         """«Сделай КП для ТОО Ромашка: 20 светильников, монтаж» / «сделать документ из этого»:
         a new КП as from the screen (`kp.service.start`: kinds, the daily limit), its ТЗ the
@@ -1781,7 +1851,8 @@ class ChatService:
         return True
 
     async def _reminder_draft(self, run: ReplyRun, turn: TurnInput, *, text_: str | None = None,
-                              m: MutationState | None = None) -> None:  # fmt: skip
+                              m: MutationState | None = None,
+                              background: bool = False) -> None:  # fmt: skip
         """«Напомни завтра в 7 …» (week 8 gap): «как понял» for S13, nothing saved. Same reader
         and Ф-1 switch as /reminders/parse; the model only behind the consent gate (the line
         already needs `ai_cross_border`, the router checks it again)."""
@@ -1810,6 +1881,15 @@ class ChatService:
                                           [{"name": "reminder", "arguments": {},
                                             "error": m.action_out is None,
                                             "by": outcome.source or "none"}])  # fmt: skip
+            return
+        if background:  # nobody sees a form or a question now: nothing is set behind their back
+            if m is not None:  # one part of a longer phrase: the rest is done, this one said
+                part = " ".join((text_ or turn.text).split())[:80]
+                m.sentences.append(f"Напоминание «{part}» не поставил: время непонятно — "
+                                   "скажите ещё раз.")  # fmt: skip
+                m.cost = Decimal(str(m.cost or 0)) + Decimal(str(outcome.cost_usd))
+                return
+            await self._fail(run, "not_done", text=TEXT_NOT_DONE[turn.lang], retry=True)
             return
         run.emit("reminder_draft", {
             "reply_id": str(run.reply_id), "status": outcome.status, "source": outcome.source,
@@ -1879,17 +1959,30 @@ class ChatService:
         book = await book_for(self.sessionmaker, turn.user_id, turn.page_pk)
         m = self._mutation(run, turn, book, True, False)
         env = self._line_env(turn, m, book)
-        async with self.sessionmaker() as s:
-            objs = await ops_line.code_objects(s, turn.user_id, book, ask, self.clock())
-            await s.commit()
-        p = ops_line.plan_code(env, ask, objs)
+        if ask.kind == "cleanup":  # «почисти повторы»: the screen's plan, then «Да» (bulk)
+            p = await self._cleanup_plan(turn) if not background else None
+            if p is None:
+                if not background:
+                    return False
+                await self._fail(run, "not_done", text=TEXT_NOT_DONE[turn.lang], retry=True)
+                return True
+        else:
+            async with self.sessionmaker() as s:
+                objs = await ops_line.code_objects(s, turn.user_id, book, ask, self.clock())
+                await s.commit()
+            p = ops_line.plan_code(env, ask, objs)
         if p is None:
             return False
-        asks = p.ask is not None or ops_line.needs_yes(p, turn.text) or ask.all_of_day
+        p.calls = ops_line.with_versions(env, p.calls)
+        p.choices = [(label, ops_line.with_versions(env, c)) for label, c in p.choices]
+        bulk = ask.kind == "cleanup" or ask.all_of_day
+        asks = p.note is None and (p.ask is not None or ops_line.needs_yes(p, turn.text) or bulk)
         if asks and background:  # a question waits for the person
             await self._fail(run, "not_done", text=TEXT_NOT_DONE[turn.lang], retry=True)
             return True
-        if p.ask is not None:
+        if p.note is not None:  # nothing to do: said honestly (Ф-88)
+            m.note = p.note
+        elif p.ask is not None:
             ops_line.propose_choice(m, p)
         elif asks:
             ops_line.propose_yes(m, p, ops_line.count_question(p))
@@ -1897,12 +1990,27 @@ class ChatService:
             run.emit("tool_activity", {"tool": "op", "text": "Делаю…", "page_id": None})
             _, error = await ops_line.run_planned(env, p.calls, many=p.many)
             if m.action_out is None:
-                m.note = TEXT_NOT_DONE[turn.lang] if error else TEXT_ALREADY[turn.lang]
+                m.note = (ops_line.TEXT_CONFLICT if m.conflict else TEXT_NOT_DONE[turn.lang]
+                          if error else TEXT_ALREADY[turn.lang])  # fmt: skip
         await self._finish_change(run, turn, m, Decimal(0),
                                   [{"name": "op", "arguments": {"kind": ask.kind},
                                     "error": m.action_out is None and m.proposal is None,
                                     "by": "code"}])  # fmt: skip
         return True
+
+    async def _cleanup_plan(self, turn: TurnInput) -> "ops_line.Planned | None":
+        """«почисти повторы» (Ф-97): the same plan as «Повторы» → «Почистить» (one pending «Да»
+        for every exact repeat). Nothing to merge: an honest «не нашёл»."""
+        from assistant.dedup import plan_cleanup
+
+        async with self.sessionmaker() as s:
+            pending, _ = await plan_cleanup(s, turn.user_id, now=self.clock())
+            await s.commit()
+        if pending is None:
+            return ops_line.Planned(note="Повторов не нашёл — ничего не менял.")
+        copies = int((pending.preview or {}).get("copies") or 0)
+        return ops_line.Planned(calls=[("duplicates.cleanup", {"pending_id": pending.public_id})],
+                                count=max(copies, 1))  # fmt: skip
 
     async def _tick_purchase(self, run: ReplyRun, turn: TurnInput, m: MutationState,
                              book: SourceBook, what: str) -> None:  # fmt: skip

@@ -376,6 +376,7 @@ class MutationState:
     calls: int = 0
     cost: Any = 0
     line: Any = None  # Ф-95: ops_line.LineState of the turn (domain tools, need_tools)
+    conflict: bool = False  # Ф-97: an object changed on the phone since the line saw it
 
     @property
     def summary(self) -> str:

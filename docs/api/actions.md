@@ -93,6 +93,13 @@ phone.
   shortened `summary.ru`. `text_kk` null until reviewed (R-39): fall back to `text_ru`.
 - `target`: where a tap goes — `kind` `expense` | `task` | `document` | `reminder` | `item` |
   `page`, `id` of that object, `page_id` to open (null for a record now in the trash). May be null.
+  Ф-97 (additive): `calendar` — an entry moved / resized / skipped / shifted, or a plan put on or
+  moved on the calendar (ops `tasks.reschedule`, `tasks.remove_occurrence`, `calendar.shift_many`,
+  `calendar.shift_plan`, `plans.to_calendar`); `id` = the to-do id (the phone opens its calendar
+  day and highlights the block; a date `YYYY-MM-DD` is the other id shape the phone accepts),
+  `page_id` null. `budget` — the month's budget set / removed (`expenses.set_budget`,
+  `expenses.clear_budget`): opens «Расходы», `id` null. An older phone treats an unknown kind as
+  «no tap target».
 - `undo_label_ru`: the button — «Восстановить» after a trash, «Вернуть» after an undo, else
   «Отменить»; null when `undoable` is false (show no button). The button = `POST
   /v1/actions/{id}/undo` as before. `ms`: 3000 for every notice (Ф-75).
@@ -325,6 +332,20 @@ cannot do different things. REST contracts do not change.
 | `reminders.delete` | `DELETE /v1/reminders/{id}`; the line «не напоминай про свет» | cancel, `edit_reminder` with `restore_reminder` |
 | `records.trash` | the line («удали это», `update.trash`) | each record as its own screen deletes it: a to-do's record → as `tasks.delete`, an expense's → as `expenses.delete`, any other → the record |
 | `plans.to_calendar`, `calendar.remove_plan`, `calendar.shift_plan` | the line (plans.md «A plan on the calendar») | a plan on / off / moved on the calendar |
+| `trash.restore` | the line «верни из корзины заметку про шины» | records back from the trash, each as what it is (a to-do / expense / КП with its record); `restore_item` |
+| `pages.delete`, `pages.restore` | the line «удали страницу Ремонт», «восстанови страницу Ремонт» | a page removed (records stay) / back; `delete_screen` / `create_screen` |
+| `expenses.set_budget`, `expenses.clear_budget` | the line «бюджет 300 000 в месяц», «убери бюджет» | the month's budget, with «Отменить» (`set_user_setting`); `edit_expense`. `PUT/DELETE /v1/expenses/budget` stay as they are (a setting, no action) |
+| `settings.quiet_hours`, `settings.name` | the line «тихие часы с 23 до 7», «зови меня Али» | quiet hours / `display_name` with «Отменить» (`set_user_setting`); `user_edit` |
+| `habits.turn_off` | the line «больше не клади чеки на страницу Ремонт» (`rule_off`) | a learned placement rule off (`restore_habit`), as «Убрать» on S30; `habit_change` |
+| `kp.edit` | `POST /v1/documents/{id}/patch`, `/edit`; the line on an open КП | one new version with code's totals; `edit_kp` with `revert_document`. Sending is not an operation |
+| `duplicates.cleanup` (`bulk`) | the line «почисти повторы» (after «Да») | the cleanup plan's exact repeats merged; `cleanup_batch` (`initiated_by: agent`) |
+
+Ф-97: new engine op `set_user_setting` {values, expect?} (actions/ops_settings.py) — only the
+budget, quiet hours and the name. `touched` may now also be `settings` (refetch `GET /v1/me` and
+`GET /v1/reminders/settings`). No migration: the actions use kinds already in the 0011 CHECK
+(`restore_item`, `edit_expense`, `user_edit`, `habit_change`). Screen-only, no operation at all
+(Ф-95 (4)): account deletion, consents, logout, the phone number, delete forever, sending a КП,
+imports.
 
 The routes keep only the HTTP part (idempotency by `client_id`, the `version` check, the
 response shape); request and response bodies are unchanged. An action the line makes says

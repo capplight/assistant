@@ -282,13 +282,6 @@ class StatusIn(BaseModel):
     deal_status: Literal["draft", "sent", "seen", "accepted", "declined"]
 
 
-def _change_text(before: dict[str, Any] | None, after_total: str, currency: str) -> str:
-    if before and before.get("total") != after_total:
-        old = format_money(before["total"], currency).removesuffix(" ₸")
-        return f"Итого: {old} → {format_money(after_total, currency)}"
-    return "Изменил КП"
-
-
 async def _offers(db: Db, user_id: int, old: dict[str, Any],
                   new: dict[str, Any]) -> list[dict[str, Any]]:  # fmt: skip
     """US-21 «Обновить в прайсе?»: prices the person just typed that «Мой прайс» does not have
@@ -337,40 +330,30 @@ async def patch_document(doc_id: uuid.UUID, body: PatchIn, user: GatedUser, db: 
 async def _apply_edit(db: Db, ctx: Ctx, user_id: int, doc: Document, ops: list[dict[str, Any]], *,
                       author: str, request_text: str | None, client_id: uuid.UUID,
                       save_prices: bool, by: str, now: datetime) -> dict[str, Any]:  # fmt: skip
-    """A tap or phrase edit: a new version with code's totals, one action whose «Отменить» is a
-    revert to the version before. The caller holds the user lock and the document row."""
-    cur = await service.version(db, doc)
+    """A tap or phrase edit: the `kp.edit` operation (a new version with code's totals, one action
+    whose «Отменить» is a revert to the version before) + «Обновить в прайсе?». The caller holds
+    the user lock and the document row."""
+    from assistant import operations
+
     try:
-        data, changed, applied = patch.apply_patch(cur.data, ops)
-        saved = await service.save_version(db, doc, data, author=author, now=now,
-                                           settings=ctx.settings, patch=applied,
-                                           changed_paths=changed,
-                                           request_text=request_text)  # fmt: skip
-    except (patch.PatchError, service.KpError) as exc:
-        raise _err(exc) from exc
-    item = await db.get(Item, doc.item_id)
-    assert item is not None
-    inverse = [{"op": "revert_document", "id": str(doc.public_id), "n": cur.n,
-                "expect_n": saved.version.n, "item": str(item.public_id)}]
-    offers = await _offers(db, user_id, cur.data, data)
-    if save_prices and offers:
+        res = await operations.run("kp.edit", db, user_id, {
+            "document_id": doc.public_id, "ops": ops, "author": author,
+            "request_text": request_text}, by=by, now=now, client_id=client_id,
+            settings=ctx.settings)  # fmt: skip
+    except operations.OpError as exc:
+        raise ApiError(exc.status, exc.code, details=exc.details) from exc
+    action = res.action
+    offers = await _offers(db, user_id, res.data["before"], res.data["after"])
+    if save_prices and offers and action is not None:
         rows = [pricelist.Row(name=o["name"], unit=o["unit"], price=money(o["price"]))
                 for o in offers]  # fmt: skip
         _, inv = await pricelist.add_typed(db, user_id, rows, now=now)
-        inverse = [*inv, *inverse]
+        engine.validate(inv)
+        action.inverse = [*inv, *action.inverse]
+        await db.flush()
         offers = []
-    text = _change_text(saved.before, saved.version.totals["total"], data.get("currency") or "KZT")
-    action = await record(
-        db, user_id=user_id, kind=ActionKind.EDIT_KP, initiated_by=by,
-        summary={"ru": text, "kk": None},
-        changes=[{"item_id": str(item.public_id), "document_id": str(doc.public_id),
-                  "title": doc.title, "kind": "edit", "page_id": None, "text": text,
-                  "changed_paths": changed}],
-        inverse=inverse, now=now, source_item_ids=[item.id], client_id=client_id,
-        extra={"request_text": request_text} if request_text else None,
-    )  # fmt: skip
     return {**await _full(db, ctx, doc), "action": await _action_out(db, action),
-            "change_text": text, "price_offers": offers}  # fmt: skip
+            "change_text": res.data["text"], "price_offers": offers}  # fmt: skip
 
 
 @router.post("/{doc_id}/revert")

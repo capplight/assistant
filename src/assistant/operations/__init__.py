@@ -8,10 +8,23 @@ writing, for the line's own action), `get`, `names`, `REGISTRY`, `OpError`.
 Registered (see `names()`): tasks (create, update, reschedule, remove_occurrence, set_done,
 delete, clear_done), `calendar.shift_many`, expenses (update, delete), reminders (create, update,
 delete), `records.trash`, plans on the calendar (`plans.to_calendar`, `calendar.remove_plan`,
-`calendar.shift_plan`). The line's domain tools are built from these (`chat/ops_line.py`).
+`calendar.shift_plan`). Ф-97 (phases 2–3): pages (`pages.delete`, `pages.restore`),
+`trash.restore`, settings (`expenses.set_budget`, `expenses.clear_budget`,
+`settings.quiet_hours`, `settings.name`, `habits.turn_off`), `kp.edit`, `duplicates.cleanup`
+(bulk, after «Да»). The line's domain tools are built from these (`chat/ops_line.py`).
 """
 
-from assistant.operations import expenses, plans, records, reminders, tasks
+from assistant.operations import (
+    dedup,
+    expenses,
+    kp,
+    pages,
+    plans,
+    records,
+    reminders,
+    settings,
+    tasks,
+)
 from assistant.operations.registry import (
     REGISTRY,
     Built,
@@ -25,5 +38,6 @@ from assistant.operations.registry import (
     run,
 )
 
-__all__ = ["REGISTRY", "Built", "OpError", "OpResult", "Operation", "build", "expenses", "get",
-           "names", "plans", "records", "register", "reminders", "run", "tasks"]  # fmt: skip
+__all__ = ["REGISTRY", "Built", "OpError", "OpResult", "Operation", "build", "dedup", "expenses",
+           "get", "kp", "names", "pages", "plans", "records", "register", "reminders", "run",
+           "settings", "tasks"]  # fmt: skip

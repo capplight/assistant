@@ -51,11 +51,16 @@ def build(case: dict[str, Any]) -> tuple[Env, list[Obj], dict[uuid.UUID, str]]:
         at = datetime.strptime(o["at"], "%Y-%m-%d %H:%M").replace(tzinfo=TZ).astimezone(UTC) \
             if o.get("at") else None  # fmt: skip
         kind = o["kind"]
+        if kind == "page":  # Ф-97: a live page (code reads pages by title)
+            objs.append(Obj("", "page", oid, o["title"], o["title"]))
+            continue
         objs.append(book.add_obj(
             kind, oid, o["title"], o["title"], start=at, repeat=bool(o.get("repeat")),
+            duration_min=o.get("duration"),
             occurrence_at=at if o.get("repeat") else None, done=bool(o.get("done")),
             list_key=o.get("list") or ("todo" if kind in ("task", "event") else None),
-            data={"amount": o.get("amount")}))  # fmt: skip
+            data={"amount": o.get("amount"), "what": o.get("what", "item"),
+                  "qty": o.get("qty"), "version": o.get("version")}))  # fmt: skip
     return Env(book, Mut(case["phrase"])), objs, titles
 
 
@@ -76,6 +81,8 @@ def check_planned(p: ops_line.Planned, exp: dict[str, Any], titles: dict[uuid.UU
         return bad
     if p.ask is not None:
         return [f"asked {p.ask!r}"]
+    if exp.get("note"):  # nothing to do, said honestly: no operation runs
+        return [] if p.note and exp["note"] in p.note else [f"note {p.note!r}"]
     if not p.calls:
         return ["no operation"]
     name, args = p.calls[0]
@@ -83,7 +90,9 @@ def check_planned(p: ops_line.Planned, exp: dict[str, Any], titles: dict[uuid.UU
         bad.append(f"op {name}")
     target = exp.get("target")
     if target is not None:
-        got = titles.get(args.get("task_id") or args.get("reminder_id") or args.get("expense_id"))
+        got = titles.get(args.get("task_id") or args.get("reminder_id") or args.get("expense_id")
+                         or args.get("page_id") or args.get("habit_id")
+                         or (args.get("item_ids") or [None])[0])
         if got != target:
             bad.append(f"target {got}")
     for k, v in (exp.get("args") or {}).items():
@@ -116,6 +125,15 @@ def run_case(case: dict[str, Any]) -> tuple[list[str], bool]:
         return ([] if ok else [f"asks_assistant={asks_assistant(phrase)}"]), False
     reading = rules_first(phrase)
     ask = ops_line.read_code(phrase)
+    if route == "reads":  # Ф-97: what code reads (an operation that needs the DB to plan)
+        got = (ask.kind, ask.value) if ask is not None else None
+        want = (exp["kind"], str(exp.get("value", "")))
+        return ([] if got == want else [f"read {got}"]), False
+    if route == "free":  # Ф-97: free windows of a day, by code
+        day = datetime.strptime(exp["day"], "%Y-%m-%d").date()
+        wins = ops_line.free_windows(objs, day, TZ, NOW.astimezone(TZ).replace(tzinfo=None))
+        got = [f"{a:%H:%M}-{b:%H:%M}" for a, b in wins]
+        return ([] if got == exp["windows"] else [f"windows {got}"]), False
     if route in ("code", "none"):
         plan = ops_line.plan_code(env, ask, objs) if ask is not None else None  # type: ignore[arg-type]
         if exp.get("not_undo") and undo_phrase(phrase) is not None:
@@ -126,8 +144,9 @@ def run_case(case: dict[str, Any]) -> tuple[list[str], bool]:
             return ([] if plan is None else [f"code took it: {plan.calls or plan.ask}"]), False
         if plan is None:
             return [f"code did not take it ({ask})"], False
+        bulk = ask is not None and (ask.all_of_day or ask.kind == "cleanup")
         return check_planned(plan, exp, titles, phrase,
-                             yes=True if ask and ask.all_of_day else None), True  # type: ignore[union-attr]
+                             yes=True if bulk else None), not exp.get("note")  # type: ignore[union-attr]
     call = case["call"]
     if route == "question":
         problems = []

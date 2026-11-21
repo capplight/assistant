@@ -411,7 +411,8 @@ async def open_near_groups(s: AsyncSession, user_id: int) -> list[DuplicateGroup
 
 
 async def run_cleanup(s: AsyncSession, user_id: int, pending: PendingAction,
-                      now: datetime) -> Action | None:  # fmt: skip
+                      now: datetime, *, by: str = Initiator.USER,
+                      message_pk: int | None = None) -> Action | None:  # fmt: skip
     """The «Да» on a cleanup plan: every exact group, still exact, in one `cleanup_batch` action.
     Copies changed or removed since the plan are left alone."""
     await lock_user(s, user_id)
@@ -444,11 +445,11 @@ async def run_cleanup(s: AsyncSession, user_id: int, pending: PendingAction,
         copies += len(others)
     if not ops:
         return None
-    out = await engine.apply(s, user_id, ops, by=Initiator.USER, check=False, now=now)
+    out = await engine.apply(s, user_id, ops, by=by, check=False, now=now)
     action = await record(
-        s, user_id=user_id, kind=ActionKind.CLEANUP_BATCH, initiated_by=Initiator.USER,
+        s, user_id=user_id, kind=ActionKind.CLEANUP_BATCH, initiated_by=by,
         summary={"ru": texts.cleanup_sentence(copies), "kk": None}, changes=changes,
-        inverse=out.inverse, now=now, source_item_ids=pks[:5000],
+        inverse=out.inverse, now=now, source_item_ids=pks[:5000], message_id=message_pk,
     )  # fmt: skip
     for g in groups:
         if g.status == DupStatus.MERGED:

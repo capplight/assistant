@@ -11,11 +11,19 @@ from assistant.chat.intent import Intent, Reading, asks_assistant, note_by_code,
 
 def test_registry_has_the_phase0_operations() -> None:
     assert operations.names() == [
-        "calendar.remove_plan", "calendar.shift_many", "calendar.shift_plan", "expenses.delete",
-        "expenses.update", "plans.to_calendar", "records.trash", "reminders.create",
-        "reminders.delete", "reminders.update", "tasks.clear_done", "tasks.create",
-        "tasks.delete", "tasks.remove_occurrence", "tasks.reschedule", "tasks.set_done",
-        "tasks.update"]  # fmt: skip
+        "calendar.remove_plan", "calendar.shift_many", "calendar.shift_plan",
+        "duplicates.cleanup", "expenses.clear_budget", "expenses.delete", "expenses.set_budget",
+        "expenses.update", "habits.turn_off", "kp.edit", "pages.delete", "pages.restore",
+        "plans.to_calendar", "records.trash", "reminders.create", "reminders.delete",
+        "reminders.update", "settings.name", "settings.quiet_hours", "tasks.clear_done",
+        "tasks.create", "tasks.delete", "tasks.remove_occurrence", "tasks.reschedule",
+        "tasks.set_done", "tasks.update", "trash.restore"]  # fmt: skip
+    for name in ("duplicates.cleanup", "tasks.clear_done", "calendar.shift_many"):
+        assert operations.get(name).risk == "bulk"
+    # Ф-95 (4): no operation for the screen-only things
+    for gone in ("account.delete", "consents.revoke", "auth.logout", "items.delete_forever",
+                 "kp.send", "imports.start"):
+        assert gone not in operations.names()
     assert operations.names("tasks") == ["tasks.clear_done", "tasks.create", "tasks.delete",
                                          "tasks.set_done", "tasks.update"]  # fmt: skip
     assert operations.get("tasks.clear_done").risk == "bulk"
